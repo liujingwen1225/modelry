@@ -110,6 +110,8 @@ Global API 是明确例外，它承担整个 Backend 的 Application API Workspa
 
 ## 3.2 Header
 
+V0.1 Header 保持克制，不为了“开发者工具感”提前堆 Global Search / Command Palette。
+
 左侧：
 
 - Modelry 标识；
@@ -118,10 +120,15 @@ Global API 是明确例外，它承担整个 Backend 的 Application API Workspa
 右侧：
 
 - Runtime Status；
-- Global Command / Search；
+- 当前 Admin Menu。
+
+Admin Menu 内包含：
+
 - Theme；
-- 当前 Admin；
-- Session / Logout。
+- Session information；
+- Logout。
+
+只有当 V0.1 后续真正提供跨 Collection / Endpoint / Change / Setting 的统一搜索能力时，才增加 Global Search / Command Palette。没有完整搜索语义时不占 Header 位置。
 
 Runtime Status 出现异常时必须可点击，并跳转到真正处理问题的页面。
 
@@ -380,7 +387,8 @@ Create Collection
 Basic information
 
 Type
-[ Normal ▼ ]
+
+[ Normal Collection ]   [ Auth Collection ]
 
 Name
 [ posts ]
@@ -407,6 +415,80 @@ Quick add field
 
 ────────────────────────────────────────
                          Cancel   Create Collection
+~~~
+
+### Collection Type 选择
+
+V0.1 只有 Normal / Auth 两种 Collection Type，因此不使用 Dropdown。
+
+使用并列可选择项，让用户在创建时直接理解两者差异：
+
+~~~text
+[ Normal Collection ]
+Application data
+
+[ Auth Collection ]
+Application users + authentication
+~~~
+
+选择 Type 后，当前创建 Surface 原地更新对应默认配置，不跳下一步。
+
+### Auth Collection 默认可用
+
+选择 Auth Collection 时，创建页面必须同时展示 Authentication Defaults，使 Collection 创建完成后即可直接 Register / Login，不要求用户创建后再进入 Auth 页面完成第二轮基础配置。
+
+推荐默认：
+
+~~~text
+Authentication
+
+Login
+Email + password                 Enabled
+
+Registration
+Self registration               Enabled
+
+Session
+Duration                         7 days
+~~~
+
+同时 Initial Fields 中明确出现 Auth Identifier：
+
+~~~text
+id             System ID         System · Locked
+email          Auth identifier   Required · Unique
+createdAt      Datetime          System-managed
+updatedAt      Datetime          System-managed
+~~~
+
+规则：
+
+- email 作为默认登录标识时必须在 Schema 中可见；
+- 当 Email Login 仍启用时，email 不能被删除；
+- Password **不是普通 Collection Field**，不出现在 Schema / Records 表格，也不能通过普通 Record API 读取；
+- Password 属于 Application Credential，由 Auth Runtime 管理；
+- 用户仍可在同一次 Create Collection 中添加 name、avatar、role 等 Profile Field；
+- 高级 Auth 参数不阻断首次创建，创建后可在 Auth / Configuration 中调整。
+
+因此 Auth Collection 的首次路径是：
+
+~~~text
+Create Auth Collection
+-> choose Auth
+-> keep sensible defaults
+-> add optional profile fields
+-> Create Collection
+-> immediately usable for register / login
+~~~
+
+而不是：
+
+~~~text
+Create Auth Collection
+-> open Auth page
+-> configure login
+-> apply again
+-> finally usable
 ~~~
 
 ### 默认字段
@@ -451,6 +533,14 @@ author  Relation             -> Advanced
 ~~~
 
 Quick Add 与 Advanced Editor 最终都只修改同一个 Create Collection Draft，不立即写入 Runtime。
+
+Quick Add 还必须优化连续录入：
+
+- Enter 可以提交当前简单 Field；
+- Add 成功后焦点回到下一个 Field Name；
+- Type 默认继承最常用 Text，但每行仍明确显示；
+- Field Name 冲突立即在当前行提示，不等到最终 Apply；
+- 不因为新增一行而滚动到页面顶部或关闭当前工作区。
 
 用户可以连续添加、编辑、删除初始字段。
 
@@ -1065,7 +1155,9 @@ Simulation Result 与编辑区分离，不能自动改变 Rule。
 
 # 13. Auth — Auth Collection Only
 
-Auth 页面固定两个 Local View：
+Auth Collection 创建时已经带有可工作的 Authentication Default，因此 Auth 页面不是“完成初始化”的必经页，而是后续管理与调整入口。
+
+固定两个 Local View：
 
 ~~~text
 [ Configuration ] [ Sessions ]
@@ -1073,39 +1165,75 @@ Auth 页面固定两个 Local View：
 
 ## 13.1 Configuration
 
-~~~text
-Authentication
+默认先展示当前配置摘要，而不是一进入页面就把所有字段变成 Form。
 
-Login identifiers
-[x] Email
-[ ] Username
+~~~text
+Authentication                                      [ Edit ]
+
+Login
+Email + password                         Enabled
+
+Registration
+Self registration                        Enabled
 
 Password
-Minimum length      8
+Minimum length                            8
 
 Session
-Duration            7 days
-
-                                      [ Review Changes ]
+Duration                                  7 days
 ~~~
 
-Configuration Change 属于 Backend Model Change。
+点击 Edit 后进入本页编辑状态。
+
+修改只进入当前 Collection Draft；底部统一显示：
+
+~~~text
+1 unsaved change                         Discard   Apply 1 change
+~~~
+
+不再使用额外的 Review Changes 按钮制造第二层确认。
+
+需要风险确认时，Apply 后在当前页面原地展开 Review / Confirm。
+
+### Auth Identifier 与 Credential
+
+必须明确：
+
+~~~text
+email
+-> Collection Field / Auth Identifier
+
+password
+-> Application Credential
+-> not a normal Collection Field
+~~~
+
+因此：
+
+- email 在 Schema / Records 中按其产品语义展示；
+- password 不出现在 Schema Field List；
+- password 不进入普通 Record Detail；
+- password 不允许普通 Record API read-back。
 
 ## 13.2 Sessions
 
 ~~~text
 Sessions
 
-Search principal...
+Search user...
 
-Principal        Created       Last used       Status
-usr_...          2h            10m             Active
-usr_...          1d            2h              Revoked
+User                 Created       Last used       Status
+alice@example.com    2h            10m             Active
+bob@example.com      1d            2h              Revoked
 ~~~
 
-点击 Session / Principal -> Detail Sheet。
+优先显示可识别的 Application User，而不是 usr_... / Principal 等内部标识；无法安全解析显示名称时才退回稳定 ID。
+
+点击 Session / User -> Detail Sheet。
 
 Revoke Session 是 Runtime Operation，不走 ChangeSet。
+
+Revoke 成功后行保留并更新为 Revoked，让 Durable Result 原地可见。
 
 ---
 
@@ -1347,46 +1475,76 @@ History 展示 Durable Applied Migration / Change Facts，不只是 Activity Tim
 
 回答：
 
-> 当前有哪些 Lifecycle Hook？它们是否健康？
+> 当前有哪些 Lifecycle Hook？它们什么时候执行、代码是什么、现在是否健康？
 
-V0.1 只展示已正式支持的 Hook 类型。
+V0.1 只展示已正式支持的 Lifecycle Hook，不提前展示 Cron / Webhook / Event Delivery Placeholder。
 
-## 线框
+## 首屏
 
 ~~~text
 Hooks                                               [ + Add Hook ]
 
 Search...
 
-Name                    Event                  Status       Updated
+Name                    Trigger                Status       Updated
 normalize-post          posts.beforeCreate     Healthy      1d
 validate-title          posts.beforeUpdate     Error        2h
 ~~~
 
-Add Hook 是 Primary Action。
+## Add Hook
 
-点击 Hook -> Detail / Editor Sheet：
+Add Hook 使用一个完整 Editor Surface，一次定义即可保存，不再先创建空 Hook 再进入第二个页面补配置。
 
 ~~~text
-Hook
+Add Hook
 
 Name
-Event / Target
+[ normalize-post ]
+
+Collection
+[ posts ▼ ]
+
+Trigger
+[ beforeCreate ▼ ]
+
 Enabled
+[x]
 
 Code
-┌──────────────────────────────────────────────┐
-│ TypeScript                                   │
-└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ TypeScript                                               │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 
-Secrets used
-Runtime status
-Last error
+Secrets
+[ Select secret references... ]
 
-                        [ Disable ] [ Save ]
+Context / API help                            View reference
+
+───────────────────────────────────────────────────────────
+                                      Cancel   Save Hook
 ~~~
 
-不要在 V0.1 UI 提前展示 Event Hook / Cron / Webhook Placeholder。
+选择 Trigger 后，Editor 应提供对应的最小 TypeScript Signature / Context Hint，减少用户查文档再返回编辑器的往返。
+
+Secrets 只按 Reference 选择，不把 Plaintext 注入编辑表单。
+
+## Hook Detail
+
+点击 Hook 后保持 Registry Context，打开 Detail / Editor。
+
+优先展示：
+
+- Trigger；
+- Enabled / Disabled / Faulted；
+- Runtime Status；
+- Last Error（有真实来源时）；
+- Code；
+- Referenced Secrets。
+
+Save 成功后留在 Detail 并展示 Durable Hook Definition。
+
+如果 Hook Runtime 尚未提供安全的 Test Execution Contract，V0.1 **不展示假的 Test 按钮**。等真实 Test Runtime 存在后再增加原地 Test 能力。
 
 ---
 
@@ -1398,33 +1556,95 @@ Access 页面内部固定：
 [ Access ] [ Audit ]
 ~~~
 
+产品 UI 不要求普通用户先理解 Principal / Capability / Credential 等内部安全模型术语。
+
+这些概念可以继续存在于 Domain / Contract，但界面优先使用：
+
+- Administrator
+- Service Account
+- Permissions
+- API Key
+- Session
+
 ## 18.1 Access
 
 ~~~text
-Access                                           [ + Add Principal ]
+Access                                                [ + Add access ]
 
 Search...
 
-Principal             Type          Status        Last used
-admin@example.com     Admin         Active        now
-agent_local           Service       Active        1h
+Name                    Kind               Status       Last used
+jane@example.com        Administrator      Active       now
+ci-deploy               Service account    Active       1h
 ~~~
 
-点击 -> Principal Detail Sheet。
+点击 Add access：
 
-内容分区：
+~~~text
+Add access
 
-- Identity
-- Capabilities / Roles
-- Status
-- Credentials
-- Sessions
+[ Add administrator ]
+Human access to Modelry Admin
+
+[ Create service account ]
+Machine / Agent access through API key
+~~~
+
+不先弹一个要求用户选择 Principal Type 的工程化表单。
+
+### Add administrator
+
+一次完成：
+
+- Name；
+- Email；
+- Initial password / bootstrap credential（按 Security Contract）；
+- Permissions。
+
+成功后直接进入新 Administrator Detail。
+
+### Create service account
+
+一次完成：
+
+- Name；
+- Description；
+- Permissions；
+- Create API key now：默认开启。
+
+成功路径：
+
+~~~text
+Create service account
+-> durable service account created
+-> API key created
+-> one-time reveal
+-> copy
+-> Done
+-> stay on service account detail
+~~~
+
+这样不会出现“创建了 Service Account，但用户还不知道下一步要再去创建 Credential”的断裂流程。
+
+API Key Plaintext 仍然只能 One-time Reveal，不允许后续 Read-back。
+
+### Access Detail
+
+内容按用户任务排序：
+
+1. Identity；
+2. Permissions；
+3. API Keys（Service Account）；
+4. Sessions（Administrator）；
+5. Status / Disable。
+
+UI 使用 Permissions 作为用户术语；底层仍可映射到 Capability。
 
 危险操作使用 Dialog：
 
-- Disable Principal
-- Revoke Credential
-- Revoke Session
+- Disable access；
+- Revoke API Key；
+- Revoke Session。
 
 Application User 不出现在这里。
 
@@ -1630,7 +1850,7 @@ Collections                                     [ + Create Collection ]
 Records                                         [ + Create Record ]
 Fields                                          [ + Add Field ]
 Hooks                                           [ + Add Hook ]
-Access                                          [ + Add Principal ]
+Access                                             [ + Add access ]
 ~~~
 
 当页面存在 Draft 时，Primary Action 从页面右上切换为 Bottom Sticky Action Bar：
@@ -1819,6 +2039,9 @@ Admin V0.1 不能仅以“页面完成”验收。
 - Global / Collection API 共用 Endpoint Detail 与 Runner；
 - Records CRUD 不错误进入 ChangeSet；
 - Application Auth 与 Admin Access 不混淆；
+- Auth Collection 创建完成后具备默认可用的 Email + Password Auth；
+- Password 不被建模为普通 Collection Field；
+- Access UI 不强迫用户理解 Principal / Capability / Credential 内部术语；
 - Request / Audit / Activity 不混淆；
 - 所有核心页面使用 Modelry Design System；
 - Mandatory Playwright Browser Acceptance 完成真实业务闭环。
