@@ -617,23 +617,42 @@ Index Review 重点展示：
 
 ~~~text
 ┌─────────────────────────────────────────────────────────────┐
-│ 3 unsaved model changes              Discard  Review Changes│
+│ 3 unsaved model changes              Discard   Apply Changes│
 └─────────────────────────────────────────────────────────────┘
 ~~~
 
 固定在 Workspace 底部。
 
-Review Changes 是 Draft 状态唯一 Primary Action。
+默认主操作是 **Apply Changes**，不要求用户先跳转 Changes 页面。
 
-切 Tab 不丢 Draft。
+点击 Apply Changes 后：
 
-离开 Workspace 时必须有 Unsaved Changes Protection。
+- Runtime 生成 / 更新对应 ChangeSet；
+- Runtime 计算 canonical Risk / Preconditions / Impact；
+- SAFE Change 可以直接完成 Apply；
+- 需要确认的 Risk Change 在当前 Workspace 原地展开 Review Surface；
+- 用户确认后仍在当前 Workspace 内完成 Apply；
+- Apply 成功后 Draft 清理并刷新当前页面。
+
+切换 Fields / Relations / Indexes 不丢 Draft。
+
+如果用户离开 Collection Workspace，Draft 不得静默丢失。离开时可以：
+
+- Continue Editing；
+- Save for Later；
+- Discard。
+
+选择 Save for Later 后，Draft 转为可继续处理的 ChangeSet，之后可从 Changes 页面继续 Review / Apply。
 
 ---
 
-# 11. Review Changes
+# 11. Review / Apply Changes
 
-Review Surface 统一用于 Collection Model Change。
+Review Surface 是 **当前工作区内的风险确认层**，不是独立页面跳转要求。
+
+普通 SAFE Change 默认不展开完整 Review，用户点击 Apply Changes 后即可完成。
+
+只有 Runtime 返回需要确认的 Risk / Impact 时，当前页面原地展开 Review Surface，例如 Sheet、Drawer 或 In-place Review Panel：
 
 ~~~text
 Review Changes
@@ -656,18 +675,22 @@ Impact
 Affected records: 128
 Preconditions: 1 warning
 
-[ Save as ChangeSet ]                 [ Confirm & Apply ]
+[ Save for Later ]                  [ Confirm & Apply ]
 ~~~
 
 规则：
 
-- Frontend 可以在 POST 前给 Preview；
-- ChangeSet 创建后必须使用 Runtime Canonical Risk / Preconditions / Impact；
+- 不强制导航到 Changes 页面；
+- Frontend 可以在 Apply 前给即时 Preview；
+- Runtime 返回 canonical Risk / Preconditions / Impact 后，以 Runtime 结果为准；
 - Risk 不是用户输入；
-- 高风险必须 Human Confirmation；
-- 没有 Apply Capability 时，不显示 Apply，只能 Save/Open in Changes；
-- Apply 成功后 Draft 清理并刷新当前 Schema；
-- Save as ChangeSet 后提供 Open in Changes。
+- 需要确认的 Risk Change 在当前业务上下文内完成 Human Confirmation；
+- Confirm & Apply 成功后，保持在当前 Collection / Schema 页面；
+- 成功结果在当前页面可见，并清理 Draft；
+- 用户暂不应用时可以选择 Save for Later；
+- Save for Later 后，该 ChangeSet 出现在 Changes 页面，供后续继续；
+- 用户已经离开原页面后，也可以从 Changes 页面恢复 Review / Apply；
+- 没有 Apply Capability 时，只允许 Save for Later / Open in Changes，不显示可执行 Apply。
 
 ---
 
@@ -920,7 +943,9 @@ V0.1 Request Detail 不展示：
 
 回答：
 
-> Backend 有哪些待处理、已应用或失败的变更？风险是什么？
+> 我之前保存但尚未处理的变更在哪里？有哪些失败、待确认或已应用的历史？
+
+Changes 是 **异步承接、恢复和历史页面**，不是每次模型编辑的强制中转页。
 
 ## 首屏
 
@@ -940,6 +965,14 @@ Change        Scope        Risk          Status        Updated
 禁止提供 Generic New ChangeSet。
 
 ChangeSet 应从真实业务编辑器产生。
+
+用户在原业务页面仍然可以完成 Apply；只有以下情况才需要进入 Changes：
+
+- 用户选择 Save for Later；
+- 用户已经离开原业务页面；
+- Apply 失败后需要恢复；
+- 需要查看 Apply Attempts / Migration History；
+- 需要统一处理多个 Pending Change。
 
 ## Change Detail
 
