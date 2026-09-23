@@ -125,6 +125,35 @@ Admin 必须有统一 Design System，至少覆盖：
 - 不把 Raw ID / JSON 作为主要用户界面；
 - 不允许每个模块创造自己的 Button / Dialog / Form 行为。
 
+## Design System 实现基线
+
+产品体验规范对应的前端基础固定为：
+
+~~~text
+React + TypeScript + Vite
+        ↓
+Modelry Design System
+        ↓
+shadcn/ui
+        ↓
+Base UI
+        ↓
+Tailwind CSS v4
+~~~
+
+复杂业务状态使用：
+
+- TanStack Query
+- TanStack Table
+- React Hook Form
+- Zod
+
+这里的关键原则是：
+
+> Modelry 使用 shadcn/ui / Base UI 来建立自己的 Design System，而不是让 Modelry 看起来像 shadcn/ui Demo。
+
+所有页面必须优先复用 Modelry Design System 中已经定义的 Primitive、Composite Component 和 Interaction Pattern。
+
 ## 信息架构
 
 一级导航：
