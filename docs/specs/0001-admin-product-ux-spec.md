@@ -548,6 +548,54 @@ Schema
 
 ## 10.1 Fields
 
+### 默认系统字段
+
+创建 Collection 后，Schema / Fields 必须立即显示系统默认字段，禁止存在“Runtime 实际有字段，但 UI 默认不展示”的隐式字段。
+
+V0.1 默认字段：
+
+~~~text
+id           System ID        required   locked
+createdAt    Created Time     optional   system-managed
+updatedAt    Updated Time     optional   system-managed
+~~~
+
+规则：
+
+- **id 必须显示**；
+- id 是 Collection 的系统主键，用户不能删除、重命名、修改类型或改变其系统语义；
+- id 使用明显的 System / Locked 标识，避免用户误以为需要再次创建 ID 字段；
+- createdAt / updatedAt 默认创建并显示；
+- createdAt / updatedAt 的值由 Runtime 自动维护，不允许用户手工写入或修改；
+- createdAt / updatedAt 可以从 Schema 中删除；删除属于普通 Backend Model Change，并进入当前 Collection Shared Draft；
+- createdAt / updatedAt 一旦保留，其 Name、Type 与系统维护语义固定，不作为普通自定义 Field 编辑；
+- 删除后如需恢复，应通过 Add System Field / Restore Default Field 等明确入口恢复，而不是让用户手工创建一个同名普通字段；
+- 新建普通 Field 时，id / createdAt / updatedAt 等保留名称必须做冲突校验；
+- Record Form 默认不显示 id / createdAt / updatedAt 为可编辑输入；
+- Record Detail 可以在 Metadata 区域展示这些系统字段。
+
+创建 Collection 成功后，空 Collection 的 Schema 初始状态应该类似：
+
+~~~text
+Schema · 3 fields                                [ + Add Field ]
+
+[ Fields ] [ Relations ] [ Indexes ]
+
+Field          Type          Required       Features
+id             system id     Yes            System · Locked
+createdAt      datetime      No             System-managed
+updatedAt      datetime      No             System-managed
+~~~
+
+这样用户能明确知道：
+
+- Collection 已经有主键；
+- 哪些字段由系统维护；
+- 哪些默认字段可以移除；
+- 不需要重复创建 id。
+
+
+
 ~~~text
 Schema · 12 fields                                [ + Add Field ]
 
