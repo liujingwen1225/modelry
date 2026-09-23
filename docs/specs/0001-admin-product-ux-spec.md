@@ -299,7 +299,23 @@ users             Open Records
 - 不复制 Activity Timeline；
 - 不放大号 Record / Request KPI。
 
-Overview 没有固定 Create 按钮。
+Overview 在正常已有 Collection 时没有固定 Create 按钮。
+
+但**首次空项目是明确例外**。当 Backend 尚无任何 Collection 时，Overview 应直接成为 onboarding continuation：
+
+~~~text
+Your backend is ready
+
+Create your first Collection to define application data and API.
+
+[ Create Collection ]
+
+Runtime    Ready
+Database   Ready
+Storage    Ready
+~~~
+
+不要让新用户在刚完成 Bootstrap 后先研究 Sidebar，再猜下一步去哪里。
 
 ---
 
@@ -744,7 +760,19 @@ Edit 是 Primary Action。
 
 Delete 是 Destructive Secondary Action。
 
-## 9.3 Create / Edit Sheet
+## 9.3 Create / Edit Record
+
+普通 Collection 使用 Detail / Edit Sheet，保持 Records 列表上下文。
+
+但不能规定所有 Record Form 永远使用窄 Sheet。
+
+根据可见字段数量和复杂度自适应：
+
+- 少量简单字段：标准侧边 Sheet；
+- 字段较多、包含大文本 / File / Relation / JSON-like complex input：Wide Sheet；
+- 极复杂表单如果后续确有需要，可以使用 Focused Record Editor，但 V0.1 不默认跳完整独立页面。
+
+目标是：**保留列表上下文，但不牺牲表单可用宽度。**
 
 ~~~text
 ┌──────────────────────────────────────┐
@@ -1413,10 +1441,19 @@ Changes
 Search...     Scope: All ▼     Risk: All ▼     Status: All ▼
 
 ──────────────────────────────────────────────────────────────
-Change        Scope        Risk          Status        Updated
-#12           posts        DESTRUCTIVE   Needs review  5m
-#11           users        SAFE          Ready         1h
+Change summary                    Scope       Risk          Status        Updated
+Remove legacy status field         posts       DESTRUCTIVE   Needs review  5m
+Add profile fields                 users       SAFE          Ready         1h
 ~~~
+
+Change ID 仍然存在，但作为 Secondary Metadata / Deep-link Identity，不作为列表中最主要的信息。
+
+Change List 的第一列必须优先展示用户能理解的 Summary，例如：
+
+- Add 3 fields to posts；
+- Remove legacy status field；
+- Update users policy；
+- Add unique index on slug。
 
 禁止提供 Generic New ChangeSet。
 
@@ -1433,12 +1470,12 @@ ChangeSet 应从真实业务编辑器产生。
 ## Change Detail
 
 ~~~text
-Change #12
+Remove legacy status field
 
-Summary
-Scope
-Created by
-Status
+Change ID        chg_...
+Scope            posts
+Created by       jane@example.com
+Status           Needs review
 
 Structured Diff
 [...]
@@ -1819,7 +1856,10 @@ Activity 不复制：
 - 保持原列表 Context；
 - 支持 Deep Link；
 - 可以在 View / Edit 状态间切换；
-- Durable Result 可以留在 Sheet 中。
+- Durable Result 可以留在 Sheet 中；
+- 宽度必须由任务复杂度决定，不使用一个固定窄宽度承载所有表单；
+- 简单 Detail 使用标准宽度，复杂 Record / Field / Hook Editor 可以升级为 Wide Sheet；
+- 内容需要大量横向比较时优先使用页面内 Detail Pane，而不是无限加宽 Sheet。
 
 ## Dialog
 
@@ -2033,6 +2073,7 @@ Admin V0.1 不能仅以“页面完成”验收。
 
 - 页面目的明确；
 - Wireframe 与 Primary Action 层级符合本 Spec；
+- 首次空项目能从 Overview 一步进入 Create Collection；
 - Empty / Loading / Error / Permission / Partial State 齐全；
 - Durable Result 可见；
 - Backend Model Change 不绕过 ChangeSet；
