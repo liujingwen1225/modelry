@@ -11,6 +11,7 @@
 5. **04-v0.1-community-scope.md** — V0.1 Community 的正式范围
 6. **05-product-experience-and-acceptance.md** — 产品化与验收标准
 7. **06-product-architecture.md** — 产品分层和共享 Domain Model
+8. **specs/0001-admin-product-ux-spec.md** — Admin 页面结构、线框、按钮位置与交互基线
 
 后续正式设计统一新增在：
 
