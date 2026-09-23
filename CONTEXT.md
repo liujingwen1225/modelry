@@ -88,9 +88,10 @@ Project Backend Plane 的核心产品语义继续与 Self-hosted Modelry 共用�
 5. docs/04-v0.1-community-scope.md
 6. docs/05-product-experience-and-acceptance.md
 7. docs/06-product-architecture.md
-8. 后续 Accepted ADR
-9. 后续 Accepted Spec
-10. 后续 Accepted Contract
+8. docs/specs/0001-admin-product-ux-spec.md
+9. 后续 Accepted ADR
+10. 后续 Accepted Spec
+11. 后续 Accepted Contract
 
 历史文档不具备当前权威性。
 
@@ -101,5 +102,6 @@ Project Backend Plane 的核心产品语义继续与 Self-hosted Modelry 共用�
 - Runtime / Storage / Extension ADR
 - Foundation Spec
 - HTTP Contract / OpenAPI
-- Admin Product UX Spec
 - Browser Acceptance Spec
+
+Admin Product UX Spec 已接受，当前权威文件为 docs/specs/0001-admin-product-ux-spec.md。
