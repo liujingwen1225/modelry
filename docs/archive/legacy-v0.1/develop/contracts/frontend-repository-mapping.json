@@ -1,0 +1,1050 @@
+{
+  "contractVersion": "v0.1.0",
+  "source": "frontend/admin/src/repositories/contracts.ts",
+  "controlPlaneCredentials": {
+    "admin": ["Session"],
+    "agentService": ["ApiKey"]
+  },
+  "adminControlPlaneAuth": {
+    "representation": "Backend core endpoint; not currently represented by Frontend Repository",
+    "sessionSeparation": {
+      "applicationAuthSession": "AuthSession for business Auth Collection users on Data Plane",
+      "adminControlPlaneSession": "ControlPlaneSession for Admin access/refresh session transport",
+      "credentialMetadata": "Credential metadata for Agent/Service API Key; never a session token"
+    },
+    "routes": [
+      {
+        "name": "bootstrapAdmin",
+        "httpMethod": "POST",
+        "path": "/_modelry/api/v1/bootstrap/admin",
+        "requestDto": "BootstrapAdminRequest",
+        "responseDto": "BootstrapAdminResponse",
+        "authentication": "BootstrapSetupToken",
+        "capability": []
+      },
+      {
+        "name": "adminLogin",
+        "httpMethod": "POST",
+        "path": "/_modelry/api/v1/auth/login",
+        "requestDto": "AdminLoginRequest",
+        "responseDto": "AdminLoginResponse",
+        "authentication": "Admin email + password",
+        "capability": []
+      },
+      {
+        "name": "adminRefresh",
+        "httpMethod": "POST",
+        "path": "/_modelry/api/v1/auth/refresh",
+        "requestDto": "no body; AdminRefreshCookie",
+        "responseDto": "AdminRefreshResponse",
+        "authentication": "AdminRefreshCookie",
+        "capability": []
+      },
+      {
+        "name": "adminLogout",
+        "httpMethod": "POST",
+        "path": "/_modelry/api/v1/auth/logout",
+        "requestDto": "no body",
+        "responseDto": "204 No Content",
+        "authentication": "ControlApiSession",
+        "capability": []
+      },
+      {
+        "name": "currentAdmin",
+        "httpMethod": "GET",
+        "path": "/_modelry/api/v1/auth/current",
+        "requestDto": "no body",
+        "responseDto": "AdminCurrentResponse",
+        "authentication": "ControlApiSession",
+        "capability": []
+      },
+      {
+        "name": "listAdminSessions",
+        "httpMethod": "GET",
+        "path": "/_modelry/api/v1/auth/sessions",
+        "requestDto": "no body",
+        "responseDto": "ControlPlaneSession[]",
+        "authentication": "ControlApiSession",
+        "capability": ["access:manage"]
+      },
+      {
+        "name": "revokeAdminSession",
+        "httpMethod": "DELETE",
+        "path": "/_modelry/api/v1/auth/sessions/{sessionId}",
+        "requestDto": "SessionIdPath",
+        "responseDto": "ControlPlaneSession",
+        "authentication": "ControlApiSession",
+        "capability": ["access:manage"]
+      }
+    ]
+  },
+  "entries": [
+    {
+      "repository": "CollectionRepository",
+      "method": "listCollections",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<Collection[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/collections",
+      "requestDto": "CollectionListQuery",
+      "responseDto": "Collection[]",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "读取 Backend Model 的 Collection 视图。"
+    },
+    {
+      "repository": "CollectionRepository",
+      "method": "getCollection",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<Collection>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/collections/{collectionId}",
+      "requestDto": "CollectionPath",
+      "responseDto": "Collection",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "collectionId 是 stable opaque ID；name 只作为展示和 Data Plane 路由别名。"
+    },
+    {
+      "repository": "CollectionRepository",
+      "method": "proposeCollection",
+      "signature": {
+        "parameters": [
+          { "name": "input", "type": "CollectionCreateInput", "optional": false }
+        ],
+        "returns": "Promise<ChangeSet>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/changesets",
+      "requestDto": "CollectionCreateRequest -> ChangeSetProposalRequest",
+      "responseDto": "ChangeSet",
+      "capability": ["model:write", "changeset:propose"],
+      "policy": "ChangeSet content is validated; no Record Policy",
+      "concurrency": "baseModelHash reserved by server",
+      "notes": "Frontend input 只表达 collection.create；Backend 负责生成 Diff、Risk、Preconditions 和 Ready ChangeSet。"
+    },
+    {
+      "repository": "CollectionRepository",
+      "method": "getRelationOptions",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "displayField", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<RelationOption[]>"
+      },
+      "classification": "derived-read",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/records",
+      "requestDto": "RelationOptionsQuery",
+      "responseDto": "RelationOption[]",
+      "capability": ["data:inspect"],
+      "policy": "Administrative Data Access；不伪装 auth.id",
+      "concurrency": "none",
+      "notes": "不新增 relation-options endpoint；由受控 Record 查询返回 id/displayField 后在前端投影。"
+    },
+    {
+      "repository": "RecordRepository",
+      "method": "listRecords",
+      "signature": {
+        "parameters": [
+          { "name": "query", "type": "RecordQuery", "optional": false }
+        ],
+        "returns": "Promise<RecordListResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/records",
+      "requestDto": "AdministrativeRecordListQuery",
+      "responseDto": "RecordListResponse",
+      "capability": ["data:inspect"],
+      "policy": "Administrative Data Access；不运行 Record Policy",
+      "concurrency": "none",
+      "notes": "Frontend Admin Repository 使用 Control Plane 管理数据投影；Application 使用对应 Data Plane 路由并运行 Record Policy。"
+    },
+    {
+      "repository": "RecordRepository",
+      "method": "getRecord",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "recordId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<ModelRecord>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/records/{recordId}",
+      "requestDto": "AdministrativeRecordPath",
+      "responseDto": "Record",
+      "capability": ["data:inspect"],
+      "policy": "Administrative Data Access；不运行 Record Policy",
+      "concurrency": "none",
+      "notes": "Application Data Plane 对应 GET /api/v1/collections/{collection}/records/{id}，无权资源采用非泄漏 NOT_FOUND。"
+    },
+    {
+      "repository": "RecordRepository",
+      "method": "createRecord",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "values", "type": "Record<string, RecordInputValue>", "optional": false }
+        ],
+        "returns": "Promise<ModelRecord>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/records",
+      "requestDto": "RecordMutationRequest",
+      "responseDto": "Record",
+      "capability": ["data:mutate"],
+      "policy": "Administrative Data Access；不运行 Record Policy；Application 路径运行 create Policy",
+      "concurrency": "none",
+      "notes": "File Field 新绑定只能使用 uploadSessionId；事务成功后才将 Upload Session 标记 committed。"
+    },
+    {
+      "repository": "RecordRepository",
+      "method": "updateRecord",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "recordId", "type": "string", "optional": false },
+          { "name": "values", "type": "Record<string, RecordInputValue>", "optional": false },
+          { "name": "expectedVersion", "type": "number", "optional": true }
+        ],
+        "returns": "Promise<ModelRecord>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "PATCH",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/records/{recordId}",
+      "requestDto": "RecordMutationRequest",
+      "responseDto": "Record",
+      "capability": ["data:mutate"],
+      "policy": "Administrative Data Access；不运行 Record Policy；Application 路径运行 before/after update Policy",
+      "concurrency": "If-Match required when optimisticLock=true",
+      "notes": "expectedVersion 只映射为 If-Match；不能同时使用第二套 version request field。"
+    },
+    {
+      "repository": "RecordRepository",
+      "method": "deleteRecord",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "recordId", "type": "string", "optional": false },
+          { "name": "expectedVersion", "type": "number", "optional": true }
+        ],
+        "returns": "Promise<void>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "DELETE",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/records/{recordId}",
+      "requestDto": "no body",
+      "responseDto": "204 No Content",
+      "capability": ["data:mutate"],
+      "policy": "Administrative Data Access；不运行 Record Policy；Application 路径运行 delete Policy",
+      "concurrency": "If-Match required when optimisticLock=true; optional otherwise",
+      "notes": "softDelete=true 时只改变可观察状态；Admin 查询可显式 inspect deleted Record。"
+    },
+    {
+      "repository": "AuditRepository",
+      "method": "listAuditFacts",
+      "signature": {
+        "parameters": [
+          { "name": "objectId", "type": "string", "optional": true }
+        ],
+        "returns": "Promise<AuditFact[]>"
+      },
+      "classification": "derived-read",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/audit/facts",
+      "requestDto": "AuditQuery with optional objectId",
+      "responseDto": "AuditFact[]",
+      "capability": ["audit:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "按 objectId 的便捷查询，复用 queryAuditFacts 的同一审计资源。"
+    },
+    {
+      "repository": "AuditRepository",
+      "method": "queryAuditFacts",
+      "signature": {
+        "parameters": [
+          { "name": "query", "type": "AuditQuery", "optional": false }
+        ],
+        "returns": "Promise<AuditListResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/audit/facts",
+      "requestDto": "AuditQuery",
+      "responseDto": "AuditListResponse",
+      "capability": ["audit:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "支持 principal、object、action、result、requestId、time range、related object 和 pagination；AuditFact actor 必须是 Principal actor 或 Bootstrap/Unauthenticated/Runtime/Filesystem source actor，不能混合。"
+    },
+    {
+      "repository": "AuthRepository",
+      "method": "getAuthConfiguration",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<AuthConfiguration>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/collections/{collectionId}/auth",
+      "requestDto": "AuthCollectionPath",
+      "responseDto": "AuthConfiguration",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "只允许 Auth Collection；V0.1.0 仅冻结 email_password/username_password、registrationEnabled、primaryIdentifier、session TTL、password policy。"
+    },
+    {
+      "repository": "AuthRepository",
+      "method": "listAuthSessions",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<AuthSession[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/auth/collections/{collectionId}/sessions",
+      "requestDto": "AuthCollectionPath",
+      "responseDto": "AuthSession[]",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "这是 Auth Collection 业务用户 session 的 Control Plane 管理投影，不是 Admin/Control Plane Credential Session；业务用户自己的 session API 见 Data Plane auth routes。"
+    },
+    {
+      "repository": "AuthRepository",
+      "method": "revokeAuthSession",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "sessionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<AuthSession>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "DELETE",
+      "path": "/_modelry/api/v1/auth/collections/{collectionId}/sessions/{sessionId}",
+      "requestDto": "AuthSessionPath",
+      "responseDto": "AuthSession",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 durable Audit Fact",
+      "concurrency": "session status transition is idempotent",
+      "notes": "撤销不会删除 Principal；Credential 与 Principal 生命周期分离。"
+    },
+    {
+      "repository": "StorageRepository",
+      "method": "requestUploadSession",
+      "signature": {
+        "parameters": [
+          { "name": "input", "type": "StorageUploadInput", "optional": false }
+        ],
+        "returns": "Promise<UploadSession>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/data/upload-sessions",
+      "requestDto": "UploadSessionRequest",
+      "responseDto": "UploadSession",
+      "capability": ["data:mutate"],
+      "policy": "Administrative Data Access；最终 Record bind 仍须满足对应 Data Mutation 规则",
+      "concurrency": "session ownership and expiry",
+      "notes": "只创建 pending 临时资源；校验 collection、field、size、MIME 和 owner。"
+    },
+    {
+      "repository": "StorageRepository",
+      "method": "uploadFile",
+      "signature": {
+        "parameters": [
+          { "name": "sessionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<UploadSession>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "PUT",
+      "path": "/_modelry/api/v1/data/upload-sessions/{sessionId}/content",
+      "requestDto": "binary/octet-stream",
+      "responseDto": "UploadSession",
+      "capability": ["data:mutate"],
+      "policy": "Upload Session ownership/collection/field binding",
+      "concurrency": "pending -> uploaded; expired session rejected",
+      "notes": "V0.1.0 Local Storage handoff；不冻结 multipart、presigned URL 或 S3。"
+    },
+    {
+      "repository": "StorageRepository",
+      "method": "getUploadSession",
+      "signature": {
+        "parameters": [
+          { "name": "sessionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<UploadSession>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/data/upload-sessions/{sessionId}",
+      "requestDto": "UploadSessionPath",
+      "responseDto": "UploadSession",
+      "capability": ["data:inspect"],
+      "policy": "Upload Session owner and collection binding",
+      "concurrency": "expiry is observable state transition",
+      "notes": "无效、过期或不属于当前 Principal 的 session 不能泄漏其他上传信息。"
+    },
+    {
+      "repository": "StorageRepository",
+      "method": "commitUploadSession",
+      "signature": {
+        "parameters": [
+          { "name": "sessionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<FileValue>"
+      },
+      "classification": "presentation-only",
+      "httpMethod": null,
+      "path": null,
+      "requestDto": null,
+      "responseDto": null,
+      "capability": [],
+      "policy": "not an independent public endpoint",
+      "concurrency": "record mutation transaction",
+      "notes": "禁止冻结 standalone commit endpoint；commit 是 Record create/update 成功事务中的内部状态转换。"
+    },
+    {
+      "repository": "StorageRepository",
+      "method": "deleteFile",
+      "signature": {
+        "parameters": [
+          { "name": "url", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<void>"
+      },
+      "classification": "presentation-only",
+      "httpMethod": null,
+      "path": null,
+      "requestDto": null,
+      "responseDto": null,
+      "capability": [],
+      "policy": "not a URL-based public delete endpoint",
+      "concurrency": "post-commit durable work",
+      "notes": "文件对象删除由 Record/File 引用变化产生 durable file.object.delete；前端 URL helper 不得成为 Backend API。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "listChangeSets",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<ChangeSet[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/changesets",
+      "requestDto": "ChangeSetListQuery",
+      "responseDto": "ChangeSet[]",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "只返回 Draft/Ready/Applying/Applied/Cancelled；失败显示在 ApplyAttempt 历史。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "getChangeSet",
+      "signature": {
+        "parameters": [
+          { "name": "changeSetId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<ChangeSet>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/changesets/{changeSetId}",
+      "requestDto": "ChangeSetPath",
+      "responseDto": "ChangeSet",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "返回结构化 operations、before/after、Risk、impactFlags、Preconditions 和状态。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "listApplyAttempts",
+      "signature": {
+        "parameters": [
+          { "name": "changeSetId", "type": "string", "optional": true }
+        ],
+        "returns": "Promise<ApplyAttempt[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/apply-attempts",
+      "requestDto": "ApplyAttemptListQuery",
+      "responseDto": "ApplyAttempt[]",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "changeSetId 是可选过滤条件；Failed 只出现在 ApplyAttempt。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "applyChangeSet",
+      "signature": {
+        "parameters": [
+          { "name": "changeSetId", "type": "string", "optional": false },
+          { "name": "confirmationPrincipalId", "type": "string", "optional": true }
+        ],
+        "returns": "Promise<ApplyAttempt>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/changesets/{changeSetId}/apply",
+      "requestDto": "ApplyChangeSetRequest",
+      "responseDto": "ApplyAttempt",
+      "capability": ["changeset:apply"],
+      "policy": "ChangeSet Risk/Preconditions/Confirmation；不运行 Record Policy",
+      "concurrency": "baseModelHash or baseConfigHash; reserved ApplyPlan reuse",
+      "notes": "changeset:propose 不蕴含 apply；高风险 confirmation 必须由受控交互式 Admin 提供，Agent 不能自我声明。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "retryApplyAttempt",
+      "signature": {
+        "parameters": [
+          { "name": "attemptId", "type": "string", "optional": false },
+          { "name": "confirmationPrincipalId", "type": "string", "optional": true }
+        ],
+        "returns": "Promise<ApplyAttempt>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/apply-attempts/{attemptId}/retry",
+      "requestDto": "RetryApplyAttemptRequest",
+      "responseDto": "ApplyAttempt",
+      "capability": ["changeset:apply"],
+      "policy": "重新校验当前 Risk/Preconditions/Confirmation",
+      "concurrency": "复用适用的 reserved ApplyPlan；base hash 失效则 CHANGESET_STALE",
+      "notes": "Retry 创建新的 ApplyAttempt，但不为同一 ChangeSet 生成第二份等价 Migration Artifact。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "cancelChangeSet",
+      "signature": {
+        "parameters": [
+          { "name": "changeSetId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<ChangeSet>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/changesets/{changeSetId}/cancel",
+      "requestDto": "no body",
+      "responseDto": "ChangeSet",
+      "capability": ["changeset:propose"],
+      "policy": "仅 Draft/Ready 可取消",
+      "concurrency": "state transition guarded",
+      "notes": "Applied、Cancelled、Applying ChangeSet 不能再次取消。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "listMigrationHistory",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<MigrationHistoryEntry[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/migrations",
+      "requestDto": "MigrationHistoryListQuery",
+      "responseDto": "MigrationHistoryEntry[]",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "包含 ApplyAttempt 关联、Applied/Pending 状态和 ExportState。"
+    },
+    {
+      "repository": "ChangeSetRepository",
+      "method": "createChangeSet",
+      "signature": {
+        "parameters": [
+          { "name": "input", "type": "ChangeSetInput", "optional": false }
+        ],
+        "returns": "Promise<ChangeSet>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/changesets",
+      "requestDto": "ChangeSetProposalRequest",
+      "responseDto": "ChangeSet",
+      "capability": ["changeset:propose"],
+      "policy": "model/config/policy operation scope determined by content",
+      "concurrency": "baseModelHash for model; baseConfigHash for config",
+      "notes": "服务端计算 Risk/impact，不信任 caller-supplied Risk；canonical policy no-op 不生成 operation。"
+    },
+    {
+      "repository": "BulkMutationRepository",
+      "method": "previewBulkMutation",
+      "signature": {
+        "parameters": [
+          { "name": "request", "type": "BulkMutationRequest", "optional": false }
+        ],
+        "returns": "Promise<BulkMutationPreview>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/bulk/preview",
+      "requestDto": "BulkMutationPreviewRequest",
+      "responseDto": "BulkMutationPreview",
+      "capability": ["data:inspect"],
+      "policy": "Administrative Data Access；不进入 ChangeSet",
+      "concurrency": "previewId records target snapshot",
+      "notes": "Impact Preview 是独立安全步骤，结果应在 Execute 时校验是否仍适用。"
+    },
+    {
+      "repository": "BulkMutationRepository",
+      "method": "executeBulkMutation",
+      "signature": {
+        "parameters": [
+          { "name": "request", "type": "BulkMutationRequest", "optional": false }
+        ],
+        "returns": "Promise<BulkMutationResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/data/collections/{collectionId}/bulk",
+      "requestDto": "BulkMutationExecuteRequest",
+      "responseDto": "BulkMutationResult",
+      "capability": ["data:mutate"],
+      "policy": "Administrative Data Access；Human Confirmation；不进入 ChangeSet",
+      "concurrency": "previewId + confirmation context; per-record partial result",
+      "notes": "Frontend 当前 request 是选择输入；传输层必须关联 previewId 和受控 confirmation，不能把 UI 勾选当作服务端授权。"
+    },
+    {
+      "repository": "ApiRepository",
+      "method": "listEndpoints",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<ApiEndpoint[]>"
+      },
+      "classification": "derived-read",
+      "httpMethod": "GET",
+      "path": "/api/v1/openapi.json",
+      "requestDto": "OpenApiCollectionFilter",
+      "responseDto": "ApiEndpoint[]",
+      "capability": [],
+      "policy": "OpenAPI is a generated read artifact",
+      "concurrency": "ETag=modelHash",
+      "notes": "从生成的 OpenAPI/Backend Model 过滤当前 Collection；不新增临时 endpoint registry。"
+    },
+    {
+      "repository": "ApiRepository",
+      "method": "runEndpoint",
+      "signature": {
+        "parameters": [
+          { "name": "endpointId", "type": "string", "optional": false },
+          { "name": "input", "type": "ApiRunInput", "optional": false }
+        ],
+        "returns": "Promise<ApiRunResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "DYNAMIC",
+      "path": "{endpoint.path}",
+      "requestDto": "ApiRunInput",
+      "responseDto": "ApiRunResult",
+      "capability": [],
+      "policy": "Application Auth Principal -> Record Policy；Admin runner 不伪装 auth.id",
+      "concurrency": "If-Match for optimistic-lock PATCH/DELETE",
+      "notes": "method/path/status 来自 OpenAPI；Runner 不是第二套 Backend API。"
+    },
+    {
+      "repository": "ModelingRepository",
+      "method": "listIndexes",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<IndexDefinition[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/collections/{collectionId}/indexes",
+      "requestDto": "CollectionPath",
+      "responseDto": "IndexDefinition[]",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "Index type 仅 Index/Unique；多字段由 fields[] 表达。"
+    },
+    {
+      "repository": "ModelingRepository",
+      "method": "listPolicyRules",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<PolicyRule[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/collections/{collectionId}/policies",
+      "requestDto": "CollectionPath",
+      "responseDto": "PolicyRule[]",
+      "capability": ["model:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "Policy operation 必须覆盖 list/view/create/update/delete。"
+    },
+    {
+      "repository": "ModelingRepository",
+      "method": "simulatePolicy",
+      "signature": {
+        "parameters": [
+          { "name": "collectionId", "type": "string", "optional": false },
+          { "name": "operation", "type": "PolicyRule[\"operation\"]", "optional": false },
+          { "name": "principal", "type": "ApplicationPrincipal", "optional": false },
+          { "name": "draftExpression", "type": "string", "optional": true },
+          { "name": "context", "type": "PolicySimulationContext", "optional": true }
+        ],
+        "returns": "Promise<PolicySimulationResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/collections/{collectionId}/policies/simulate",
+      "requestDto": "PolicySimulationRequest",
+      "responseDto": "PolicySimulationResult",
+      "capability": ["model:read"],
+      "policy": "Policy Simulation；不等同 Administrative Data Access",
+      "concurrency": "none",
+      "notes": "principal 只能是 anonymous/auth application principal；Admin/Agent 不写入 auth.id。operation=list 时 allowed 表示 context.record 的有效行可见性（list Policy 与 view Policy 均通过）；缺少 context.record 返回 POLICY_CONTEXT_REQUIRED。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "getRuntimeStatus",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<RuntimeStatus>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/runtime/status",
+      "requestDto": "no body",
+      "responseDto": "RuntimeStatus",
+      "capability": ["runtime:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "诊断状态可读不等于 Data Plane 在所有状态下可用。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "listSecrets",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<SecretMetadata[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/secrets",
+      "requestDto": "no body",
+      "responseDto": "SecretMetadata[]",
+      "capability": ["secrets:manage"],
+      "policy": "Control Plane Capability Scope only；永不返回 plaintext",
+      "concurrency": "none",
+      "notes": "只返回 name/present/updatedAt。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "setSecret",
+      "signature": {
+        "parameters": [
+          { "name": "name", "type": "string", "optional": false },
+          { "name": "value", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<SecretMetadata>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "PUT",
+      "path": "/_modelry/api/v1/secrets/{name}",
+      "requestDto": "SecretSetRequest",
+      "responseDto": "SecretMetadata",
+      "capability": ["secrets:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Secret Audit Fact",
+      "concurrency": "replace is idempotent by name",
+      "notes": "请求可携带 plaintext value，响应绝不回显 value。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "deleteSecret",
+      "signature": {
+        "parameters": [
+          { "name": "name", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<void>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "DELETE",
+      "path": "/_modelry/api/v1/secrets/{name}",
+      "requestDto": "SecretPath",
+      "responseDto": "204 No Content",
+      "capability": ["secrets:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Secret Audit Fact",
+      "concurrency": "name state transition",
+      "notes": "删除也不返回已保存值。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "listHooks",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<HookDefinition[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/hooks",
+      "requestDto": "no body",
+      "responseDto": "LifecycleHook[]",
+      "capability": ["runtime:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "generation/reload state",
+      "notes": "V0.1.0 只返回 Lifecycle Hook；Event/Cron/Webhook/Delivery 仅为 deferred fixture，不能成为 operable API。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "listPrincipals",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<Principal[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/principals",
+      "requestDto": "PrincipalListQuery",
+      "responseDto": "Principal[]",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "Control Plane Principal 只包含 Admin/Agent/Service；业务 Auth Principal 不进入 Access 页面。Admin bootstrap/login/session transport 由 Backend core endpoint 提供，不强行映射到现有 Frontend Repository。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "createPrincipal",
+      "signature": {
+        "parameters": [
+          { "name": "input", "type": "GovernanceRepositoryInput[\"createPrincipal\"]", "optional": false }
+        ],
+        "returns": "Promise<Principal>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/principals",
+      "requestDto": "PrincipalCreateRequest",
+      "responseDto": "Principal",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Audit Fact",
+      "concurrency": "none",
+      "notes": "Principal 与 Credential 分离；Admin Session 与 Agent/Service API Key 都是 operable Control Plane Credential。PrincipalCreateRequest 同时冻结 Agent/Service 与后续 Admin（email/password + explicit scopes）branch；当前 Frontend Repository 只发送 Agent/Service 输入，Admin Auth transport 由 Backend core endpoint 提供。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "updatePrincipalStatus",
+      "signature": {
+        "parameters": [
+          { "name": "principalId", "type": "string", "optional": false },
+          { "name": "status", "type": "\"Active\" | \"Suspended\"", "optional": false }
+        ],
+        "returns": "Promise<Principal>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "PATCH",
+      "path": "/_modelry/api/v1/principals/{principalId}",
+      "requestDto": "PrincipalStatusUpdateRequest",
+      "responseDto": "Principal",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Audit Fact",
+      "concurrency": "status transition",
+      "notes": "只冻结 Active/Suspended；Credential revoke 是独立动作。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "listCredentials",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<Credential[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/credentials",
+      "requestDto": "CredentialListQuery",
+      "responseDto": "Credential[]",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；不返回 plaintext",
+      "concurrency": "none",
+      "notes": "V0.1.0 该 Repository method 只返回 Agent/Service API Key metadata；Admin Session 通过 ControlPlaneSession auth transport 表达，不与 Application AuthSession 混用。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "createCredential",
+      "signature": {
+        "parameters": [
+          { "name": "input", "type": "GovernanceRepositoryInput[\"createCredential\"]", "optional": false }
+        ],
+        "returns": "Promise<CreatedCredentialResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/credentials",
+      "requestDto": "CredentialCreateRequest",
+      "responseDto": "CreatedCredentialResult",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；明文 key 只返回一次",
+      "concurrency": "one-time-visible credential",
+      "notes": "API Key 明文只在创建响应出现一次；持久化只保留 hash 和 lookup prefix。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "rotateCredential",
+      "signature": {
+        "parameters": [
+          { "name": "credentialId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<CreatedCredentialResult>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/credentials/{credentialId}/rotate",
+      "requestDto": "no body",
+      "responseDto": "CreatedCredentialResult",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Audit Fact",
+      "concurrency": "old credential invalidated according to rotation result",
+      "notes": "rotate/replace 只生成新 Credential，不改变 Principal。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "revokeCredential",
+      "signature": {
+        "parameters": [
+          { "name": "credentialId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<Credential>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "POST",
+      "path": "/_modelry/api/v1/credentials/{credentialId}/revoke",
+      "requestDto": "no body",
+      "responseDto": "Credential",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Audit Fact",
+      "concurrency": "revocation is idempotent",
+      "notes": "撤销是 Credential 状态变化，不删除 Principal。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "listCapabilities",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<CapabilityScope[]>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/capabilities",
+      "requestDto": "no body",
+      "responseDto": "CapabilityScope[]",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "none",
+      "notes": "Capability 词汇必须与冻结清单完全一致。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "assignCapability",
+      "signature": {
+        "parameters": [
+          { "name": "principalId", "type": "string", "optional": false },
+          { "name": "capabilityId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<CapabilityScope>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "PUT",
+      "path": "/_modelry/api/v1/principals/{principalId}/capabilities/{capabilityId}",
+      "requestDto": "PrincipalCapabilityPath",
+      "responseDto": "CapabilityScope",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Audit Fact",
+      "concurrency": "set membership is idempotent",
+      "notes": "assign 不隐式授予其他 capability。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "removeCapability",
+      "signature": {
+        "parameters": [
+          { "name": "principalId", "type": "string", "optional": false },
+          { "name": "capabilityId", "type": "string", "optional": false }
+        ],
+        "returns": "Promise<CapabilityScope>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "DELETE",
+      "path": "/_modelry/api/v1/principals/{principalId}/capabilities/{capabilityId}",
+      "requestDto": "PrincipalCapabilityPath",
+      "responseDto": "CapabilityScope",
+      "capability": ["access:manage"],
+      "policy": "Control Plane Capability Scope only；写入 Audit Fact",
+      "concurrency": "set membership is idempotent",
+      "notes": "data:inspect 不等于 data:mutate；changeset:propose 不等于 changeset:apply。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "listActivity",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<ActivityEvent[]>"
+      },
+      "classification": "derived-read",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/activity",
+      "requestDto": "ActivityQuery",
+      "responseDto": "ActivityEvent[]",
+      "capability": ["audit:read"],
+      "policy": "Activity 是 Runtime/Migration/Hook/Delivery 等 projection，不是 Audit Fact 存储模型",
+      "concurrency": "none",
+      "notes": "V0.1.0 不因 Activity 的 Delivery projection 冻结 Event Delivery API。"
+    },
+    {
+      "repository": "GovernanceRepository",
+      "method": "getSettings",
+      "signature": {
+        "parameters": [],
+        "returns": "Promise<RuntimeSettings>"
+      },
+      "classification": "backend-api",
+      "httpMethod": "GET",
+      "path": "/_modelry/api/v1/runtime/settings",
+      "requestDto": "no body",
+      "responseDto": "RuntimeSettings",
+      "capability": ["runtime:read"],
+      "policy": "Control Plane Capability Scope only",
+      "concurrency": "configHash is read baseline",
+      "notes": "V0.1.0 storageDriver 只能为 Local；OAuth/SMTP/S3 不进入 operable settings contract。"
+    }
+  ]
+}
