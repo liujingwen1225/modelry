@@ -279,9 +279,6 @@ Continue recent work
 posts             Continue editing
 Change #12        Review
 users             Open Records
-
-Quick navigation
-[ Collections ]   [ Changes ]   [ Activity ]
 ~~~
 
 规则：
@@ -290,6 +287,7 @@ Quick navigation
 - 正常 Health 信息保持紧凑；
 - 读取失败显示 Unknown / Unavailable，不能显示 Ready；
 - Recent Work 只保留 1–3 项；
+- 不再额外放置 Collections / Changes / Activity 的 Quick Navigation，Sidebar 已承担导航职责；
 - 不复制 Collections Inventory；
 - 不复制 Activity Timeline；
 - 不放大号 Record / Request KPI。
@@ -361,6 +359,10 @@ Collection Workspace
 
 Create Collection 必须完成一个 Collection 的**初始模型定义**，不采用“先创建空 Collection，再跳到 Schema 补字段”的割裂流程。
 
+由于创建阶段可能连续定义多个 Field / Relation，Create Collection 使用**宽幅 Focused Creation Workspace**，而不是窄侧边 Sheet，也不拆成多步 Wizard。
+
+它仍然是一次操作、一次提交，只是给连续建模足够空间。
+
 用户心智是：
 
 > 我要创建一个 posts 数据模型。
@@ -398,7 +400,10 @@ title          Text              Yes
 slug           Text              Yes
 author         Relation          No              -> users
 
-[ + Add Field ]
+Quick add field
+[ field name ] [ Type ▼ ] [ Required ] [ + Add ]
+
+[ Advanced field settings ]
 
 ────────────────────────────────────────
                          Cancel   Create Collection
@@ -420,18 +425,32 @@ author         Relation          No              -> users
 
 ### Add Field
 
-点击 + Add Field 使用与 Schema 页面一致的 Canonical Field Editor。
+创建阶段优先支持 **Quick Add**，让普通字段无需反复打开 / 关闭 Editor：
 
-可在创建阶段定义：
+~~~text
+[ name ] [ Type ▼ ] [ Required ] [ + Add ]
+~~~
 
-- 普通 Field；
-- Validation；
-- Default；
-- Required；
-- Relation Field；
-- File Field。
+适合快速创建：
 
-Add Field 只加入当前 Create Collection Draft，不立即写入 Runtime。
+- Text；
+- Number；
+- Boolean；
+- Datetime；
+- 其他无需复杂配置的基础 Field。
+
+需要 Validation、Default、Relation、File 或 Type-specific Option 时，点击 Advanced 或已添加 Field，打开与 Schema 共用的 Canonical Field Editor。
+
+因此常见建模路径是：
+
+~~~text
+title   Text      Required   + Add
+slug    Text      Required   + Add
+views   Number               + Add
+author  Relation             -> Advanced
+~~~
+
+Quick Add 与 Advanced Editor 最终都只修改同一个 Create Collection Draft，不立即写入 Runtime。
 
 用户可以连续添加、编辑、删除初始字段。
 
@@ -600,6 +619,17 @@ Create Record 是唯一 Primary Action。
 - Loading / Empty / Error；
 - Record Deep Link。
 
+Records 页面必须保留用户当前工作上下文：
+
+- Search；
+- Filter；
+- Sort；
+- Pagination / Cursor；
+- Column Visibility（适合 URL 的部分进入 URL State，其余可作为本地偏好）；
+- 当前打开的 Record Deep Link。
+
+打开 Record Detail、编辑后返回、刷新页面时，不应把用户重置回默认列表。
+
 Bulk Action 只有真正 Runtime 支持时才显示。
 
 ## 9.2 Record Detail Sheet
@@ -655,6 +685,12 @@ Create
 -> durable ID/value visible
 -> Table refetches
 ~~~
+
+Create 成功后的 View 状态可以提供 Secondary Action：
+
+- Create another
+
+用于连续录入多条数据，但不自动清空并进入下一条，避免意外丢失刚创建结果。
 
 Edit 同理。
 
@@ -874,19 +910,19 @@ posts + users + comments
 
 跨 Collection 联合 Draft 会显著增加依赖排序、失败恢复、权限和 UX 复杂度，留待后续版本单独设计。
 
-## 10.4 Shared Draft Action Bar
+## 10.5 Shared Draft Action Bar
 
 只要 Fields / Relations / Indexes 有任何 Draft：
 
 ~~~text
 ┌─────────────────────────────────────────────────────────────┐
-│ 3 unsaved model changes              Discard   Apply Changes│
+│ 3 unsaved model changes            Discard   Apply 3 changes│
 └─────────────────────────────────────────────────────────────┘
 ~~~
 
 固定在 Workspace 底部。
 
-默认主操作是 **Apply Changes**，不要求用户先跳转 Changes 页面。
+默认主操作应带上当前变更数量，例如 **Apply 3 changes**，不使用含糊的通用 Apply Changes，也不要求用户先跳转 Changes 页面。
 
 点击 Apply Changes 后：
 
@@ -963,15 +999,27 @@ Preconditions: 1 warning
 
 回答：
 
-> Application User 对当前 Collection 可以做什么？
+> Application User 对当前 Collection 的各类操作分别有什么访问规则？
 
-## 线框
+Policy 不默认让用户在五个 Operation Tab 之间来回切换，而是先给出**五类操作的整体摘要**，再编辑单项规则。
+
+## 首屏
 
 ~~~text
-Policy                                             [ Review Changes ]
+Policy
 
-Operation
-[ List ] [ View ] [ Create ] [ Update ] [ Delete ]
+Operation        Current rule                         Status
+List             ownerId = @request.auth.id          Custom
+View             ownerId = @request.auth.id          Custom
+Create           authenticated                       Custom
+Update           ownerId = @request.auth.id          Custom
+Delete           denied                              Default deny
+~~~
+
+点击某一 Operation 后，在同页 Detail / Editor Pane 中编辑：
+
+~~~text
+Update policy
 
 Rule
 ┌──────────────────────────────────────────────────────────────┐
@@ -979,24 +1027,41 @@ Rule
 └──────────────────────────────────────────────────────────────┘
 
 Readable explanation
-Only records owned by the current user are accessible.
+Only records owned by the current user can be updated.
 
 Secondary:
-[ Simulate ]
+[ Copy from View ]   [ Simulate ]
+
+───────────────────────────────────────────────────────────────
+                         Cancel   Save Draft
 ~~~
 
-Policy Mutation 属于 Backend Model Change，不能直接 Save 到 Runtime。
+这样用户始终能看到 List / View / Create / Update / Delete 的整体状态，不需要逐个 Tab 才知道当前配置。
 
-Primary Action：
+### 减少重复配置
 
-- 无 Draft：Edit / Add Rule
-- 有 Draft：Review Changes
+Policy Editor 支持把已有 Operation Rule 复制到当前 Operation Draft，例如：
+
+- Copy from List；
+- Copy from View；
+- Copy from Update。
+
+复制只修改 Draft，不直接写 Runtime。
+
+### Apply
+
+Policy Mutation 属于 Backend Model Change，进入当前 Collection Shared Draft。
+
+有 Draft 时使用统一 Bottom Sticky Action Bar：
+
+~~~text
+2 unsaved changes                         Discard   Apply 2 changes
+~~~
 
 Simulation 是 Secondary Tool。
 
-Simulation Result 应与编辑区分开，不能自动改变 Rule。
+Simulation Result 与编辑区分离，不能自动改变 Rule。
 
----
 
 # 13. Auth — Auth Collection Only
 
@@ -1403,6 +1468,14 @@ Read-only runtime information
 
 Runtime Config 是否进入 ChangeSet，由后续 Runtime Config Contract 决定；UI 不提前假设直接写文件。
 
+每一个可编辑 Setting 必须明确标记生效方式：
+
+- Applies immediately；
+- Requires Runtime restart；
+- Read-only / derived。
+
+保存需要 Restart 的配置后，当前页面必须持续显示 Pending Restart，并提供明确 Restart Guidance，不能只 Toast 成功。
+
 ## 19.2 Secrets
 
 ~~~text
@@ -1472,7 +1545,43 @@ Activity 不复制：
 
 ---
 
-# 21. Sheet / Drawer / Dialog 统一规则
+# 21. 操作效率与上下文保留
+
+## 21.1 列表上下文不丢失
+
+从 List / Table 进入 Detail、Edit、Sheet 后返回时，必须尽可能恢复：
+
+- Search；
+- Filter；
+- Sort；
+- Pagination / Cursor；
+- Selected local view；
+- Scroll / selection（在稳定实现可行时）。
+
+适合 Deep Link 的状态进入 URL State；纯展示偏好保留为 Local Preference。
+
+禁止用户每查看或编辑一个对象就被送回列表第一页。
+
+## 21.2 高频简单操作就地完成
+
+当一个操作只需要 1–3 个常用字段时，优先使用 Quick Add / Inline Draft，而不是强制打开大型 Editor。
+
+复杂配置再 Progressive Disclosure 到 Sheet / Detail Pane。
+
+适用：
+
+- Add simple Field；
+- Initial Collection Fields；
+- 简单 Filter；
+- Policy Rule copy。
+
+不适用：
+
+- Destructive Confirmation；
+- Complex Relation / File configuration；
+- Long-form Hook Code。
+
+# 22. Sheet / Drawer / Dialog 统一规则
 
 ## Sheet / Drawer
 
@@ -1506,7 +1615,7 @@ Activity 不复制：
 
 ---
 
-# 22. Primary Action 位置规则
+# 23. Primary Action 位置规则
 
 默认：
 
@@ -1527,7 +1636,7 @@ Access                                          [ + Add Principal ]
 当页面存在 Draft 时，Primary Action 从页面右上切换为 Bottom Sticky Action Bar：
 
 ~~~text
-3 unsaved changes                       Discard   Review Changes
+3 unsaved changes                     Discard   Apply 3 changes
 ~~~
 
 Detail Sheet 的 Primary Action 默认位于右下。
@@ -1536,7 +1645,7 @@ Destructive Action 不与 Primary Action 使用相同视觉权重。
 
 ---
 
-# 23. 页面状态
+# 24. 页面状态
 
 每个核心页面必须至少设计：
 
@@ -1580,7 +1689,7 @@ Create your first Collection to define application data.
 
 ---
 
-# 24. Responsive 与 Density
+# 25. Responsive 与 Density
 
 V0.1 Admin 优先 Desktop Developer Tool。
 
@@ -1598,7 +1707,7 @@ Form 最大宽度应限制，避免 1920px 下字段横跨整屏。
 
 ---
 
-# 25. Design System 与技术边界
+# 26. Design System 与技术边界
 
 固定技术基线：
 
@@ -1642,7 +1751,7 @@ Modelry Design System 决定：
 
 ---
 
-# 26. Browser Acceptance 对齐
+# 27. Browser Acceptance 对齐
 
 本 Spec 中每个核心页面都必须能被 Playwright 以稳定语义识别。
 
@@ -1696,7 +1805,7 @@ Hook
 
 ---
 
-# 27. Definition of Done
+# 28. Definition of Done
 
 Admin V0.1 不能仅以“页面完成”验收。
 
@@ -1716,7 +1825,7 @@ Admin V0.1 不能仅以“页面完成”验收。
 
 ---
 
-# 28. 后续文档关系
+# 29. 后续文档关系
 
 本 Spec 固定页面产品结构，但不冻结具体 HTTP DTO。
 
