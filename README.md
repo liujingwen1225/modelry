@@ -1,30 +1,37 @@
 # Modelry
 
-Modelry is being rebuilt as a self-hosted application backend designed for both human developers and Coding Agents.
+Modelry is a productized Backend Platform for building and operating application backends through a visual Admin, stable APIs, and agent-friendly interfaces.
 
-## Reboot baseline
+The product goal is not to expose database internals. Modelry should be easy to start, easy to understand, pleasant to use, visually coherent, and complete enough to finish real backend work without assembling many unrelated tools.
 
-- Backend: **Go**
-- Frontend: **React + TypeScript + Vite**
-- Storage: **SQLite First**
-- Packaging: **Single Binary**
-- Topology: **One Instance / One Project**
-- Architecture: **Modular Monolith**
-- Product discipline: **Contract First**
+## Product direction
 
-This repository is a clean implementation reboot. The previous implementation is preserved separately in `liujingwen1225/modelry-bf`.
+Modelry is developed as one product family:
 
-## Documentation status
+- Modelry Community: open-source, self-hosted, SQLite-based, zero-config-first.
+- Modelry Enterprise: self-hosted commercial edition for production teams and organizations, with PostgreSQL and enterprise governance capabilities.
+- Modelry Cloud: official managed SaaS built around PostgreSQL and a dedicated cloud control plane.
 
-Current Reboot planning lives under:
+Community must remain a complete backend product rather than a demo edition. Enterprise and Cloud sell production scale, governance, operations, and managed service value.
 
-- `docs/reboot/`
+## V0.1 Community technical baseline
 
-Pre-Reboot and legacy V0.1 documents are retained under:
+- Backend runtime: Go
+- Database: SQLite
+- Admin: React + TypeScript + Vite
+- Architecture: modular monolith
+- Product discipline: Contract First
+- Default delivery: simple self-hosted runtime with an embedded Admin
+- User extension direction: JavaScript / TypeScript runtime boundary, not Go plugins
 
-- `docs/archive/pre-reboot/`
-- `docs/archive/legacy-v0.1/`
+Single Binary and One Instance / One Project are V0.1 Community delivery choices. They are not permanent product-wide constraints and must not block future Enterprise or Cloud evolution.
 
-Legacy documents are reference material only. They are not automatically authoritative for the Go Reboot.
+## Documentation
 
-The new authoritative Product Vision, V0.1 Scope, ADRs, Specs and Contracts will be rewritten from the consolidated source set before production implementation begins.
+The authoritative documentation starts at docs/README.md.
+
+Historical pre-Reboot documents are intentionally not kept in this repository's active documentation tree. The previous implementation and historical material remain available through repository history and the separate modelry-bf repository.
+
+## Current phase
+
+The current phase is product and architecture definition before production implementation. Product roadmap, technical roadmap, edition strategy, V0.1 scope, product experience rules, and product architecture are authoritative inputs for the next ADR / Spec / Contract pass.

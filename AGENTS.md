@@ -1,35 +1,61 @@
-# AGENTS.md — Modelry Reboot
+# AGENTS.md — Modelry
 
 ## Read first
 
-1. `CONTEXT.md`
-2. `docs/reboot/0000-source-inventory-and-migration-plan.md`
-3. `docs/reboot/v0.1-capability-decision-matrix.md`
-4. the accepted Reboot Scope / ADR / Spec / Contract for the task.
+1. CONTEXT.md
+2. docs/00-product-vision.md
+3. docs/01-product-roadmap.md
+4. docs/02-technical-roadmap.md
+5. docs/03-editions-and-cloud.md
+6. docs/04-v0.1-community-scope.md
+7. docs/05-product-experience-and-acceptance.md
+8. docs/06-product-architecture.md
+9. the accepted ADR / Spec / Contract for the task
 
-## Authority
+## Product rule
 
-- `docs/archive/**` is reference material only.
-- Do not copy the old Bun/TypeScript implementation into the Go core.
-- If a legacy decision is useful, migrate its semantics into a Reboot document first.
+Do not optimize Modelry as an internal engineering system.
 
-## Reboot invariants
+Every feature must be judged as a product surface:
 
-- Go backend
+- Can a new user understand it quickly?
+- Is there one obvious next action?
+- Are defaults safe and useful?
+- Is the durable result visible?
+- Are errors actionable?
+- Can a real workflow finish end to end?
+- Does the UI feel like one coherent product?
+
+## V0.1 Community baseline
+
+- Go
+- SQLite
 - React + TypeScript + Vite
-- SQLite First
-- Single Binary
-- One Instance / One Project
-- Modular Monolith
+- modular monolith
 - Contract First
-- no premature distributed architecture
-- no hypothetical database adapter
-- no Go dynamic plugin system as the default project Hook model
+- zero-config-first
+- simple self-hosted distribution
 
-## Contract First
+Single Binary and One Instance / One Project are V0.1 Community delivery choices. Do not turn them into permanent global assumptions.
 
-Define/freeze externally observable behavior before implementation. Then implement Go runtime, wire clients, and prove behavior with real integration/browser acceptance.
+## Architecture rules
 
-## Quality
+- Product semantics must not equal SQLite-specific semantics.
+- Do not build PostgreSQL in V0.1, but do not make adding it later require rewriting Modelry's domain model.
+- Do not expose raw database concepts when a Modelry product concept exists.
+- Data Plane and Control Plane stay separate.
+- Admin identity and Application Auth stay separate.
+- Schema evolution goes through ChangeSet / Diff / Risk / Apply / History.
+- Hooks and extensions remain behind an explicit JavaScript / TypeScript-facing runtime boundary.
+- MCP is another interface to the same product semantics, not a privileged bypass.
+- Contract is defined before transport implementation.
 
-Prefer real compiled binary, real SQLite, real HTTP, real Admin browser, restart persistence and durable-state assertions.
+## Quality rule
+
+The definition of done is not code compiled or API passed.
+
+Core work requires:
+
+Functional Closure + UX Closure + Visual Closure + Error Closure + Business Flow Closure.
+
+Use real runtime, real SQLite, real HTTP, real Admin browser and durable-state verification for mandatory acceptance.

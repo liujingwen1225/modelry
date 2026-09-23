@@ -1,49 +1,88 @@
-# Modelry Reboot Context
+# Modelry Current Context
 
-## Project identity
+## Product identity
 
-Modelry is a self-hosted application backend designed for both human developers and Coding Agents.
+Modelry is a productized Backend Platform for human developers and Coding Agents.
 
-This repository is the clean **Modelry Reboot** implementation. The previous implementation is preserved in `liujingwen1225/modelry-bf` and is not a code compatibility baseline.
+Its core job is to let a developer move from an empty backend to a working application backend through one coherent product experience:
 
-## Reboot baseline
+start -> model data -> manage records -> use APIs -> configure auth and policy -> add files/realtime/hooks -> evolve schema safely -> observe and diagnose the runtime.
 
-- Backend: **Go**
-- Frontend: **React + TypeScript + Vite**
-- Storage: **SQLite First**
-- Packaging: **Single Binary**
-- Topology: **One Instance / One Project**
-- Architecture: **Modular Monolith**
-- Discipline: **Contract First**
+Modelry must not become a database administration tool with extra features attached.
 
-## Current phase
+## Product priority
 
-The project is currently in **documentation consolidation and V0.1 re-planning**.
+The priority order is:
 
-Do not begin production implementation until Product Vision, V0.1 Scope, Reboot ADRs, Foundation Spec, Contract, Admin Product UX and Browser Acceptance are rewritten and accepted.
+1. Easy to use
+2. Useful in real work
+3. Visually polished and coherent
+4. Functionally complete
+5. Technically elegant
 
-## Documentation authority
+Architecture exists to serve the product experience.
 
-When documents disagree:
+## Product family
 
-1. accepted Reboot decisions / ADRs / Specs / Contracts;
-2. current `docs/reboot/**`;
-3. `docs/archive/pre-reboot/**`;
-4. `docs/archive/legacy-v0.1/**`;
-5. legacy implementation/prototype/spike evidence.
+### Community
 
-Nothing under `docs/archive/**` is automatically authoritative for the Go Reboot.
+Open-source, self-hosted, SQLite-based and zero-config-first.
 
-## Implementation principle
+Community is expected to provide a complete single-backend workflow including schema, records, API, auth, policy, files, realtime, hooks, changes, observability, OpenAPI and MCP.
 
-Do not translate the old TypeScript backend into Go.
+### Enterprise
 
-```text
-product semantics
-  -> accepted scope
-  -> ADR
-  -> contract
-  -> spec
-  -> Go / React implementation
-  -> acceptance
-```
+Commercial self-hosted edition for organizations operating production backends.
+
+PostgreSQL and enterprise capabilities belong here when they solve real production, governance, identity, audit, backup, availability and support needs.
+
+### Modelry Cloud
+
+Official SaaS.
+
+Cloud introduces a Cloud Control Plane for Organization, Team, Project, Environment, Region, Usage, Billing, Backup and managed operations. Project Backend Plane semantics remain shared with self-hosted Modelry.
+
+## V0.1 Community baseline
+
+- Go runtime
+- SQLite
+- React + TypeScript + Vite Admin
+- modular monolith
+- Contract First
+- zero-config-first startup
+- embedded Admin / simple distribution
+- one runtime serving one project as the V0.1 Community topology
+
+These are V0.1 delivery choices, not permanent product ontology.
+
+## Architectural invariants
+
+- Modelry Backend Model owns product semantics; SQLite does not define the product model.
+- Collection, Field, Relation, Index, Policy and ChangeSet are Modelry concepts first.
+- The V0.1 implementation only needs SQLite, but the core must not make a later PostgreSQL backend require a product-model rewrite.
+- Application Data Plane and Modelry Control Plane remain distinct.
+- Admin identity and Application user identity remain distinct.
+- Principal and Credential remain distinct concepts.
+- Schema/model changes use an explicit reviewable lifecycle.
+- Human Admin, API, CLI and MCP must operate the same backend semantics.
+- External side effects happen after commit; reliable delivery intent must be durable before commit completes.
+- User extensions are not forced to use Go.
+
+## Authoritative read order
+
+1. docs/00-product-vision.md
+2. docs/01-product-roadmap.md
+3. docs/02-technical-roadmap.md
+4. docs/03-editions-and-cloud.md
+5. docs/04-v0.1-community-scope.md
+6. docs/05-product-experience-and-acceptance.md
+7. docs/06-product-architecture.md
+8. accepted future ADRs
+9. accepted future Specs
+10. accepted future Contracts
+
+Historical documents are not authority.
+
+## Current implementation gate
+
+Do not start broad production implementation until the new ADR, Foundation Spec, HTTP Contract and Admin Product UX Spec have been rewritten against this baseline.
