@@ -154,6 +154,12 @@ Sidebar 只承担导航，不放：
 
 > 这是一个新的 Modelry Runtime，我如何创建第一个 Admin？
 
+## 默认 Community 本机流程
+
+当 Runtime 使用默认本机绑定（例如 127.0.0.1 / localhost）且尚未创建 Admin 时，用户打开 Admin 应直接进入首次 Setup。
+
+普通用户**不需要复制或输入 Setup Token**。
+
 ## 线框
 
 ~~~text
@@ -164,32 +170,52 @@ Sidebar 只承担导航，不放：
 │                                               │
 │  Instance       local-modelry                 │
 │                                               │
-│  Setup Token    [________________________]     │
 │  Email          [________________________]     │
 │  Password       [________________________]     │
 │                                               │
-│  安全说明                                     │
+│  首次创建 Admin 后，此 Setup 页面自动关闭    │
 │                                               │
-│                     [ Complete Bootstrap ]    │
+│                     [ Complete Setup ]        │
 └───────────────────────────────────────────────┘
 ~~~
 
 Primary Action：
 
-- Complete Bootstrap
+- Complete Setup
 
 成功：
 
 ~~~text
 Admin created
 -> session established
+-> bootstrap closed
 -> redirect Overview
 ~~~
 
+## Remote Bootstrap
+
+只有在 Runtime 被显式暴露为远程可访问，或首次 Admin 创建不是从本机可信上下文发起时，才启用额外 Bootstrap Security Mechanism。
+
+可以采用：
+
+- 一次性 Bootstrap Secret；
+- CLI bootstrap；
+- 启动时生成的短期 Pairing / Claim Code；
+
+具体机制由后续 Security ADR / Contract 决定。
+
+关键产品规则：
+
+- Remote Bootstrap Secret 不进入默认 Community 本机 UX；
+- 不要求普通用户从 Terminal 复制长 Token 到 Browser；
+- Bootstrap Secret 只用于证明首次管理权，不作为后续 Login Credential；
+- Admin 创建成功后 Bootstrap Capability 必须自动关闭；
+- Runtime 已完成 Bootstrap 后再次访问 Setup 必须明确显示 already configured。
+
 必须覆盖：
 
-- invalid token；
 - already bootstrapped；
+- remote bootstrap secret invalid / expired（仅远程模式）；
 - runtime unavailable；
 - submitting；
 - password validation。
