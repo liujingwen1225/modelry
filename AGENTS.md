@@ -10,7 +10,8 @@
 6. docs/04-v0.1-community-scope.md
 7. docs/05-product-experience-and-acceptance.md
 8. docs/06-product-architecture.md
-9. 与当前任务直接相关的 Accepted ADR / Spec / Contract
+9. docs/specs/0001-admin-product-ux-spec.md
+10. 与当前任务直接相关的 Accepted ADR / Spec / Contract
 
 ## 产品原则
 
