@@ -359,37 +359,181 @@ Collection Workspace
 
 ## 7.3 Create Collection
 
-点击后使用 Sheet，而不是跳到独立 Wizard 页面。
+Create Collection 必须完成一个 Collection 的**初始模型定义**，不采用“先创建空 Collection，再跳到 Schema 补字段”的割裂流程。
+
+用户心智是：
+
+> 我要创建一个 posts 数据模型。
+
+而不是：
+
+> 我要先创建一个空容器，再去另一个页面继续配置。
+
+### 线框
 
 ~~~text
 Create Collection
+────────────────────────────────────────
+
+Basic information
 
 Type
-(•) Normal
-( ) Auth
+[ Normal ▼ ]
 
 Name
-[________________]
+[ posts ]
 
 Description
-[____________________________]
+[ Blog posts ]
 
-                         [ Cancel ] [ Review Change ]
+────────────────────────────────────────
+Initial fields
+
+Field          Type              Required        Features
+id             System ID         Yes             System · Locked
+createdAt      Datetime          No              System-managed
+updatedAt      Datetime          No              System-managed
+
+title          Text              Yes
+slug           Text              Yes
+author         Relation          No              -> users
+
+[ + Add Field ]
+
+────────────────────────────────────────
+                         Cancel   Create Collection
 ~~~
 
-因为创建 Collection 属于 Backend Model Change：
+### 默认字段
+
+创建界面必须直接展示：
+
+- id；
+- createdAt；
+- updatedAt。
+
+其中：
+
+- id 固定存在且不可修改；
+- createdAt / updatedAt 可以在创建阶段删除；
+- 默认字段必须明确标记系统语义，避免用户重复创建同名字段。
+
+### Add Field
+
+点击 + Add Field 使用与 Schema 页面一致的 Canonical Field Editor。
+
+可在创建阶段定义：
+
+- 普通 Field；
+- Validation；
+- Default；
+- Required；
+- Relation Field；
+- File Field。
+
+Add Field 只加入当前 Create Collection Draft，不立即写入 Runtime。
+
+用户可以连续添加、编辑、删除初始字段。
+
+### Relation
+
+Relation 仍然是 Field Type。
+
+因此创建阶段可以直接：
 
 ~~~text
-Draft
--> Review Change
--> ChangeSet
--> Runtime canonical Risk / Preconditions
--> Apply
--> Collection durable
--> enter Collection / Records
+author
+-> Relation
+-> target users
+-> many-to-one
 ~~~
 
----
+不需要先创建 Collection 再跳 Schema / Relations。
+
+### Index
+
+V0.1 默认 Create Collection Surface 不要求用户立即创建 Index。
+
+原因：
+
+- 初次创建 Collection 的主要任务是定义数据结构；
+- Index 属于更高级的查询 / 唯一性设计；
+- 可以在 Collection 创建完成后从 Schema / Indexes 添加。
+
+如果后续确认 Unique Constraint 需要成为常见建模入口，可以通过 Field Feature 表达并由 Runtime 生成对应 Index，但不在本 Spec 提前冻结。
+
+### 提交语义
+
+整个 Create Collection Surface 只产生一个 Draft。
+
+~~~text
+Collection definition
++
+Initial Fields
++
+Initial Relations
++
+Field Validation / Defaults
+        ↓
+one modeling draft
+        ↓
+Create Collection
+        ↓
+one ChangeSet
+        ↓
+Runtime canonical Risk / Preconditions / Impact
+        ↓
+SAFE -> apply immediately
+Risk -> review in current Create Collection flow
+        ↓
+durable Collection
+~~~
+
+用户只需要点击一次 **Create Collection**。
+
+不要求：
+
+~~~text
+Create empty Collection
+-> enter Collection
+-> open Schema
+-> add fields
+-> Apply again
+~~~
+
+### Apply 结果
+
+创建成功后直接进入：
+
+~~~text
+Collection Workspace
+-> Records
+~~~
+
+如果 Collection 尚无 Record：
+
+~~~text
+posts
+
+No records yet.
+Your collection is ready with 6 fields.
+
+[ Create first record ]
+
+Secondary:
+Edit Schema
+~~~
+
+此时用户可以立即创建第一条业务数据。
+
+如果 Runtime 返回需要确认的风险，Review / Confirm 仍在当前 Create Collection Flow 原地完成，不强制跳转 Changes。
+
+如果用户只有 propose 权限没有 apply 权限：
+
+- Create Collection Draft 可以 Save for Later；
+- 后续从 Changes 页面继续；
+- 未 Apply 前不得把 Collection 显示为已经创建。
+
 
 # 8. Collection Workspace Header
 
