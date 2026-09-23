@@ -1,64 +1,84 @@
-# Modelry Technical Roadmap
+# Modelry 技术路线
 
-## Objective
+## 目标
 
-The technical route exists to support the product route:
+技术路线服务于产品路线：
 
-Community first -> production-ready Enterprise -> managed Modelry Cloud.
+~~~text
+Community
+→ Commercial / Enterprise
+→ Modelry Cloud
+~~~
 
-## Baseline selection
+当前技术选择必须保证 V0.1 简单，同时不把未来 PostgreSQL、Enterprise 和 Cloud 的演进路径堵死。
 
-### Runtime Core
+## Runtime Core：Go
 
-Go.
+Go 适合作为 Modelry Runtime Core，因为：
 
-Why it fits Modelry:
+- 适合长期运行的 Backend Runtime；
+- HTTP / Networking / Concurrency 能力成熟；
+- Runtime Resource 使用可控；
+- Cross-platform Distribution 简单；
+- Self-hosted 与 Cloud Project Runtime 可以共用；
+- Runtime Core 与用户 Extension Language 可以保持分离。
 
-- stable long-running backend runtime;
-- simple deployment and cross-platform distribution;
-- strong concurrency and HTTP/runtime engineering;
-- predictable resource use;
-- suitable for both self-hosted and managed project runtimes;
-- keeps the runtime core independent from the user's extension language.
+Go 是内部 Runtime Implementation Language，不是用户必须面对的扩展语言。
 
-### Community Database
+## Community Database：SQLite
 
-SQLite.
+SQLite 是 Community 的正式数据库边界，而不仅仅是“V0.1 临时数据库”。
 
-Why it fits Community:
+价值：
 
-- no external database setup;
-- excellent first-run and local self-hosted experience;
-- easy packaging, backup and project portability;
-- reinforces the product promise that the Community edition starts simply.
+- 不要求用户先安装外部数据库；
+- 支持真正 Zero-config-first；
+- 非常适合 Local / Self-hosted / 小团队；
+- 备份、分发和项目可移植性好；
+- 与 Community“简单完整”的产品定位一致。
 
-### Enterprise / Cloud Database
+## Commercial / Enterprise / Cloud Database：PostgreSQL
 
-PostgreSQL, introduced later.
+PostgreSQL 是明确的后续真实 Target，不是假想 Adapter。
 
-PostgreSQL is a real planned target, not an abstract theoretical database. Therefore the V0.1 core must preserve product semantics above the SQLite implementation.
+因此 V0.1 必须做到：
 
-V0.1 does not need to implement PostgreSQL.
+> 只实现 SQLite，但不让 Modelry Domain Model 依赖 SQLite 私有语义。
 
-### Admin
+V0.1 不实现 PostgreSQL。
 
-React + TypeScript + Vite.
+## Admin：React + TypeScript + Vite
 
-Admin is a first-class product surface, not a generated internal console.
+Admin 是核心产品，不是内部管理工具。
 
-### Extension Runtime
+前端技术选择必须优先支持：
 
-JavaScript / TypeScript-facing runtime boundary.
+- Complex Workspace
+- Data Table
+- Form
+- Diff
+- Drawer / Sheet
+- API Runner
+- Query State
+- URL State
+- Design System
+- Browser Acceptance
 
-Go is the internal runtime language. It must not force project Hooks, Custom APIs or future extensions to be authored in Go.
+## Extension Runtime：JavaScript / TypeScript-facing Boundary
 
-The exact embedded engine / worker / process mechanism is an ADR + spike decision, but the product-facing language and capability boundary are separate from the Go core.
+Go Core 不意味着 Hook / Custom API 必须写 Go。
 
-## Architecture direction
+用户侧应该保留易于开发的 JavaScript / TypeScript Extension Experience。
 
-Start as a modular monolith.
+具体采用 Embedded Engine、Worker、Subprocess 还是其他机制，由独立 ADR + Spike 决定。
 
-Major internal modules:
+但 Product-facing Language 和 Capability Boundary 必须与 Go Core 解耦。
+
+## 总体架构
+
+V0.1 从 **Modular Monolith** 开始。
+
+主要模块：
 
 - Backend Model / Schema
 - Changes / Migration
@@ -73,157 +93,190 @@ Major internal modules:
 - Observability
 - Audit / Activity
 - Admin Control Plane
-- MCP / CLI.
+- MCP
+- CLI
 
-Do not create service boundaries merely because Cloud exists in the future.
+不要因为未来要做 Cloud，就提前为这些模块创建 Network Service Boundary。
 
-## Storage boundary
+## Storage Boundary
 
-The rule is:
+正确关系：
 
-Modelry semantics -> storage implementation.
+~~~text
+Modelry Semantics
+→ Storage / Migration Boundary
+→ SQLite
+→ future PostgreSQL
+~~~
 
-Not:
+错误关系：
 
-SQLite schema -> Modelry semantics.
+~~~text
+SQLite Table / Index / SQL
+→ 反推出 Modelry Product Semantics
+~~~
 
-Collection, Field, Relation, Index, Query and Change must exist as domain concepts before SQL generation/execution.
+Collection、Field、Relation、Index、Query、Change 都必须先存在为 Modelry Domain Concept。
 
-V0.1 may use SQLite-native implementation deeply for correctness and simplicity, but SQLite-specific behavior must stay inside the storage/migration boundary.
+V0.1 可以深入使用 SQLite 能力实现正确性和简洁性，但 SQLite-specific Behavior 必须停留在 Storage / Migration Boundary。
 
-A future PostgreSQL backend must be able to implement the same supported Modelry contract without rewriting product concepts or Admin workflows.
+未来 PostgreSQL 实现同一受支持的 Modelry Contract，而不是重新设计整个产品。
 
-Do not build a generic arbitrary-database plugin framework in V0.1.
+V0.1 不建立“支持任意数据库”的 Generic Adapter Marketplace。
 
-## Schema evolution
+## Schema Evolution
 
-The technical core should preserve:
+统一核心：
 
+~~~text
 Backend Model
--> ChangeSet
--> Structured Diff
--> Risk / Preconditions / Impact
--> Apply Attempt
--> physical migration
--> Migration History / Ledger
--> generated projection.
+→ ChangeSet
+→ Structured Diff
+→ Risk / Preconditions / Impact
+→ Apply Attempt
+→ Physical Migration
+→ Migration History / Ledger
+→ Generated Projection
+~~~
 
-Applied migrations are immutable facts.
+重要规则：
 
-Risk and preconditions are runtime-derived, not UI-provided.
+- 已 Apply 的 Migration 是 Immutable Fact。
+- Risk 与 Preconditions 由 Runtime 计算，不由 UI 输入。
+- Retry 创建新的 Apply Attempt，而不是复制语义相同的 ChangeSet。
+- Destructive / Irreversible Change 必须具有明确确认和恢复策略。
 
-## Data and Control Plane
+## Data Plane 与 Control Plane
 
-Application Data Plane includes:
+### Application Data Plane
 
-- application auth;
-- records;
-- files;
-- realtime;
-- public application API.
+包含：
 
-Modelry Control Plane includes:
+- Application Auth
+- Records
+- Files
+- Realtime
+- Public Application API
 
-- Admin authentication;
-- schema/model changes;
-- runtime settings;
-- secrets;
-- access management;
-- audit;
-- administrative data access;
-- MCP management operations.
+### Modelry Control Plane
 
-These authorization models must not collapse into one role system.
+包含：
 
-## Auth model
+- Admin Authentication
+- Backend Model / Schema Change
+- Runtime Settings
+- Secrets
+- Access Management
+- Audit
+- Administrative Data Access
+- MCP Management Operation
 
-Maintain:
+两者不能合并成一套模糊 Role System。
 
-Principal != Credential.
+## Identity Model
 
-Keep distinct:
+维持：
 
-- Admin / Control Plane Principal;
-- Application Principal from Auth Collection;
-- Agent / Service Principal.
+~~~text
+Principal != Credential
+~~~
 
-Application users do not become Modelry administrators.
+至少区分：
 
-## Query and policy
+- Admin / Control Plane Principal
+- Application Principal
+- Agent / Service Principal
 
-Use one declarative expression model where practical for:
+Application User 不能因为存在 Auth Collection Record 就成为 Modelry Administrator。
 
-- record filtering;
-- record policy;
-- realtime subscription filtering;
-- administrative filtering.
+## Query / Policy
 
-Policy is fail-closed.
+尽可能复用一个 Declarative Expression Model：
 
-Relation expansion must re-check target view policy.
+- Record Filter
+- Record Policy
+- Realtime Subscription Filter
+- Administrative Filter
 
-## Events and reliability
+Policy 默认 Fail Closed。
 
-Lifecycle Hooks execute synchronously around transactions for deterministic validation and mutation.
+Relation Expand 必须再次检查目标 Collection 的 View Policy。
 
-External irreversible side effects happen after commit.
+## Events 与 Reliability
 
-Features promising reliable asynchronous delivery must persist delivery intent atomically with the business mutation.
+Lifecycle Hook 用于 Transaction 周围的同步、确定性逻辑，例如：
 
-Realtime remains best effort unless a later contract explicitly adds replay guarantees.
+- Validation
+- Field Mutation
+- Reject Mutation
+
+不可回滚的 External Side Effect 必须发生在 Commit 之后。
+
+如果功能承诺 Reliable Async Delivery，则对应 Delivery Intent 必须与 Business Mutation 原子耐久化。
+
+Realtime 在没有显式 Replay Contract 前保持 Best Effort。
 
 ## Files
 
-Community begins with Local Storage.
+Community 从 Local Storage 开始。
 
-File remains a Field-level product capability.
+File 作为 Collection Field 能力，不独立演变成复杂 DAM Product。
 
-S3-compatible storage belongs to later Community maturity and commercial/cloud operation.
+S3-compatible Storage 后续进入 Community Mature / Commercial / Cloud 阶段。
 
 ## Observability
 
-Keep three concepts separate:
+明确分离三个概念：
 
-- API Requests: application HTTP operational telemetry;
-- Audit: durable security / governance facts;
-- Activity: operational cross-module timeline and diagnostics.
+- **API Requests**：Application HTTP Operational Telemetry
+- **Audit**：Security / Governance Durable Fact
+- **Activity**：跨模块 Operational Timeline / Diagnostic Event
 
-A shared requestId should connect runtime errors, API Runner results and request logs.
+三者不互相替代。
+
+统一 requestId 用于连接：
+
+- Runtime Error
+- API Runner
+- Request Log
+- Diagnostic Surface
 
 ## Contract First
 
-Externally observable behavior is frozen before implementation.
+标准实施顺序：
 
-Expected progression:
+~~~text
+Product Model
+→ ADR
+→ Domain Spec
+→ HTTP Contract / OpenAPI
+→ Go Implementation
+→ React Client
+→ Browser Acceptance
+~~~
 
-Product model
--> ADR
--> domain Spec
--> HTTP Contract / OpenAPI
--> Go implementation
--> React client
--> browser acceptance.
+不能从 Handler 反向推导 Contract。
 
-## Technical phases
+## 技术阶段
 
-1. Domain + contract foundation
-2. Go runtime skeleton + SQLite
+1. Domain + Contract Foundation
+2. Go Runtime Skeleton + SQLite
 3. Schema / Changes / Records / API
 4. Auth / Policy / Files / Realtime
 5. Hooks / Secrets / Observability / Audit
-6. Admin product closure
-7. MCP / CLI closure
-8. Community hardening
-9. PostgreSQL backend for Enterprise / Cloud
-10. Cloud Control Plane and managed operations.
+6. Admin Product Closure
+7. MCP / CLI Closure
+8. Community Hardening
+9. PostgreSQL Runtime for Commercial / Enterprise / Cloud
+10. Cloud Control Plane + Managed Operations
 
-## Non-goals for V0.1
+## V0.1 明确不做
 
-- PostgreSQL implementation;
-- microservices;
-- Kubernetes-first architecture;
-- distributed queue;
-- generic database adapter marketplace;
-- hostile multi-tenant serverless sandbox;
-- HA cluster;
-- multi-project runtime inside one Community process.
+- PostgreSQL Implementation
+- Microservices
+- Kubernetes-first
+- Distributed Queue
+- Generic Database Plugin Marketplace
+- Hostile Multi-tenant Serverless Sandbox
+- HA Cluster
+- One Runtime hosting multiple Community Projects

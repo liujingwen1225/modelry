@@ -1,33 +1,40 @@
-# Modelry Product Architecture
+# Modelry 产品架构
 
-## Architecture goal
+## 架构目标
 
-Keep the product simple for Community users while preserving a clean path to Enterprise and Modelry Cloud.
+Modelry 的架构必须同时满足：
 
-The product is organized into three conceptual layers.
+- Community 用户看到的产品足够简单；
+- Commercial / Enterprise 可以升级到 PostgreSQL 与企业治理；
+- Modelry Cloud 可以增加成熟 Cloud Control Plane；
+- 三种形态共享 Project Backend 核心产品语义。
 
-## 1. Developer Interfaces
+产品整体分成三个概念层。
 
-Human and machine entry points:
+# 1. Developer Interfaces
+
+人类与机器入口：
 
 - Project Admin
 - Application HTTP API
 - OpenAPI
 - CLI
 - MCP
-- future generated SDKs.
+- Future SDK
 
-These interfaces share the same backend semantics.
+所有 Interface 共享同一套 Backend Semantics。
 
-No interface receives a hidden bypass around authorization, changes or audit.
+任何 Interface 都不能拥有绕过 Authorization、Changes 或 Audit 的隐藏通道。
 
-## 2. Project Backend Plane
+# 2. Project Backend Plane
 
-This is the core Modelry product and is shared across Community, Enterprise and Cloud.
+这是 Modelry 的核心产品。
 
-Major domains:
+Community、Commercial / Enterprise 与 Cloud 都共享这一层的产品概念。
 
-### Backend Model
+## Backend Model
+
+包含：
 
 - Collection
 - Field
@@ -36,19 +43,23 @@ Major domains:
 - Validation
 - Default
 - Policy
-- Auth capability
-- File capability.
+- Auth Capability
+- File Capability
 
-Backend Model is the canonical product semantic layer.
+Backend Model 是 Canonical Product Semantic Layer。
 
-### Runtime Data
+## Runtime Data
+
+包含：
 
 - Records
 - Files
 - Sessions
-- runtime metadata.
+- Runtime Metadata
 
-### Changes
+## Changes
+
+包含：
 
 - ChangeSet
 - Structured Diff
@@ -57,36 +68,45 @@ Backend Model is the canonical product semantic layer.
 - Impact
 - Apply Attempt
 - Migration History / Ledger
-- Drift / Recovery.
+- Drift
+- Recovery
 
-### Application Platform
+## Application Platform
+
+包含：
 
 - REST API
 - OpenAPI
 - Auth
 - Policy
 - Files
-- Realtime.
+- Realtime
 
-### Extension Platform
+## Extension Platform
+
+包含：
 
 - Lifecycle Hooks
-- later Event Hooks / Webhooks / Jobs
+- Future Event Hooks
+- Future Webhooks
+- Future Jobs
 - Secrets
-- future typed Custom API.
+- Future Typed Custom API
 
-### Observability
+## Observability
+
+包含：
 
 - API Requests
 - Audit
 - Activity
-- health / diagnostics.
+- Health / Diagnostics
 
-## 3. Cloud Control Plane
+# 3. Cloud Control Plane
 
-Not implemented in V0.1 Community.
+V0.1 Community 不实现。
 
-Future Cloud / Enterprise concepts:
+未来 Modelry Cloud / Enterprise Control Plane 包含：
 
 - Account
 - Organization
@@ -99,131 +119,164 @@ Future Cloud / Enterprise concepts:
 - Usage / Quota
 - Billing
 - Backup
-- Support / lifecycle.
+- Support / Lifecycle
 
-Cloud Control Plane manages Modelry deployments and organizations.
+Cloud Control Plane 负责管理 Modelry Resource 和组织关系。
 
-It does not replace Project Admin and does not become the Application Data Plane.
+它不替代 Project Admin，也不进入 Application Data Plane。
 
-## Product topology
+# Product Topology
 
-Community V0.1:
+## Community V0.1
 
-one runtime
--> one implicit project
--> SQLite
--> Project Admin.
+~~~text
+One Runtime
+→ One implicit Project
+→ SQLite
+→ Project Admin
+~~~
 
-Enterprise:
+## Commercial / Enterprise
 
-organization/fleet management
--> one or more project runtimes
--> PostgreSQL
--> Project Admin.
+~~~text
+Organization / Fleet Management
+→ One or more Project Runtime
+→ PostgreSQL
+→ Project Admin
+~~~
 
-Cloud:
+## Modelry Cloud
 
+~~~text
 Cloud Control Plane
--> Organization
--> Project
--> Environment
--> managed Project Backend Plane
--> PostgreSQL
--> Project Admin.
+→ Organization
+→ Project
+→ Environment
+→ Managed Project Backend Plane
+→ PostgreSQL
+→ Project Admin
+~~~
 
-The one-project Community runtime is therefore a deployment topology, not the permanent global product model.
+因此：
 
-## Storage architecture
+> One Instance / One Project 是 Community V0.1 Runtime Topology，不是永久产品本体。
 
-The product model must remain above storage.
+# Storage Architecture
 
-Conceptual direction:
+核心关系：
 
-Backend Model / Query / Change semantics
--> storage and migration boundary
--> SQLite in Community
--> PostgreSQL later in Enterprise / Cloud.
+~~~text
+Backend Model / Query / Change Semantics
+→ Storage + Migration Boundary
+→ SQLite in Community
+→ PostgreSQL in Commercial / Cloud
+~~~
 
-Do not expose a generic arbitrary database plugin in V0.1.
+V0.1 不做 Generic Arbitrary Database Plugin。
 
-Only preserve the boundaries needed by the known SQLite-to-PostgreSQL roadmap.
+只保留已知 SQLite → PostgreSQL Roadmap 所需要的 Domain Boundary。
 
-## Admin architecture
+# Admin Architecture
 
-Project Admin is a Backend workspace, not a Cloud Console.
+Project Admin 是 Backend Workspace，不是 Cloud Console。
 
-Primary Project Admin navigation remains:
+Project Admin 一级导航：
 
+~~~text
 Core
-- Overview
-- Collections
-- API
+  Overview
+  Collections
+  API
 
 Control
-- Changes
-- Hooks
-- Access
+  Changes
+  Hooks
+  Access
 
 System
-- Settings
-- Activity.
+  Settings
+  Activity
+~~~
 
-Cloud management appears outside this navigation in the future.
+未来 Cloud Management 在 Project Admin 之外呈现。
 
-## Identity architecture
+# Identity Architecture
 
-Keep at least four conceptual identities separate:
+至少保持以下 Identity 分离：
 
-- Cloud Account / Enterprise administrator;
-- Modelry Admin Principal;
-- Agent / Service Principal;
-- Application Principal from Auth Collection.
+- Cloud Account / Enterprise Administrator
+- Modelry Admin Principal
+- Agent / Service Principal
+- Application Principal
 
-Credentials are attached mechanisms, not the identity itself.
+Credential 是认证机制，不等于 Principal 本身。
 
-## Change architecture
+# Change Architecture
 
-Every managed Backend Model mutation follows one governance model regardless of source:
+无论来自：
 
-Admin / CLI / MCP
--> propose
--> ChangeSet
--> canonical runtime diff/risk/preconditions
--> apply authorization / confirmation
--> Apply Attempt
--> migration
--> durable history
--> audit.
+- Admin
+- CLI
+- MCP
 
-This is both a safety feature and a product differentiator.
+受管 Backend Model Mutation 都统一走：
 
-## Extension architecture
+~~~text
+Propose
+→ ChangeSet
+→ Runtime-canonical Diff / Risk / Preconditions
+→ Apply Authorization / Confirmation
+→ Apply Attempt
+→ Migration
+→ Durable History
+→ Audit
+~~~
 
-The Go runtime hosts an extension boundary designed for JavaScript / TypeScript project code.
+这是 Modelry 的核心安全能力，也是重要产品差异点。
 
-Project extension APIs should expose capabilities such as:
+# Extension Architecture
 
-- record read/write through controlled APIs;
-- request context;
-- current principal;
-- secrets by reference;
-- outbound HTTP when allowed;
-- event emission / future jobs;
-- logging.
+Go Runtime 提供 JavaScript / TypeScript-facing Extension Boundary。
 
-Do not expose raw unrestricted database/file/process handles as the normal extension API.
+Project Extension API 应暴露受控能力，例如：
 
-## Environment architecture
+- Record Read / Write
+- Request Context
+- Current Principal
+- Secrets by Reference
+- Outbound HTTP（受能力限制）
+- Event Emission
+- Future Jobs
+- Logging
 
-Environment is deferred from Community V0.1 UI.
+默认不暴露：
 
-Future Enterprise / Cloud should reuse ChangeSet and Migration artifacts for promotion between Development, Staging and Production rather than inventing a separate schema deployment product.
+- Raw unrestricted DB Handle
+- Arbitrary Filesystem
+- Arbitrary Process Control
+- Raw Environment Access
 
-## Design principle
+# Environment Architecture
 
-Whenever a future Cloud need conflicts with Community simplicity:
+Community V0.1 UI 不展示 Environment。
 
-- keep Community UI simple;
-- preserve the shared domain boundary underneath;
-- expose Cloud complexity only in Cloud Control Plane;
-- avoid forcing SaaS concepts into every self-hosted workflow.
+未来 Commercial / Cloud 复用 ChangeSet / Migration Artifact 实现环境 Promotion：
+
+~~~text
+Development
+→ Review / Promote
+→ Staging
+→ Verify / Promote
+→ Production
+~~~
+
+不要为环境发布再创造第二套 Schema Deployment Product。
+
+# 设计原则
+
+当未来 Cloud 需求与 Community 简洁性发生冲突时：
+
+1. Community UI 保持简单；
+2. Shared Domain Boundary 在底层保留；
+3. Cloud Complexity 只在 Cloud Control Plane 暴露；
+4. 不把 SaaS Concept 强行塞进所有 Self-hosted Workflow。

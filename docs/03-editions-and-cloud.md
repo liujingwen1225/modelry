@@ -1,16 +1,22 @@
-# Modelry Editions and Cloud Strategy
+# Modelry Community / Commercial / Cloud 产品策略
 
-## Product family
+## 产品体系
 
-Modelry is one backend product with multiple operating models.
+Modelry 是同一个 Backend Platform 的不同运行与商业形态，而不是三套互不兼容的产品。
 
-### Community Edition
+## Community Edition
 
-Purpose: open-source, self-hosted, simple and complete.
+### 定位
 
-Database: SQLite only.
+开源、自托管、简单、完整。
 
-Community should include the core application-backend workflow:
+### Database
+
+**SQLite Only**
+
+### 产品承诺
+
+Community 至少应具备完整 Backend 核心闭环：
 
 - Collections / Schema / Records
 - Relations / Indexes
@@ -22,46 +28,63 @@ Community should include the core application-backend workflow:
 - Realtime
 - Lifecycle Hooks
 - Secrets
-- Request Logs
+- API Request Logs
 - Audit / Activity
-- CLI / MCP.
+- CLI
+- MCP
 
-Community must not be positioned as a demo.
+Community 不能被设计成 Demo Edition。
 
-Its differentiator is simplicity: install, run, open Admin, build backend.
+它的核心差异化是：
 
-### Enterprise Edition
+> 下载、运行、打开 Admin，即可开始构建完整 Backend。
 
-Purpose: self-hosted production operation for teams and organizations.
+## Commercial / Enterprise Edition
 
-Database: PostgreSQL.
+### 定位
 
-Commercial value should come from organizational complexity and production operation, for example:
+面向正式生产、团队和组织的商业 Self-hosted 产品。
 
-- SSO / enterprise identity;
-- advanced organization RBAC;
-- centralized audit and retention;
-- advanced secrets and external key management;
-- backup / disaster recovery;
-- advanced observability;
-- HA and scaling;
-- fleet management;
-- compliance integrations;
-- enterprise support and SLA.
+### Database
 
-Enterprise uses the same Backend Model and Project Admin semantics as Community.
+**PostgreSQL**
 
-### Modelry Cloud
+### 商业价值来源
 
-Purpose: official managed SaaS.
+商业价值应该来自生产和组织复杂度，而不是人为切断 Community 基础功能。
 
-Database: PostgreSQL.
+优先方向：
 
-Cloud adds a dedicated Cloud Control Plane:
+- Enterprise Identity / SSO
+- Advanced Organization RBAC
+- Centralized Audit / Retention
+- Enterprise Secrets / KMS Integration
+- Advanced Backup / Restore / DR
+- Production Observability
+- HA / Scaling
+- Fleet Management
+- Compliance Integration
+- Enterprise Support / SLA
+
+Commercial / Enterprise 继续使用与 Community 相同的 Backend Model 和 Project Admin Semantics。
+
+## Modelry Cloud
+
+### 定位
+
+官方 Managed SaaS。
+
+### Database
+
+**PostgreSQL**
+
+### Cloud Control Plane
+
+Cloud 新增独立管理域：
 
 - Account
 - Organization
-- Team / Members
+- Team / Member
 - Project
 - Environment
 - Region
@@ -69,97 +92,131 @@ Cloud adds a dedicated Cloud Control Plane:
 - Usage / Quota
 - Billing
 - Backup / Restore
-- Runtime health
-- Support and operational lifecycle.
+- Runtime Health
+- Support
+- Operational Lifecycle
 
-## Product-layer separation
+## Cloud Console 与 Project Admin 分层
 
-Do not put Cloud management into the Project Admin sidebar.
+不要把所有 Cloud 管理能力塞进 Project Admin Sidebar。
 
-Use two product layers.
+### Cloud Console
 
-Cloud Console:
+管理：
 
-Organizations
-Projects
-Members
-Environments
-Usage
-Billing
-Managed operations.
+- Organizations
+- Projects
+- Members
+- Environments
+- Usage
+- Billing
+- Managed Operations
 
-Project Admin:
+### Project Admin
 
-Overview
-Collections
-API
-Changes
-Hooks
-Access
-Settings
-Activity.
+管理：
 
-This preserves a simple backend-building experience even as Cloud grows.
+- Overview
+- Collections
+- API
+- Changes
+- Hooks
+- Access
+- Settings
+- Activity
 
-## Identity separation
+Cloud Console 管“Modelry 资源”。
 
-Cloud Account / Organization identity is not Application Auth.
+Project Admin 管“应用 Backend”。
 
-The product must distinguish:
+## Identity 分离
 
-Cloud user
--> organization / project permissions
+Cloud Account / Organization Identity 与 Application Auth 是两套不同 Identity Domain。
 
-from:
+必须明确区分：
 
-Application user
--> Auth Collection / Record Policy.
+~~~text
+Cloud / Enterprise User
+→ Organization / Project Permission
+~~~
 
-Likewise, Enterprise SSO secures Modelry administration and does not replace the authentication model of applications built on Modelry.
+和：
 
-## Project and environment model
+~~~text
+Application User
+→ Auth Collection
+→ Application Session
+→ Record Policy
+~~~
 
-V0.1 Community may expose a single project implicitly.
+Enterprise SSO 保护 Modelry 管理面，不能替代用户应用自身的 Application Auth。
 
-The broader product model should allow:
+## Project / Environment Model
 
+V0.1 Community 可以把 Project 隐式化，只让用户看到一个 Backend。
+
+长期产品模型可以演进为：
+
+~~~text
 Organization
--> Project
--> Environment
--> Project Backend.
+→ Project
+→ Environment
+→ Project Backend
+~~~
 
-Environment becomes visible only when Enterprise / Cloud needs Development, Staging and Production workflows.
+Environment 只在 Commercial / Cloud 真正需要 Development / Staging / Production 时显示。
 
-## Database boundary
+## Database Boundary
 
-Community = SQLite.
+当前 Edition Boundary：
 
-Enterprise = PostgreSQL.
+~~~text
+Community
+→ SQLite
 
-Cloud = PostgreSQL.
+Commercial / Enterprise
+→ PostgreSQL
 
-Do not use PostgreSQL support as the only commercial value. The paid product must solve production, team, governance and operational problems.
+Modelry Cloud
+→ PostgreSQL
+~~~
 
-## Growth path
+PostgreSQL 不能成为商业版唯一价值。
 
-A desirable future journey is:
+真正的商业能力必须解决：
 
-Community SQLite project
--> mature locally
--> migrate to Enterprise PostgreSQL
+- Team
+- Governance
+- Production
+- Operations
+- Scale
+- Compliance
+- Support
 
-or:
+## 成长路径
 
-Community SQLite project
--> Deploy to Modelry Cloud
--> managed PostgreSQL project.
+未来应该形成自然升级体验：
 
-Migration experience itself can become a strong product feature.
+~~~text
+Community SQLite Project
+→ 项目成熟
+→ Migrate to Commercial / Enterprise PostgreSQL
+~~~
 
-## Packaging and licensing principle
+或者：
 
-Edition boundaries should be easy to explain.
+~~~text
+Community SQLite Project
+→ Deploy to Modelry Cloud
+→ Managed PostgreSQL Project
+~~~
 
-Open-source core capabilities remain genuinely useful.
+Migrate to PostgreSQL / Deploy to Modelry Cloud 本身可以成为重要产品能力。
 
-Commercial code and Cloud Control Plane can add enterprise and hosted capabilities without forking the basic backend semantics into incompatible products.
+## Packaging / Licensing 原则
+
+Edition Boundary 必须简单、清晰、容易解释。
+
+Open-source Community 保持真正可用。
+
+Commercial / Cloud 在不破坏 Backend Core Semantics 的前提下增加组织、生产和托管能力。

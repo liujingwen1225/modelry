@@ -1,25 +1,27 @@
-# Modelry Documentation
+# Modelry 文档
 
-This directory contains the only active product and architecture baseline for the Modelry reboot.
+本目录是 Modelry 当前唯一有效的产品与架构权威文档体系。
 
-## Read order
+## 阅读顺序
 
-1. 00-product-vision.md — what Modelry is and the product principles
-2. 01-product-roadmap.md — how the product evolves from Community to Enterprise and Cloud
-3. 02-technical-roadmap.md — implementation path that supports the product roadmap
-4. 03-editions-and-cloud.md — edition boundaries and SaaS model
-5. 04-v0.1-community-scope.md — first concrete Community release boundary
-6. 05-product-experience-and-acceptance.md — productization and acceptance standard
-7. 06-product-architecture.md — product layers and shared domain model
+1. **00-product-vision.md** — Modelry 是什么，以及产品原则
+2. **01-product-roadmap.md** — Community、Commercial / Enterprise 与 Cloud 的产品演进路线
+3. **02-technical-roadmap.md** — 支撑产品路线的技术路线
+4. **03-editions-and-cloud.md** — 社区版、商业版与 Cloud 的产品边界
+5. **04-v0.1-community-scope.md** — V0.1 Community 的正式范围
+6. **05-product-experience-and-acceptance.md** — 产品化与验收标准
+7. **06-product-architecture.md** — 产品分层和共享 Domain Model
 
-Future accepted decisions should be added as:
+后续正式设计统一新增在：
 
 - docs/adr/
 - docs/specs/
 - docs/contracts/
 
-## Historical material
+## 历史资料
 
-Historical pre-Reboot documents are intentionally removed from the active documentation tree to avoid mixed authority.
+Pre-Reboot / Legacy 文档已主动从当前活动文档树删除，避免多套旧结论继续造成权威混淆。
 
-Use Git history or the separate modelry-bf repository only when a specific historical behavior needs to be mined and re-evaluated. Historical text never overrides the current documents.
+需要追溯具体历史行为时，可以查看 Git History 或旧仓库 modelry-bf。
+
+历史材料只能作为证据来源，不能覆盖当前权威文档。

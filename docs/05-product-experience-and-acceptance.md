@@ -1,217 +1,274 @@
-# Modelry Product Experience and Acceptance
+# Modelry 产品体验与验收标准
 
-## Why this document exists
+## 为什么需要这份文档
 
-Modelry's success depends on productization.
+Modelry 最核心的要求是产品化。
 
-A technically correct backend can still fail if the user cannot discover the right action, understand the current state, recover from errors or complete a workflow without reading implementation documentation.
+一个技术正确的 Backend，如果用户：
 
-## Product experience rules
+- 找不到入口；
+- 不理解状态；
+- 不知道下一步；
+- 出错后不会恢复；
+- 无法完成完整业务闭环；
 
-### One clear job per page
+它仍然不是一个合格产品。
 
-Every page must answer a user question.
+## 产品体验规则
 
-Examples:
+### 1. 一个页面只解决一个主要问题
 
-- Overview: is my backend healthy and what needs attention?
-- Collections: what data models exist?
-- Records: what real data exists?
-- Schema: what is the structure?
-- Changes: what is about to change and what happened?
-- API: what can my application call and what requests actually happened?
-- Hooks: what code extends runtime behavior and is it healthy?
-- Access: who can manage Modelry and what was audited?
-- Activity: what operational events need attention?
+页面必须明确回答用户问题。
 
-### One obvious primary action
+例如：
 
-A work surface should not present five equally strong buttons.
+- **Overview**：Backend 是否健康？现在有什么需要处理？
+- **Collections**：有哪些业务数据模型？
+- **Records**：真实数据是什么？
+- **Schema**：结构是什么？
+- **Changes**：准备改什么？风险是什么？最终发生了什么？
+- **API**：应用能调用什么？最近实际请求发生了什么？
+- **Hooks**：有哪些扩展逻辑？是否健康？
+- **Access**：谁可以管理 Modelry？发生过什么管理审计？
+- **Activity**：当前有哪些运行事件值得处理？
 
-Secondary actions belong in context menus, row actions or secondary toolbars.
+### 2. 一个工作面只有一个明显 Primary Action
 
-### Default to the common path
+不要出现多个同等强调按钮。
 
-The common path must work without advanced configuration.
+Secondary Action 应进入：
 
-Advanced database, runtime and security features use progressive disclosure.
+- Context Menu
+- Row Action
+- Secondary Toolbar
+- Overflow Menu
 
-### Durable result, not Toast-only success
+### 3. Common Path 默认简单
 
-After a mutation, the resulting object/state remains visible.
+普通任务不应该要求用户先理解 Advanced Configuration。
 
-A Toast may confirm success but cannot be the only evidence.
+高级能力采用 Progressive Disclosure。
 
-### Actionable errors
+### 4. Durable Result，不接受 Toast-only Success
 
-Errors should answer:
+Mutation 成功后，结果必须继续存在于当前 Context。
 
-- what failed;
-- why;
-- what is affected;
-- whether anything was persisted;
-- what the user can do next;
-- where to navigate for recovery.
+例如创建 Record 后，用户应立刻看到真实 Record。
 
-### Safe destructive actions
+Toast 只能作为瞬时反馈。
 
-Destructive schema/data/runtime operations require appropriate confirmation and visible impact.
+### 5. Error 必须可行动
 
-Risk is calculated by the runtime, not entered by the user.
+Error 至少回答：
 
-### Empty states teach the product
+- 什么失败了？
+- 为什么？
+- 哪些状态受到影响？
+- 是否已有部分数据写入？
+- 用户下一步做什么？
+- 去哪里恢复？
 
-An empty state should explain the purpose, show the next action and avoid decorative noise.
+禁止只返回 Operation failed。
 
-### Progressive complexity
+### 6. Destructive Action 默认安全
 
-Users should not need to understand SQLite WAL, migration internals, principal types or event durability to perform ordinary work.
+破坏性 Schema / Data / Runtime Operation 需要匹配风险级别的确认。
 
-Advanced explanations remain available where diagnostic value exists.
+Risk 由 Runtime 计算，而不是用户选择。
 
-## Visual product standard
+### 7. Empty State 是产品教学
 
-Admin must use one Design System for:
+Empty State 应该：
 
-- typography;
-- spacing;
-- buttons;
-- forms;
-- tables;
-- cards;
-- drawers/sheets;
-- dialogs;
-- tabs;
-- status indicators;
-- empty states;
-- errors;
-- destructive confirmations.
+- 解释当前页面用途；
+- 告诉用户下一步；
+- 提供一个明显 Primary Action。
 
-Avoid the visual feel of a generic internal dashboard:
+不要只展示装饰插画或空表。
 
-- do not default every page to metric cards;
-- do not overuse dense tables when cards provide better discovery;
-- do not expose raw IDs or JSON as the main experience;
-- do not let each module invent its own interaction patterns.
+### 8. Progressive Complexity
 
-## Recommended information architecture
+普通用户不需要理解：
 
+- SQLite WAL
+- Physical Migration Internals
+- Principal Type
+- Event Durability
+- Internal Ledger
+
+才能完成普通业务操作。
+
+这些信息只在 Advanced / Diagnostic Context 中出现。
+
+## 视觉产品标准
+
+Admin 必须有统一 Design System，至少覆盖：
+
+- Typography
+- Spacing
+- Button
+- Form
+- Table
+- Card
+- Drawer / Sheet
+- Dialog
+- Tabs
+- Status
+- Empty State
+- Error State
+- Destructive Confirmation
+
+禁止形成“工程后台感”：
+
+- 不把 Metric Card 当成所有页面默认布局；
+- 不在适合 Card Discovery 的场景强行使用 Dense Table；
+- 不把 Raw ID / JSON 作为主要用户界面；
+- 不允许每个模块创造自己的 Button / Dialog / Form 行为。
+
+## 信息架构
+
+一级导航：
+
+~~~text
 Core
-- Overview
-- Collections
-- API
+  Overview
+  Collections
+  API
 
 Control
-- Changes
-- Hooks
-- Access
+  Changes
+  Hooks
+  Access
 
 System
-- Settings
-- Activity.
+  Settings
+  Activity
+~~~
 
-Collection local navigation:
+Collection：
 
-- Records
-- Schema
-- Policy
-- Auth when applicable
-- API.
+~~~text
+Records
+Schema
+Policy
+Auth
+API
+~~~
 
-Schema local views:
+Schema：
 
-- Fields
-- Relations
-- Indexes.
+~~~text
+Fields
+Relations
+Indexes
+~~~
 
-## State ownership
+## State Ownership
 
-Use clear state boundaries:
+状态职责明确：
 
-- server state: query/cache layer;
-- form state: form library and validation schema;
-- URL state: filters, tabs, selections that should deep-link;
-- local UI state: transient presentation only.
+- **Server State**：Query / Cache Layer
+- **Form State**：Form Library + Validation Schema
+- **URL State**：Filter / Tab / Selection / Deep-link State
+- **Local UI State**：纯瞬时 Presentation State
 
-Do not introduce global state merely to avoid designing ownership.
+不要为了“方便”而把所有状态塞进 Global Store。
 
 ## Product Definition of Done
 
-Every user-facing feature must satisfy five closures.
+每个用户可见功能必须满足五个 Closure。
 
 ### Functional Closure
 
-The intended behavior works through real runtime interfaces.
+真实 Runtime 行为正确。
 
 ### UX Closure
 
-The workflow is understandable and efficient.
+用户工作流清晰、顺畅、可发现。
 
 ### Visual Closure
 
-The surface follows the shared Design System and information hierarchy.
+遵守统一 Design System 和 Information Hierarchy。
 
 ### Error Closure
 
-Expected failure modes provide actionable recovery.
+主要失败模式有明确反馈和恢复路径。
 
 ### Business Flow Closure
 
-A user can complete the full real task and verify the durable result from another surface.
+用户能够完成真实任务，并从第二观察面验证 Durable Result。
 
 ## Browser Acceptance
 
-Mandatory acceptance uses:
+Mandatory Acceptance 必须使用：
 
-real compiled Modelry runtime
-+ real SQLite
-+ real HTTP
-+ real Admin UI
-+ real Chromium.
+~~~text
+Real Modelry Runtime
++
+Real SQLite
++
+Real HTTP
++
+Real Admin UI
++
+Real Chromium
+~~~
 
-Do not use mocked backends for mandatory product closure flows.
+核心产品闭环禁止依赖 Mock Backend。
 
-### Cross-surface verification
+## Cross-Surface Verification
 
-Examples:
+### Create Record
 
-Create Record
--> record appears in UI
--> API reads it
--> reload preserves it.
+~~~text
+Create
+→ Records 中出现
+→ Detail 数据正确
+→ API 查询正确
+→ Reload 后仍存在
+~~~
 
-Apply ChangeSet
--> ChangeSet Applied
--> Apply Attempt succeeded
--> Schema changed
--> Migration History updated
--> restart preserves the new model.
+### Apply ChangeSet
 
-Auth revoke
--> session management shows revoked state
--> application access fails afterwards.
+~~~text
+ChangeSet Applied
+→ Apply Attempt Succeeded
+→ Schema 改变
+→ Migration History 更新
+→ Restart 后仍保持
+~~~
 
-### Health gates
+### Revoke Session
 
-Mandatory flows should fail on:
+~~~text
+Session 标记 revoked
+→ Application 后续访问失败
+→ Audit / Activity 可追踪
+~~~
 
-- unexpected browser console errors;
-- page exceptions;
-- unexpected 5xx;
-- broken navigation;
-- stuck loading state;
-- unhandled network failure.
+## Browser Health Gate
 
-### Interaction quality
+Mandatory Flow 遇到以下情况直接失败：
 
-Acceptance also checks:
+- Unexpected Console Error
+- Page Exception
+- Unexpected 5xx
+- Broken Navigation
+- Infinite / Stuck Loading
+- Unhandled Network Failure
 
-- focus and keyboard behavior;
-- loading and disabled states;
-- empty/error states;
-- obvious next action;
-- stable layout;
-- no duplicate submissions;
-- deep links where expected.
+## Interaction Quality
 
-A passing API suite alone is not product acceptance.
+Acceptance 还必须检查：
+
+- Focus / Keyboard
+- Loading State
+- Disabled State
+- Empty State
+- Error State
+- Primary Action 是否明显
+- Layout 是否稳定
+- 是否可能 Duplicate Submission
+- Deep Link 是否正确
+
+API Test Passed 不能代替 Product Acceptance。

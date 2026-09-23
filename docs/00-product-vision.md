@@ -1,111 +1,183 @@
-# Modelry Product Vision
+# Modelry 产品愿景
 
-## One sentence
+## 一句话定义
 
-Modelry is a productized Backend Platform that lets developers create, operate and safely evolve an application backend through one coherent visual and programmable experience.
+**Modelry 是一个产品化 Backend Platform，让开发者通过统一的可视化和可编程体验，创建、运行并安全演进应用后端。**
 
-## The problem
+## 要解决的问题
 
-Building an application backend usually means combining a database, schema tooling, API framework, auth, authorization, files, realtime, hooks, migrations, observability and deployment conventions.
+一个完整应用后端通常需要同时组合：
 
-Each individual tool may be good, but the developer still has to design the seams and maintain the operational model.
+- Database
+- Schema / Migration
+- API
+- Auth
+- Authorization
+- Files
+- Realtime
+- Hooks / Events
+- Secrets
+- Observability
+- Admin Tooling
+- Deployment Convention
 
-Modelry turns these concerns into one product.
+单独看，每个工具可能都很好用；但开发者仍需要自己设计它们之间的边界、状态和运维方式。
 
-## Product promise
+Modelry 的目标，是把这些能力收敛为一个完整产品。
 
-A new user should be able to move through this path without first becoming a database or infrastructure expert:
+## 产品承诺
 
-download or create project
--> start Modelry
--> enter Admin
--> create Collection
--> define Fields / Relations / Indexes
--> review and apply Changes
--> create Records
--> use generated API
--> configure Auth / Policy
--> add Files / Realtime / Hooks
--> inspect Requests / Audit / Activity
--> evolve the backend safely.
+新用户不需要先成为数据库或基础设施专家，就应该能够完成：
 
-The product succeeds when this workflow is easy, understandable, visually coherent and durable.
+~~~text
+启动 Modelry
+→ 进入 Admin
+→ 创建 Collection
+→ 定义 Fields / Relations / Indexes
+→ Review 并 Apply Changes
+→ 创建真实 Records
+→ 使用自动生成的 API
+→ 配置 Auth / Policy
+→ 使用 Files / Realtime / Hooks
+→ 查看 Requests / Audit / Activity
+→ 安全演进 Backend
+~~~
 
-## Product principles
+当这一整条路径做到易用、好用、好看、功能完善且状态可恢复时，Modelry 才算真正成立。
 
-### Productization first
+## 产品原则
 
-Easy to use, useful, polished and complete is more important than technical novelty.
+### 1. 产品化优先
 
-### Complete workflows over feature checklists
+技术架构服务于产品。
 
-A feature is not complete because an endpoint exists. It is complete when configuration, execution, result, feedback, recovery and observability form a usable workflow.
+不能因为某种语言、数据库、部署方式或内部实现更“纯粹”，而牺牲用户体验和完整闭环。
 
-### Default simple, advanced progressive
+### 2. 完整工作流优先于 Feature Checklist
 
-Common tasks should have strong defaults. Advanced database, policy, runtime or deployment options should appear only when relevant.
+一个 API Endpoint 存在，不代表功能完成。
 
-### Modelry concepts over database concepts
+完整能力至少包括：
 
-Users work with Collection, Field, Relation, Policy, Change and API concepts. The database is an implementation detail unless the user explicitly enters an advanced database-specific surface.
+~~~text
+配置
+→ 执行
+→ 结果
+→ 反馈
+→ 错误
+→ 恢复
+→ 可观测
+~~~
 
-### Explicit change, not invisible magic
+### 3. 默认简单，高级能力渐进暴露
 
-Backend model changes must be inspectable and reviewable.
+常见任务应该拥有合理默认值。
 
-The core lifecycle is:
+数据库细节、高级 Policy、Runtime 参数、危险变更等高级能力，仅在真正需要时展示。
 
-Inspect -> Propose -> ChangeSet -> Structured Diff + Risk -> Apply Attempt -> Migration/History -> Audit.
+### 4. Modelry Concept 优先于 Database Concept
 
-### Human and Agent share one backend semantics
+用户首先面对：
 
-Admin, HTTP API, CLI and MCP must observe and mutate the same product model and authorization rules.
+- Collection
+- Field
+- Relation
+- Policy
+- Change
+- API
 
-### AI-native, not AI-dependent
+而不是数据库内部术语。
 
-Coding Agents are first-class clients, but the runtime remains fully useful without an AI provider.
+数据库是实现层，除非用户主动进入 Advanced Surface。
 
-### Safe by default
+### 5. Explicit Change，不做不可解释的 Magic
 
-Authentication, policy, destructive schema changes, secrets and external side effects must fail safely and present clear recovery paths.
+Backend Model 的变化必须可 Inspect、可 Review、可解释。
 
-## Core product domains
+核心链路：
 
-- Collections and Records
-- Schema: Fields, Relations, Indexes, Validation, Defaults
-- Changes and Migration History
-- Application API and OpenAPI
+~~~text
+Inspect
+→ Propose
+→ ChangeSet
+→ Structured Diff + Risk
+→ Apply Attempt
+→ Migration / History
+→ Audit
+~~~
+
+### 6. Human 与 Agent 操作同一 Backend Semantics
+
+Admin、HTTP API、CLI、MCP 不得形成多套相互绕开的业务规则。
+
+Coding Agent 不是隐形 DBA。
+
+### 7. AI Native, Not AI Dependent
+
+Coding Agent 是一等客户端。
+
+但即使完全没有 AI Provider，Modelry 仍然必须是完整可用的 Backend Platform。
+
+### 8. Safe by Default
+
+Auth、Policy、Secret、危险 Schema Change 与 External Side Effect 默认采用安全边界。
+
+失败必须可诊断、可恢复。
+
+## 核心产品域
+
+- Collections / Records
+- Schema：Fields / Relations / Indexes / Validation / Defaults
+- Changes / Migration History
+- Application API / OpenAPI
 - Application Auth
 - Record Policy
 - Files
 - Realtime
-- Hooks and Events
+- Hooks / Events
 - Secrets
-- API Request observability
-- Audit and Activity
+- API Request Observability
+- Audit / Activity
 - CLI
 - MCP
 
-## What Modelry is not
+## Modelry 不是什么
 
-Modelry is not:
+Modelry 不是：
 
-- a visual SQL client;
-- a generic database administration console;
-- a workflow/DAG platform;
-- a Kubernetes management product;
-- a headless CMS with backend features added later;
-- a PocketBase compatibility layer;
-- an AI tool that stops working without AI.
+- Visual SQL Client
+- 通用数据库管理器
+- Workflow / DAG Platform
+- Kubernetes Management Product
+- 给 Headless CMS 补 Backend 能力
+- PocketBase Compatibility Layer
+- 没有 AI 就不能运行的 AI Tool
 
-## North-star experience
+## 北极星体验
 
-For humans:
+Human：
 
-start -> model -> data -> API -> secure -> extend -> observe -> evolve.
+~~~text
+start
+→ model
+→ data
+→ API
+→ secure
+→ extend
+→ observe
+→ evolve
+~~~
 
-For Coding Agents:
+Coding Agent：
 
-inspect -> understand -> propose -> diff -> apply -> verify -> audit.
+~~~text
+inspect
+→ understand
+→ propose
+→ diff
+→ apply
+→ verify
+→ audit
+~~~
 
-Both paths converge on the same Backend Model and Runtime.
+两者最终操作同一个 Backend Model 与 Runtime。

@@ -1,141 +1,178 @@
-# Modelry Product Roadmap
+# Modelry 产品路线
 
-## Roadmap rule
+## 路线原则
 
-The roadmap is driven by product maturity, not by adding as many capabilities as possible.
+Modelry 的产品路线不是“不断堆功能”。
 
-Each phase should improve one of four outcomes:
+每个阶段都应该明显改善至少一个结果：
 
-- easier onboarding;
-- more complete real-world backend workflows;
-- safer production operation;
-- better team and cloud operation.
+- 更快上手；
+- 更完整的真实 Backend 工作流；
+- 更安全的生产运行；
+- 更成熟的团队和 Cloud 使用体验。
 
-## Phase A — Product foundation
+## Phase A — 产品与架构基础
 
-Goal: freeze the product model before implementation expands.
+目标：在大规模实现前先冻结产品模型。
 
-Deliverables:
+主要产物：
 
 - Product Vision
 - Product Architecture
 - V0.1 Community Scope
-- product-grade Admin information architecture
-- Runtime ADR set
+- Product-grade Admin Information Architecture
+- Runtime ADR
 - Foundation Spec
 - HTTP Contract
-- Browser Acceptance specification
+- Browser Acceptance Spec
 
-The key decision is that Community, Enterprise and Cloud share backend product semantics even though their deployment and storage choices differ.
+这一阶段最重要的结论是：
+
+> Community、Commercial / Enterprise 和 Modelry Cloud 共享同一套 Project Backend Product Semantics，但可以拥有不同的数据库、部署模式和 Control Plane。
 
 ## Phase B — V0.1 Community
 
-Goal: deliver an open-source backend that feels like a real product on first use.
+目标：交付一个第一次使用就具有正式产品感的开源 Backend Platform。
 
-Primary user journey:
+核心用户路径：
 
-start Modelry
--> bootstrap Admin
--> create Normal/Auth Collection
--> define Schema
--> review Changes
--> apply
--> manage Records
--> register/login an application user
--> call API
--> configure Policy
--> use Local Files
--> use Realtime
--> run Lifecycle Hook
--> inspect API Requests / Audit / Activity
--> use MCP
--> restart and verify durable state.
+~~~text
+启动 Modelry
+→ Bootstrap Admin
+→ 创建 Normal / Auth Collection
+→ 定义 Schema
+→ Review Changes
+→ Apply
+→ 管理 Records
+→ Application Register / Login
+→ 调用 API
+→ 配置 Policy
+→ 使用 Local Files
+→ 使用 Realtime
+→ 执行 Lifecycle Hook
+→ 查看 API Requests / Audit / Activity
+→ 使用 MCP
+→ Restart
+→ 验证 Durable State
+~~~
 
-V0.1 is SQLite-only.
+V0.1 **只支持 SQLite**。
 
-The emphasis is not breadth. Every included capability must close its full user workflow.
+重点不是功能数量，而是每一个进入 V0.1 的能力都必须完成完整产品闭环。
 
-## Phase C — Community maturity
+## Phase C — Community 成熟
 
-Goal: make Community credible for long-running self-hosted projects.
+目标：让 Community 适合长期 Self-hosted 项目，而不仅仅是初次体验。
 
-Likely additions after the V0.1 core is stable:
+后续优先考虑：
 
-- stronger backup / restore UX;
-- OAuth and richer auth flows;
-- S3-compatible files;
-- Event Hooks and Webhooks;
-- jobs / simple cron;
-- SDK generation and developer tooling;
-- richer diagnostics and observability;
-- import/export and migration ergonomics;
-- improved local-to-production workflows.
+- 更完整 Backup / Restore UX
+- OAuth 与更丰富 Auth Lifecycle
+- S3-compatible Files
+- Event Hooks / Webhooks
+- Simple Jobs / Cron
+- SDK Generation
+- 更成熟的 Diagnostics / Observability
+- Import / Export
+- Migration Ergonomics
+- 更顺滑的 Local → Production 成长路径
 
-Community remains SQLite-focused unless the edition strategy is explicitly changed.
+Community 默认继续围绕 SQLite 保持简单产品定位。
 
 ## Phase D — Commercial / Enterprise
 
-Goal: solve organizational production problems rather than remove basic Community capabilities.
+目标：解决团队和企业的正式生产问题，而不是通过削弱 Community 制造付费点。
 
-Primary themes:
+主要方向：
 
-- PostgreSQL backend;
-- team and organization governance;
-- enterprise identity and SSO;
-- advanced RBAC;
-- centralized and longer-retention audit;
-- enterprise secrets and key management integration;
-- advanced backup / restore / disaster recovery;
-- production observability;
-- HA / scale where required;
-- fleet and multi-instance operations;
-- support, SLA and enterprise integration.
+- PostgreSQL Runtime
+- Organization / Team Governance
+- Enterprise Identity / SSO
+- Advanced RBAC
+- Centralized Audit / Retention
+- Enterprise Secrets / KMS Integration
+- Backup / Restore / Disaster Recovery
+- Production Observability
+- HA / Scale
+- Fleet / Multi-instance Operations
+- Compliance Integration
+- Support / SLA
 
-Enterprise must continue to use the same Project Backend semantics as Community.
+Enterprise 继续使用与 Community 相同的 Project Backend Model 和 Project Admin Semantics。
 
 ## Phase E — Modelry Cloud
 
-Goal: provide the same Backend Platform as a managed SaaS rather than merely hosting the Community binary.
+目标：提供真正的 Managed Backend Platform，而不是简单“托管一个 Community Binary”。
 
-Cloud product layers:
+Cloud 产品分层：
 
+~~~text
 Cloud Control Plane
--> Organization / Team / Project / Environment / Region / Usage / Billing / Backup / Support
+→ Organization
+→ Team
+→ Project
+→ Environment
+→ Region
+→ Usage
+→ Billing
+→ Backup
+→ Support
 
 Project Backend Plane
--> Collection / Records / API / Auth / Policy / Files / Realtime / Hooks / Changes / Observability
+→ Collection
+→ Records
+→ API
+→ Auth
+→ Policy
+→ Files
+→ Realtime
+→ Hooks
+→ Changes
+→ Observability
 
 Developer Interfaces
--> Admin / HTTP / OpenAPI / SDK / CLI / MCP.
+→ Admin
+→ HTTP
+→ OpenAPI
+→ SDK
+→ CLI
+→ MCP
+~~~
 
-Cloud Console and Project Admin are separate product experiences.
+Cloud Console 与 Project Admin 是两个不同产品层。
 
-The Cloud Control Plane manages Modelry resources. Project Admin manages the user's backend.
+Cloud Console 管理“你的 Modelry 资源”。
 
-## Environment evolution
+Project Admin 管理“你用 Modelry 构建的 Backend”。
 
-Development / Staging / Production should become a first-class Cloud and Enterprise concept when environment promotion is implemented.
+## Environment 演进
 
-The existing Changes model should evolve naturally into:
+Development / Staging / Production 在真正进入 Enterprise / Cloud 环境管理后，应该成为一等产品概念。
 
+Changes 能力可以自然演进为：
+
+~~~text
 Development Change
--> review
--> promote
--> Staging
--> verify
--> promote
--> Production.
+→ Review
+→ Promote
+→ Staging
+→ Verify
+→ Promote
+→ Production
+~~~
 
-Do not implement environment complexity in V0.1 Community, but do not define ChangeSet or Project identity in a way that prevents this evolution.
+V0.1 Community 不实现 Environment Complexity。
 
-## Roadmap guardrails
+但 Project Identity、ChangeSet 和 Migration Artifact 的定义不能阻断未来 Promotion 模型。
 
-Do not:
+## 路线 Guardrails
 
-- add Cloud-only organization concepts to every Community screen;
-- turn Community into a crippled trial edition;
-- make PostgreSQL a V0.1 requirement;
-- make SQLite the permanent definition of Modelry semantics;
-- add distributed systems before a product capability needs them;
-- split the runtime into microservices by default;
-- make enterprise commercialization the reason to weaken the core developer experience.
+不要：
+
+- 把 Organization / Billing 等 Cloud-only 概念塞进所有 Community 页面；
+- 把 Community 做成残缺 Trial Edition；
+- 把 PostgreSQL 变成 V0.1 前置条件；
+- 把 SQLite 变成 Modelry 永久产品语义；
+- 在没有真实产品需求前引入 Distributed System；
+- 默认拆成 Microservices；
+- 为商业化主动破坏 Community 核心开发体验。
