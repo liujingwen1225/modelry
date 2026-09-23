@@ -1,0 +1,1284 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Modelry V0.1.0 API",
+    "version": "0.1.0",
+    "description": "冻结的 Modelry V0.1.0 Data Plane 与 Control Plane 机器契约。"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8090"
+    }
+  ],
+  "tags": [
+    { "name": "Data Plane" },
+    { "name": "Auth" },
+    { "name": "Files" },
+    { "name": "Realtime" },
+    { "name": "Control Plane" },
+    { "name": "Control Plane Auth" },
+    { "name": "Administrative Data" },
+    { "name": "Changes" },
+    { "name": "Governance" }
+  ],
+  "paths": {
+    "/api/v1/collections/{collection}/records": {
+      "get": {
+        "tags": ["Data Plane"],
+        "operationId": "dataListRecords",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionNamePath" },
+          { "$ref": "#/components/parameters/FilterQuery" },
+          { "$ref": "#/components/parameters/SortQuery" },
+          { "$ref": "#/components/parameters/PageQuery" },
+          { "$ref": "#/components/parameters/PerPageQuery" },
+          { "$ref": "#/components/parameters/ExpandQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/RecordListResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "post": {
+        "tags": ["Data Plane"],
+        "operationId": "dataCreateRecord",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionNamePath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/RecordMutation" },
+        "responses": {
+          "201": { "$ref": "#/components/responses/RecordCreated" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      }
+    },
+    "/api/v1/collections/{collection}/records/{recordId}": {
+      "get": {
+        "tags": ["Data Plane"],
+        "operationId": "dataViewRecord",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionNamePath" },
+          { "$ref": "#/components/parameters/RecordIdPath" },
+          { "$ref": "#/components/parameters/ExpandQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/RecordResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "patch": {
+        "tags": ["Data Plane"],
+        "operationId": "dataUpdateRecord",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionNamePath" },
+          { "$ref": "#/components/parameters/RecordIdPath" },
+          { "$ref": "#/components/parameters/IfMatchHeader" }
+        ],
+        "requestBody": { "$ref": "#/components/requestBodies/RecordMutation" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/RecordResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      },
+      "delete": {
+        "tags": ["Data Plane"],
+        "operationId": "dataDeleteRecord",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionNamePath" },
+          { "$ref": "#/components/parameters/RecordIdPath" },
+          { "$ref": "#/components/parameters/IfMatchHeader" }
+        ],
+        "responses": {
+          "204": { "$ref": "#/components/responses/NoContent" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      }
+    },
+    "/api/v1/auth/{collection}/register": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "authRegister",
+        "parameters": [{ "$ref": "#/components/parameters/CollectionNamePath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/AuthRegister" },
+        "responses": {
+          "201": { "$ref": "#/components/responses/AuthRegistrationResponse" },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      }
+    },
+    "/api/v1/auth/{collection}/login": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "authLogin",
+        "parameters": [{ "$ref": "#/components/parameters/CollectionNamePath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/AuthLogin" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AuthSessionResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "authRefresh",
+        "requestBody": { "$ref": "#/components/requestBodies/AuthRefresh" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AuthSessionResponse" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "authLogout",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "204": { "$ref": "#/components/responses/NoContent" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "get": {
+        "tags": ["Auth"],
+        "operationId": "authListSessions",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/AuthSessionListResponse" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/api/v1/auth/sessions/{sessionId}": {
+      "delete": {
+        "tags": ["Auth"],
+        "operationId": "authRevokeSession",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SessionIdPath" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/AuthSessionMetadataResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "authLogoutAll",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "204": { "$ref": "#/components/responses/NoContent" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/api/v1/upload-sessions": {
+      "post": {
+        "tags": ["Files"],
+        "operationId": "dataRequestUploadSession",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/UploadSessionRequest" },
+        "responses": {
+          "201": { "$ref": "#/components/responses/UploadSessionResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/api/v1/upload-sessions/{sessionId}/content": {
+      "put": {
+        "tags": ["Files"],
+        "operationId": "dataUploadSessionContent",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SessionIdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/UploadSessionResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "409": { "$ref": "#/components/responses/UploadSessionInvalid" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/api/v1/upload-sessions/{sessionId}": {
+      "get": {
+        "tags": ["Files"],
+        "operationId": "dataGetUploadSession",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SessionIdPath" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/UploadSessionResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/UploadSessionInvalid" }
+        }
+      }
+    },
+    "/api/v1/files/{fileId}": {
+      "get": {
+        "tags": ["Files"],
+        "operationId": "dataDownloadFile",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/FileIdPath" }],
+        "responses": {
+          "200": { "description": "Authorized file bytes", "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/api/v1/realtime": {
+      "get": {
+        "tags": ["Realtime"],
+        "operationId": "dataSubscribeRealtime",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionNameQuery" },
+          { "$ref": "#/components/parameters/SubscriptionFilterQuery" },
+          { "$ref": "#/components/parameters/LastEventIdHeader" }
+        ],
+        "responses": {
+          "200": { "description": "Best-effort SSE stream", "content": { "text/event-stream": { "schema": { "type": "string" } } } },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "tags": ["Data Plane"],
+        "operationId": "dataGetOpenApiDocument",
+        "x-modelry-public-projection": {
+          "kind": "path-prefix",
+          "includePathPrefixes": ["/api/v1/"],
+          "excludePathPrefixes": ["/_modelry/api/v1/"],
+          "frozenContract": "complete",
+          "applicationContract": "complete",
+          "controlPlaneContract": "complete",
+          "adminConsumers": "unaffected"
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/OpenApiDocumentResponse" },
+          "304": { "description": "Not Modified" }
+        }
+      }
+    },
+    "/_modelry/api/v1/bootstrap/admin": {
+      "post": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlBootstrapAdmin",
+        "description": "使用 Runtime 当前生成的 one-time Bootstrap Setup Token 创建首个 Admin。该 token 只存在于 bootstrap 生命周期，成功后立即失效；本路由不要求已有 Admin Session，也不是普通匿名 API。",
+        "x-authentication-kind": "bootstrap-token",
+        "x-required-capabilities": [],
+        "x-error-codes": { "400": ["INVALID_REQUEST"], "401": ["BOOTSTRAP_TOKEN_INVALID", "BOOTSTRAP_TOKEN_EXPIRED"], "409": ["ADMIN_ALREADY_BOOTSTRAPPED"], "422": ["VALIDATION_ERROR"] },
+        "requestBody": { "$ref": "#/components/requestBodies/BootstrapAdmin" },
+        "responses": {
+          "201": { "$ref": "#/components/responses/BootstrapAdminResponse" },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/login": {
+      "post": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlAdminLogin",
+        "description": "使用 Control Plane Admin email + password 建立 Admin Session。Admin 不属于业务 Auth Collection。成功响应只返回短生命周期 access credential；refresh material 通过 HttpOnly cookie 发送。",
+        "x-authentication-kind": "admin-credentials",
+        "x-required-capabilities": [],
+        "x-error-codes": { "401": ["ADMIN_CREDENTIAL_INVALID"], "403": ["ADMIN_SUSPENDED"], "422": ["VALIDATION_ERROR"] },
+        "requestBody": { "$ref": "#/components/requestBodies/AdminLogin" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AdminLoginResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlAdminRefresh",
+        "description": "使用 HttpOnly refresh cookie 轮换 Admin Session refresh material，并签发新的短生命周期 access credential。refresh token 不出现在 JSON body。",
+        "security": [{ "AdminRefreshCookie": [] }],
+        "x-authentication-kind": "admin-refresh-cookie",
+        "x-required-capabilities": [],
+        "x-error-codes": { "401": ["ADMIN_SESSION_INVALID"] },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AdminRefreshResponse" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/logout": {
+      "post": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlAdminLogout",
+        "description": "撤销当前 Admin server-side session，并清除 refresh cookie。",
+        "security": [{ "ControlApiSession": [] }],
+        "x-authentication-kind": "admin-access-session",
+        "x-required-capabilities": [],
+        "x-error-codes": { "401": ["ADMIN_SESSION_INVALID"] },
+        "responses": {
+          "204": { "$ref": "#/components/responses/AdminLogoutResponse" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/current": {
+      "get": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlCurrentAdmin",
+        "description": "读取当前 Admin Principal、当前 Session metadata 与显式 Capability Scope。",
+        "security": [{ "ControlApiSession": [] }],
+        "x-authentication-kind": "admin-access-session",
+        "x-required-capabilities": [],
+        "x-error-codes": { "401": ["ADMIN_SESSION_INVALID"] },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AdminCurrentResponse" },
+          "401": { "$ref": "#/components/responses/Error401" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/sessions": {
+      "get": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlListAdminSessions",
+        "description": "列出 Admin Control Plane Session metadata；不返回 access/refresh token plaintext。",
+        "security": [{ "ControlApiSession": [] }],
+        "x-authentication-kind": "admin-access-session",
+        "x-required-capabilities": ["access:manage"],
+        "x-error-codes": { "401": ["ADMIN_SESSION_INVALID"], "403": ["CAPABILITY_DENIED"] },
+        "responses": {
+          "200": { "$ref": "#/components/responses/ControlPlaneSessionListResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/sessions/{sessionId}": {
+      "delete": {
+        "tags": ["Control Plane Auth"],
+        "operationId": "controlRevokeAdminSession",
+        "description": "撤销指定 Admin Control Plane Session；服务端 revocation 立即生效。",
+        "security": [{ "ControlApiSession": [] }],
+        "x-authentication-kind": "admin-access-session",
+        "x-required-capabilities": ["access:manage"],
+        "x-error-codes": { "401": ["ADMIN_SESSION_INVALID"], "403": ["CAPABILITY_DENIED"], "404": ["NOT_FOUND"] },
+        "parameters": [{ "$ref": "#/components/parameters/SessionIdPath" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ControlPlaneSessionResponse" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/collections": {
+      "get": {
+        "tags": ["Control Plane"],
+        "operationId": "controlListCollections",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CollectionListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/_modelry/api/v1/collections/{collectionId}": {
+      "get": {
+        "tags": ["Control Plane"],
+        "operationId": "controlGetCollection",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CollectionResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/collections/{collectionId}/auth": {
+      "get": {
+        "tags": ["Control Plane"],
+        "operationId": "controlGetAuthConfiguration",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/AuthConfigurationResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/collections/{collectionId}/indexes": {
+      "get": {
+        "tags": ["Control Plane"],
+        "operationId": "controlListIndexes",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/IndexListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/collections/{collectionId}/policies": {
+      "get": {
+        "tags": ["Control Plane"],
+        "operationId": "controlListPolicies",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/PolicyListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/collections/{collectionId}/policies/simulate": {
+      "post": {
+        "tags": ["Control Plane"],
+        "operationId": "controlSimulatePolicy",
+        "description": "Policy Simulation is a read-only diagnostic. For operation=list, allowed means that the supplied context.record would be visible in the real Application List result: both the effective list Policy and the current view Policy must allow it.",
+        "x-modelry-policy-simulation-semantics": {
+          "listAllowed": "effective_record_visibility",
+          "listPredicates": ["list", "view"],
+          "listContextRecord": {
+            "required": true,
+            "missing": {
+              "status": 422,
+              "code": "VALIDATION_ERROR",
+              "reason": "POLICY_CONTEXT_REQUIRED",
+              "field": "context.record"
+            }
+          },
+          "listMissingAllow": "deny",
+          "listDraftExpression": "overrides_list_policy_only",
+          "listViewPolicy": "runtime_backend_model",
+          "relationVisibility": "application_list",
+          "evaluationErrors": "structured_error"
+        },
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/PolicySimulation" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/PolicySimulationResponse" },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/collections/{collectionId}/records": {
+      "get": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminListRecords",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionIdPath" },
+          { "$ref": "#/components/parameters/FilterQuery" },
+          { "$ref": "#/components/parameters/SortQuery" },
+          { "$ref": "#/components/parameters/PageQuery" },
+          { "$ref": "#/components/parameters/PerPageQuery" },
+          { "$ref": "#/components/parameters/ExpandQuery" }
+        ],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/RecordListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      },
+      "post": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminCreateRecord",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/RecordMutation" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "201": { "$ref": "#/components/responses/RecordCreated" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/collections/{collectionId}/records/{recordId}": {
+      "get": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminGetRecord",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionIdPath" },
+          { "$ref": "#/components/parameters/RecordIdPath" }
+        ],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/RecordResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      },
+      "patch": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminUpdateRecord",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionIdPath" },
+          { "$ref": "#/components/parameters/RecordIdPath" },
+          { "$ref": "#/components/parameters/IfMatchHeader" }
+        ],
+        "requestBody": { "$ref": "#/components/requestBodies/RecordMutation" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/RecordResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      },
+      "delete": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminDeleteRecord",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionIdPath" },
+          { "$ref": "#/components/parameters/RecordIdPath" },
+          { "$ref": "#/components/parameters/IfMatchHeader" }
+        ],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "204": { "$ref": "#/components/responses/NoContent" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "504": { "$ref": "#/components/responses/Error504" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/upload-sessions": {
+      "post": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminRequestUploadSession",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/UploadSessionRequest" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "201": { "$ref": "#/components/responses/UploadSessionResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/upload-sessions/{sessionId}": {
+      "get": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminGetUploadSession",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SessionIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/UploadSessionResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/UploadSessionInvalid" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/upload-sessions/{sessionId}/content": {
+      "put": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminUploadSessionContent",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SessionIdPath" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } }
+        },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/UploadSessionResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/UploadSessionInvalid" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/collections/{collectionId}/bulk/preview": {
+      "post": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminPreviewBulkMutation",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/BulkMutationPreview" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/BulkMutationPreviewResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/data/collections/{collectionId}/bulk": {
+      "post": {
+        "tags": ["Administrative Data"],
+        "operationId": "adminExecuteBulkMutation",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/BulkMutationExecute" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/BulkMutationResultResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/audit/facts": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlQueryAuditFacts",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/AuditQueryParameters" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/AuditListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/changesets": {
+      "get": {
+        "tags": ["Changes"],
+        "operationId": "controlListChangeSets",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/ChangeSetListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      },
+      "post": {
+        "tags": ["Changes"],
+        "operationId": "controlCreateChangeSet",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/ChangeSetProposal" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "201": { "$ref": "#/components/responses/ChangeSetResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/changesets/{changeSetId}": {
+      "get": {
+        "tags": ["Changes"],
+        "operationId": "controlGetChangeSet",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/ChangeSetIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/ChangeSetResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/changesets/{changeSetId}/apply": {
+      "post": {
+        "tags": ["Changes"],
+        "operationId": "controlApplyChangeSet",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/ChangeSetIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ApplyChangeSet" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "202": { "$ref": "#/components/responses/ApplyAttemptResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/_modelry/api/v1/changesets/{changeSetId}/cancel": {
+      "post": {
+        "tags": ["Changes"],
+        "operationId": "controlCancelChangeSet",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/ChangeSetIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/ChangeSetResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/apply-attempts": {
+      "get": {
+        "tags": ["Changes"],
+        "operationId": "controlListApplyAttempts",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/ChangeSetIdQuery" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/ApplyAttemptListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/apply-attempts/{attemptId}/retry": {
+      "post": {
+        "tags": ["Changes"],
+        "operationId": "controlRetryApplyAttempt",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/AttemptIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/RetryApplyAttempt" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "202": { "$ref": "#/components/responses/ApplyAttemptResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "422": { "$ref": "#/components/responses/Error422" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/_modelry/api/v1/migrations": {
+      "get": {
+        "tags": ["Changes"],
+        "operationId": "controlListMigrationHistory",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/MigrationListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/runtime/status": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlGetRuntimeStatus",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/RuntimeStatusResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/runtime/settings": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlGetRuntimeSettings",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/RuntimeSettingsResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/secrets": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListSecrets",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/SecretMetadataListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/secrets/{name}": {
+      "put": {
+        "tags": ["Governance"],
+        "operationId": "controlSetSecret",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SecretNamePath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/SecretSet" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/SecretMetadataResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      },
+      "delete": {
+        "tags": ["Governance"],
+        "operationId": "controlDeleteSecret",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/SecretNamePath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "204": { "$ref": "#/components/responses/NoContent" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/hooks": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListLifecycleHooks",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/HookListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/principals": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListPrincipals",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/PrincipalListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      },
+      "post": {
+        "tags": ["Governance"],
+        "operationId": "controlCreatePrincipal",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "x-required-capabilities": ["access:manage"],
+        "requestBody": { "$ref": "#/components/requestBodies/PrincipalCreate" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "201": { "$ref": "#/components/responses/PrincipalResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/principals/{principalId}": {
+      "patch": {
+        "tags": ["Governance"],
+        "operationId": "controlUpdatePrincipalStatus",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PrincipalIdPath" }],
+        "requestBody": { "$ref": "#/components/requestBodies/PrincipalStatusUpdate" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/PrincipalResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/credentials": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListCredentials",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CredentialListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      },
+      "post": {
+        "tags": ["Governance"],
+        "operationId": "controlCreateCredential",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/CredentialCreate" },
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "201": { "$ref": "#/components/responses/CreatedCredentialResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/credentials/{credentialId}/rotate": {
+      "post": {
+        "tags": ["Governance"],
+        "operationId": "controlRotateCredential",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CredentialIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CreatedCredentialResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "422": { "$ref": "#/components/responses/Error422" }
+        }
+      }
+    },
+    "/_modelry/api/v1/credentials/{credentialId}/revoke": {
+      "post": {
+        "tags": ["Governance"],
+        "operationId": "controlRevokeCredential",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CredentialIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CredentialResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/capabilities": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListCapabilities",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CapabilityListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/principals/{principalId}/capabilities/{capabilityId}": {
+      "put": {
+        "tags": ["Governance"],
+        "operationId": "controlAssignCapability",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PrincipalIdPath" },
+          { "$ref": "#/components/parameters/CapabilityIdPath" }
+        ],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CapabilityResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      },
+      "delete": {
+        "tags": ["Governance"],
+        "operationId": "controlRemoveCapability",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PrincipalIdPath" },
+          { "$ref": "#/components/parameters/CapabilityIdPath" }
+        ],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/CapabilityResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/activity": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListActivity",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/ActivityListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/collections/{collectionId}/sessions": {
+      "get": {
+        "tags": ["Governance"],
+        "operationId": "controlListAuthSessions",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CollectionIdPath" }],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/AuthSessionListResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    },
+    "/_modelry/api/v1/auth/collections/{collectionId}/sessions/{sessionId}": {
+      "delete": {
+        "tags": ["Governance"],
+        "operationId": "controlRevokeAuthSession",
+        "security": [{ "ControlApiSession": [] }, { "ControlApiKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/CollectionIdPath" },
+          { "$ref": "#/components/parameters/SessionIdPath" }
+        ],
+        "responses": {
+          "401": { "$ref": "#/components/responses/Error401" },
+          "200": { "$ref": "#/components/responses/AuthSessionMetadataResponse" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "opaque-access-token" },
+      "ControlApiSession": { "type": "http", "scheme": "bearer", "bearerFormat": "opaque-admin-access-token", "description": "短生命周期 Admin Control Plane access credential（默认 15 分钟）；仅保存在 Admin SPA memory。" },
+      "AdminRefreshCookie": { "type": "apiKey", "in": "cookie", "name": "modelry_admin_refresh", "description": "Admin refresh material；HttpOnly、SameSite=Lax、Path=/_modelry/api/v1/auth，HTTPS 时设置 Secure，不暴露给 JavaScript。", "x-cookie-attributes": { "httpOnly": true, "sameSite": "Lax", "secure": "when-https", "path": "/_modelry/api/v1/auth" } },
+      "ControlApiKey": { "type": "apiKey", "in": "header", "name": "X-Modelry-API-Key" }
+    },
+    "parameters": {
+      "CollectionNamePath": { "name": "collection", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" } },
+      "CollectionIdPath": { "name": "collectionId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "RecordIdPath": { "name": "recordId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "FileIdPath": { "name": "fileId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "SessionIdPath": { "name": "sessionId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "ChangeSetIdPath": { "name": "changeSetId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "AttemptIdPath": { "name": "attemptId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "PrincipalIdPath": { "name": "principalId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "CredentialIdPath": { "name": "credentialId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "CapabilityIdPath": { "name": "capabilityId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "SecretNamePath": { "name": "name", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" } },
+      "IfMatchHeader": { "name": "If-Match", "in": "header", "required": false, "description": "Optimistic lock expected version, formatted as a quoted integer.", "schema": { "type": "string", "pattern": "^\\\"[1-9][0-9]*\\\"$" } },
+      "LastEventIdHeader": { "name": "Last-Event-ID", "in": "header", "required": false, "schema": { "type": "string" } },
+      "FilterQuery": { "name": "filter", "in": "query", "required": false, "schema": { "type": "string" } },
+      "SortQuery": { "name": "sort", "in": "query", "required": false, "schema": { "type": "string" } },
+      "PageQuery": { "name": "page", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+      "PerPageQuery": { "name": "perPage", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 30 } },
+      "ExpandQuery": { "name": "expand", "in": "query", "required": false, "schema": { "type": "string" } },
+      "CollectionNameQuery": { "name": "collection", "in": "query", "required": true, "schema": { "type": "string" } },
+      "SubscriptionFilterQuery": { "name": "filter", "in": "query", "required": false, "schema": { "type": "string" } },
+      "ChangeSetIdQuery": { "name": "changeSetId", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/OpaqueId" } },
+      "AuditQueryParameters": { "name": "query", "in": "query", "required": false, "style": "form", "explode": true, "schema": { "$ref": "#/components/schemas/AuditQuery" } }
+    },
+    "requestBodies": {
+      "RecordMutation": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecordMutationRequest" } } } },
+      "AuthRegister": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthRegisterRequest" } } } },
+      "AuthLogin": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthLoginRequest" } } } },
+      "AuthRefresh": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthRefreshRequest" } } } },
+      "BootstrapAdmin": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BootstrapAdminRequest" } } } },
+      "AdminLogin": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminLoginRequest" } } } },
+      "UploadSessionRequest": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UploadSessionRequest" } } } },
+      "BulkMutationPreview": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BulkMutationPreviewRequest" } } } },
+      "BulkMutationExecute": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BulkMutationExecuteRequest" } } } },
+      "ChangeSetProposal": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangeSetProposalRequest" } } } },
+      "ApplyChangeSet": { "required": false, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplyChangeSetRequest" } } } },
+      "RetryApplyAttempt": { "required": false, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RetryApplyAttemptRequest" } } } },
+      "PolicySimulation": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PolicySimulationRequest" } } } },
+      "SecretSet": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SecretSetRequest" } } } },
+      "PrincipalCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PrincipalCreateRequest" } } } },
+      "PrincipalStatusUpdate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PrincipalStatusUpdateRequest" } } } },
+      "CredentialCreate": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CredentialCreateRequest" } } } }
+    },
+    "responses": {
+      "RecordListResponse": { "description": "Paged record list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecordListResponse" } } } },
+      "RecordResponse": { "description": "Record", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Record" } } } },
+      "RecordCreated": { "description": "Created Record", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Record" } } } },
+      "NoContent": { "description": "No Content" },
+      "Error400": { "description": "Invalid request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error401": { "description": "Authentication required or invalid", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error403": { "description": "Policy or capability denied", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error409": { "description": "Conflict", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error422": { "description": "Validation or unsupported operation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error503": { "description": "Runtime unavailable or diagnostic-safe state", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Error504": { "description": "Hook timeout", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "UploadSessionInvalid": { "description": "Invalid or expired Upload Session", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "CollectionListResponse": { "description": "Collections", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Collection" } } } } },
+      "CollectionResponse": { "description": "Collection", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } },
+      "ChangeSetListResponse": { "description": "ChangeSets", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ChangeSet" } } } } },
+      "ChangeSetResponse": { "description": "ChangeSet", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangeSet" } } } },
+      "ApplyAttemptListResponse": { "description": "Apply Attempts", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ApplyAttempt" } } } } },
+      "ApplyAttemptResponse": { "description": "Apply Attempt", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplyAttempt" } } } },
+      "MigrationListResponse": { "description": "Migration History", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MigrationHistoryEntry" } } } } },
+      "AuditListResponse": { "description": "Audit facts", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditListResponse" } } } },
+      "AuthConfigurationResponse": { "description": "Auth configuration", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthConfiguration" } } } },
+      "AuthRegistrationResponse": { "description": "Created identity metadata", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthRegistrationResponse" } } } },
+      "AuthSessionResponse": { "description": "Auth session", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthSessionResponse" } } } },
+      "AuthSessionMetadataResponse": { "description": "Auth session metadata", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthSession" } } } },
+      "AuthSessionListResponse": { "description": "Auth sessions", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/AuthSession" } } } } },
+      "UploadSessionResponse": { "description": "Upload Session", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UploadSession" } } } },
+      "BulkMutationPreviewResponse": { "description": "Bulk impact preview", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BulkMutationPreview" } } } },
+      "BulkMutationResultResponse": { "description": "Bulk result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BulkMutationResult" } } } },
+      "IndexListResponse": { "description": "Indexes", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/IndexDefinition" } } } } },
+      "PolicyListResponse": { "description": "Policy rules", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/PolicyRule" } } } } },
+      "PolicySimulationResponse": { "description": "Policy simulation result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PolicySimulationResult" } } } },
+      "RuntimeStatusResponse": { "description": "Runtime status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RuntimeStatus" } } } },
+      "RuntimeSettingsResponse": { "description": "Runtime settings", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RuntimeSettings" } } } },
+      "SecretMetadataListResponse": { "description": "Secret metadata", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SecretMetadata" } } } } },
+      "SecretMetadataResponse": { "description": "Secret metadata", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SecretMetadata" } } } },
+      "HookListResponse": { "description": "Lifecycle hooks", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/LifecycleHook" } } } } },
+      "PrincipalListResponse": { "description": "Control Plane principals", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Principal" } } } } },
+      "PrincipalResponse": { "description": "Principal", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Principal" } } } },
+      "CredentialListResponse": { "description": "Credential metadata", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Credential" } } } } },
+      "CredentialResponse": { "description": "Credential metadata", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Credential" } } } },
+      "CreatedCredentialResponse": { "description": "Credential metadata and one-time key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreatedCredentialResult" } } } },
+      "CapabilityListResponse": { "description": "Capabilities", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CapabilityScope" } } } } },
+      "CapabilityResponse": { "description": "Capability", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CapabilityScope" } } } },
+      "ActivityListResponse": { "description": "Activity projection", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ActivityEvent" } } } } },
+      "OpenApiDocumentResponse": { "description": "Generated OpenAPI 3.1 document", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OpenApiDocument" } } } },
+      "BootstrapAdminResponse": { "description": "首个 Admin 创建成功；JSON 只包含短生命周期 access credential，refresh material 通过 HttpOnly cookie 返回。", "headers": { "Set-Cookie": { "$ref": "#/components/headers/ControlPlaneRefreshCookie" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BootstrapAdminResponse" } } } },
+      "AdminLoginResponse": { "description": "Admin 登录成功；JSON 只包含短生命周期 access credential，refresh material 通过 HttpOnly cookie 返回。", "headers": { "Set-Cookie": { "$ref": "#/components/headers/ControlPlaneRefreshCookie" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminLoginResponse" } } } },
+      "AdminRefreshResponse": { "description": "Admin refresh session 轮换成功；新的 refresh material 通过 HttpOnly cookie 返回。", "headers": { "Set-Cookie": { "$ref": "#/components/headers/ControlPlaneRefreshCookie" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminRefreshResponse" } } } },
+      "AdminLogoutResponse": { "description": "当前 Admin Session 已撤销，refresh cookie 已清除；清除时使用与创建/轮换相同的 cookie scope，并发送空值与 Max-Age=0。", "headers": { "Set-Cookie": { "$ref": "#/components/headers/ControlPlaneRefreshCookie" } } },
+      "AdminCurrentResponse": { "description": "当前 Admin Principal、Session metadata 与显式 Capability Scope。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminCurrentResponse" } } } },
+      "ControlPlaneSessionListResponse": { "description": "Admin Control Plane Session metadata", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ControlPlaneSession" } } } } },
+      "ControlPlaneSessionResponse": { "description": "Admin Control Plane Session metadata", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ControlPlaneSession" } } } }
+    },
+    "headers": {
+      "ControlPlaneRefreshCookie": { "description": "Set-Cookie 中的 modelry_admin_refresh refresh material。创建/轮换时必须设置 HttpOnly、SameSite=Lax、Path=/_modelry/api/v1/auth；请求为 HTTPS 时设置 Secure。Logout 清除时使用相同 scope，并发送空值与 Max-Age=0。该值不进入 JSON，也不得暴露给 JavaScript。", "x-cookie-attributes": { "httpOnly": true, "sameSite": "Lax", "secure": "when-https", "path": "/_modelry/api/v1/auth" }, "x-cookie-clear": { "value": "", "maxAge": 0 }, "schema": { "type": "string" } }
+    },
+    "schemas": {
+      "OpaqueId": { "type": "string", "minLength": 1 },
+      "Timestamp": { "type": "string", "format": "date-time" },
+      "JsonValue": {},
+      "ErrorDetails": { "type": "object", "additionalProperties": true },
+      "Error": {
+        "type": "object",
+        "required": ["code", "message", "requestId"],
+        "properties": {
+          "code": { "type": "string", "enum": ["INVALID_REQUEST", "NOT_FOUND", "VALIDATION_ERROR", "UPLOAD_SESSION_INVALID", "AUTH_REQUIRED", "AUTH_INVALID", "POLICY_DENIED", "CAPABILITY_DENIED", "OPTIMISTIC_LOCK_CONFLICT", "CHANGESET_STALE", "CONFIRMATION_REQUIRED", "MIGRATION_PRECONDITION_FAILED", "UNSUPPORTED_TYPE_CONVERSION", "MIGRATION_PENDING", "UNEXPORTED_ARTIFACTS", "DRIFT_DETECTED", "PROJECT_SOURCE_READ_ONLY", "CONFIG_APPLY_RECOVERY_REQUIRED", "RUNTIME_NOT_READY", "HOOK_FAILED", "HOOK_TIMEOUT", "BOOTSTRAP_TOKEN_INVALID", "BOOTSTRAP_TOKEN_EXPIRED", "ADMIN_ALREADY_BOOTSTRAPPED", "ADMIN_CREDENTIAL_INVALID", "ADMIN_SUSPENDED", "ADMIN_SESSION_INVALID"] },
+          "message": { "type": "string" },
+          "requestId": { "type": "string" },
+          "correlationId": { "type": "string" },
+          "hint": { "type": "string" },
+          "details": { "$ref": "#/components/schemas/ErrorDetails" }
+        }
+      },
+      "ErrorEnvelope": { "type": "object", "required": ["error"], "properties": { "error": { "$ref": "#/components/schemas/Error" } } },
+      "Collection": {
+        "type": "object",
+        "required": ["id", "name", "label", "type", "description", "fields", "recordCount", "relationCount", "pendingChanges", "updatedAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/OpaqueId" },
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
+          "label": { "type": "string" },
+          "type": { "type": "string", "enum": ["normal", "auth"] },
+          "description": { "type": "string" },
+          "fields": { "type": "array", "items": { "$ref": "#/components/schemas/FieldDefinition" } },
+          "options": { "$ref": "#/components/schemas/CollectionOptions" },
+          "recordCount": { "type": "integer", "minimum": 0 },
+          "relationCount": { "type": "integer", "minimum": 0 },
+          "pendingChanges": { "type": "integer", "minimum": 0 },
+          "updatedAt": { "$ref": "#/components/schemas/Timestamp" },
+          "modelHash": { "type": "string" }
+        }
+      },
+      "CollectionOptions": { "type": "object", "properties": { "softDelete": { "type": "boolean" }, "optimisticLock": { "type": "boolean" } }, "additionalProperties": false },
+      "FieldDefinition": { "type": "object", "required": ["id", "name", "label", "type"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "name": { "type": "string" }, "label": { "type": "string" }, "type": { "type": "string", "enum": ["text", "integer", "number", "decimal", "boolean", "date", "datetime", "json", "relation", "file", "select", "email", "url"] }, "required": { "type": "boolean" }, "defaultValue": {}, "validation": { "type": "object", "additionalProperties": true }, "relation": { "type": "object", "additionalProperties": true }, "file": { "type": "object", "additionalProperties": true }, "options": { "type": "array", "items": { "type": "string" } }, "multiple": { "type": "boolean" } } },
+      "CollectionCreateRequest": { "type": "object", "required": ["name", "label", "type", "description", "fields"], "properties": { "name": { "type": "string" }, "label": { "type": "string" }, "type": { "type": "string", "enum": ["normal", "auth"] }, "description": { "type": "string" }, "fields": { "type": "array", "items": { "$ref": "#/components/schemas/FieldDefinition" } }, "options": { "$ref": "#/components/schemas/CollectionOptions" }, "authConfiguration": { "$ref": "#/components/schemas/AuthConfiguration" } } },
+      "Record": { "type": "object", "required": ["id", "collectionId", "values", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "collectionId": { "$ref": "#/components/schemas/OpaqueId" }, "values": { "type": "object", "additionalProperties": true }, "createdAt": { "$ref": "#/components/schemas/Timestamp" }, "updatedAt": { "$ref": "#/components/schemas/Timestamp" }, "version": { "type": "integer", "minimum": 1 }, "deletedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "RecordMutationRequest": { "type": "object", "required": ["values"], "properties": { "values": { "type": "object", "additionalProperties": true, "description": "File Field 新绑定值必须是 { uploadSessionId } 或其数组，不接受最终 FileValue 作为上传入口。" } } },
+      "RecordListResponse": { "type": "object", "required": ["page", "perPage", "totalItems", "totalPages", "items"], "properties": { "page": { "type": "integer", "minimum": 1 }, "perPage": { "type": "integer", "minimum": 1, "maximum": 100 }, "totalItems": { "type": "integer", "minimum": 0 }, "totalPages": { "type": "integer", "minimum": 1 }, "items": { "type": "array", "items": { "$ref": "#/components/schemas/Record" } } } },
+      "FileValue": { "type": "object", "required": ["name", "size", "type", "url"], "properties": { "name": { "type": "string" }, "size": { "type": "string" }, "type": { "type": "string" }, "url": { "type": "string", "format": "uri" } } },
+      "UploadSession": { "type": "object", "required": ["id", "collectionId", "fieldName", "fileName", "mimeType", "declaredSize", "status", "expiresAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "collectionId": { "$ref": "#/components/schemas/OpaqueId" }, "fieldName": { "type": "string" }, "fileName": { "type": "string" }, "mimeType": { "type": "string" }, "declaredSize": { "type": "integer", "minimum": 0 }, "status": { "type": "string", "enum": ["pending", "uploaded", "committed", "expired"] }, "expiresAt": { "$ref": "#/components/schemas/Timestamp" }, "uploadedAt": { "$ref": "#/components/schemas/Timestamp" }, "committedAt": { "$ref": "#/components/schemas/Timestamp" }, "fileReference": { "$ref": "#/components/schemas/FileValue" } } },
+      "UploadSessionRequest": { "type": "object", "required": ["collectionId", "fieldName", "name", "size", "type"], "properties": { "collectionId": { "$ref": "#/components/schemas/OpaqueId" }, "fieldName": { "type": "string" }, "name": { "type": "string" }, "size": { "type": "integer", "minimum": 0 }, "type": { "type": "string" }, "fileCount": { "type": "integer", "minimum": 1 } } },
+      "AuthConfiguration": { "type": "object", "required": ["registrationEnabled", "loginMethods", "sessionTtl", "passwordPolicy"], "properties": { "registrationEnabled": { "type": "boolean" }, "loginMethods": { "type": "array", "items": { "type": "string", "enum": ["email_password", "username_password"] } }, "primaryIdentifier": { "type": "string", "enum": ["email", "username", "both"] }, "sessionTtl": { "type": "string" }, "passwordPolicy": { "type": "string" }, "configHash": { "type": "string" } } },
+      "AuthRegisterRequest": { "type": "object", "required": ["values", "password"], "properties": { "values": { "type": "object", "additionalProperties": true }, "password": { "type": "string", "minLength": 8, "maxLength": 128 } } },
+      "AuthLoginRequest": { "type": "object", "required": ["identifier", "password"], "properties": { "identifier": { "type": "string" }, "password": { "type": "string" } } },
+      "AuthRefreshRequest": { "type": "object", "required": ["refreshToken"], "properties": { "refreshToken": { "type": "string" } } },
+      "AuthRegistrationResponse": { "type": "object", "required": ["record", "principalId"], "properties": { "record": { "$ref": "#/components/schemas/Record" }, "principalId": { "$ref": "#/components/schemas/OpaqueId" } } },
+      "AuthSession": { "type": "object", "required": ["id", "principalId", "createdAt", "expiresAt", "status"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "createdAt": { "$ref": "#/components/schemas/Timestamp" }, "lastUsedAt": { "$ref": "#/components/schemas/Timestamp" }, "expiresAt": { "$ref": "#/components/schemas/Timestamp" }, "revokedAt": { "$ref": "#/components/schemas/Timestamp" }, "status": { "type": "string", "enum": ["Active", "Expired", "Revoked"] }, "device": { "type": "string" } } },
+      "AuthSessionResponse": { "type": "object", "required": ["accessToken", "refreshToken", "expiresAt"], "properties": { "accessToken": { "type": "string" }, "refreshToken": { "type": "string" }, "expiresAt": { "$ref": "#/components/schemas/Timestamp" }, "session": { "$ref": "#/components/schemas/AuthSession" } } },
+      "BootstrapAdminRequest": { "type": "object", "additionalProperties": false, "required": ["bootstrapToken", "email", "password"], "properties": { "bootstrapToken": { "type": "string", "minLength": 1, "description": "Runtime 在本次未完成 bootstrap 生命周期中生成并打印到本地 console 的 one-time setup token；不是长期 Credential。" }, "email": { "type": "string", "format": "email", "maxLength": 320 }, "password": { "type": "string", "minLength": 8, "maxLength": 128, "writeOnly": true } } },
+      "AdminLoginRequest": { "type": "object", "additionalProperties": false, "required": ["email", "password"], "properties": { "email": { "type": "string", "format": "email", "maxLength": 320 }, "password": { "type": "string", "minLength": 8, "maxLength": 128, "writeOnly": true } } },
+      "AdminPrincipal": { "type": "object", "additionalProperties": false, "required": ["id", "type", "email", "status", "capabilityCount", "createdAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "type": { "type": "string", "const": "Admin" }, "email": { "type": "string", "format": "email" }, "status": { "type": "string", "enum": ["Active", "Suspended"] }, "capabilityCount": { "type": "integer", "minimum": 0 }, "createdAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "CapabilityScopeName": { "type": "string", "enum": ["model:read", "model:write", "config:write", "data:inspect", "data:mutate", "changeset:propose", "changeset:apply", "policy:write", "secrets:manage", "access:manage", "audit:read", "runtime:read"] },
+      "ControlPlaneSession": { "type": "object", "additionalProperties": false, "description": "Admin Control Plane 的 opaque、server-side、可撤销 refresh session metadata（默认 30 天）；不包含 access/refresh token plaintext。", "required": ["sessionId", "principalId", "createdAt", "lastUsedAt", "expiresAt", "status"], "properties": { "sessionId": { "$ref": "#/components/schemas/OpaqueId" }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "createdAt": { "$ref": "#/components/schemas/Timestamp" }, "lastUsedAt": { "$ref": "#/components/schemas/Timestamp" }, "expiresAt": { "$ref": "#/components/schemas/Timestamp" }, "revokedAt": { "$ref": "#/components/schemas/Timestamp" }, "status": { "type": "string", "enum": ["Active", "Expired", "Revoked"] }, "device": { "type": "string" } } },
+      "BootstrapAdminResponse": { "type": "object", "additionalProperties": false, "required": ["admin", "session", "accessToken", "accessTokenExpiresAt"], "properties": { "admin": { "$ref": "#/components/schemas/AdminPrincipal" }, "session": { "$ref": "#/components/schemas/ControlPlaneSession" }, "accessToken": { "type": "string", "description": "短生命周期 opaque Admin access credential；仅用于 Authorization bearer，SPA 只保存在 memory。" }, "accessTokenExpiresAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "AdminLoginResponse": { "type": "object", "additionalProperties": false, "required": ["admin", "session", "accessToken", "accessTokenExpiresAt"], "properties": { "admin": { "$ref": "#/components/schemas/AdminPrincipal" }, "session": { "$ref": "#/components/schemas/ControlPlaneSession" }, "accessToken": { "type": "string", "description": "短生命周期 opaque Admin access credential；仅用于 Authorization bearer，SPA 只保存在 memory。" }, "accessTokenExpiresAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "AdminRefreshResponse": { "type": "object", "additionalProperties": false, "required": ["admin", "session", "accessToken", "accessTokenExpiresAt"], "properties": { "admin": { "$ref": "#/components/schemas/AdminPrincipal" }, "session": { "$ref": "#/components/schemas/ControlPlaneSession" }, "accessToken": { "type": "string", "description": "新签发的短生命周期 opaque Admin access credential；refresh material 不出现在 JSON。" }, "accessTokenExpiresAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "AdminCurrentResponse": { "type": "object", "additionalProperties": false, "required": ["admin", "session", "capabilities"], "properties": { "admin": { "$ref": "#/components/schemas/AdminPrincipal" }, "session": { "$ref": "#/components/schemas/ControlPlaneSession" }, "capabilities": { "type": "array", "items": { "$ref": "#/components/schemas/CapabilityScopeName" } } } },
+      "AuditSource": { "type": "string", "enum": ["Bootstrap", "Unauthenticated", "Runtime", "Filesystem"] },
+      "AuditPrincipalActor": { "type": "object", "required": ["principalId", "principalType"], "properties": { "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "principalType": { "type": "string", "enum": ["Admin", "Agent", "Service"] }, "capability": { "$ref": "#/components/schemas/CapabilityScopeName" } }, "not": { "required": ["source"] } },
+      "AuditSourceActor": { "type": "object", "required": ["source"], "properties": { "source": { "$ref": "#/components/schemas/AuditSource" } }, "not": { "anyOf": [{ "required": ["principalId"] }, { "required": ["principalType"] }, { "required": ["capability"] }] } },
+      "AuditFact": { "type": "object", "required": ["id", "objectType", "objectId", "action", "result", "occurredAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "principalType": { "type": "string", "enum": ["Admin", "Agent", "Service"] }, "capability": { "$ref": "#/components/schemas/CapabilityScopeName" }, "source": { "$ref": "#/components/schemas/AuditSource" }, "objectType": { "type": "string" }, "objectId": { "$ref": "#/components/schemas/OpaqueId" }, "action": { "type": "string" }, "result": { "type": "string", "enum": ["Succeeded", "Failed"] }, "occurredAt": { "$ref": "#/components/schemas/Timestamp" }, "requestId": { "type": "string" }, "correlationId": { "type": "string" }, "relatedRefs": { "type": "array", "items": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/OpaqueId" } } }, "details": { "type": "object", "additionalProperties": true } }, "oneOf": [{ "$ref": "#/components/schemas/AuditPrincipalActor" }, { "$ref": "#/components/schemas/AuditSourceActor" }] },
+      "AuditQuery": { "type": "object", "properties": { "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "objectType": { "type": "string" }, "objectId": { "$ref": "#/components/schemas/OpaqueId" }, "action": { "type": "string" }, "result": { "type": "string", "enum": ["Succeeded", "Failed"] }, "requestId": { "type": "string" }, "timeFrom": { "$ref": "#/components/schemas/Timestamp" }, "timeTo": { "$ref": "#/components/schemas/Timestamp" }, "relatedObjectType": { "type": "string" }, "relatedObjectId": { "$ref": "#/components/schemas/OpaqueId" }, "page": { "type": "integer", "minimum": 1 }, "perPage": { "type": "integer", "minimum": 1, "maximum": 100 } } },
+      "AuditListResponse": { "type": "object", "required": ["items", "totalItems", "page", "perPage", "totalPages"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/AuditFact" } }, "totalItems": { "type": "integer" }, "page": { "type": "integer" }, "perPage": { "type": "integer" }, "totalPages": { "type": "integer" } } },
+      "ChangeImpactFlags": { "type": "object", "required": ["requiresBackfill", "dropsData", "changesCardinality", "expandsAccess", "requiresCheckpoint"], "properties": { "requiresBackfill": { "type": "boolean" }, "dropsData": { "type": "boolean" }, "changesCardinality": { "type": "boolean" }, "expandsAccess": { "type": "boolean" }, "requiresCheckpoint": { "type": "boolean" } } },
+      "ChangeOperation": { "type": "object", "required": ["code", "target", "before", "after", "impact"], "properties": { "code": { "type": "string" }, "target": { "type": "object", "additionalProperties": true }, "before": { "type": "object", "additionalProperties": true }, "after": { "type": "object", "additionalProperties": true }, "impact": { "$ref": "#/components/schemas/ChangeImpactFlags" } } },
+      "ChangeSet": { "type": "object", "required": ["id", "kind", "status", "risk", "impactFlags", "preconditions", "operations", "createdAt", "updatedAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "title": { "type": "string" }, "source": { "type": "string", "enum": ["Developer", "Agent", "System"] }, "proposerId": { "$ref": "#/components/schemas/OpaqueId" }, "intent": { "type": "string" }, "kind": { "type": "string", "enum": ["model", "config"] }, "baseModelHash": { "type": "string" }, "baseConfigHash": { "type": "string" }, "status": { "type": "string", "enum": ["Draft", "Ready", "Applying", "Applied", "Cancelled"] }, "risk": { "type": "string", "enum": ["SAFE", "DATA_REWRITE", "DESTRUCTIVE", "IRREVERSIBLE"] }, "impactFlags": { "$ref": "#/components/schemas/ChangeImpactFlags" }, "preconditions": { "type": "array", "items": { "type": "object", "additionalProperties": true } }, "operations": { "type": "array", "items": { "$ref": "#/components/schemas/ChangeOperation" } }, "createdAt": { "$ref": "#/components/schemas/Timestamp" }, "updatedAt": { "$ref": "#/components/schemas/Timestamp" }, "attemptIds": { "type": "array", "items": { "$ref": "#/components/schemas/OpaqueId" } } } },
+      "ChangeSetProposalRequest": { "type": "object", "required": ["kind", "intent", "operations"], "properties": { "kind": { "type": "string", "enum": ["model", "config"] }, "intent": { "type": "string" }, "baseModelHash": { "type": "string" }, "baseConfigHash": { "type": "string" }, "operations": { "type": "array", "items": { "$ref": "#/components/schemas/ChangeOperation" } } } },
+      "ApplyChangeSetRequest": { "type": "object", "properties": { "confirmation": { "$ref": "#/components/schemas/HumanConfirmation" } } },
+      "RetryApplyAttemptRequest": { "type": "object", "properties": { "confirmation": { "$ref": "#/components/schemas/HumanConfirmation" } } },
+      "HumanConfirmation": { "type": "object", "required": ["changeSetId", "acceptedRisk", "principalId"], "properties": { "changeSetId": { "$ref": "#/components/schemas/OpaqueId" }, "acceptedRisk": { "type": "string", "enum": ["SAFE", "DATA_REWRITE", "DESTRUCTIVE", "IRREVERSIBLE"] }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "confirmedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "ApplyAttempt": { "type": "object", "required": ["id", "changeSetId", "status", "principalId", "startedAt", "resultSummary"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "changeSetId": { "$ref": "#/components/schemas/OpaqueId" }, "attemptNumber": { "type": "integer", "minimum": 1 }, "status": { "type": "string", "enum": ["Pending", "Running", "Succeeded", "Failed"] }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "confirmationPrincipalId": { "$ref": "#/components/schemas/OpaqueId" }, "startedAt": { "$ref": "#/components/schemas/Timestamp" }, "completedAt": { "$ref": "#/components/schemas/Timestamp" }, "migrationId": { "$ref": "#/components/schemas/OpaqueId" }, "applyPlanId": { "$ref": "#/components/schemas/OpaqueId" }, "riskSnapshot": { "type": "string", "enum": ["SAFE", "DATA_REWRITE", "DESTRUCTIVE", "IRREVERSIBLE"] }, "impactFlagsSnapshot": { "$ref": "#/components/schemas/ChangeImpactFlags" }, "preconditionSummary": { "type": "object", "additionalProperties": true }, "structuredError": { "$ref": "#/components/schemas/Error" }, "resultSummary": { "type": "string" } } },
+      "MigrationHistoryEntry": { "type": "object", "required": ["id", "changeSetId", "applyAttemptId", "status", "createdAt", "exportState"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "changeSetId": { "$ref": "#/components/schemas/OpaqueId" }, "applyAttemptId": { "$ref": "#/components/schemas/OpaqueId" }, "applyPlanId": { "$ref": "#/components/schemas/OpaqueId" }, "status": { "type": "string", "enum": ["Applied", "Pending"] }, "createdAt": { "$ref": "#/components/schemas/Timestamp" }, "appliedAt": { "$ref": "#/components/schemas/Timestamp" }, "exportState": { "type": "string", "enum": ["Exported", "Unexported", "NotApplicable"] }, "artifactRef": { "type": "string" } } },
+      "BulkMutationPreviewRequest": { "type": "object", "required": ["recordIds", "operation"], "properties": { "recordIds": { "type": "array", "items": { "$ref": "#/components/schemas/OpaqueId" }, "minItems": 1 }, "operation": { "type": "string", "enum": ["update", "delete"] }, "field": { "type": "string" }, "value": {} } },
+      "BulkMutationPreview": { "type": "object", "required": ["id", "operation", "requestedCount", "affectedCount", "blockedCount", "impactLevel", "generatedAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "collectionId": { "$ref": "#/components/schemas/OpaqueId" }, "operation": { "type": "string", "enum": ["update", "delete"] }, "requestedCount": { "type": "integer" }, "affectedCount": { "type": "integer" }, "blockedCount": { "type": "integer" }, "impactLevel": { "type": "string", "enum": ["None", "Low", "High"] }, "summary": { "type": "string" }, "warnings": { "type": "array", "items": { "type": "string" } }, "targetIds": { "type": "array", "items": { "$ref": "#/components/schemas/OpaqueId" } }, "generatedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "BulkMutationExecuteRequest": { "type": "object", "required": ["previewId", "confirmation"], "properties": { "previewId": { "$ref": "#/components/schemas/OpaqueId" }, "confirmation": { "$ref": "#/components/schemas/HumanConfirmation" }, "operation": { "type": "string", "enum": ["update", "delete"] }, "field": { "type": "string" }, "value": {} } },
+      "BulkMutationResult": { "type": "object", "required": ["operation", "requestedCount", "affectedCount", "skippedCount", "succeededCount", "failedCount", "failures", "auditFactId", "completedAt"], "properties": { "operation": { "type": "string", "enum": ["update", "delete"] }, "requestedCount": { "type": "integer" }, "affectedCount": { "type": "integer" }, "skippedCount": { "type": "integer" }, "succeededCount": { "type": "integer" }, "failedCount": { "type": "integer" }, "failures": { "type": "array", "items": { "type": "object", "required": ["recordId", "reason"], "properties": { "recordId": { "$ref": "#/components/schemas/OpaqueId" }, "reason": { "type": "string" } } } }, "auditFactId": { "$ref": "#/components/schemas/OpaqueId" }, "completedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "IndexDefinition": { "type": "object", "required": ["id", "name", "type", "fields"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "name": { "type": "string" }, "type": { "type": "string", "enum": ["Index", "Unique"] }, "fields": { "type": "array", "items": { "type": "string" }, "minItems": 1 }, "status": { "type": "string", "enum": ["Applied", "Pending", "Conflict"] }, "preconditions": { "type": "array", "items": { "type": "string" } }, "duplicateCount": { "type": "integer", "minimum": 0 } } },
+      "PolicyRule": { "type": "object", "required": ["operation", "expression", "mode"], "properties": { "operation": { "type": "string", "enum": ["list", "view", "create", "update", "delete"] }, "expression": { "type": "string" }, "description": { "type": "string" }, "mode": { "type": "string", "enum": ["Allow", "Deny"] }, "updatedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "PolicySimulationRequest": { "type": "object", "required": ["operation", "principal"], "description": "For operation=list, context.record is required to evaluate row visibility. The JSON Schema keeps context.record optional because the requirement depends on operation.", "properties": { "operation": { "type": "string", "enum": ["list", "view", "create", "update", "delete"] }, "principal": { "type": "object", "required": ["kind", "id"], "properties": { "kind": { "type": "string", "enum": ["anonymous", "auth"] }, "id": { "type": "string" }, "collectionId": { "$ref": "#/components/schemas/OpaqueId" }, "recordId": { "$ref": "#/components/schemas/OpaqueId" } } }, "draftExpression": { "type": "string" }, "context": { "type": "object", "additionalProperties": true, "description": "Operation-specific Policy Evaluation Context. For operation=list, record is required; before and after retain their existing operation-specific semantics." } } },
+      "PolicySimulationResult": { "type": "object", "required": ["operation", "principalId", "principalKind", "allowed", "expression", "evaluatedAt"], "properties": { "operation": { "type": "string", "enum": ["list", "view", "create", "update", "delete"] }, "principalId": { "type": "string" }, "principal": { "type": "string" }, "principalKind": { "type": "string", "enum": ["anonymous", "auth"] }, "allowed": { "type": "boolean", "description": "For operation=list, true only when context.record passes both the effective list Policy and the current view Policy, matching real Application List visibility." }, "expression": { "type": "string" }, "trace": { "type": "array", "items": { "type": "string" } }, "evaluatedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "RuntimeStatus": { "type": "object", "required": ["version", "instanceName", "state", "database", "storage", "pendingMigrations", "unexportedArtifacts", "drift", "projectSourceWritable", "checkedAt"], "properties": { "version": { "type": "string" }, "instanceName": { "type": "string" }, "state": { "type": "string", "enum": ["READY", "STARTING", "PENDING_MIGRATIONS", "HARD_DRIFT", "CONFIG_RECOVERY_REQUIRED"] }, "database": { "type": "string", "enum": ["healthy", "unknown"] }, "storage": { "type": "string", "enum": ["healthy", "unknown"] }, "pendingMigrations": { "type": "integer" }, "unexportedArtifacts": { "type": "integer" }, "drift": { "type": "string", "enum": ["none", "hard"] }, "projectSourceWritable": { "type": "boolean" }, "checkedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "RuntimeSettings": { "type": "object", "required": ["instanceName", "environment", "publicUrl", "storageDriver", "storagePath", "providerStatus"], "properties": { "instanceName": { "type": "string" }, "environment": { "type": "string", "enum": ["Development", "Production"] }, "publicUrl": { "type": "string", "format": "uri" }, "storageDriver": { "type": "string", "enum": ["Local"] }, "storagePath": { "type": "string" }, "providerStatus": { "type": "string", "enum": ["Local Only"] }, "configHash": { "type": "string" } } },
+      "SecretMetadata": { "type": "object", "required": ["name", "present", "updatedAt"], "properties": { "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }, "present": { "type": "boolean" }, "updatedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "SecretSetRequest": { "type": "object", "required": ["value"], "properties": { "value": { "type": "string", "minLength": 1 } } },
+      "LifecycleHook": { "type": "object", "required": ["id", "name", "kind", "trigger", "status", "runtime"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "name": { "type": "string" }, "kind": { "type": "string", "enum": ["Lifecycle"] }, "trigger": { "type": "string", "enum": ["record.beforeCreate", "record.beforeUpdate", "record.beforeDelete"] }, "status": { "type": "string", "enum": ["Enabled", "Disabled", "Faulted"] }, "generationId": { "$ref": "#/components/schemas/OpaqueId" }, "reloadStatus": { "type": "string", "enum": ["Stable", "Reloading", "Fallback"] }, "timeoutMs": { "type": "integer", "minimum": 50, "maximum": 10000 }, "runtime": { "type": "string" }, "description": { "type": "string" } } },
+      "Principal": { "type": "object", "required": ["id", "name", "type", "status", "description", "capabilityCount"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "name": { "type": "string" }, "type": { "type": "string", "enum": ["Admin", "Agent", "Service"] }, "status": { "type": "string", "enum": ["Active", "Suspended"] }, "description": { "type": "string" }, "lastSeen": { "$ref": "#/components/schemas/Timestamp" }, "capabilityCount": { "type": "integer" } } },
+      "PrincipalCreateRequest": { "oneOf": [{ "$ref": "#/components/schemas/AgentServicePrincipalCreateRequest" }, { "$ref": "#/components/schemas/AdminPrincipalCreateRequest" }] },
+      "AgentServicePrincipalCreateRequest": { "type": "object", "additionalProperties": false, "required": ["name", "type", "description"], "properties": { "name": { "type": "string" }, "type": { "type": "string", "enum": ["Agent", "Service"] }, "description": { "type": "string" } } },
+      "AdminPrincipalCreateRequest": { "type": "object", "additionalProperties": false, "required": ["name", "type", "email", "password", "description", "capabilities"], "properties": { "name": { "type": "string", "description": "Admin 在 Control Plane Access projection 中的显示名称。" }, "type": { "type": "string", "const": "Admin" }, "email": { "type": "string", "format": "email", "maxLength": 320 }, "password": { "type": "string", "minLength": 8, "maxLength": 128, "writeOnly": true }, "description": { "type": "string" }, "capabilities": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/components/schemas/CapabilityScopeName" }, "description": "后续 Admin 的显式 Capability Scope set；不隐式获得全部 scope。" } } },
+      "PrincipalStatusUpdateRequest": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["Active", "Suspended"] } } },
+      "Credential": { "type": "object", "required": ["id", "principalId", "principalName", "type", "label", "status", "createdAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "principalName": { "type": "string" }, "type": { "type": "string", "enum": ["API Key"], "description": "Credential resource 仅返回 Agent/Service API Key metadata；Admin Session 是可操作的 Control Plane auth transport，由 ControlPlaneSession 与 Admin Auth routes 表达，不与 Application AuthSession 混用。" }, "label": { "type": "string" }, "status": { "type": "string", "enum": ["Active", "Expiring", "Revoked"] }, "createdAt": { "$ref": "#/components/schemas/Timestamp" }, "expiresAt": { "$ref": "#/components/schemas/Timestamp" }, "lastUsedAt": { "$ref": "#/components/schemas/Timestamp" } } },
+      "CredentialCreateRequest": { "type": "object", "description": "V0.1.0 只为 Agent/Service Principal 创建 Control Plane API Key；Admin Session 通过独立的 Admin Auth routes 与 ControlPlaneSession 表达。", "required": ["principalId", "label"], "properties": { "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "label": { "type": "string" } } },
+      "CreatedCredentialResult": { "type": "object", "required": ["credential", "secretKey"], "properties": { "credential": { "$ref": "#/components/schemas/Credential" }, "secretKey": { "type": "string", "description": "只显示一次的 API Key plaintext。" } } },
+      "CapabilityScope": { "type": "object", "required": ["id", "name", "description", "assignedTo"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "name": { "type": "string", "enum": ["model:read", "model:write", "config:write", "data:inspect", "data:mutate", "changeset:propose", "changeset:apply", "policy:write", "secrets:manage", "access:manage", "audit:read", "runtime:read"] }, "description": { "type": "string" }, "assignedTo": { "type": "array", "items": { "$ref": "#/components/schemas/OpaqueId" } } } },
+      "ActivityEvent": { "type": "object", "required": ["id", "kind", "title", "description", "status", "actor", "occurredAt"], "properties": { "id": { "$ref": "#/components/schemas/OpaqueId" }, "kind": { "type": "string", "enum": ["Runtime", "Mutation", "Migration", "Hook", "Delivery", "Drift", "Warning"] }, "title": { "type": "string" }, "description": { "type": "string" }, "status": { "type": "string", "enum": ["Info", "Success", "Warning", "Failed"] }, "principalId": { "$ref": "#/components/schemas/OpaqueId" }, "actor": { "type": "string" }, "occurredAt": { "$ref": "#/components/schemas/Timestamp" }, "objectType": { "type": "string" }, "objectId": { "$ref": "#/components/schemas/OpaqueId" }, "collectionId": { "$ref": "#/components/schemas/OpaqueId" }, "auditFactId": { "$ref": "#/components/schemas/OpaqueId" }, "relatedRefs": { "type": "array", "items": { "type": "object", "additionalProperties": true } } } },
+      "OpenApiDocument": { "type": "object", "required": ["openapi", "info", "paths"], "properties": { "openapi": { "const": "3.1.0" }, "info": { "type": "object" }, "paths": { "type": "object" }, "components": { "type": "object" } }, "additionalProperties": true }
+    }
+  }
+}
