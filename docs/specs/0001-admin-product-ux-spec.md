@@ -637,6 +637,51 @@ Index Review 重点展示：
 
 ---
 
+## 10.4 Shared Draft Scope
+
+同一个 Collection 内的模型修改默认进入同一个 Shared Draft。
+
+可以连续积累：
+
+- Field add / update / remove；
+- Relation add / update / remove；
+- Index add / update / remove；
+- 与上述结构变更直接相关的 Validation / Default / Constraint 调整。
+
+用户不需要每修改一个 Field 就立即 Apply。
+
+推荐工作方式：
+
+~~~text
+Add Field
+-> Edit Field
+-> Add Relation
+-> Add Index
+-> continue modeling
+-> one Apply Changes
+~~~
+
+Runtime 对这一组变更统一计算：
+
+- Structured Diff；
+- Risk；
+- Preconditions；
+- Impact；
+- Migration Plan。
+
+因此一次 Apply 对应一次完整的 Collection Modeling Task，而不是一次单字段操作。
+
+V0.1 的 Draft Scope 固定为 **单 Collection**。
+
+明确不做：
+
+~~~text
+posts + users + comments
+-> one cross-collection modeling draft
+~~~
+
+跨 Collection 联合 Draft 会显著增加依赖排序、失败恢复、权限和 UX 复杂度，留待后续版本单独设计。
+
 ## 10.4 Shared Draft Action Bar
 
 只要 Fields / Relations / Indexes 有任何 Draft：
