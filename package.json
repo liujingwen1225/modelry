@@ -1,0 +1,15 @@
+{
+  "name": "modelry-foundation",
+  "private": true,
+  "workspaces": [
+    "admin"
+  ],
+  "scripts": {
+    "admin:dev": "npm --workspace @modelry/admin run dev",
+    "admin:build": "npm --workspace @modelry/admin run build",
+    "admin:test": "npm --workspace @modelry/admin run test",
+    "admin:browser-smoke": "npm --workspace @modelry/admin run browser:smoke",
+    "build": "npm run admin:build",
+    "test": "npm run admin:test"
+  }
+}
