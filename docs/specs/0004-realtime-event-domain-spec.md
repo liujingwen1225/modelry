@@ -20,6 +20,7 @@ The HTTP representation and reconnect cursor are defined in [Realtime HTTP Contr
 ## 2. Event Identity and Ordering
 
 - Each Project has one ordered Event sequence. An Event ID is stable across reload and same-Project Runtime restart, and identifies exactly one committed Record Event.
+- An Event Cursor identifies a sequence position from which delivery resumes. It is usually the most recently delivered Event ID; the reserved zero cursor represents the position before the first committed Event and is not itself an Event.
 - Event IDs increase in Record mutation commit order. The sequence is not a count: gaps are permitted, and clients must not infer that a missing integer means data loss.
 - `occurredAt` records the mutation's committed UTC time. The Event's Collection ID, Record ID, operation, and Applied schema version describe the committed change.
 - Events are emitted for successful Create / Update / Delete operations through Application API, Admin Record management, and Auth Collection Profile Record services. This keeps all interfaces on the same Record semantics.
@@ -40,8 +41,8 @@ Create stores the committed Record snapshot. Update stores its before and after 
 
 - The endpoint uses the Application Data Plane. A supplied Application Session must authenticate successfully; invalid credentials never downgrade to anonymous. Anonymous access is evaluated only when no credential is supplied.
 - Revalidate a supplied Session before each Event and at least once per heartbeat interval. A revoked, expired, or unverifiable Session closes the stream before any further protected Event is sent.
-- Opening a Collection stream first evaluates its currently Applied `list` Access Rule with no Record. A deny or evaluator failure denies the stream.
-- Before an Event is delivered or replayed, evaluate the current Applied `list` Access Rule against the Event's corresponding Record snapshot. Rules are evaluated again at delivery time; a stored Event does not preserve an old authorization grant.
+- Opening a Collection stream first evaluates its currently Applied `list` Access Rule with no Record. Before each Event and heartbeat, re-evaluate this Collection-level admission; a deny or evaluator failure closes the stream.
+- Before an Event is delivered or replayed, evaluate the current Applied `list` Access Rule against the Event's corresponding Record snapshot. Rules are evaluated again at delivery time; a stored Event does not preserve an old authorization grant. An evaluator failure closes the stream.
 - `record.created` uses the after snapshot and may include the resulting Record. `record.updated` uses the after snapshot and may include the resulting Record. `record.deleted` uses the before snapshot and includes only the Record ID. A client can use the normal Record API to read current state, which performs its own authorization.
 - If an Update changes a Record from listable to not listable for the current Principal, deliver `record.removed` with only its Collection ID and Record ID so a client can remove a previously visible row. If neither before nor after snapshot is listable, send nothing.
 - A denied row Event is omitted without disclosing its Record ID, values, or denial reason. If Access Rule evaluation fails, close the stream without sending the affected Event. No credential, session token, API key, authorization header, internal file path, or request body is event data.
@@ -50,10 +51,10 @@ Create stores the committed Record snapshot. Update stores its before and after 
 ## 5. Subscription, Replay, and Recovery
 
 - One subscription observes one Collection. It has no arbitrary search/filter language in V0.1.x; consumers use the existing Records API for query results.
-- A new subscription with no cursor starts at the current sequence head and receives a `stream.ready` frame containing that baseline Event ID. Consumers should establish the stream, load current Records, and then apply subsequent Events so that changes concurrent with the initial load are not missed.
+- A new subscription with no cursor starts at the current sequence head and receives a `stream.ready` frame containing that baseline Event Cursor. Consumers should establish the stream, load current Records, and then apply subsequent Events so that changes concurrent with the initial load are not missed.
 - A subscription with a valid Last-Event-ID resumes strictly after that Event ID. The order of delivered Events follows the Project sequence; hidden Events are skipped, and only visible Events advance the client-visible cursor.
-- The event log retains at most the most recent 10,000 events and 64 MiB of event plus authorization snapshot data, whichever limit is reached first. A cursor older than the retained range is an explicit recovery condition: the client reloads current Collection Records and opens a fresh stream.
-- An Event ID from a later sequence or a malformed cursor is a client error. A cursor gap is never silently treated as a complete replay.
+- The event log retains at most the most recent 10,000 events and 64 MiB of event plus authorization snapshot data, whichever limit is reached first. The Project retains the highest pruned Event ID as a recovery watermark. A cursor at or before that watermark is an explicit recovery condition: the client reloads current Collection Records and opens a fresh stream.
+- A cursor later than the current sequence head or a malformed cursor is a client error. Numeric gaps alone do not imply lost Events; the retained watermark is the authoritative signal that a cursor needs recovery.
 - Realtime is an observation channel. The durable Record API remains the source of current state; clients must handle duplicate delivery idempotently by Event ID and may re-read a Record after receiving its ID.
 
 ## 6. Bounded Lifecycle and Request Observability
