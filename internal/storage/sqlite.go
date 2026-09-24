@@ -37,6 +37,13 @@ type Store struct {
 	closed      bool
 }
 
+// Executor 仅在当前事务内提供结构化数据访问。
+type Executor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 type ConnectionSettings struct {
 	ForeignKeys int64
 	BusyTimeout int64
@@ -96,6 +103,50 @@ func Open(databasePath string) (*Store, error) {
 
 func (store *Store) ProjectID() string {
 	return store.projectID
+}
+
+// WithTransaction 在一个短事务中执行模块操作。
+func (store *Store) WithTransaction(ctx context.Context, work func(Executor) error) error {
+	if store == nil || store.db == nil || store.IsClosed() {
+		return errors.New("SQLite store is not open")
+	}
+	if work == nil {
+		return errors.New("storage transaction callback is required")
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("cannot begin project data transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if err := work(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("cannot commit project data transaction: %w", err)
+	}
+	return nil
+}
+
+// WithReadSnapshot 在只读事务中提供一致的数据快照。
+func (store *Store) WithReadSnapshot(ctx context.Context, work func(Executor) error) error {
+	if store == nil || store.db == nil || store.IsClosed() {
+		return errors.New("SQLite store is not open")
+	}
+	if work == nil {
+		return errors.New("storage read callback is required")
+	}
+	tx, err := store.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("cannot begin project read snapshot: %w", err)
+	}
+	defer tx.Rollback()
+	if err := work(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("cannot close project read snapshot: %w", err)
+	}
+	return nil
 }
 
 func (store *Store) SQLiteVersion() string {

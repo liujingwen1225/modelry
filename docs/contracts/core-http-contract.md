@@ -107,26 +107,28 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 - `GET /changes` 与 `GET /changes/{changeSetId}` 提供全局 Changes Surface 和指定 Change 的恢复详情；列表分别表达 Pending Change 与不可变 AppliedMigration，不把失败 ApplyAttempt 改写成成功历史。
 - Apply 请求不能携带原始 SQL，也不能由调用方指定 authoritative Risk / Diff / Preconditions。Runtime 每次 Preview / Apply 重新计算 Diff、Risk、Preconditions、Impact。SAFE 可直接应用；需 Review 时，未确认返回 409 和可解释详情，用户在当前业务上下文确认后重试。失败保留 Pending Change，并将新的 ApplyAttempt 与恢复结果关联；成功历史对应不可变 AppliedMigration。
 - Access Rule 与 Auth Configuration 各有自己的保存、Apply、Discard 生命周期，不加入 Schema Pending Change。
+- Access Rule 以 applied/pending 两份五操作规则和独立 version 返回；无 pending 时 pending 与 applied 相同。新 Collection 默认 `list`、`view`、`create`、`update`、`delete` 五项均为 `noAccess`。Custom 仅接受版本化 JSON `{ "version": 1, "all": [{ "fieldId": "fld_…", "operator": "eq|neq|in", "value": ... }] }`；`all` 为 1–16 条 AND 条件，`in` 的值为 1–32 个、且必须符合 Applied Field 类型。表达式只引用非系统 Applied Field，未知字段、操作符、版本或属性均拒绝，任意 SQL 永不接受。`recordOwner` 必须引用指向 Auth Collection 的 Applied Relation。对 owner/custom List，Collection 级检查只允许继续读取；Records 必须再对每条记录逐行评估同一 Applied Rule。
 
 ### Auth Users、Credentials 与 Sessions
 
 - Admin 通过 Control Plane `GET/POST /collections/{collectionId}/users` 浏览或创建 Auth Collection 用户。创建一次提交 Profile Record + Password Credential；不得让调用方分别写入后得到半个用户。
 - Application Auth 在 `/api/v1/auth/{collectionName}` 下提供注册（仅当已 Apply 且启用）、登录、当前 Session、登出、密码更改与 Session 查看 / 撤销边界。密码是 Credential，不是 Field；不得读回或进入普通 Record response。
+- Auth Configuration 与 Access Rule 一样返回独立 `version`；GET/PUT/apply/discard 使用 `{applied,pending,version}`，无 pending 时 pending 等于 applied，写入与 Apply 使用 `expectedVersion` 防止覆盖并发变更。Auth Collection 默认 email/password enabled、self-registration disabled、session duration 7 days。
 - Control Plane 可按权限为 Auth Collection 创建 App User、改密码、查看 / 撤销 App User Sessions。Session 必须可服务端撤销，撤销后的 Session 后续访问失败；密码修改时按 ADR-0001 原子处理所需 Session 失效。
 - Auth Collection 的 Email Identifier、注册开关和 Session Duration 属于 Auth Configuration，不属于 Schema Change。Self Registration 默认关闭。
 
 ### Service Accounts、API Keys、Requests 与 Audit
 
-- `GET/POST /service-accounts` 与 `GET/PATCH /service-accounts/{id}` 管理 Service Account；V0.1 Permission 仅有受控 Full Access、Read Only、Custom 表达，不开放额外管理员。
+- `GET/POST /service-accounts` 与 `GET/PATCH /service-accounts/{id}` 管理 Service Account；V0.1 Permission 仅有受控 Full Access、Read Only、Custom 表达，不开放额外管理员。Full Access 包含固定 V1 Control Plane 操作集；Read Only 只包含 `runtime.read`、`storage.read` 与对应只读操作；Custom 使用 OpenAPI 中固定的 `ServiceAccountOperation` 枚举，要求版本 1 和明确 allowlist，未知值一律拒绝。Service Account 只能创建或管理授予权限集合为自身子集的目标账户；API Key 仅认证 Control Plane 操作，不认证 Owner 浏览器或 Application Data Plane。
 - 创建 API Key 通过 `POST /service-accounts/{id}/api-keys`。明文只在成功响应中展示一次；明文不得出现在列表、后续读取、Record、RequestRecord、AuditRecord 或 Error 中。列表只返回非秘密摘要，`POST /api-keys/{id}/revoke` 撤销为不可逆事实；禁用 Service Account 也立即使其 Key 不可认证。
 - `GET /requests`、`GET /requests/{requestId}` 只暴露已脱敏 Application RequestRecord 元数据。不得暴露原始凭证、无限制 Header / Query 或完整敏感 Body。
-- `GET /audit`、`GET /audit/{auditRecordId}` 只读访问耐久、追加式 AuditRecord，并按 Owner / Permission 授权。Audit 不等于所有 Application Request。
+- `GET /audit`、`GET /audit/{auditRecordId}` 只读访问耐久、追加式 AuditRecord，并按 Owner / Permission 授权。Audit 不等于所有 Application Request。Audit 列表支持 opaque cursor 与服务端过滤：`search` 是 Actor / Action / Resource 字段的大小写不敏感字面子串；`actorKind`、`actorId`、`action`、`resourceKind`、`resourceId` 为精确过滤；`from` 和 `to` 是含边界 RFC 3339 时间。过滤与游标在同一稳定排序中执行，游标与过滤条件绑定。
 
 ## 6. Schema 兼容性约束
 
 - OpenAPI 是唯一 canonical HTTP DTO 描述；本文件说明契约语义，不复制 Schema 字段定义。
 - `operationId` 全文唯一且稳定。移除、重命名路径或字段必须按兼容变更评估。
-- 错误 envelope、requestId、平面前缀和安全边界适用于 V0.1 的后续实现；列出操作不代表本次已实现所有产品能力。
+- 错误 envelope、requestId、平面前缀和安全边界适用于当前 V0.1 HTTP Contract。OpenAPI 中的操作构成候选版本的 canonical API 面；不在契约中的产品能力不应通过私有旁路暴露。
 - 查询分页采用 opaque cursor；分页大小有界。Search / Filter / Sort 语法以本契约中的稳定字段为限，不能接受任意 SQL。后续扩展不得让 Application API 穿过 AccessRule。
 - 所有日期时间采用 RFC 3339 UTC；JSON ID 不暴露 SQLite RowID。空缺 / Unknown 与空集合严格区分。
 - 本契约不定义 HTTP API 的未来 major-version 生命周期或请求记录保留年限；RequestRecord Retention 必须在运维边界明确前，不得宣传未约定时长。

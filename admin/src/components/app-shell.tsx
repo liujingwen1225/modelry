@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
-  Command,
-  FileStack,
-  GitBranch,
-  Home,
-  Moon,
+	ChevronDown,
+	Command,
+	FileStack,
+	GitBranch,
+	Home,
+	LogOut,
+	Moon,
   Network,
   Settings2,
   ShieldCheck,
@@ -83,7 +86,60 @@ function ThemeButton() {
   );
 }
 
-export function AppShell() {
+export type AppShellProps = {
+	ownerEmail?: string;
+	sessionExpiresAt?: string;
+	onLogout?: () => Promise<void>;
+};
+
+function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProps) {
+	const [signOutState, setSignOutState] = useState<'idle' | 'loading' | 'error'>('idle');
+	const [signOutMessage, setSignOutMessage] = useState('');
+
+	async function signOut() {
+		if (!onLogout || signOutState === 'loading') return;
+		setSignOutState('loading');
+		setSignOutMessage('');
+		try {
+			await onLogout();
+		} catch (error) {
+			setSignOutMessage(error instanceof Error ? error.message : 'Sign out could not be completed. Retry after checking the Runtime.');
+			setSignOutState('error');
+			return;
+		}
+		setSignOutState('idle');
+	}
+
+	return (
+		<details className="owner-menu">
+			<summary aria-label={`Owner menu${ownerEmail ? ` for ${ownerEmail}` : ''}`}>
+				<span className="owner-menu__avatar" aria-hidden="true">{ownerEmail?.slice(0, 1).toUpperCase() ?? 'O'}</span>
+				<span className="owner-menu__email">{ownerEmail ?? 'Owner'}</span>
+				<ChevronDown aria-hidden="true" size={14} />
+			</summary>
+			<div className="owner-menu__popover">
+				<div className="owner-menu__identity">
+					<strong>{ownerEmail ?? 'Owner'}</strong>
+					<span>Owner session active</span>
+					{sessionExpiresAt && <span>Expires {new Date(sessionExpiresAt).toLocaleString()}</span>}
+				</div>
+				<div className="owner-menu__actions">
+					<ThemeButton />
+					<span>Theme</span>
+					{onLogout && (
+						<button aria-disabled={signOutState === 'loading'} className="owner-menu__logout" disabled={signOutState === 'loading'} onClick={() => void signOut()} type="button">
+							<LogOut aria-hidden="true" size={15} />
+							{signOutState === 'loading' ? 'Signing out…' : 'Sign out'}
+						</button>
+					)}
+				</div>
+				{signOutMessage && <p className="owner-menu__error" role="alert">{signOutMessage}</p>}
+			</div>
+		</details>
+	);
+}
+
+export function AppShell({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProps) {
   return (
     <div className="app-frame">
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -99,7 +155,7 @@ export function AppShell() {
           <div className="topbar__actions">
             <RuntimeBadge />
             <span aria-hidden="true" className="topbar__action-divider" />
-            <ThemeButton />
+            <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} sessionExpiresAt={sessionExpiresAt} />
           </div>
         </header>
         <main className="page-area" id="main-content" tabIndex={-1}>
@@ -108,7 +164,7 @@ export function AppShell() {
         <footer className="workspace-footer">
           <span>Modelry Community</span>
           <span className="footer-dot" aria-hidden="true">·</span>
-          <span>V0.1 foundation</span>
+          <span>V0.1</span>
         </footer>
       </div>
     </div>

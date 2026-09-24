@@ -63,7 +63,7 @@ export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T>
   const response = await fetch(path, {
     method: 'GET',
     headers: { Accept: 'application/json' },
-    credentials: 'omit',
+    credentials: 'same-origin',
     cache: 'no-store',
     signal,
   });

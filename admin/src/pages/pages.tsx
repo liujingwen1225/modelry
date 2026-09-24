@@ -60,8 +60,8 @@ export function OverviewPage() {
         <div className="hero-decoration" aria-hidden="true"><span /><span /><span /></div>
         <div className="overview-hero__content">
           <div className="hero-kicker"><span className="hero-kicker__mark"><Layers3 size={15} /></span> MODELRY WORKSPACE</div>
-          <h2>Everything starts with a<br className="desktop-only" /> healthy foundation.</h2>
-          <p>Runtime and storage status are read directly from this local project. Product workflows will arrive in their own release gates.</p>
+          <h2>Build and evolve your<br className="desktop-only" /> backend in one workspace.</h2>
+          <p>Create a model, manage real application data, and review access and changes in this local project.</p>
           <div className="hero-links">
             <Link className="text-link" to="/settings">Review system status <ArrowRight aria-hidden="true" size={15} /></Link>
             <span className="hero-separator" aria-hidden="true">·</span>
@@ -93,21 +93,21 @@ export function OverviewPage() {
         <div className="section-heading-row">
           <div>
             <p className="eyebrow">WORKSPACE</p>
-            <h2 id="scope-heading">A focused foundation</h2>
+            <h2 id="scope-heading">Build, secure, and observe</h2>
           </div>
         </div>
         <div className="scope-grid">
           <Surface className="scope-card" variant="standard">
             <span className="scope-icon"><Layers3 aria-hidden="true" size={18} /></span>
             <h3>Build your model</h3>
-            <p>Collections and API workflows have a place in the workspace. Their product operations are not delivered in this foundation closure.</p>
-            <Link className="text-link" to="/collections">View Collections area <ArrowRight aria-hidden="true" size={15} /></Link>
+            <p>Define Collections and fields, work with records and local files, and use the API generated from your model.</p>
+            <Link className="text-link" to="/collections">Open Collections <ArrowRight aria-hidden="true" size={15} /></Link>
           </Surface>
           <Surface className="scope-card" variant="standard">
             <span className="scope-icon scope-icon--violet"><LockKeyhole aria-hidden="true" size={18} /></span>
             <h3>Operate with clarity</h3>
-            <p>Access and change workflows are reserved for their own release gates. This shell does not show sample data or pretend actions.</p>
-            <Link className="text-link text-link--muted" to="/access">View Access area <ArrowRight aria-hidden="true" size={15} /></Link>
+            <p>Apply Access Rules, manage credentials, inspect requests, and recover model changes from their saved history.</p>
+            <Link className="text-link text-link--muted" to="/access">Open Access <ArrowRight aria-hidden="true" size={15} /></Link>
           </Surface>
         </div>
       </section>
@@ -125,7 +125,7 @@ export function SettingsPage() {
           <div>
             <p className="eyebrow">DIAGNOSTICS</p>
             <h2 id="settings-status-heading">Runtime &amp; storage</h2>
-            <p className="section-description">Anonymous snapshots contain health state and provider only. Local paths are not displayed.</p>
+            <p className="section-description">Review Local Storage health, provider, and project path.</p>
           </div>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={15} /> Refresh status</Button>
         </div>
@@ -134,31 +134,7 @@ export function SettingsPage() {
       </section>
       <Surface className="settings-note" variant="inset">
         <span className="scope-icon"><LockKeyhole aria-hidden="true" size={17} /></span>
-        <div><strong>Safe diagnostics</strong><p>Status requests use the anonymous, read-only Runtime and Storage endpoints. No Owner session is sent.</p></div>
-      </Surface>
-    </div>
-  );
-}
-
-const pageDescriptions = {
-  Collections: 'Define the data model for your application.',
-  API: 'Explore the API generated from your backend model.',
-  Changes: 'Review and apply model changes with confidence.',
-  Access: 'Understand how applications and users can access data.',
-} as const;
-
-export function FoundationScopePage({ title }: { title: keyof typeof pageDescriptions }) {
-  return (
-    <div className="page-stack">
-      <PageHeading description={pageDescriptions[title]} eyebrow={title === 'Collections' || title === 'API' ? 'BUILD' : 'OPERATE'} title={title} />
-      <Surface className="scope-empty" variant="raised">
-        <div className="scope-empty__mark" aria-hidden="true"><Layers3 size={24} strokeWidth={1.6} /></div>
-        <div>
-          <p className="eyebrow">FOUNDATION SCOPE</p>
-          <h2>This workflow is not delivered yet</h2>
-          <p>The V0.1 navigation is in place. The {title.toLowerCase()} product workflow is outside this Foundation closure, so this page has no sample data or pretend actions.</p>
-          <Link className="text-link" to="/">Return to Overview <ArrowRight aria-hidden="true" size={15} /></Link>
-        </div>
+        <div><strong>Read-only diagnostics</strong><p>Status requests show safe health snapshots. Only a signed-in Owner can see the Local Storage path.</p></div>
       </Surface>
     </div>
   );

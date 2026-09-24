@@ -19,7 +19,7 @@ describe('diagnostic API client', () => {
     expect(status.state).toBe('ready');
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/runtime/status', expect.objectContaining({
       method: 'GET',
-      credentials: 'omit',
+      credentials: 'same-origin',
       cache: 'no-store',
       headers: { Accept: 'application/json' },
     }));
