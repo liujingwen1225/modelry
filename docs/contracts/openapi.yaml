@@ -1,0 +1,2811 @@
+openapi: 3.1.1
+info:
+  title: Modelry Community Core HTTP API
+  version: 0.1.0
+  description: >-
+    Canonical V0.1 contract for the Modelry Control Plane and Application API.
+    Describes the target boundary and does not assert that every operation is implemented.
+servers:
+  - url: /
+security:
+  - OwnerSession: []
+  - ServiceAccountAPIKey: []
+x-modelry-request-id:
+  responseHeader: X-Request-Id
+  generatedBy: server for every HTTP request; incoming values are not authoritative
+  errorEnvelopeField: error.requestId
+  applicationRequestRecord: RequestRecord.requestId
+tags:
+  - name: Bootstrap
+    description: Read first-run state and establish the initial Owner on a locally authorized Runtime.
+  - name: ControlPlaneAuth
+    description: Create, inspect, and revoke the Owner management session.
+  - name: Runtime
+    description: Read Runtime readiness and local storage health diagnostics.
+  - name: Collections
+    description: Create and inspect Collections and administer their Records.
+  - name: SchemaChanges
+    description: Save per-Collection schema operations, preview and apply changes, and inspect their history.
+  - name: AccessRules
+    description: Save, apply, discard, and inspect Collection Access Rule changes.
+  - name: Authentication
+    description: Manage Auth Collection configuration, App Users, credentials, and their sessions from the Control Plane.
+  - name: ServiceAccounts
+    description: Manage Service Accounts, permissions, and one-time-revealed API Keys.
+  - name: Requests
+    description: Read redacted Application RequestRecord metadata and details.
+  - name: Audit
+    description: Read durable Control Plane security and governance AuditRecords.
+  - name: ApplicationRecords
+    description: Create, list, read, update, and delete records through the Application Data Plane.
+  - name: ApplicationAuth
+    description: Register and authenticate App Users and manage their Application Sessions.
+paths:
+  '/admin/api/v1/bootstrap/status':
+    get:
+      tags: [Bootstrap]
+      operationId: getBootstrapStatus
+      summary: Read bootstrap status
+      security: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/bootstrap/owner':
+    post:
+      tags: [Bootstrap]
+      operationId: bootstrapOwner
+      summary: Create the first Owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapOwnerRequest'
+      security: []
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Set-Cookie:
+              description: Establishes the HttpOnly, SameSite Owner session cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapOwnerResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/auth/login':
+    post:
+      tags: [ControlPlaneAuth]
+      operationId: loginOwner
+      summary: Create an Owner session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerLoginRequest'
+      security: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Set-Cookie:
+              description: Establishes the HttpOnly, SameSite Owner session cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerLoginResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/auth/session':
+    get:
+      tags: [ControlPlaneAuth]
+      operationId: getOwnerSession
+      summary: Read the current Owner session
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerSessionResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/auth/logout':
+    post:
+      tags: [ControlPlaneAuth]
+      operationId: logoutOwner
+      summary: Revoke the current Owner session
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/runtime/status':
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeStatus
+      summary: Read the public Runtime readiness snapshot
+      security:
+        - OwnerSession: []
+        - ServiceAccountAPIKey: []
+        - {}
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/status':
+    get:
+      tags: [Runtime]
+      operationId: getStorageStatus
+      summary: Read the public SQLite and Local Storage health snapshot
+      security:
+        - OwnerSession: []
+        - ServiceAccountAPIKey: []
+        - {}
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections':
+    get:
+      tags: [Collections]
+      operationId: listCollections
+      summary: List Collections
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Collections]
+      operationId: createCollection
+      summary: Create a Collection with its initial Model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionCreateRequest'
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [Collections]
+      operationId: getCollection
+      summary: Read a Collection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/records':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [Collections]
+      operationId: listAdminRecords
+      summary: List Records in Admin
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Collections]
+      operationId: createAdminRecord
+      summary: Create a Record in Admin
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordWriteRequest'
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/records/{recordId}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      tags: [Collections]
+      operationId: getAdminRecord
+      summary: Read a Record in Admin
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    patch:
+      tags: [Collections]
+      operationId: updateAdminRecord
+      summary: Update a Record in Admin
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordWriteRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [Collections]
+      operationId: deleteAdminRecord
+      summary: Delete a Record in Admin
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/{collectionName}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    get:
+      tags: [ApplicationRecords]
+      operationId: listApplicationRecords
+      summary: List Records
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+      security:
+        - ApplicationSession: []
+        - {}
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [ApplicationRecords]
+      operationId: createApplicationRecord
+      summary: Create a Record
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordWriteRequest'
+      security:
+        - ApplicationSession: []
+        - {}
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/{collectionName}/{recordId}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      tags: [ApplicationRecords]
+      operationId: getApplicationRecord
+      summary: Read a Record
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/RecordId'
+      security:
+        - ApplicationSession: []
+        - {}
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    patch:
+      tags: [ApplicationRecords]
+      operationId: updateApplicationRecord
+      summary: Update a Record
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordWriteRequest'
+      security:
+        - ApplicationSession: []
+        - {}
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [ApplicationRecords]
+      operationId: deleteApplicationRecord
+      summary: Delete a Record
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/RecordId'
+      security:
+        - ApplicationSession: []
+        - {}
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/pending-change':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [SchemaChanges]
+      operationId: getSchemaPendingChange
+      summary: Inspect the durable Schema Pending Change
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingChangeResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/pending-operations':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [SchemaChanges]
+      operationId: saveSchemaPendingOperation
+      summary: Save a durable Pending Operation
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PendingOperationRequest'
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingChangeResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/pending-operations/{operationId}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/OperationId'
+    patch:
+      tags: [SchemaChanges]
+      operationId: updateSchemaPendingOperation
+      summary: Update a Pending Operation
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/OperationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PendingOperationRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingChangeResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [SchemaChanges]
+      operationId: removeSchemaPendingOperation
+      summary: Remove a Pending Operation
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/OperationId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/preview':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [SchemaChanges]
+      operationId: previewSchemaChange
+      summary: Preview current Model Change
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaPreviewResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/apply':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [SchemaChanges]
+      operationId: applySchemaChange
+      summary: Apply the current Pending Change
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyResultResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/discard':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [SchemaChanges]
+      operationId: discardSchemaChange
+      summary: Discard the current Pending Change
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingChangeResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/schema/history':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [SchemaChanges]
+      operationId: getSchemaHistory
+      summary: Read Applied Model history
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/changes':
+    get:
+      tags: [SchemaChanges]
+      operationId: listChanges
+      summary: List Pending and Applied Changes
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/changes/{changeSetId}':
+    parameters:
+      - $ref: '#/components/parameters/ChangeSetId'
+    get:
+      tags: [SchemaChanges]
+      operationId: getChange
+      summary: Read Change details and recovery state
+      parameters:
+        - $ref: '#/components/parameters/ChangeSetId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/access-rules':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [AccessRules]
+      operationId: getAccessRules
+      summary: Read applied and pending Access Rules
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessRulesResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [AccessRules]
+      operationId: saveAccessRules
+      summary: Save Access Rule changes
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessRulesRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessRulesResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/access-rules/apply':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [AccessRules]
+      operationId: applyAccessRules
+      summary: Apply Access Rule changes
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyResultResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/access-rules/discard':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [AccessRules]
+      operationId: discardAccessRules
+      summary: Discard Access Rule changes
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessRulesResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/authentication':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [Authentication]
+      operationId: getAuthenticationConfiguration
+      summary: Read applied and pending Auth Configuration
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationConfigurationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Authentication]
+      operationId: saveAuthenticationConfiguration
+      summary: Save Auth Configuration changes
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticationConfigurationRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationConfigurationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/authentication/apply':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [Authentication]
+      operationId: applyAuthenticationConfiguration
+      summary: Apply Auth Configuration changes
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyResultResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/authentication/discard':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    post:
+      tags: [Authentication]
+      operationId: discardAuthenticationConfiguration
+      summary: Discard Auth Configuration changes
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationConfigurationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/users':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+    get:
+      tags: [Authentication]
+      operationId: listApplicationUsers
+      summary: List App Users in an Auth Collection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionUsersResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Authentication]
+      operationId: createApplicationUser
+      summary: Create App User and Password Credential atomically
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationUserCreateRequest'
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/users/{recordId}/password':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/RecordId'
+    put:
+      tags: [Authentication]
+      operationId: setApplicationUserPassword
+      summary: Change App User password
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordRequest'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/users/{recordId}/sessions':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/RecordId'
+    get:
+      tags: [Authentication]
+      operationId: listApplicationUserSessions
+      summary: List App User Sessions
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/sessions/{sessionId}/revoke':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Authentication]
+      operationId: revokeApplicationUserSession
+      summary: Revoke an App User Session
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/users/{recordId}/sessions/revoke-all':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/RecordId'
+    post:
+      tags: [Authentication]
+      operationId: revokeAllApplicationUserSessions
+      summary: Revoke all App User Sessions for a user
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/register':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: registerApplicationUser
+      summary: Register an App User when self registration is enabled
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationRegistrationRequest'
+      security: []
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/login':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: loginApplicationUser
+      summary: Authenticate and create an Application Session
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationLoginRequest'
+      security: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSessionResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/session':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    get:
+      tags: [ApplicationAuth]
+      operationId: getApplicationSession
+      summary: Read the current Application Session
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      security:
+        - ApplicationSession: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/logout':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: logoutApplicationUser
+      summary: Revoke the current Application Session
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      security:
+        - ApplicationSession: []
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/password':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    put:
+      tags: [ApplicationAuth]
+      operationId: changeApplicationPassword
+      summary: Change the current App User password
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      security:
+        - ApplicationSession: []
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/sessions':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    get:
+      tags: [ApplicationAuth]
+      operationId: listOwnApplicationSessions
+      summary: List the current App User Sessions
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      security:
+        - ApplicationSession: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/sessions/{sessionId}/revoke':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [ApplicationAuth]
+      operationId: revokeOwnApplicationSession
+      summary: Revoke one owned Application Session
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/SessionId'
+      security:
+        - ApplicationSession: []
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/service-accounts':
+    get:
+      tags: [ServiceAccounts]
+      operationId: listServiceAccounts
+      summary: List Service Accounts
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [ServiceAccounts]
+      operationId: createServiceAccount
+      summary: Create a Service Account and optionally an API Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceAccountCreateRequest'
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountCreateResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/service-accounts/{serviceAccountId}':
+    parameters:
+      - $ref: '#/components/parameters/ServiceAccountId'
+    get:
+      tags: [ServiceAccounts]
+      operationId: getServiceAccount
+      summary: Read a Service Account
+      parameters:
+        - $ref: '#/components/parameters/ServiceAccountId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    patch:
+      tags: [ServiceAccounts]
+      operationId: updateServiceAccount
+      summary: Update Service Account profile and Permission
+      parameters:
+        - $ref: '#/components/parameters/ServiceAccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceAccountUpdateRequest'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/service-accounts/{serviceAccountId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/ServiceAccountId'
+    post:
+      tags: [ServiceAccounts]
+      operationId: disableServiceAccount
+      summary: Disable a Service Account
+      parameters:
+        - $ref: '#/components/parameters/ServiceAccountId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/service-accounts/{serviceAccountId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/ServiceAccountId'
+    post:
+      tags: [ServiceAccounts]
+      operationId: enableServiceAccount
+      summary: Enable a Service Account
+      parameters:
+        - $ref: '#/components/parameters/ServiceAccountId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/service-accounts/{serviceAccountId}/api-keys':
+    parameters:
+      - $ref: '#/components/parameters/ServiceAccountId'
+    get:
+      tags: [ServiceAccounts]
+      operationId: listServiceAccountAPIKeys
+      summary: List API Key metadata without secrets
+      parameters:
+        - $ref: '#/components/parameters/ServiceAccountId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKeyListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [ServiceAccounts]
+      operationId: createServiceAccountAPIKey
+      summary: Create an API Key and reveal plaintext once
+      parameters:
+        - $ref: '#/components/parameters/ServiceAccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreateRequest'
+      responses:
+        '201':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKeyRevealResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/api-keys/{apiKeyId}/revoke':
+    parameters:
+      - $ref: '#/components/parameters/APIKeyId'
+    post:
+      tags: [ServiceAccounts]
+      operationId: revokeAPIKey
+      summary: Revoke an API Key
+      parameters:
+        - $ref: '#/components/parameters/APIKeyId'
+      responses:
+        '204':
+          description: Operation completed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/requests':
+    get:
+      tags: [Requests]
+      operationId: listRequestRecords
+      summary: List redacted Application RequestRecords
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestRecordListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/requests/{requestId}':
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Requests]
+      operationId: getRequestRecord
+      summary: Read the Request Detail for a canonical requestId
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestRecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/audit':
+    get:
+      tags: [Audit]
+      operationId: listAuditRecords
+      summary: List AuditRecords
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/audit/{auditRecordId}':
+    parameters:
+      - $ref: '#/components/parameters/AuditRecordId'
+    get:
+      tags: [Audit]
+      operationId: getAuditRecord
+      summary: Read an AuditRecord
+      parameters:
+        - $ref: '#/components/parameters/AuditRecordId'
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+components:
+  securitySchemes:
+    OwnerSession:
+      type: apiKey
+      in: cookie
+      name: modelry_admin_session
+      description: HttpOnly Owner session cookie created by the Control Plane login operation.
+    ServiceAccountAPIKey:
+      type: http
+      scheme: bearer
+      description: One-time-revealed Service Account API Key; authorization still checks Permission.
+    ApplicationSession:
+      type: http
+      scheme: bearer
+      description: Opaque, server-revocable Application Session Token.
+  headers:
+    RequestId:
+      description: Canonical server-generated request ID for this HTTP request.
+      schema:
+        $ref: '#/components/schemas/RequestId'
+  parameters:
+    CollectionId:
+      name: collectionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    RecordId:
+      name: recordId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ChangeSetId:
+      name: changeSetId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    CollectionName:
+      name: collectionName
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ServiceAccountId:
+      name: serviceAccountId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    APIKeyId:
+      name: apiKeyId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/RequestId'
+    AuditRecordId:
+      name: auditRecordId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    Search:
+      name: search
+      in: query
+      required: false
+      schema:
+        type: string
+    Filter:
+      name: filter
+      in: query
+      required: false
+      description: Structured filter syntax is constrained by the accepted field types; arbitrary SQL is forbidden.
+      schema:
+        type: string
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: Comma-separated field keys with optional asc or desc; no SQL expressions.
+      schema:
+        type: string
+  responses:
+    StructuredError:
+      description: Structured error response with the canonical request ID.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Id:
+      type: string
+      minLength: 1
+      description: Opaque stable domain identity; not a SQLite row identifier.
+    RequestId:
+      type: string
+      pattern: '^req_[A-Za-z0-9_-]{8,}$'
+      description: Canonical server-generated ID shared by response header, Error and RequestRecord.
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiError'
+      additionalProperties: false
+    ApiError:
+      type: object
+      description: For anonymous Runtime or Storage diagnostics, no error field may reveal an absolute Project Root path or secret.
+      required: [code, message, details, requestId]
+      properties:
+        code:
+          type: string
+          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, INTERNAL_ERROR]
+        message:
+          type: string
+          description: Human-readable message without stack traces, SQL, credentials, sensitive body content, or anonymous diagnostic paths.
+        details:
+          $ref: '#/components/schemas/ErrorDetails'
+        hint:
+          type: string
+          description: Optional safe action; anonymous diagnostic hints omit absolute Project Root paths and secrets.
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+      additionalProperties: false
+    ErrorDetails:
+      type: object
+      description: Structured details; anonymous diagnostic error details must omit absolute Project Root paths and secrets.
+      properties:
+        violations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Violation'
+      additionalProperties: true
+    Violation:
+      type: object
+      required: [path, code, message]
+      properties:
+        path:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+      additionalProperties: true
+    BootstrapStatusResponse:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [required, closed]
+    BootstrapOwnerRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    BootstrapOwnerResponse:
+      type: object
+      required: [owner, session]
+      properties:
+        owner:
+          $ref: '#/components/schemas/Owner'
+        session:
+          $ref: '#/components/schemas/OwnerSession'
+    OwnerLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      additionalProperties: false
+    OwnerLoginResponse:
+      type: object
+      required: [owner, session]
+      properties:
+        owner:
+          $ref: '#/components/schemas/Owner'
+        session:
+          $ref: '#/components/schemas/OwnerSession'
+      description: Sets the modelry_admin_session HttpOnly cookie; no raw credential is returned.
+    Owner:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        email:
+          type: string
+          format: email
+      additionalProperties: false
+    OwnerSessionResponse:
+      type: object
+      required: [owner, expiresAt]
+      properties:
+        owner:
+          $ref: '#/components/schemas/Owner'
+        expiresAt:
+          type: string
+          format: date-time
+    OwnerSession:
+      type: object
+      required: [expiresAt]
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+    RuntimeStatusResponse:
+      type: object
+      description: Safe readiness snapshot; never includes the Project Root absolute path or secrets.
+      required: [state, observedAt, database, localStorage]
+      properties:
+        state:
+          type: string
+          enum: [starting, ready, degraded, unavailable, stopping]
+        observedAt:
+          type: string
+          format: date-time
+        database:
+          $ref: '#/components/schemas/Health'
+        localStorage:
+          $ref: '#/components/schemas/Health'
+        projectSource:
+          type: string
+          description: Identifies flag, environment, or working-directory selection without returning its value or any path.
+        version:
+          type: string
+      additionalProperties: false
+    StorageStatusResponse:
+      type: object
+      description: Safe storage snapshot; the localStorage path is omitted unless the request has valid diagnostic authorization.
+      required: [database, localStorage]
+      properties:
+        database:
+          $ref: '#/components/schemas/Health'
+        localStorage:
+          $ref: '#/components/schemas/LocalStorageHealth'
+      additionalProperties: false
+    LocalStorageHealth:
+      type: object
+      description: Contains the absolute Local Storage path only for a request authenticated and authorized to read diagnostics.
+      required: [state, provider]
+      properties:
+        state:
+          type: string
+          enum: [ready, degraded, unavailable, unknown]
+        message:
+          type: string
+          description: Safe diagnostic text; must not include an absolute Project Root path or secret.
+        hint:
+          type: string
+          description: Safe actionable guidance; must not include an absolute Project Root path or secret.
+        provider:
+          const: Local
+        path:
+          type: string
+          description: Omitted for anonymous requests; returned only when Owner or Service Account Permission authorizes diagnostic path access.
+      additionalProperties: false
+    Health:
+      type: object
+      description: Safe diagnostic health; message and hint never include an absolute Project Root path or secret.
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [ready, degraded, unavailable, unknown]
+        message:
+          type: string
+        hint:
+          type: string
+      additionalProperties: false
+    CollectionCreateRequest:
+      type: object
+      required: [name, type, fields]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        type:
+          type: string
+          enum: [Normal, Auth]
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldDefinition'
+        authentication:
+          $ref: '#/components/schemas/AuthenticationConfiguration'
+        accessRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessRule'
+      additionalProperties: false
+    FieldDefinition:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [text, number, boolean, dateTime, json, relation, file]
+        required:
+          type: boolean
+        unique:
+          type: boolean
+        description:
+          type: string
+        validation:
+          type: object
+          additionalProperties: true
+        default:
+          description: Product default value; never raw SQL or a database expression.
+        relation:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+    Collection:
+      type: object
+      required: [id, name, type, fields]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [Normal, Auth]
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldDefinition'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+    CollectionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Collection'
+    CollectionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+        nextCursor:
+          type: string
+    RecordWriteRequest:
+      type: object
+      description: Dynamic Field values; id, createdAt and updatedAt are Runtime-managed and rejected on write.
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+      required: [values]
+      additionalProperties: false
+    Record:
+      type: object
+      required: [id, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+    RecordResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Record'
+    RecordListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Record'
+        nextCursor:
+          type: string
+    PendingOperationRequest:
+      type: object
+      required: [kind, action, definition]
+      properties:
+        kind:
+          type: string
+          enum: [field, relation, index]
+        action:
+          type: string
+          enum: [add, update, remove]
+        targetId:
+          $ref: '#/components/schemas/Id'
+        definition:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+    PendingChange:
+      type: object
+      required: [changeSetId, collectionId, version, status, operations]
+      properties:
+        changeSetId:
+          $ref: '#/components/schemas/Id'
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [ready, needsReview, failed]
+        operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingOperation'
+    PendingOperation:
+      allOf:
+        - $ref: '#/components/schemas/PendingOperationRequest'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+    PendingChangeResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PendingChange'
+    SchemaPreviewResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/SchemaPreview'
+    SchemaPreview:
+      type: object
+      required: [risk, diff, preconditions, impact]
+      properties:
+        risk:
+          type: string
+          enum: [safe, review, blocked]
+        diff:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        preconditions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        impact:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+    PreviewRequest:
+      $ref: '#/components/schemas/VersionRequest'
+    VersionRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    ApplyRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+        confirmRisk:
+          type: boolean
+          default: false
+      additionalProperties: false
+    ApplyResultResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [state]
+          properties:
+            state:
+              type: string
+              enum: [applied, recoveryRequired]
+            appliedMigrationId:
+              $ref: '#/components/schemas/Id'
+            applyAttemptId:
+              $ref: '#/components/schemas/Id'
+            recovery:
+              type: object
+              additionalProperties: true
+    AppliedMigration:
+      type: object
+      required: [id, changeSetId, applyAttemptId, appliedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        changeSetId:
+          $ref: '#/components/schemas/Id'
+        applyAttemptId:
+          $ref: '#/components/schemas/Id'
+        appliedAt:
+          type: string
+          format: date-time
+        diff:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    HistoryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedMigration'
+        nextCursor:
+          type: string
+    ChangeListResponse:
+      type: object
+      description: Pending ChangeSets and immutable AppliedMigration history entries share the Changes surface.
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/PendingChange'
+              - $ref: '#/components/schemas/AppliedMigration'
+        nextCursor:
+          type: string
+    ChangeDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [changeSetId, collectionId, status, version, applyAttempts]
+          properties:
+            changeSetId:
+              $ref: '#/components/schemas/Id'
+            collectionId:
+              $ref: '#/components/schemas/Id'
+            status:
+              type: string
+              enum: [ready, needsReview, failed, applied, discarded]
+            version:
+              type: integer
+              minimum: 1
+            operations:
+              type: array
+              items:
+                $ref: '#/components/schemas/PendingOperation'
+            applyAttempts:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApplyAttempt'
+            appliedMigration:
+              $ref: '#/components/schemas/AppliedMigration'
+            recoveryState:
+              $ref: '#/components/schemas/RecoveryState'
+          additionalProperties: false
+    ApplyAttempt:
+      type: object
+      required: [id, changeSetId, status, startedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        changeSetId:
+          $ref: '#/components/schemas/Id'
+        status:
+          type: string
+          enum: [inProgress, succeeded, failed, recoveryRequired, interrupted]
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        evaluation:
+          $ref: '#/components/schemas/SchemaPreview'
+        errorCode:
+          type: string
+        recoveryState:
+          $ref: '#/components/schemas/RecoveryState'
+      additionalProperties: false
+    RecoveryState:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          description: Runtime-derived recovery status for the latest relevant ApplyAttempt.
+        summary:
+          type: string
+        actions:
+          type: array
+          items:
+            type: string
+      additionalProperties: true
+    AccessRule:
+      type: object
+      required: [operation, mode]
+      properties:
+        operation:
+          type: string
+          enum: [list, view, create, update, delete]
+        mode:
+          type: string
+          enum: [noAccess, anyone, signedInUsers, recordOwner, custom]
+        ownerFieldId:
+          $ref: '#/components/schemas/Id'
+        expression:
+          type: object
+          description: Versioned Modelry expression; arbitrary SQL is forbidden.
+          additionalProperties: true
+      additionalProperties: false
+    AccessRulesRequest:
+      type: object
+      required: [expectedVersion, rules]
+      properties:
+        expectedVersion:
+          type: integer
+        rules:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/AccessRule'
+      additionalProperties: false
+    AccessRulesResponse:
+      type: object
+      required: [applied, pending]
+      properties:
+        applied:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessRule'
+        pending:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessRule'
+    AuthenticationConfiguration:
+      type: object
+      required: [emailPasswordEnabled, selfRegistration, sessionDurationDays]
+      properties:
+        emailPasswordEnabled:
+          type: boolean
+        selfRegistration:
+          type: boolean
+        sessionDurationDays:
+          type: integer
+          minimum: 1
+    AuthenticationConfigurationRequest:
+      type: object
+      required: [expectedVersion, configuration]
+      properties:
+        expectedVersion:
+          type: integer
+        configuration:
+          $ref: '#/components/schemas/AuthenticationConfiguration'
+    AuthenticationConfigurationResponse:
+      type: object
+      required: [applied, pending]
+      properties:
+        applied:
+          $ref: '#/components/schemas/AuthenticationConfiguration'
+        pending:
+          $ref: '#/components/schemas/AuthenticationConfiguration'
+    ApplicationUserCreateRequest:
+      type: object
+      required: [profile, password]
+      properties:
+        profile:
+          type: object
+          additionalProperties: true
+          description: Profile values excluding Runtime-managed system fields and password.
+        password:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    SetPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    ApplicationRegistrationRequest:
+      $ref: '#/components/schemas/ApplicationUserCreateRequest'
+    ApplicationLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      additionalProperties: false
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    ApplicationSession:
+      type: object
+      required: [id, createdAt, expiresAt, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        lastUsedAt:
+          type: string
+          format: date-time
+    ApplicationSessionResponse:
+      type: object
+      required: [accessToken, tokenType, session]
+      properties:
+        accessToken:
+          type: string
+          description: Opaque secret returned only when the session is created.
+        tokenType:
+          const: Bearer
+        session:
+          $ref: '#/components/schemas/ApplicationSession'
+    SessionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ApplicationSession'
+    ApplicationSessionsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationSession'
+    SessionListResponse:
+      $ref: '#/components/schemas/ApplicationSessionsResponse'
+    CollectionUsersResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [recordId, email]
+            properties:
+              recordId:
+                $ref: '#/components/schemas/Id'
+              email:
+                type: string
+                format: email
+    ServiceAccountCreateRequest:
+      type: object
+      required: [name, permission]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        permission:
+          type: string
+          enum: [fullAccess, readOnly, custom]
+        createAPIKey:
+          type: boolean
+          default: true
+      additionalProperties: false
+    ServiceAccountUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        permission:
+          type: string
+          enum: [fullAccess, readOnly, custom]
+      minProperties: 1
+      additionalProperties: false
+    ServiceAccount:
+      type: object
+      required: [id, name, permission, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        description:
+          type: string
+        permission:
+          type: string
+          enum: [fullAccess, readOnly, custom]
+        status:
+          type: string
+          enum: [active, disabled]
+        createdAt:
+          type: string
+          format: date-time
+    ServiceAccountResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ServiceAccount'
+    ServiceAccountListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAccount'
+        nextCursor:
+          type: string
+    ServiceAccountCreateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [serviceAccount]
+          properties:
+            serviceAccount:
+              $ref: '#/components/schemas/ServiceAccount'
+            apiKeyReveal:
+              $ref: '#/components/schemas/APIKeyReveal'
+    APIKeyCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    APIKey:
+      type: object
+      required: [id, name, status, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked]
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    APIKeyReveal:
+      type: object
+      required: [apiKey, secret, revealedOnce]
+      properties:
+        apiKey:
+          $ref: '#/components/schemas/APIKey'
+        secret:
+          type: string
+          writeOnly: true
+        revealedOnce:
+          const: true
+          description: The secret is not returned by any later read or list operation.
+    APIKeyRevealResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/APIKeyReveal'
+    APIKeyListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/APIKey'
+    RequestRecord:
+      type: object
+      required: [requestId, time, endpoint, method, status, durationMs]
+      properties:
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+        time:
+          type: string
+          format: date-time
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        endpoint:
+          type: string
+        method:
+          type: string
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        durationMs:
+          type: integer
+          minimum: 0
+        authenticationOutcome:
+          type: string
+        authorizationOutcome:
+          type: string
+        errorCode:
+          type: string
+      additionalProperties: false
+    RequestRecordResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/RequestRecord'
+    RequestRecordListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestRecord'
+        nextCursor:
+          type: string
+    AuditRecord:
+      type: object
+      required: [id, time, actor, action, resource, result]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+        time:
+          type: string
+          format: date-time
+        actor:
+          type: object
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              enum: [owner, serviceAccount]
+            id:
+              $ref: '#/components/schemas/Id'
+        action:
+          type: string
+        resource:
+          type: object
+          additionalProperties: true
+        result:
+          type: string
+      additionalProperties: false
+    AuditRecordResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/AuditRecord'
+    AuditRecordListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        nextCursor:
+          type: string

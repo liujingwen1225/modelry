@@ -1,0 +1,5 @@
+# 仓库尚未声明许可证，不虚构授权来满足可选元数据规则。
+extends:
+  - recommended
+rules:
+  info-license: off
