@@ -3,6 +3,7 @@ import { Command, Search, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n/i18n';
 import { fuzzyMatch, useCommandRegistry, type AdminCommand, type CommandContext } from './command-registry';
+import { collectionIdFromPathname } from './route-context';
 
 function isMacPlatform(platform: string): boolean {
   return /mac|iphone|ipad/i.test(platform);
@@ -160,16 +161,7 @@ export function CommandPaletteControl() {
   const [open, setOpen] = useState(false);
   const shortcut = commandPaletteShortcut();
   const context = useMemo<CommandContext>(() => {
-    const match = pathname.match(/^\/collections\/([^/]+)/);
-    let collectionId: string | undefined;
-    if (match?.[1]) {
-      try {
-        const id = decodeURIComponent(match[1]);
-        if (id !== 'new') collectionId = id;
-      } catch {
-        if (match[1] !== 'new') collectionId = match[1];
-      }
-    }
+    const collectionId = collectionIdFromPathname(pathname);
     return { pathname, search, hash, ...(collectionId ? { collectionId } : {}), navigate: (to) => navigate(to) };
   }, [pathname, search, hash, navigate]);
 

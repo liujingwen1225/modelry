@@ -20,6 +20,7 @@ import { RuntimeBadge } from './runtime-status';
 import { useDiagnostics } from './diagnostics-context';
 import { CommandPaletteControl } from './command-palette';
 import { CommandRegistryProvider, useCommandRegistry, useRegisterCommands, type AdminCommand, type CommandContext } from './command-registry';
+import { collectionIdFromPathname } from './route-context';
 import { useTheme } from './theme-context';
 
 const groups: Array<{
@@ -154,17 +155,6 @@ function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProps) {
   );
 }
 
-function currentCollectionId(pathname: string): string | undefined {
-  const match = pathname.match(/^\/collections\/([^/]+)/);
-  if (!match?.[1]) return undefined;
-  try {
-    const id = decodeURIComponent(match[1]);
-    return id === 'new' ? undefined : id;
-  } catch {
-    return match[1] === 'new' ? undefined : match[1];
-  }
-}
-
 function recordsTarget(context: CommandContext): string {
   const collectionPath = `/collections/${encodeURIComponent(context.collectionId ?? '')}`;
   const searchParams = context.pathname === collectionPath ? new URLSearchParams(context.search) : new URLSearchParams();
@@ -181,7 +171,7 @@ function ShellCommands() {
   const { runtime, storage } = useDiagnostics();
   const { recentCollections } = useCommandRegistry();
   const { pathname } = useLocation();
-  const currentId = currentCollectionId(pathname);
+  const currentId = collectionIdFromPathname(pathname);
 
   const commands = useMemo<AdminCommand[]>(() => {
     const go = (id: string, key: TranslationKey, to: string, keywords: string[] = []): AdminCommand => ({
