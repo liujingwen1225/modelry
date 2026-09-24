@@ -178,6 +178,37 @@ func TestStreamDeliversCommittedAuthorizedEventsAndRemovesNewlyHiddenRecords(t *
 	if !strings.Contains(removed, "event: record.removed\n") || !strings.Contains(removed, visible.ID) || strings.Contains(removed, "PUBLIC_MARKER") || strings.Contains(removed, `"record":{`) {
 		t.Fatalf("Record removal frame = %q", removed)
 	}
+	ruleState, err := stack.rules.Get(ctx, stack.posts.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteRules := append([]accesscontrol.Rule(nil), ruleState.Applied...)
+	for index := range deleteRules {
+		if deleteRules[index].Operation == authorization.OperationDelete {
+			deleteRules[index].Mode = accesscontrol.ModeAnyone
+		}
+	}
+	deletePending, err := stack.rules.Save(ctx, stack.posts.ID, accesscontrol.SaveInput{ExpectedVersion: ruleState.Version, Rules: deleteRules})
+	if err != nil {
+		t.Fatalf("allow the test Delete operation: %v", err)
+	}
+	if _, err := stack.rules.Apply(ctx, stack.posts.ID, deletePending.Version); err != nil {
+		t.Fatalf("apply Delete Access Rule: %v", err)
+	}
+	if err := stack.records.Delete(ctx, stack.posts.ID, hidden.ID); err != nil {
+		t.Fatalf("delete hidden Record: %v", err)
+	}
+	afterHiddenDelete, err := stack.records.Create(ctx, stack.posts.ID, map[string]any{"title": "AFTER_HIDDEN_DELETE_MARKER", "visibility": "public"})
+	if err != nil {
+		t.Fatalf("create visible Record after hidden Delete: %v", err)
+	}
+	deleteBoundary := readSSEFrame(t, reader)
+	if !strings.Contains(deleteBoundary, "event: record.created\n") || !strings.Contains(deleteBoundary, afterHiddenDelete.ID) || !strings.Contains(deleteBoundary, "AFTER_HIDDEN_DELETE_MARKER") {
+		t.Fatalf("visible frame after hidden Delete = %q", deleteBoundary)
+	}
+	if strings.Contains(deleteBoundary, hidden.ID) || strings.Contains(deleteBoundary, "PRIVATE_MARKER") {
+		t.Fatalf("stream leaked an invisible deleted Record ID or value: %q", deleteBoundary)
+	}
 }
 
 func TestStreamRechecksCurrentListAccessWhenReplayingRetainedEvents(t *testing.T) {
