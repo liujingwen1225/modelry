@@ -2,86 +2,101 @@
 
 ## 路线原则
 
-Modelry 的产品路线不是“不断堆功能”。
+Modelry 不以“不断堆功能”作为路线。
 
-每个阶段都应该明显改善至少一个结果：
+每一阶段都应该明显改善：
 
-- 更快上手；
-- 更完整的真实 Backend 工作流；
-- 更安全的生产运行；
-- 更成熟的团队和 Cloud 使用体验。
+- 上手速度；
+- 核心 Backend 工作流完整性；
+- 安全演进；
+- 长期 Self-hosted 使用；
+- 团队 / Enterprise / Cloud 生产体验。
 
 ## Phase A — 产品与架构基础
 
-目标：在大规模实现前先冻结产品模型。
+目标：冻结产品语义、V0.1 范围和交互基线。
 
 主要产物：
 
 - Product Vision
 - Product Architecture
 - V0.1 Community Scope
-- Product-grade Admin Information Architecture
-- Runtime ADR
+- Admin Product UX
+- Runtime / Storage ADR
 - Foundation Spec
 - HTTP Contract
 - Browser Acceptance Spec
 
-这一阶段最重要的结论是：
+关键结论：
 
-> Community、Commercial / Enterprise 和 Modelry Cloud 共享同一套 Project Backend Product Semantics，但可以拥有不同的数据库、部署模式和 Control Plane。
+> Community、Commercial / Enterprise 与 Modelry Cloud 共享 Project Backend Product Semantics，但可以拥有不同数据库、部署模式和 Control Plane。
 
 ## Phase B — V0.1 Community
 
-目标：交付一个第一次使用就具有正式产品感的开源 Backend Platform。
+目标：交付第一个真正好用、完整、可发布的 Community Backend Platform。
 
 核心用户路径：
 
 ~~~text
-启动 Modelry
-→ Bootstrap Admin
-→ 创建 Normal / Auth Collection
-→ 定义 Schema
-→ Review Changes
-→ Apply
-→ 管理 Records
-→ Application Register / Login
-→ 调用 API
-→ 配置 Policy
-→ 使用 Local Files
-→ 使用 Realtime
-→ 执行 Lifecycle Hook
-→ 查看 API Requests / Audit / Activity
-→ 使用 MCP
+Start Modelry
+→ Bootstrap Owner
+→ Create Normal / Auth Collection
+→ Define Initial Schema
+→ Create / Edit Records
+→ Configure Access Rules
+→ Create / Login Application User when needed
+→ Discover / Run Application API
+→ Inspect Requests / Audit
+→ Evolve Schema with Pending Changes
+→ Apply / Recover
 → Restart
-→ 验证 Durable State
+→ Verify Durable State
 ~~~
 
-V0.1 **只支持 SQLite**。
+V0.1 只支持 SQLite。
 
-重点不是功能数量，而是每一个进入 V0.1 的能力都必须完成完整产品闭环。
+V0.1 必须保留：
 
-## Phase C — Community 成熟
+- Model / Records / Auth / Access Rules
+- REST API / OpenAPI / Runner / Request Logs
+- Local Single-file Field
+- Safe Schema Evolution
+- Owner + Service Account / API Key
+- Minimal Audit / Runtime Diagnostics
+- Minimal CLI
+- Core MCP
 
-目标：让 Community 适合长期 Self-hosted 项目，而不仅仅是初次体验。
+V0.1 不以 Realtime、Hooks 或完整 Extension Runtime 证明产品成立。
 
-后续优先考虑：
+## Phase C — Community V0.1.x / Mature
 
-- 更完整 Backup / Restore UX
-- OAuth 与更丰富 Auth Lifecycle
-- S3-compatible Files
+目标：在核心闭环稳定之后扩展长期 Community 能力。
+
+优先方向：
+
+- SSE Realtime
+- Lifecycle Hooks
+- Secrets UI
+- Policy Simulation
+- Additional Administrator Management
 - Event Hooks / Webhooks
+- S3-compatible Files
+- Multiple File Values
 - Simple Jobs / Cron
-- SDK Generation
-- 更成熟的 Diagnostics / Observability
+- Better Backup / Restore UX
 - Import / Export
+- SDK Generation
+- More complete Activity / Diagnostics
+- Drift Detection
+- Editable Runtime Settings
 - Migration Ergonomics
-- 更顺滑的 Local → Production 成长路径
+- Local → Production growth path
 
 Community 默认继续围绕 SQLite 保持简单产品定位。
 
 ## Phase D — Commercial / Enterprise
 
-目标：解决团队和企业的正式生产问题，而不是通过削弱 Community 制造付费点。
+目标：解决团队、治理和正式生产问题，而不是通过削弱 Community 制造付费点。
 
 主要方向：
 
@@ -90,7 +105,7 @@ Community 默认继续围绕 SQLite 保持简单产品定位。
 - Enterprise Identity / SSO
 - Advanced RBAC
 - Centralized Audit / Retention
-- Enterprise Secrets / KMS Integration
+- Enterprise Secrets / KMS
 - Backup / Restore / Disaster Recovery
 - Production Observability
 - HA / Scale
@@ -102,9 +117,7 @@ Enterprise 继续使用与 Community 相同的 Project Backend Model 和 Project
 
 ## Phase E — Modelry Cloud
 
-目标：提供真正的 Managed Backend Platform，而不是简单“托管一个 Community Binary”。
-
-Cloud 产品分层：
+Cloud 是 Managed Backend Platform，而不是简单托管 Community Binary。
 
 ~~~text
 Cloud Control Plane
@@ -119,16 +132,7 @@ Cloud Control Plane
 → Support
 
 Project Backend Plane
-→ Collection
-→ Records
-→ API
-→ Auth
-→ Policy
-→ Files
-→ Realtime
-→ Hooks
-→ Changes
-→ Observability
+→ Shared Modelry Backend Semantics
 
 Developer Interfaces
 → Admin
@@ -139,17 +143,15 @@ Developer Interfaces
 → MCP
 ~~~
 
-Cloud Console 与 Project Admin 是两个不同产品层。
+Cloud Console 管“Modelry 资源”。
 
-Cloud Console 管理“你的 Modelry 资源”。
-
-Project Admin 管理“你用 Modelry 构建的 Backend”。
+Project Admin 管“用户构建的 Backend”。
 
 ## Environment 演进
 
-Development / Staging / Production 在真正进入 Enterprise / Cloud 环境管理后，应该成为一等产品概念。
+V0.1 Community 不实现 Development / Staging / Production Environment Complexity。
 
-Changes 能力可以自然演进为：
+未来 Changes 可以演进为：
 
 ~~~text
 Development Change
@@ -161,18 +163,16 @@ Development Change
 → Production
 ~~~
 
-V0.1 Community 不实现 Environment Complexity。
+因此 Project Identity、Change Artifact 与 Applied History 的定义不能阻断未来 Promotion。
 
-但 Project Identity、ChangeSet 和 Migration Artifact 的定义不能阻断未来 Promotion 模型。
-
-## 路线 Guardrails
+## Guardrails
 
 不要：
 
-- 把 Organization / Billing 等 Cloud-only 概念塞进所有 Community 页面；
+- 把 Cloud-only 概念提前塞进 Community；
 - 把 Community 做成残缺 Trial Edition；
 - 把 PostgreSQL 变成 V0.1 前置条件；
-- 把 SQLite 变成 Modelry 永久产品语义；
-- 在没有真实产品需求前引入 Distributed System；
-- 默认拆成 Microservices；
-- 为商业化主动破坏 Community 核心开发体验。
+- 把 SQLite 变成永久 Modelry 语义；
+- 为了“完整”把所有长期能力一次塞进 V0.1；
+- 提前拆 Microservices / Distributed System；
+- 让内部 Change / Security Object Model 主导用户操作路径。

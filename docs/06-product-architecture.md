@@ -2,18 +2,19 @@
 
 ## 架构目标
 
-Modelry 的架构必须同时满足：
+Modelry 架构必须同时支持：
 
-- Community 用户看到的产品足够简单；
-- Commercial / Enterprise 可以升级到 PostgreSQL 与企业治理；
-- Modelry Cloud 可以增加成熟 Cloud Control Plane；
-- 三种形态共享 Project Backend 核心产品语义。
+- Community V0.1 足够简单；
+- Community 可以持续增加 Realtime / Extension 能力；
+- Commercial / Enterprise 可以升级 PostgreSQL 与组织治理；
+- Cloud 可以增加独立 Control Plane；
+- 各形态共享 Project Backend Product Semantics。
 
-产品整体分成三个概念层。
+本文件定义 Domain / Plane / Boundary。
+
+Exact Project Admin IA 由 Admin Product UX Spec 定义。
 
 # 1. Developer Interfaces
-
-人类与机器入口：
 
 - Project Admin
 - Application HTTP API
@@ -22,15 +23,13 @@ Modelry 的架构必须同时满足：
 - MCP
 - Future SDK
 
-所有 Interface 共享同一套 Backend Semantics。
+所有 Interface 共享同一 Backend Semantics。
 
-任何 Interface 都不能拥有绕过 Authorization、Changes 或 Audit 的隐藏通道。
+不得拥有绕过 Authorization、Changes 或 Audit 的隐藏通道。
 
 # 2. Project Backend Plane
 
-这是 Modelry 的核心产品。
-
-Community、Commercial / Enterprise 与 Cloud 都共享这一层的产品概念。
+Community、Enterprise 与 Cloud 共享这一层。
 
 ## Backend Model
 
@@ -42,7 +41,7 @@ Community、Commercial / Enterprise 与 Cloud 都共享这一层的产品概念�
 - Index
 - Validation
 - Default
-- Policy
+- Access Rule / Policy
 - Auth Capability
 - File Capability
 
@@ -50,16 +49,14 @@ Backend Model 是 Canonical Product Semantic Layer。
 
 ## Runtime Data
 
-包含：
-
 - Records
 - Files
-- Sessions
+- Application Sessions
 - Runtime Metadata
 
-## Changes
+## Change Domain
 
-包含：
+底层对象：
 
 - ChangeSet
 - Structured Diff
@@ -68,45 +65,188 @@ Backend Model 是 Canonical Product Semantic Layer。
 - Impact
 - Apply Attempt
 - Migration History / Ledger
-- Drift
 - Recovery
+
+产品 UI 不需要直接以这些对象作为一级心智。
+
+Mapping：
+
+~~~text
+ChangeSet       -> Pending change
+Apply Attempt   -> Apply details
+Migration       -> Applied change / Technical details
+~~~
 
 ## Application Platform
 
-包含：
+V0.1：
 
 - REST API
 - OpenAPI
 - Auth
-- Policy
+- Access Rules
 - Files
+
+V0.1.x：
+
 - Realtime
 
 ## Extension Platform
 
-包含：
+V0.1.x 以后：
 
 - Lifecycle Hooks
+- Secrets
 - Future Event Hooks
 - Future Webhooks
 - Future Jobs
-- Secrets
 - Future Typed Custom API
+
+Extension Platform 属于长期产品架构，但不进入 V0.1 Release Gate。
 
 ## Observability
 
-包含：
+V0.1：
 
 - API Requests
 - Audit
-- Activity
-- Health / Diagnostics
+- Health / Contextual Diagnostics
 
-# 3. Cloud Control Plane
+V0.1.x：
+
+- richer Activity / Diagnostics
+
+# 3. Control Plane / Identity
+
+## Modelry Control Plane
+
+包含：
+
+- Owner Authentication
+- Backend Model Management
+- Changes
+- Runtime / Storage Diagnostics
+- Service Accounts
+- API Keys
+- Audit
+- MCP Management Operations
+
+## Identity Domain
+
+至少区分：
+
+- Cloud / Enterprise Identity
+- Modelry Owner / Administrator Principal
+- Service / Agent Principal
+- Application Principal
+
+Domain：
+
+~~~text
+Principal != Credential
+~~~
+
+UI：
+
+~~~text
+Owner / Administrator
+Service account
+App user
+Password
+API key
+Session
+Permission
+~~~
+
+不要让普通用户为了正确使用产品先理解 Principal / Credential / Capability。
+
+## Auth Collection
+
+Auth Collection Record 与 Credential 分离。
+
+~~~text
+App User
+├─ Profile Record
+└─ Password Credential
+~~~
+
+Admin Create User 是一个产品动作，可以内部原子协调 Record + Credential，而不是要求用户分两页初始化。
+
+# 4. Schema Pending Changes Architecture
+
+Schema Editor 的 UX Scope 固定为单 Collection：
+
+~~~text
+Fields
++
+Relations
++
+Indexes
+→ one durable pending schema draft
+~~~
+
+Policy 与 Auth Configuration 不进入同一个 Draft。
+
+保存 Field / Relation / Index Editor 后：
+
+~~~text
+operation becomes durable pending change
+~~~
+
+因此：
+
+- Refresh 不丢失；
+- 切换 Schema View 不丢失；
+- 离开 Collection 不需要 Save for Later；
+- local editor 尚未保存的表单仍需要 Leave Protection。
+
+Apply 时 Runtime 生成 canonical Diff / Risk / Preconditions。
+
+# 5. Storage Architecture
+
+~~~text
+Backend Model / Query / Change Semantics
+→ Storage + Migration Boundary
+→ SQLite in Community
+→ PostgreSQL in Commercial / Cloud
+~~~
+
+V0.1 不做 Generic Arbitrary Database Plugin。
+
+# 6. Files Architecture
+
+V0.1：
+
+- Local Storage
+- Single File Field
+
+V0.1.x：
+
+- Multiple File Values
+- S3-compatible provider
+
+File 仍是 Collection Field Capability，不成为独立 DAM Product。
+
+# 7. Realtime / Extension Architecture
+
+Realtime 与 Extension Runtime 在 V0.1.x 通过独立 ADR 冻结。
+
+Go Core 不要求用户编写 Go Plugin。
+
+长期目标继续保持 JavaScript / TypeScript-facing Extension Boundary。
+
+默认不暴露：
+
+- Raw unrestricted DB Handle
+- Arbitrary Filesystem
+- Arbitrary Process Control
+- Raw Environment Access
+
+# 8. Cloud Control Plane
 
 V0.1 Community 不实现。
 
-未来 Modelry Cloud / Enterprise Control Plane 包含：
+未来包含：
 
 - Account
 - Organization
@@ -121,9 +261,7 @@ V0.1 Community 不实现。
 - Backup
 - Support / Lifecycle
 
-Cloud Control Plane 负责管理 Modelry Resource 和组织关系。
-
-它不替代 Project Admin，也不进入 Application Data Plane。
+Cloud Control Plane 管 Modelry Resource，不替代 Project Backend Plane。
 
 # Product Topology
 
@@ -139,8 +277,8 @@ One Runtime
 ## Commercial / Enterprise
 
 ~~~text
-Organization / Fleet Management
-→ One or more Project Runtime
+Organization / Fleet
+→ Project Runtime
 → PostgreSQL
 → Project Admin
 ~~~
@@ -154,113 +292,15 @@ Cloud Control Plane
 → Environment
 → Managed Project Backend Plane
 → PostgreSQL
-→ Project Admin
 ~~~
 
-因此：
-
-> One Instance / One Project 是 Community V0.1 Runtime Topology，不是永久产品本体。
-
-# Storage Architecture
-
-核心关系：
-
-~~~text
-Backend Model / Query / Change Semantics
-→ Storage + Migration Boundary
-→ SQLite in Community
-→ PostgreSQL in Commercial / Cloud
-~~~
-
-V0.1 不做 Generic Arbitrary Database Plugin。
-
-只保留已知 SQLite → PostgreSQL Roadmap 所需要的 Domain Boundary。
-
-# Admin Architecture
-
-Project Admin 是 Backend Workspace，不是 Cloud Console。
-
-Project Admin 一级导航：
-
-~~~text
-Core
-  Overview
-  Collections
-  API
-
-Control
-  Changes
-  Hooks
-  Access
-
-System
-  Settings
-  Activity
-~~~
-
-未来 Cloud Management 在 Project Admin 之外呈现。
-
-# Identity Architecture
-
-至少保持以下 Identity 分离：
-
-- Cloud Account / Enterprise Administrator
-- Modelry Admin Principal
-- Agent / Service Principal
-- Application Principal
-
-Credential 是认证机制，不等于 Principal 本身。
-
-# Change Architecture
-
-无论来自：
-
-- Admin
-- CLI
-- MCP
-
-受管 Backend Model Mutation 都统一走：
-
-~~~text
-Propose
-→ ChangeSet
-→ Runtime-canonical Diff / Risk / Preconditions
-→ Apply Authorization / Confirmation
-→ Apply Attempt
-→ Migration
-→ Durable History
-→ Audit
-~~~
-
-这是 Modelry 的核心安全能力，也是重要产品差异点。
-
-# Extension Architecture
-
-Go Runtime 提供 JavaScript / TypeScript-facing Extension Boundary。
-
-Project Extension API 应暴露受控能力，例如：
-
-- Record Read / Write
-- Request Context
-- Current Principal
-- Secrets by Reference
-- Outbound HTTP（受能力限制）
-- Event Emission
-- Future Jobs
-- Logging
-
-默认不暴露：
-
-- Raw unrestricted DB Handle
-- Arbitrary Filesystem
-- Arbitrary Process Control
-- Raw Environment Access
+One Instance / One Project 只是 Community V0.1 Runtime Topology。
 
 # Environment Architecture
 
-Community V0.1 UI 不展示 Environment。
+V0.1 Community UI 不展示 Environment。
 
-未来 Commercial / Cloud 复用 ChangeSet / Migration Artifact 实现环境 Promotion：
+未来复用同一 Change Artifact / Applied History 形成 Promotion：
 
 ~~~text
 Development
@@ -270,13 +310,14 @@ Development
 → Production
 ~~~
 
-不要为环境发布再创造第二套 Schema Deployment Product。
+不要为 Environment Deployment 再创造第二套 Schema Change Product。
 
 # 设计原则
 
-当未来 Cloud 需求与 Community 简洁性发生冲突时：
+当未来复杂度与 Community 简洁性冲突时：
 
 1. Community UI 保持简单；
-2. Shared Domain Boundary 在底层保留；
-3. Cloud Complexity 只在 Cloud Control Plane 暴露；
-4. 不把 SaaS Concept 强行塞进所有 Self-hosted Workflow。
+2. Shared Domain Boundary 保留在底层；
+3. Advanced / Cloud Complexity 只在需要的 Surface 暴露；
+4. 不让未来能力迫使 V0.1 提前实现低价值页面；
+5. 不让 Domain Object 数量决定页面数量。

@@ -1,133 +1,138 @@
 # Modelry 产品体验与验收标准
 
-## 为什么需要这份文档
+## 目的
 
 Modelry 最核心的要求是产品化。
 
-一个技术正确的 Backend，如果用户：
+技术行为正确，但用户找不到入口、不理解状态、需要反复跳页、无法恢复错误，仍然不算完成。
 
-- 找不到入口；
-- 不理解状态；
-- 不知道下一步；
-- 出错后不会恢复；
-- 无法完成完整业务闭环；
+本文件定义跨页面体验、Design System 和验收原则。
 
-它仍然不是一个合格产品。
+Exact Sidebar、Collection Workspace 与具体页面结构只由 docs/specs/0001-admin-product-ux-spec.md 定义。
 
-## 产品体验规则
+# 产品体验规则
 
-### 1. 一个页面只解决一个主要问题
+## 1. 一个页面解决一个主要用户问题
 
-页面必须明确回答用户问题。
+页面必须有明确用户任务。
 
-例如：
+不要因为底层存在一个 Domain Object 就自动为它创建一级页面。
 
-- **Overview**：Backend 是否健康？现在有什么需要处理？
-- **Collections**：有哪些业务数据模型？
-- **Records**：真实数据是什么？
-- **Schema**：结构是什么？
-- **Changes**：准备改什么？风险是什么？最终发生了什么？
-- **API**：应用能调用什么？最近实际请求发生了什么？
-- **Hooks**：有哪些扩展逻辑？是否健康？
-- **Access**：谁可以管理 Modelry？发生过什么管理审计？
-- **Activity**：当前有哪些运行事件值得处理？
+## 2. 一个工作面一个明显 Primary Action
 
-### 2. 一个工作面只有一个明显 Primary Action
+Secondary Action 进入：
 
-不要出现多个同等强调按钮。
+- row action
+- contextual action
+- secondary toolbar
+- overflow
 
-Secondary Action 应进入：
+## 3. 优先减少用户步骤
 
-- Context Menu
-- Row Action
-- Secondary Toolbar
-- Overflow Menu
+每个流程都必须问：
 
-### 3. Common Path 默认简单
+> 当前 N 步能否在保持正确性和安全性的前提下变成 N-1 步？
 
-普通任务不应该要求用户先理解 Advanced Configuration。
+典型要求：
 
-高级能力采用 Progressive Disclosure。
+- 创建对象时一起完成必要初始化；
+- 简单配置原地完成；
+- API Error 一键进入对应 Request Detail；
+- Service Account 创建时默认同时创建 API Key；
+- Auth User 创建时同时创建 Profile Record 与 Password Credential；
+- 首次 Bootstrap 后直接进入 Create Collection。
 
-### 4. Durable Result，不接受 Toast-only Success
+## 4. Domain Language 不等于 UI Language
 
-Mutation 成功后，结果必须继续存在于当前 Context。
+统一 Mapping：
 
-例如创建 Record 后，用户应立刻看到真实 Record。
+~~~text
+Domain / Runtime      Product UI
 
-Toast 只能作为瞬时反馈。
+ChangeSet             Pending change
+Apply Attempt         Apply details / Previous attempt
+Migration             Applied change / Technical details
+Principal             Owner / Administrator / Service account / App user
+Capability            Permission
+Credential            Password / API key / Session
+Policy                Access rule
+~~~
 
-### 5. Error 必须可行动
+内部对象可以存在，但普通用户不需要先学习它们。
 
-Error 至少回答：
+## 5. Durable Result，不接受 Toast-only Success
 
-- 什么失败了？
+Mutation 成功后，Durable Result 必须继续存在于当前 Context。
+
+Toast 只能作为补充。
+
+## 6. Pending 不等于 Unsaved
+
+Schema 中：
+
+~~~text
+Editor local form
+→ not yet saved pending operation
+~~~
+
+离开编辑器时可触发 Unsaved Protection。
+
+但：
+
+~~~text
+saved pending operation
+→ durable pending change
+~~~
+
+切换页面、刷新、重新登录都不能丢失。
+
+UI 应显示：
+
+~~~text
+3 pending changes
+~~~
+
+而不是：
+
+~~~text
+3 unsaved changes
+~~~
+
+## 7. Error 必须可行动
+
+至少回答：
+
+- 什么失败？
 - 为什么？
-- 哪些状态受到影响？
-- 是否已有部分数据写入？
-- 用户下一步做什么？
+- 是否产生 Durable Side Effect？
+- 当前状态是什么？
+- 下一步做什么？
 - 去哪里恢复？
 
-禁止只返回 Operation failed。
+## 8. Destructive Action 默认安全
 
-### 6. Destructive Action 默认安全
+Risk 由 Runtime 计算。
 
-破坏性 Schema / Data / Runtime Operation 需要匹配风险级别的确认。
+SAFE 不增加无意义确认。
 
-Risk 由 Runtime 计算，而不是用户选择。
+Risk / Destructive Change 在当前业务 Context 中 Review / Confirm。
 
-### 7. Empty State 是产品教学
-
-Empty State 应该：
-
-- 解释当前页面用途；
-- 告诉用户下一步；
-- 提供一个明显 Primary Action。
-
-不要只展示装饰插画或空表。
-
-### 8. Progressive Complexity
+## 9. Progressive Complexity
 
 普通用户不需要理解：
 
 - SQLite WAL
 - Physical Migration Internals
 - Principal Type
-- Event Durability
+- Capability Graph
 - Internal Ledger
+- ChangeSet Object Model
 
-才能完成普通业务操作。
+高级信息进入 Technical Details / Diagnostics。
 
-这些信息只在 Advanced / Diagnostic Context 中出现。
+# 视觉与 Design System Contract
 
-## 视觉产品标准
-
-Admin 必须有统一 Design System，至少覆盖：
-
-- Typography
-- Spacing
-- Button
-- Form
-- Table
-- Card
-- Drawer / Sheet
-- Dialog
-- Tabs
-- Status
-- Empty State
-- Error State
-- Destructive Confirmation
-
-禁止形成“工程后台感”：
-
-- 不把 Metric Card 当成所有页面默认布局；
-- 不在适合 Card Discovery 的场景强行使用 Dense Table；
-- 不把 Raw ID / JSON 作为主要用户界面；
-- 不允许每个模块创造自己的 Button / Dialog / Form 行为。
-
-## Design System 实现基线
-
-产品体验规范对应的前端基础固定为：
+固定实现关系：
 
 ~~~text
 React + TypeScript + Vite
@@ -141,141 +146,265 @@ Base UI
 Tailwind CSS v4
 ~~~
 
-复杂业务状态使用：
+业务状态：
 
 - TanStack Query
 - TanStack Table
 - React Hook Form
 - Zod
+- URL State
+- React Local State
 
-这里的关键原则是：
+## Semantic Tokens
 
-> Modelry 使用 shadcn/ui / Base UI 来建立自己的 Design System，而不是让 Modelry 看起来像 shadcn/ui Demo。
+至少定义：
 
-所有页面必须优先复用 Modelry Design System 中已经定义的 Primitive、Composite Component 和 Interaction Pattern。
+- surface
+- surface-subtle
+- border
+- text
+- text-muted
+- primary
+- success
+- warning
+- danger
+- focus
 
-## 信息架构
+Light / Dark 使用同一 semantic token contract。
 
-一级导航：
+## Density
+
+V0.1 组件支持：
+
+- Standard
+- Compact Table
+
+不需要给用户做 Density 设置。
+
+## Form Pattern
+
+统一包含：
+
+- Label
+- Description when useful
+- Control
+- Required state
+- Inline validation
+- Server error
+- Disabled reason
+
+提交失败后 focus 第一处 invalid field。
+
+## Table Pattern
+
+统一：
+
+- header
+- sorting
+- filtering
+- empty
+- loading
+- error
+- row action
+- pagination / cursor
+- truncation
+- copyable stable ID
+- context preservation
+
+无 Bulk Action 时不展示 Row Selection。
+
+## Surface Boundary
 
 ~~~text
-Core
-  Overview
-  Collections
-  API
+Standard Sheet
+→ short detail / short form
 
-Control
-  Changes
-  Hooks
-  Access
+Wide Sheet
+→ record / complex field
 
-System
-  Settings
-  Activity
+Focused Workspace
+→ Create Collection / long-form task
+
+Split Pane
+→ list + persistent inspect workflow
+
+Dialog
+→ destructive / revoke / disable / unsaved local form
 ~~~
 
-Collection：
+复杂长期编辑器禁止放进窄 Modal。
+
+## Feedback
+
+默认：
 
 ~~~text
-Records
-Schema
-Policy
-Auth
-API
+Local form edit
+→ immediate local feedback
+
+Durable mutation
+→ pessimistic by default
+
+Success
+→ durable result in context
+
+Toast
+→ supplementary
+
+Failure
+→ inline actionable error
 ~~~
 
-Schema：
+## Keyboard
+
+至少支持：
+
+- Tab / Shift+Tab
+- Enter for expected simple form action
+- Escape where safe
+- Cmd/Ctrl + Enter for explicit submit where appropriate
+- focus return after Sheet / Dialog
+- safe destructive confirmation focus
+
+## Accessibility
+
+目标：**WCAG 2.2 AA**
+
+至少覆盖：
+
+- semantic controls
+- keyboard
+- visible focus
+- contrast
+- screen-reader labels
+- status announcements
+- reduced motion
+
+## URL State / Deep Link
+
+适合共享和返回恢复的状态进入 URL：
+
+- local tab
+- filter
+- sort
+- page / cursor where reasonable
+- selected resource
+- detail / sheet identity
+
+Browser Back 必须尽可能恢复列表 Context。
+
+## JSON / Structured Data
+
+API、Diff、Debug Surface 共用 Structured Viewer：
+
+- formatted
+- collapse
+- copy
+- wrap
+- search when useful
+
+不要每个页面自行使用 Raw pre。
+
+## Copy Interaction
+
+普通 Copy：
 
 ~~~text
-Fields
-Relations
-Indexes
+Copy
+→ Copied state
 ~~~
 
-## State Ownership
+不需要成功 Toast。
 
-状态职责明确：
+API Key one-time reveal 是单独 Security Flow。
 
-- **Server State**：Query / Cache Layer
-- **Form State**：Form Library + Validation Schema
-- **URL State**：Filter / Tab / Selection / Deep-link State
-- **Local UI State**：纯瞬时 Presentation State
+# State Ownership
 
-不要为了“方便”而把所有状态塞进 Global Store。
+- Server State → Query / Cache
+- Form State → Form Library + Validation Schema
+- URL State → navigation / filter / deep-link
+- Local UI State → transient presentation
 
-## Product Definition of Done
+不要因为方便把所有状态放进 Global Store。
 
-每个用户可见功能必须满足五个 Closure。
+# Product Definition of Done
+
+每个用户可见能力必须满足：
 
 ### Functional Closure
-
 真实 Runtime 行为正确。
 
 ### UX Closure
-
-用户工作流清晰、顺畅、可发现。
+路径连续、默认值合理、步骤足够少。
 
 ### Visual Closure
-
-遵守统一 Design System 和 Information Hierarchy。
+遵守统一 Design System 与 Information Hierarchy。
 
 ### Error Closure
-
-主要失败模式有明确反馈和恢复路径。
+主要失败模式可理解、可恢复。
 
 ### Business Flow Closure
+能够完成真实任务，并从第二观察面验证 Durable Result。
 
-用户能够完成真实任务，并从第二观察面验证 Durable Result。
+# Browser Acceptance
 
-## Browser Acceptance
-
-Mandatory Acceptance 必须使用：
+Mandatory Acceptance 使用：
 
 ~~~text
-Real Modelry Runtime
+Real Runtime
 +
 Real SQLite
 +
 Real HTTP
 +
-Real Admin UI
+Real Admin
 +
 Real Chromium
 ~~~
 
-核心产品闭环禁止依赖 Mock Backend。
+禁止用 Mock Backend 代替核心闭环。
 
-## Cross-Surface Verification
+至少验证：
 
 ### Create Record
 
 ~~~text
 Create
-→ Records 中出现
-→ Detail 数据正确
-→ API 查询正确
-→ Reload 后仍存在
+→ Row appears
+→ Detail correct
+→ API correct
+→ Reload persists
 ~~~
 
-### Apply ChangeSet
+### Apply Schema Change
 
 ~~~text
-ChangeSet Applied
-→ Apply Attempt Succeeded
-→ Schema 改变
-→ Migration History 更新
-→ Restart 后仍保持
+Pending changes
+→ Apply
+→ Schema changes
+→ Applied History exists
+→ Restart persists
 ~~~
 
-### Revoke Session
+### Revoke Application Session
 
 ~~~text
-Session 标记 revoked
-→ Application 后续访问失败
-→ Audit / Activity 可追踪
+Revoke
+→ Session shows Revoked
+→ subsequent app access fails
+→ Audit fact exists
 ~~~
 
-## Browser Health Gate
+### API Error
+
+~~~text
+Run request
+→ structured error + requestId
+→ View request details
+→ same request opens directly
+~~~
+
+# Browser Health Gate
 
 Mandatory Flow 遇到以下情况直接失败：
 
@@ -283,21 +412,7 @@ Mandatory Flow 遇到以下情况直接失败：
 - Page Exception
 - Unexpected 5xx
 - Broken Navigation
-- Infinite / Stuck Loading
+- Stuck Loading
 - Unhandled Network Failure
-
-## Interaction Quality
-
-Acceptance 还必须检查：
-
-- Focus / Keyboard
-- Loading State
-- Disabled State
-- Empty State
-- Error State
-- Primary Action 是否明显
-- Layout 是否稳定
-- 是否可能 Duplicate Submission
-- Deep Link 是否正确
 
 API Test Passed 不能代替 Product Acceptance。

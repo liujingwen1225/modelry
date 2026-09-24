@@ -2,11 +2,11 @@
 
 ## 一句话定义
 
-**Modelry 是一个产品化 Backend Platform，让开发者通过统一的可视化和可编程体验，创建、运行并安全演进应用后端。**
+**Modelry 是一个产品化 Backend Platform，让开发者与 Coding Agent 通过统一产品创建、运行并安全演进应用后端。**
 
 ## 要解决的问题
 
-一个完整应用后端通常需要同时组合：
+应用后端通常需要组合：
 
 - Database
 - Schema / Migration
@@ -15,131 +15,137 @@
 - Authorization
 - Files
 - Realtime
-- Hooks / Events
+- Extension
 - Secrets
 - Observability
 - Admin Tooling
 - Deployment Convention
 
-单独看，每个工具可能都很好用；但开发者仍需要自己设计它们之间的边界、状态和运维方式。
+问题不只是缺少某项能力，而是这些能力经常形成多套配置、多套状态和割裂的运维体验。
 
-Modelry 的目标，是把这些能力收敛为一个完整产品。
+Modelry 的目标，是把它们组织成一套一致的 Backend Product Semantics。
 
-## 产品承诺
+## V0.1 产品承诺
 
-新用户不需要先成为数据库或基础设施专家，就应该能够完成：
+第一个版本不追求一次实现最终 Backend Platform 的全部能力。
+
+它必须先让开发者顺畅完成：
 
 ~~~text
-启动 Modelry
-→ 进入 Admin
-→ 创建 Collection
-→ 定义 Fields / Relations / Indexes
-→ Review 并 Apply Changes
-→ 创建真实 Records
-→ 使用自动生成的 API
-→ 配置 Auth / Policy
-→ 使用 Files / Realtime / Hooks
-→ 查看 Requests / Audit / Activity
-→ 安全演进 Backend
+First Run
+→ Create Backend Model
+→ Manage Data
+→ Secure
+→ Use API
+→ Observe
+→ Evolve
 ~~~
 
-当这一整条路径做到易用、好用、好看、功能完善且状态可恢复时，Modelry 才算真正成立。
+这条主路径必须具备：
+
+- 明确入口；
+- 合理默认值；
+- 最少无意义步骤；
+- 原地 Durable Result；
+- 可行动 Error；
+- 安全变更；
+- Reload / Restart 后仍可验证；
+- Admin 与 API / MCP 结果一致。
 
 ## 产品原则
 
 ### 1. 产品化优先
 
-技术架构服务于产品。
-
-不能因为某种语言、数据库、部署方式或内部实现更“纯粹”，而牺牲用户体验和完整闭环。
+架构服务产品，不为了内部模型漂亮而增加用户步骤。
 
 ### 2. 完整工作流优先于 Feature Checklist
 
-一个 API Endpoint 存在，不代表功能完成。
+一个 Endpoint 或页面存在，不代表能力完成。
 
 完整能力至少包括：
 
 ~~~text
-配置
-→ 执行
-→ 结果
-→ 反馈
-→ 错误
-→ 恢复
-→ 可观测
+Configure
+→ Execute
+→ Result
+→ Feedback
+→ Error
+→ Recover
+→ Verify
 ~~~
 
-### 3. 默认简单，高级能力渐进暴露
+### 3. Default Simple, Progressive Advanced
 
-常见任务应该拥有合理默认值。
+常用任务使用安全合理的默认值。
 
-数据库细节、高级 Policy、Runtime 参数、危险变更等高级能力，仅在真正需要时展示。
+高级表达式、Risk Details、Migration Internals、Runtime Diagnostics 等只在用户需要时暴露。
 
-### 4. Modelry Concept 优先于 Database Concept
+### 4. Product Concept 优先
 
-用户首先面对：
+普通用户首先面对：
 
 - Collection
 - Field
 - Relation
-- Policy
-- Change
+- Access Rule
+- Pending Change
 - API
+- App User
+- Service Account
 
-而不是数据库内部术语。
-
-数据库是实现层，除非用户主动进入 Advanced Surface。
+而不是数据库和安全实现内部术语。
 
 ### 5. Explicit Change，不做不可解释的 Magic
 
-Backend Model 的变化必须可 Inspect、可 Review、可解释。
+Backend Model 的变化必须可理解、可审查、可恢复。
 
-核心链路：
+底层保持：
 
 ~~~text
-Inspect
-→ Propose
+Propose
 → ChangeSet
-→ Structured Diff + Risk
+→ Structured Diff
+→ Risk / Preconditions
 → Apply Attempt
 → Migration / History
-→ Audit
 ~~~
+
+但 UI 不要求用户先学习这些对象。
 
 ### 6. Human 与 Agent 操作同一 Backend Semantics
 
-Admin、HTTP API、CLI、MCP 不得形成多套相互绕开的业务规则。
-
-Coding Agent 不是隐形 DBA。
+Admin、HTTP、CLI、MCP 不得形成互相绕开的业务规则。
 
 ### 7. AI Native, Not AI Dependent
 
 Coding Agent 是一等客户端。
 
-但即使完全没有 AI Provider，Modelry 仍然必须是完整可用的 Backend Platform。
+没有任何 AI Provider 时，Modelry 仍必须是完整可用的 Backend Platform。
 
 ### 8. Safe by Default
 
-Auth、Policy、Secret、危险 Schema Change 与 External Side Effect 默认采用安全边界。
+Auth、Access Rule、Secret、危险 Model Change 与 External Side Effect 默认采用安全边界。
 
-失败必须可诊断、可恢复。
+安全默认不意味着强迫用户理解所有治理对象。
 
 ## 核心产品域
 
+长期 Modelry 包括：
+
 - Collections / Records
-- Schema：Fields / Relations / Indexes / Validation / Defaults
-- Changes / Migration History
+- Schema / Changes
 - Application API / OpenAPI
 - Application Auth
-- Record Policy
+- Access Rules
 - Files
 - Realtime
-- Hooks / Events
+- Extensions / Hooks
 - Secrets
-- API Request Observability
-- Audit / Activity
+- Requests / Audit / Diagnostics
 - CLI
 - MCP
+
+这些是长期产品域，不等于全部必须进入 V0.1。
 
 ## Modelry 不是什么
 
@@ -149,7 +155,6 @@ Modelry 不是：
 - 通用数据库管理器
 - Workflow / DAG Platform
 - Kubernetes Management Product
-- 给 Headless CMS 补 Backend 能力
 - PocketBase Compatibility Layer
 - 没有 AI 就不能运行的 AI Tool
 
@@ -161,11 +166,19 @@ Human：
 start
 → model
 → data
-→ API
 → secure
-→ extend
+→ API
 → observe
 → evolve
+~~~
+
+Optional expansion：
+
+~~~text
+extend
+→ realtime
+→ hooks
+→ advanced operations
 ~~~
 
 Coding Agent：
@@ -180,4 +193,4 @@ inspect
 → audit
 ~~~
 
-两者最终操作同一个 Backend Model 与 Runtime。
+两者操作同一 Backend Model 与 Runtime。

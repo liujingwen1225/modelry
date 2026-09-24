@@ -1,6 +1,6 @@
 # AGENTS.md — Modelry
 
-## 开始任何任务前先读
+## 开始任务前先读
 
 1. CONTEXT.md
 2. docs/00-product-vision.md
@@ -17,45 +17,75 @@
 
 不要把 Modelry 优化成内部工程系统。
 
-每个用户可见功能都必须按产品能力评审：
+每个用户可见功能都必须先问：
 
-- 用户能否快速理解？
-- 是否有明确的下一步？
-- 默认值是否合理、安全？
-- Durable Result 是否可见？
-- 出错后是否知道原因和修复方式？
-- 能否完成真实业务闭环？
-- 是否符合统一视觉与交互体系？
+- 能不能少理解一个概念？
+- 能不能少跳一次页面？
+- 能不能少点一次按钮？
+- 能不能使用安全合理的默认值？
+- Durable Result 是否原地可见？
+- Error 是否给出明确恢复路径？
+- Search / Filter / Sort / Pagination / Deep Link Context 是否保留？
+- 是否形成真实业务闭环？
 
 ## V0.1 Community 基线
 
 - Go
-- SQLite
+- SQLite Only
 - React + TypeScript + Vite
 - Modular Monolith
 - Contract First
 - Zero-config-first
 - 简单 Self-hosted Delivery
+- One Runtime / One Project in V0.1
 
-Single Binary 与 One Instance / One Project 只是 V0.1 Community 的交付和拓扑策略，禁止把它们扩大成永久全局产品假设。
+## V0.1 产品 Gate
+
+优先证明：
+
+~~~text
+First Run
+→ Model
+→ Data
+→ Secure
+→ API
+→ Observe
+→ Evolve
+~~~
+
+不要因为长期 Community 需要某个能力，就默认它必须进入 V0.1。
+
+Realtime、Lifecycle Hooks、Secrets UI、Standalone Activity、Policy Simulation、Additional Administrator Management 等默认属于 V0.1.x，除非权威 Scope 明确重新纳入。
 
 ## 架构规则
 
 - Modelry Product Semantics 不得等同于 SQLite-specific Semantics。
 - V0.1 不实现 PostgreSQL，但不得让未来 PostgreSQL 需要重写 Domain Model。
-- 当存在 Modelry Product Concept 时，不直接向用户暴露 Raw Database Concept。
-- Data Plane 与 Control Plane 必须分离。
-- Admin Auth 与 Application Auth 必须分离。
-- Schema Evolution 统一经过 ChangeSet / Diff / Risk / Apply / History。
-- Hooks / Extensions 保持 JavaScript / TypeScript-facing Runtime Boundary。
+- 当存在 Product Concept 时，不直接向普通用户暴露 Raw Database Concept。
+- Data Plane 与 Control Plane 分离。
+- Admin Auth 与 Application Auth 分离。
+- Backend Model Evolution 统一经过 ChangeSet / Diff / Risk / Apply / History。
+- Schema Pending Changes 必须耐久保存。
+- Schema、Policy、Auth Configuration 不共享一个隐形 Collection-wide UX Draft。
 - MCP 只是同一 Product Semantics 的另一个 Interface，不拥有隐藏旁路。
 - Contract 在 Transport Implementation 之前定义。
 
+## UI Vocabulary
+
+Domain 可以保留内部术语，但 Product UI 优先使用：
+
+~~~text
+ChangeSet       -> Pending change
+Migration       -> Applied change / Technical details
+Principal       -> Administrator / Service account / App user
+Capability      -> Permission
+Credential      -> Password / API key / Session
+Policy          -> Access rule
+~~~
+
 ## 质量规则
 
-Definition of Done 不是“代码能编译”或“API 测试通过”。
-
-核心产品功能必须满足：
+Definition of Done 必须同时覆盖：
 
 ~~~text
 Functional Closure

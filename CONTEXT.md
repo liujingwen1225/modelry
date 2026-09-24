@@ -4,32 +4,32 @@
 
 Modelry 是一个面向人类开发者与 Coding Agent 的产品化 Backend Platform。
 
-它的核心任务，是让用户通过一个统一产品完成：
+V0.1 的核心用户路径统一为：
 
 ~~~text
-启动
-→ 建模
-→ 管理真实数据
-→ 使用 API
-→ 配置 Auth / Policy
-→ 使用 Files / Realtime / Hooks
-→ 安全演进 Schema
-→ 查看 Requests / Audit / Activity
-→ 诊断与恢复
+First Run
+→ Create Backend Model
+→ Manage Data
+→ Secure
+→ Use API
+→ Observe
+→ Evolve
 ~~~
+
+扩展能力是重要方向，但不作为第一个 V0.1 Release Gate 的前置条件。
 
 Modelry 不能演变成“数据库管理工具 + 一堆附加功能”。
 
 ## 产品化要求
 
-所有产品和技术决策都必须服务以下目标：
+所有产品和技术决策必须优先服务：
 
-- **易用**：用户能快速理解并完成任务。
-- **好用**：真实工作流顺畅，默认值合理，错误可恢复。
-- **好看**：视觉、交互与信息层级统一，达到正式产品标准。
-- **功能完善**：核心 Backend 工作流能够真正闭环，而不是只存在零散能力。
+- **易用**：少理解一个内部概念、少一次跳转、少一次无意义确认。
+- **好用**：真实工作流连续，默认值合理，结果原地可见。
+- **好看**：视觉、信息层级与交互统一。
+- **功能完整**：核心 Backend 工作流真正闭环，而不是拥有很多未闭环能力。
 
-技术纯粹性、架构炫技和提前抽象不应凌驾于这些目标之上。
+技术纯粹性、提前抽象和内部对象模型不得凌驾于产品体验。
 
 ## 产品体系
 
@@ -37,47 +37,111 @@ Modelry 不能演变成“数据库管理工具 + 一堆附加功能”。
 
 开源、自托管、SQLite Only、零配置优先。
 
-Community 应独立完成一个完整应用后端的核心闭环，包括 Schema、Records、API、Auth、Policy、Files、Realtime、Hooks、Changes、Observability、OpenAPI 与 MCP。
+Community 的长期产品可以持续拥有 Files、Realtime、Hooks、Secrets 等能力，但 V0.1 不要求一次完成所有长期 Community 能力。
 
 ### Commercial / Enterprise
 
-面向正式生产、团队和组织的商业自托管版本。
+面向正式生产、团队和组织的商业 Self-hosted 产品。
 
-PostgreSQL 以及组织治理、企业身份、审计、备份恢复、可观测性、HA / Scale、企业支持等能力属于这一阶段。
+PostgreSQL、Organization / Team Governance、Enterprise Identity、Advanced RBAC、Backup / Restore、Production Observability、HA / Scale、Fleet Operations、Compliance 与 Support 属于这一阶段。
 
 ### Modelry Cloud
 
-官方 SaaS。
+官方 Managed SaaS。
 
-Cloud 引入独立的 Cloud Control Plane，用于 Organization、Team、Project、Environment、Region、Usage、Billing、Backup 和托管运维。
+Cloud 使用独立 Cloud Control Plane 管理 Organization、Team、Project、Environment、Region、Usage、Billing、Backup 和托管运维。
 
 Project Backend Plane 的核心产品语义继续与 Self-hosted Modelry 共用。
 
-## V0.1 Community 基线
+## V0.1 Community 固定基线
 
 - Go Runtime
-- SQLite
+- SQLite Only
 - React + TypeScript + Vite
 - Modular Monolith
 - Contract First
 - Zero-config-first
-- 简单自托管交付
-- V0.1 中一个 Runtime 服务一个 Project
+- 简单 Self-hosted Delivery
+- 一个 Runtime 服务一个 Project
 
-这些是 V0.1 的交付选择，不是永久产品本体。
+## V0.1 产品范围原则
+
+必须优先完成：
+
+~~~text
+Model
+→ Data
+→ Security
+→ API
+→ Observe
+→ Evolve
+~~~
+
+V0.1 保留：
+
+- Collections / Fields / Relations / Basic Index / Validation / Defaults
+- Records
+- Durable Pending Schema Changes / Apply / Recovery / Applied History
+- REST API / OpenAPI / Runner / Request Logs
+- Auth Collection / Email + Password / Sessions
+- Access Rules
+- Local Single-file Field
+- Owner + Service Account / API Key
+- Minimal Audit
+- Runtime / Storage Diagnostics
+- Minimal CLI
+- Core MCP
+
+V0.1.x 再进入：
+
+- Realtime
+- Lifecycle Hooks
+- Secrets UI
+- Event Hooks / Webhooks
+- Policy Simulation
+- Additional Administrator Management
+- Full Activity Timeline
+- Drift Product
+- Editable Runtime Settings
+- Multiple File Values
+- S3-compatible Storage
 
 ## 架构不变量
 
-- Modelry Backend Model 定义产品语义，SQLite 不能反过来定义产品。
-- Collection、Field、Relation、Index、Policy、ChangeSet 等首先是 Modelry Domain Concept。
-- V0.1 只需要实现 SQLite，但未来增加 PostgreSQL 不应要求重写产品模型、Admin 或 Contract。
-- Application Data Plane 与 Modelry Control Plane 必须分离。
-- Admin Identity 与 Application User Identity 必须分离。
-- Principal 与 Credential 必须分离。
-- Backend Model 变更必须使用显式、可审查、可恢复的 Change Lifecycle。
-- Admin、HTTP、CLI 与 MCP 必须操作同一套 Backend Semantics。
-- 不可回滚的外部副作用发生在 Commit 之后；承诺可靠投递时，Delivery Intent 必须在 Commit 前耐久化。
-- Go 是 Runtime 实现语言，不是用户扩展语言。
+- Backend Model 定义 Modelry 产品语义，SQLite 不能反过来定义产品。
+- V0.1 只实现 SQLite，但未来 PostgreSQL 不应要求重写 Domain Model、Admin 或 Contract。
+- Application Data Plane 与 Modelry Control Plane 分离。
+- Admin Identity 与 Application User Identity 分离。
+- Principal 与 Credential 在 Domain 中分离，但 UI 使用 Administrator、Service Account、App User、Password、API Key、Session 等自然术语。
+- 受管 Backend Model Mutation 统一经过显式 Change Lifecycle。
+- Admin、HTTP、CLI 与 MCP 操作同一套 Backend Semantics。
+- Go 是 Runtime 实现语言，不是用户必须面对的扩展语言。
+- Domain Language 不等于 UI Language。
+
+## Change UX 不变量
+
+底层继续保留：
+
+~~~text
+ChangeSet
+→ Structured Diff
+→ Risk / Preconditions / Impact
+→ Apply Attempt
+→ Migration / Ledger
+~~~
+
+用户主界面优先使用：
+
+~~~text
+Pending
+Needs review
+Failed
+Applied
+~~~
+
+Schema 的 Pending Changes 必须耐久保存。用户离开 Collection、刷新页面或切换 Fields / Relations / Indexes 时不应丢失。
+
+Policy 与 Auth Configuration 不与 Schema 共用一个隐形 Collection-wide Draft。
 
 ## 权威文档阅读顺序
 
@@ -97,11 +161,11 @@ Project Backend Plane 的核心产品语义继续与 Self-hosted Modelry 共用�
 
 ## 当前实施 Gate
 
-在以下文档重新基于本基线建立并接受之前，不开始大范围生产实现：
+Admin Product UX Spec 已完成本轮范围和 UX 收敛。
 
-- Runtime / Storage / Extension ADR
+在大范围生产实现前仍需建立并接受：
+
+- Runtime / Storage ADR
 - Foundation Spec
 - HTTP Contract / OpenAPI
 - Browser Acceptance Spec
-
-Admin Product UX Spec 已接受，当前权威文件为 docs/specs/0001-admin-product-ux-spec.md。

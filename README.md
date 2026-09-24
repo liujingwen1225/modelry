@@ -1,18 +1,32 @@
 # Modelry
 
-Modelry 是一个面向开发者的产品化 Backend Platform，用于通过可视化 Admin、稳定 API 和 Agent 友好的机器接口，完成应用后端的创建、运行与持续演进。
+Modelry 是一个面向开发者与 Coding Agent 的产品化 Backend Platform，用统一的可视化 Admin、稳定 Application API 和机器接口，完成应用后端的创建、运行与持续演进。
 
-Modelry 的目标不是把数据库内部能力直接暴露给用户，而是把建模、数据、API、认证、权限、文件、实时、扩展、变更和可观测性整合成一个真正易用、好用、好看、功能完善的完整产品。
+Modelry 不把数据库内部能力直接暴露成“管理工具”。它把建模、真实数据、认证授权、API、文件、变更和运行诊断组织成一个完整产品。
 
 ## 产品方向
 
 Modelry 作为一个统一产品体系发展：
 
 - **Modelry Community**：开源、自托管、SQLite Only、零配置优先。
-- **Modelry Commercial / Enterprise**：面向正式生产和组织级场景的自托管商业版，采用 PostgreSQL，并提供企业治理与生产运维能力。
-- **Modelry Cloud**：官方托管 SaaS，采用 PostgreSQL，并提供独立 Cloud Control Plane。
+- **Modelry Commercial / Enterprise**：面向正式生产与组织级场景的商业自托管版本，采用 PostgreSQL，并增加团队、治理、运维与规模能力。
+- **Modelry Cloud**：官方托管 SaaS，采用 PostgreSQL，并拥有独立 Cloud Control Plane。
 
-Community 必须是完整可用的 Backend Platform，而不是 Demo 或阉割版。Commercial / Enterprise 和 Cloud 的价值主要来自生产规模、组织治理、运维能力和托管服务。
+Community 必须完整可用，但“完整”不等于第一个版本一次实现所有长期能力。V0.1 优先把核心开发闭环做到真正好用，再通过 V0.1.x 持续扩展 Realtime、Hooks、Secrets 等能力。
+
+## V0.1 Community 产品闭环
+
+~~~text
+First Run
+→ Create Backend Model
+→ Manage Data
+→ Secure
+→ Use API
+→ Observe
+→ Evolve
+~~~
+
+V0.1 的发布标准不是 Feature Checklist，而是这条路径是否易用、可恢复、可验证。
 
 ## V0.1 Community 技术基线
 
@@ -21,29 +35,44 @@ Community 必须是完整可用的 Backend Platform，而不是 Demo 或阉割�
 - Admin：**React + TypeScript + Vite**
 - Architecture：**Modular Monolith**
 - Product Discipline：**Contract First**
-- Default Delivery：简单、自托管、零配置优先，Admin 随 Runtime 一起交付
-- User Extension：保留 **JavaScript / TypeScript-facing Runtime Boundary**，不要求用户编写 Go Plugin
+- Delivery：简单、自托管、Zero-config-first
+- Runtime Topology：V0.1 中一个 Runtime 服务一个 Project
 
-Single Binary 与 One Instance / One Project 是 V0.1 Community 的交付和运行拓扑选择，不是整个 Modelry 永久不变的产品约束。
+Single Binary 与 One Instance / One Project 是 V0.1 Community 的交付与拓扑选择，不是 Modelry 永久产品约束。
+
+## V0.1 重点能力
+
+V0.1 聚焦：
+
+- Collections / Schema / Records
+- Pending Changes / Apply / Recovery / History
+- REST API / OpenAPI / API Runner / Request Logs
+- Auth Collection / Email + Password / Sessions
+- Access Rules
+- Local Single-file Field
+- Service Account / API Key
+- Minimal Audit
+- Runtime / Storage Diagnostics
+- Minimal CLI
+- Core MCP
+
+Realtime、Lifecycle Hooks、Secrets UI、独立 Activity、Policy Simulation 等进入 V0.1.x。
 
 ## 文档
 
-当前唯一权威文档入口：
+当前唯一权威入口：
 
 - docs/README.md
 
-历史 Pre-Reboot / Legacy 文档不再保留在当前活动文档树中，避免旧技术和旧产品假设继续造成混淆。
-
-如需追溯历史行为，可通过 Git History 或旧仓库 modelry-bf 获取，但历史内容不能覆盖当前权威文档。
+历史 Pre-Reboot / Legacy 文档不属于当前权威体系。需要追溯时可查看 Git History 或旧仓库 modelry-bf，但历史内容不能覆盖当前决策。
 
 ## 当前阶段
 
-当前处于 **产品路线、技术路线与产品架构冻结阶段**。
+当前处于 **产品路线、V0.1 范围、产品架构与 Admin UX 冻结阶段**。
 
-在进入大规模生产实现前，需要基于当前权威文档重新建立：
+Admin Product UX Spec 已按当前 V0.1 范围收敛。大规模生产实现前还需要继续建立：
 
-- ADR
+- Runtime / Storage ADR
 - Foundation Spec
 - HTTP Contract / OpenAPI
-- Admin Product UX Spec
 - Browser Acceptance Spec

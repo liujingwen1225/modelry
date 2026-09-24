@@ -2,7 +2,7 @@
 
 ## 产品体系
 
-Modelry 是同一个 Backend Platform 的不同运行与商业形态，而不是三套互不兼容的产品。
+Modelry 是同一个 Backend Platform 的不同运行与商业形态，不是三套互不兼容的产品。
 
 ## Community Edition
 
@@ -16,28 +16,38 @@ Modelry 是同一个 Backend Platform 的不同运行与商业形态，而不是
 
 ### 产品承诺
 
-Community 至少应具备完整 Backend 核心闭环：
+Community 长期围绕以下 Project Backend Product Semantics 成长：
 
 - Collections / Schema / Records
-- Relations / Indexes
-- Changes / Migrations
+- Changes / Applied History
 - REST API / OpenAPI
 - Application Auth
-- Record Policy
-- Local Files
+- Access Rules
+- Files
 - Realtime
-- Lifecycle Hooks
+- Extensions / Hooks
 - Secrets
-- API Request Logs
-- Audit / Activity
+- Request Observability
+- Audit / Diagnostics
 - CLI
 - MCP
 
-Community 不能被设计成 Demo Edition。
+“Community 完整”不表示这些能力全部进入 V0.1。
 
-它的核心差异化是：
+V0.1 先完成：
 
-> 下载、运行、打开 Admin，即可开始构建完整 Backend。
+~~~text
+Model
+→ Data
+→ Secure
+→ API
+→ Observe
+→ Evolve
+~~~
+
+Realtime、Hooks、Secrets 等在 V0.1.x 继续扩展。
+
+Community 不能被设计成 Demo Edition，也不应为了追求 Feature Checklist 把第一个版本做成不可发布的大工程。
 
 ## Commercial / Enterprise Edition
 
@@ -51,22 +61,19 @@ Community 不能被设计成 Demo Edition。
 
 ### 商业价值来源
 
-商业价值应该来自生产和组织复杂度，而不是人为切断 Community 基础功能。
-
-优先方向：
-
 - Enterprise Identity / SSO
-- Advanced Organization RBAC
+- Organization / Team Governance
+- Advanced RBAC
 - Centralized Audit / Retention
-- Enterprise Secrets / KMS Integration
+- Enterprise Secrets / KMS
 - Advanced Backup / Restore / DR
 - Production Observability
 - HA / Scaling
 - Fleet Management
 - Compliance Integration
-- Enterprise Support / SLA
+- Support / SLA
 
-Commercial / Enterprise 继续使用与 Community 相同的 Backend Model 和 Project Admin Semantics。
+商业价值来自组织和生产复杂度，而不是切断 Community 的基础开发闭环。
 
 ## Modelry Cloud
 
@@ -80,7 +87,7 @@ Commercial / Enterprise 继续使用与 Community 相同的 Backend Model 和 Pr
 
 ### Cloud Control Plane
 
-Cloud 新增独立管理域：
+Cloud 新增：
 
 - Account
 - Organization
@@ -96,13 +103,9 @@ Cloud 新增独立管理域：
 - Support
 - Operational Lifecycle
 
-## Cloud Console 与 Project Admin 分层
+## Cloud Console 与 Project Admin
 
-不要把所有 Cloud 管理能力塞进 Project Admin Sidebar。
-
-### Cloud Console
-
-管理：
+Cloud Console 管：
 
 - Organizations
 - Projects
@@ -112,28 +115,13 @@ Cloud 新增独立管理域：
 - Billing
 - Managed Operations
 
-### Project Admin
+Project Admin 管 Project Backend。
 
-管理：
-
-- Overview
-- Collections
-- API
-- Changes
-- Hooks
-- Access
-- Settings
-- Activity
-
-Cloud Console 管“Modelry 资源”。
-
-Project Admin 管“应用 Backend”。
+Project Admin 的 Exact IA 由 Admin Product UX Spec 定义，不在本文件重复冻结 Sidebar。
 
 ## Identity 分离
 
-Cloud Account / Organization Identity 与 Application Auth 是两套不同 Identity Domain。
-
-必须明确区分：
+必须区分：
 
 ~~~text
 Cloud / Enterprise User
@@ -145,17 +133,23 @@ Cloud / Enterprise User
 ~~~text
 Application User
 → Auth Collection
-→ Application Session
-→ Record Policy
+→ Application Credential / Session
+→ Access Rule
 ~~~
 
-Enterprise SSO 保护 Modelry 管理面，不能替代用户应用自身的 Application Auth。
+Enterprise SSO 保护 Modelry 管理面，不能替代 Application Auth。
 
 ## Project / Environment Model
 
-V0.1 Community 可以把 Project 隐式化，只让用户看到一个 Backend。
+V0.1 Community：
 
-长期产品模型可以演进为：
+~~~text
+One Runtime
+→ One implicit Project
+→ SQLite
+~~~
+
+长期：
 
 ~~~text
 Organization
@@ -166,57 +160,26 @@ Organization
 
 Environment 只在 Commercial / Cloud 真正需要 Development / Staging / Production 时显示。
 
-## Database Boundary
-
-当前 Edition Boundary：
-
-~~~text
-Community
-→ SQLite
-
-Commercial / Enterprise
-→ PostgreSQL
-
-Modelry Cloud
-→ PostgreSQL
-~~~
-
-PostgreSQL 不能成为商业版唯一价值。
-
-真正的商业能力必须解决：
-
-- Team
-- Governance
-- Production
-- Operations
-- Scale
-- Compliance
-- Support
-
 ## 成长路径
 
-未来应该形成自然升级体验：
-
 ~~~text
 Community SQLite Project
-→ 项目成熟
-→ Migrate to Commercial / Enterprise PostgreSQL
+→ Commercial / Enterprise PostgreSQL
 ~~~
 
-或者：
+或：
 
 ~~~text
 Community SQLite Project
-→ Deploy to Modelry Cloud
+→ Modelry Cloud
 → Managed PostgreSQL Project
 ~~~
 
-Migrate to PostgreSQL / Deploy to Modelry Cloud 本身可以成为重要产品能力。
+迁移本身可以成为重要产品能力。
 
 ## Packaging / Licensing 原则
 
-Edition Boundary 必须简单、清晰、容易解释。
-
-Open-source Community 保持真正可用。
-
-Commercial / Cloud 在不破坏 Backend Core Semantics 的前提下增加组织、生产和托管能力。
+- Edition Boundary 简单清晰；
+- Open-source Community 真正可用；
+- Commercial / Cloud 不破坏 Backend Core Semantics；
+- Community 的版本收敛不等于人为阉割。
