@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Collection } from '../collections/client';
+import { LocaleProvider } from '../i18n/i18n';
 import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage } from './workspace';
 
 const mocks = vi.hoisted(() => ({
@@ -52,17 +53,18 @@ function CurrentLocation() {
   return <output data-testid="current-location">{location.pathname}{location.search}</output>;
 }
 
-function renderCollectionAPI(type: 'Normal' | 'Auth' = 'Normal', collectionOverride?: Collection) {
+function renderCollectionAPI(type: 'Normal' | 'Auth' = 'Normal', collectionOverride?: Collection, initialSearch = '') {
   const value = collectionOverride ?? (type === 'Auth' ? authCollection : collection);
-  return render(<MemoryRouter initialEntries={[`/collections/${value.id}/api`]}><Routes>
+  return render(<LocaleProvider><MemoryRouter initialEntries={[`/collections/${value.id}/api${initialSearch}`]}><Routes>
     <Route element={<><CurrentLocation /><Outlet context={{ collection: value, pendingChange: null, refreshCollection: vi.fn(), refreshPendingChange: vi.fn() }} /></>} path="/collections/:collectionId">
       <Route element={<CollectionAPIPage />} path="api" />
     </Route>
-  </Routes></MemoryRouter>);
+  </Routes></MemoryRouter></LocaleProvider>);
 }
 
 describe('API Workspace', () => {
   beforeEach(() => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
     mocks.getRequestRecord.mockReset();
     mocks.listRequestRecords.mockReset();
     mocks.runApplicationRequest.mockReset();
@@ -84,6 +86,47 @@ describe('API Workspace', () => {
     expect(screen.getAllByText(/listApplicationRecords/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/"title"/).length).toBeGreaterThan(0);
     expect(screen.getByText(/X-Request-Record-Persisted/)).toBeInTheDocument();
+  });
+
+  it('discovers the Realtime stream with the applied List rule and a resumable JavaScript example', async () => {
+    mocks.getAccessRules.mockResolvedValueOnce({ applied: [{ operation: 'list', mode: 'anyone' }], pending: [], version: 1 });
+    renderCollectionAPI('Normal', undefined, '?tab=realtime');
+
+    expect(await screen.findByRole('heading', { name: 'Committed Record Events' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Collection API sections' })).toBeInTheDocument();
+    expect(await screen.findByText('Anyone')).toBeInTheDocument();
+    const sample = document.querySelector('.api-realtime__example pre code')?.textContent ?? '';
+    expect(sample).toContain('/api/v1/posts/events');
+    expect(sample).toContain("headers['Last-Event-ID']");
+    expect(sample).toContain('AbortController');
+    expect(sample).toContain("credentials: 'omit'");
+    expect(screen.getByRole('button', { name: 'Copy JavaScript example' })).toBeInTheDocument();
+  });
+
+  it('preserves Collection API context when switching Realtime tabs', async () => {
+    mocks.getAccessRules.mockResolvedValue({ applied: [{ operation: 'list', mode: 'anyone' }], pending: [], version: 1 });
+    renderCollectionAPI('Normal', undefined, '?q=body&runSort=title&filter=status%20eq%20403');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Realtime' }));
+    expect(screen.getByTestId('current-location').textContent).toContain('q=body');
+    expect(screen.getByTestId('current-location').textContent).toContain('runSort=title');
+    expect(screen.getByTestId('current-location').textContent).toContain('filter=status');
+    expect(screen.getByTestId('current-location').textContent).toContain('tab=realtime');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Endpoints' }));
+    expect(screen.getByTestId('current-location').textContent).not.toContain('tab=realtime');
+    expect(screen.getByTestId('current-location').textContent).toContain('q=body');
+    expect(screen.getByTestId('current-location').textContent).toContain('runSort=title');
+  });
+
+  it('localizes the Realtime workspace and copied example in Simplified Chinese', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    renderCollectionAPI('Normal', undefined, '?tab=realtime');
+
+    expect(await screen.findByRole('heading', { name: '已提交的记录事件' })).toBeInTheDocument();
+    expect(screen.getByText('服务器发送事件流')).toBeInTheDocument();
+    expect(document.querySelector('.api-realtime__example pre code')?.textContent).toContain('设置应用会话 token');
+    expect(screen.getByRole('button', { name: '复制 JavaScript 示例' })).toBeInTheDocument();
   });
 
   it('does not expose generic Auth Collection writes and discovers canonical Auth routes', async () => {

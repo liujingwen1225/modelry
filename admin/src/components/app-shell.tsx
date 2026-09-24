@@ -219,11 +219,12 @@ function ShellCommands() {
         { key: 'currentSchema', path: '/schema' },
         { key: 'currentSecurity', path: '/security' },
         { key: 'currentAPI', path: '/api' },
+        { key: 'currentRealtime', path: '/api?tab=realtime' },
       ] as const).map(({ key, path }): AdminCommand => ({
         id: `collection.current.${key}`,
         category: 'commands.categories.collection',
         label: () => t(`commands.${key}`),
-        keywords: () => ['records', 'schema', 'security', 'api'],
+        keywords: () => ['records', 'schema', 'security', 'api', 'realtime', 'events', 'stream'],
         isVisible: (context) => Boolean(context.collectionId),
         execute: (context) => context.navigate(`/collections/${encodeURIComponent(context.collectionId ?? '')}${path}`),
       })),

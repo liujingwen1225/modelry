@@ -7,6 +7,7 @@ import { getRequestRecord, listRequestRecords, runApplicationRequest, type Appli
 import { getAccessRules, listAllCollections, type AccessRuleMode, type AccessRulesState, type Collection } from '../collections/client';
 import { useCollectionWorkspace } from '../collections/workspace-context';
 import { Button, CopyButton, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { useI18n, type TranslationKey } from '../i18n/i18n';
 import './api-workspace.css';
 
 function errorCopy(error: unknown, fallback: string) {
@@ -325,7 +326,179 @@ function APIPageHeader({ eyebrow, title, description }: { eyebrow: string; title
 
 export function CollectionAPIPage() {
   const { collection } = useCollectionWorkspace();
-  return <div className="page-stack api-page"><APIPageHeader description="Discover the applied contract and send real Application requests." eyebrow="API" title={`${collection.name} API`} /><EndpointWorkspace collections={[collection]} fixedCollection={collection} /></div>;
+  const { t } = useI18n();
+  const [params, setParams] = useSearchParams();
+  const activeTab = params.get('tab') === 'realtime' ? 'realtime' : 'endpoints';
+  const sample = realtimeExample(collection.name, t);
+
+  function selectTab(tab: 'endpoints' | 'realtime') {
+    const next = new URLSearchParams(params);
+    if (tab === 'endpoints') next.delete('tab');
+    else next.set('tab', tab);
+    setParams(next, { replace: true });
+  }
+
+  return <div className="page-stack api-page">
+    <APIPageHeader description={t('api.collectionDescription')} eyebrow="API" title={`${collection.name} API`} />
+    <nav aria-label={t('api.collectionSections')} className="api-tabs">
+      <button aria-current={activeTab === 'endpoints' ? 'page' : undefined} onClick={() => selectTab('endpoints')} type="button">{t('api.endpointsTab')}</button>
+      <button aria-current={activeTab === 'realtime' ? 'page' : undefined} onClick={() => selectTab('realtime')} type="button">{t('api.realtimeTab')}</button>
+    </nav>
+    {activeTab === 'realtime' ? <RealtimeWorkspace collection={collection} example={sample} /> : <EndpointWorkspace collections={[collection]} fixedCollection={collection} />}
+  </div>;
+}
+
+function realtimeExample(collectionName: string, t: (key: TranslationKey) => string) {
+  const path = `/api/v1/${encodeURIComponent(collectionName)}/events`;
+  return `const endpoint = ${JSON.stringify(path)};
+const sessionToken = undefined; // ${t('api.realtimeSampleSessionHint')}
+let lastEventId;
+let reloadAfterReady = true;
+
+async function reloadCurrentRecords() {
+  // ${t('api.realtimeSampleReloadHint')}
+}
+
+async function applyRecordEvent(eventType, payload) {
+  // ${t('api.realtimeSampleApplyHint')}
+}
+
+const pause = (ms, signal) => new Promise((resolve) => {
+  if (signal.aborted) return resolve();
+  const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve(); };
+  const timer = setTimeout(finish, ms);
+  signal.addEventListener('abort', finish, { once: true });
+  if (signal.aborted) finish();
+});
+
+async function subscribe(signal) {
+  let retryDelay = 1000;
+  while (!signal.aborted) {
+    const headers = { Accept: 'text/event-stream' };
+    if (sessionToken) headers.Authorization = \`Bearer \${sessionToken}\`;
+    if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+
+    let response;
+    try {
+      response = await fetch(endpoint, { headers, cache: 'no-store', credentials: 'omit', signal });
+    } catch {
+      if (signal.aborted) return;
+      await pause(retryDelay, signal);
+      retryDelay = Math.min(retryDelay * 2, 15000);
+      continue;
+    }
+    if (response.status === 410) {
+      await response.body?.cancel();
+      lastEventId = undefined;
+      reloadAfterReady = true;
+      continue;
+    }
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get('Retry-After')) * 1000;
+      await response.body?.cancel();
+      await pause(Math.min(Math.max(retryAfter || retryDelay, retryDelay), 15000), signal);
+      retryDelay = Math.min(retryDelay * 2, 15000);
+      continue;
+    }
+    if (!response.ok || !response.body) throw new Error(\`${t('api.realtimeSampleRequestFailed')} \${response.status}\`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (!signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replace(/\\r\\n/g, '\\n');
+        let boundary;
+        while ((boundary = buffer.indexOf('\\n\\n')) >= 0) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          let id;
+          let eventType = 'message';
+          const data = [];
+          for (const line of frame.split('\\n')) {
+            if (line.startsWith(':')) continue;
+            if (line.startsWith('id:')) id = line.slice(3).trimStart();
+            else if (line.startsWith('event:')) eventType = line.slice(6).trimStart();
+            else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+          }
+          if (!data.length && !id) continue; // ${t('api.realtimeSampleHeartbeatHint')}
+          if (!id || !data.length) throw new Error(${JSON.stringify(t('api.realtimeSampleMalformedFrame'))});
+          const payload = JSON.parse(data.join('\\n'));
+          if (eventType === 'stream.ready' && reloadAfterReady) {
+            await reloadCurrentRecords();
+            reloadAfterReady = false;
+          } else if (['record.created', 'record.updated', 'record.deleted', 'record.removed'].includes(eventType)) {
+            await applyRecordEvent(eventType, payload);
+          } else if (eventType !== 'stream.ready') throw new Error(\`${t('api.realtimeSampleUnsupportedEvent')} \${eventType}\`);
+          lastEventId = id; // ${t('api.realtimeSampleCursorHint')}
+        }
+      }
+    } catch (error) {
+      if (signal.aborted) return;
+      if (!(error instanceof TypeError)) throw error;
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+    if (!signal.aborted) {
+      await pause(retryDelay, signal);
+      retryDelay = Math.min(retryDelay * 2, 15000);
+    }
+  }
+}
+
+const controller = new AbortController();
+void subscribe(controller.signal);
+// ${t('api.realtimeSampleStopHint')}`;
+}
+
+function RealtimeWorkspace({ collection, example }: { collection: Collection; example: string }) {
+  const { t } = useI18n();
+  const [ruleState, setRuleState] = useState<AccessRulesState>();
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState('loading');
+    void getAccessRules(collection.id, controller.signal).then((value) => {
+      if (controller.signal.aborted) return;
+      setRuleState(value);
+      setState('ready');
+    }).catch(() => {
+      if (controller.signal.aborted) return;
+      setState('error');
+    });
+    return () => controller.abort();
+  }, [collection.id]);
+
+  const labels: Record<AccessRuleMode, string> = {
+    anyone: t('api.accessModes.anyone'),
+    signedInUsers: t('api.accessModes.signedInUsers'),
+    recordOwner: t('api.accessModes.recordOwner'),
+    custom: t('api.accessModes.custom'),
+    noAccess: t('api.accessModes.noAccess'),
+  };
+  const listMode = ruleState?.applied.find((rule) => rule.operation === 'list')?.mode;
+  const endpoint = `/api/v1/${encodeURIComponent(collection.name)}/events`;
+
+  return <Surface className="api-realtime" variant="standard">
+    <header className="api-realtime__heading">
+      <div><p className="eyebrow">{t('api.realtimeProtocol')}</p><h2>{t('api.realtimeHeading')}</h2><p>{t('api.realtimeDescription')}</p></div>
+      <CopyButton label={t('api.copyRealtimeExample')} value={example} />
+    </header>
+    <dl className="api-realtime__metadata">
+      <div><dt>{t('api.realtimeEndpoint')}</dt><dd><span className="api-method api-method--get">GET</span><code>{endpoint}</code></dd></div>
+      <div><dt>{t('api.realtimeAccess')}</dt><dd>{state === 'loading' ? <LoadingState label={t('runtime.connecting')} /> : state === 'error' ? t('api.realtimeUnavailable') : listMode ? labels[listMode] : t('api.realtimeUnavailable')}</dd></div>
+    </dl>
+    <p className="api-muted">{t('api.realtimeAccessHint')}</p>
+    {state === 'error' && <ErrorState description={t('api.realtimeUnavailableHint')} title={t('api.realtimeUnavailable')} />}
+    <section className="api-realtime__example">
+      <header><div><h3>{t('api.realtimeExampleHeading')}</h3><p>{t('api.realtimeExampleDescription')}</p></div></header>
+      <pre><code>{example}</code></pre>
+      <p className="api-muted">{t('api.realtimeExampleCallbackHint')}</p>
+    </section>
+  </Surface>;
 }
 
 export function GlobalAPIPage() {
