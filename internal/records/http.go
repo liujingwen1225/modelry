@@ -11,6 +11,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 )
 
 type recordResponse struct {
@@ -169,6 +170,10 @@ func writeRecordError(w http.ResponseWriter, r *http.Request, err error) {
 	problem := httpapi.APIError{Message: "Record request could not be completed", Details: map[string]any{}}
 	status := http.StatusInternalServerError
 	switch {
+	case errors.Is(err, recordevents.ErrEventTooLarge):
+		status = http.StatusRequestEntityTooLarge
+		problem.Code = "PAYLOAD_TOO_LARGE"
+		problem.Message = "This Record change exceeds the 1 MiB durable Event limit. Reduce the changed values and retry."
 	case errors.Is(err, ErrAuthCollectionWriteRequiresAuthAPI):
 		status = http.StatusForbidden
 		problem.Code = "AUTH_COLLECTION_WRITE_REQUIRES_AUTH_API"

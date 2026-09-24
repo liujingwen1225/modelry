@@ -11,6 +11,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 )
@@ -363,5 +364,25 @@ func TestAuthHTTPRequestRecordsContainAuthenticationOutcomes(t *testing.T) {
 	}
 	if user.ID == "" {
 		t.Fatal("created user did not have a record ID")
+	}
+}
+
+func TestAuthWriteErrorExplainsDurableEventSizeLimit(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/Members/me", nil)
+
+	(&Module{}).writeError(response, request, recordevents.ErrEventTooLarge)
+
+	var envelope struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if response.Code != http.StatusRequestEntityTooLarge || json.Unmarshal(response.Body.Bytes(), &envelope) != nil {
+		t.Fatalf("oversized Event response = %d %s", response.Code, response.Body.String())
+	}
+	if envelope.Error.Code != "PAYLOAD_TOO_LARGE" || !strings.Contains(envelope.Error.Message, "1 MiB") || !strings.Contains(envelope.Error.Message, "retry") {
+		t.Fatalf("oversized Event error was not actionable: %+v", envelope.Error)
 	}
 }

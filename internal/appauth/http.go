@@ -11,6 +11,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 )
@@ -434,6 +435,10 @@ func (module *Module) writeError(w http.ResponseWriter, request *http.Request, e
 	var violation *ValidationFailure
 	var recordValueError *backendmodel.RecordValueError
 	switch {
+	case errors.Is(err, recordevents.ErrEventTooLarge):
+		status = http.StatusRequestEntityTooLarge
+		problem.Code = "PAYLOAD_TOO_LARGE"
+		problem.Message = "This App User Profile change exceeds the 1 MiB durable Event limit. Reduce the changed values and retry."
 	case errors.As(err, &input):
 		status, problem.Code, problem.Message = input.status, input.code, input.message
 	case errors.As(err, &violation):

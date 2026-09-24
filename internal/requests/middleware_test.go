@@ -54,7 +54,7 @@ func TestApplicationMiddlewarePersistsOnlyRedactedRequestMetadata(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.CollectionID != "col_posts" || created.Endpoint != "/api/v1/posts" || created.Method != http.MethodPost || created.Status != http.StatusCreated ||
+	if created.CollectionID != "col_posts" || created.Endpoint != "/api/v1/{collectionName}" || created.Method != http.MethodPost || created.Status != http.StatusCreated ||
 		created.AuthenticationOutcome != AuthenticationAuthenticated || created.AuthorizationOutcome != AuthorizationAllowed || created.Time.IsZero() {
 		t.Fatalf("persisted RequestRecord = %+v", created)
 	}
@@ -80,6 +80,32 @@ func TestApplicationMiddlewarePersistsOnlyRedactedRequestMetadata(t *testing.T) 
 	failed, err := service.Get(t.Context(), errorResponse.Header().Get("X-Request-Id"))
 	if err != nil || failed.ErrorCode != "UNAUTHENTICATED" || failed.AuthenticationOutcome != AuthenticationRejected || failed.AuthorizationOutcome != AuthorizationNotEvaluated {
 		t.Fatalf("persisted error RequestRecord = %+v, error = %v", failed, err)
+	}
+
+	credentialMux := http.NewServeMux()
+	credentialMux.HandleFunc("GET /api/v1/{collectionName}/events", func(w http.ResponseWriter, request *http.Request) {
+		httpapi.WriteAPIError(w, request, http.StatusNotFound, httpapi.APIError{Code: "NOT_FOUND", Message: "The requested Collection was not found."})
+	})
+	credentialServer := httpapi.NewHandler(nil, nil, service.Middleware(credentialMux))
+	pathCredentialRequest := httptest.NewRequest(http.MethodGet, "/api/v1/path-credential-secret/events", nil)
+	pathCredentialResponse := httptest.NewRecorder()
+	credentialServer.ServeHTTP(pathCredentialResponse, pathCredentialRequest)
+	if pathCredentialResponse.Code != http.StatusNotFound || pathCredentialResponse.Header().Get(PersistedHeader) != "true" {
+		t.Fatalf("unknown Collection response = %d, persistence header = %q", pathCredentialResponse.Code, pathCredentialResponse.Header().Get(PersistedHeader))
+	}
+	pathCredentialRecord, err := service.Get(t.Context(), pathCredentialResponse.Header().Get("X-Request-Id"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pathCredentialRecord.Endpoint != "/api/v1/{collectionName}/events" {
+		t.Fatalf("path credential endpoint = %q", pathCredentialRecord.Endpoint)
+	}
+	encodedPathCredentialRecord, err := json.Marshal(pathCredentialRecord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encodedPathCredentialRecord), "path-credential-secret") {
+		t.Fatalf("RequestRecord leaked path credential: %s", encodedPathCredentialRecord)
 	}
 }
 

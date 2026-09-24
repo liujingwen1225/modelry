@@ -56,6 +56,7 @@ func (service *Service) CreateUser(ctx context.Context, collectionID string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
+	publishProfileRecordEvents(service.profiles, collectionID)
 	return created, nil
 }
 
@@ -69,6 +70,7 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 		return records.Record{}, err
 	}
 	var created records.Record
+	var createdCollectionID string
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		collection, err := collectionByName(ctx, tx, collectionName)
 		if err != nil {
@@ -77,6 +79,7 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 		if err := requireAuthCollection(collection); err != nil {
 			return err
 		}
+		createdCollectionID = collection.ID
 		configuration, _, err := readConfig(ctx, tx, collection)
 		if err != nil {
 			return err
@@ -99,7 +102,14 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
+	publishProfileRecordEvents(service.profiles, createdCollectionID)
 	return created, nil
+}
+
+func publishProfileRecordEvents(profiles ProfileWriter, collectionID string) {
+	if notifier, ok := profiles.(interface{ PublishRecordEventsCommitted(string) }); ok {
+		notifier.PublishRecordEventsCommitted(collectionID)
+	}
 }
 
 func (service *Service) ListUsers(ctx context.Context, collectionID string, options records.ListOptions) (ApplicationUserPage, error) {

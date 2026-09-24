@@ -6,7 +6,7 @@
 
 ## 1. Product Model
 
-A **Record Event** is the durable fact that one Collection Record was created, updated, or deleted. Its Event ID identifies its position in the Project event sequence. A Realtime Subscription delivers the Record Events that the subscribing Application Principal may list under the Collection's currently Applied Access Rules.
+A **Record Event** is the durable fact that one Collection Record was created, updated, or deleted. Its Event ID identifies its position in that Collection's event sequence within the Project. A Realtime Subscription delivers the Record Events that the subscribing Application Principal may list under the Collection's currently Applied Access Rules.
 
 Record Event, RequestRecord, AuditRecord, and Activity are separate product concepts:
 
@@ -15,14 +15,14 @@ Record Event, RequestRecord, AuditRecord, and Activity are separate product conc
 - AuditRecord describes a Control Plane security or governance action.
 - Activity is not introduced by this package.
 
-The HTTP representation and reconnect cursor are defined in [Realtime HTTP Contract](../contracts/realtime-http-contract.md). SQLite tables, Go types, and React component structure are implementation details and do not define these product terms.
+OpenAPI is the canonical DTO definition for named SSE event payloads. The [Realtime HTTP Contract](../contracts/realtime-http-contract.md) defines the SSE wire framing, reconnect and connection lifecycle behavior, and the consumer example. SQLite tables, Go types, and React component structure are implementation details and do not define these product terms.
 
 ## 2. Event Identity and Ordering
 
-- Each Project has one ordered Event sequence. An Event ID is stable across reload and same-Project Runtime restart, and identifies exactly one committed Record Event.
-- An Event Cursor identifies a sequence position from which delivery resumes. It is usually the most recently delivered Event ID; the reserved zero cursor represents the position before the first committed Event and is not itself an Event.
-- Event IDs increase in Record mutation commit order. The sequence is not a count: gaps are permitted, and clients must not infer that a missing integer means data loss.
-- `occurredAt` records the mutation's committed UTC time. The Event's Collection ID, Record ID, operation, and Applied schema version describe the committed change.
+- Each Collection has one ordered Event sequence. An Event ID has the form `evt_<unpadded Base64 URL-safe encoding of the Collection ID's UTF-8 bytes>_<20-digit sequence>`, so it preserves the opaque Collection ID contract. It is stable across reload and same-Project Runtime restart, and identifies exactly one committed Record Event.
+- An Event Cursor identifies a position in one Collection's sequence from which delivery resumes. After a Record Event, its Event ID can be used as the cursor. A new subscription uses a separate Collection-scoped cursor for its baseline; the zero position represents the sequence before its first committed Event and is not itself an Event.
+- Event IDs increase in Record mutation commit order within their Collection. The sequence is not a count: gaps are permitted, and clients must not infer that a missing integer means data loss. No cross-Collection total order is exposed.
+- `occurredAt` is the UTC mutation timestamp sampled while the Record transaction is active. It is not a physical database commit timestamp; the Collection sequence is the authoritative order for delivery. The Event's Collection ID, Record ID, operation, and Applied schema version describe the committed change.
 - Events are emitted for successful Create / Update / Delete operations through Application API, Admin Record management, and Auth Collection Profile Record services. This keeps all interfaces on the same Record semantics.
 - Schema Apply, Access Rule edits, Authentication Configuration, file-only side effects, RequestRecord, and AuditRecord do not create Record Events in this package.
 
@@ -52,9 +52,11 @@ Create stores the committed Record snapshot. Update stores its before and after 
 
 - One subscription observes one Collection. It has no arbitrary search/filter language in V0.1.x; consumers use the existing Records API for query results.
 - A new subscription with no cursor starts at the current sequence head and receives a `stream.ready` frame containing that baseline Event Cursor. Consumers should establish the stream, load current Records, and then apply subsequent Events so that changes concurrent with the initial load are not missed.
-- A subscription with a valid Last-Event-ID resumes strictly after that Event ID. The order of delivered Events follows the Project sequence; hidden Events are skipped, and only visible Events advance the client-visible cursor.
-- The event log retains at most the most recent 10,000 events and 64 MiB of event plus authorization snapshot data, whichever limit is reached first. The Project retains the highest pruned Event ID as a recovery watermark. A cursor at or before that watermark is an explicit recovery condition: the client reloads current Collection Records and opens a fresh stream.
-- A cursor later than the current sequence head or a malformed cursor is a client error. Numeric gaps alone do not imply lost Events; the retained watermark is the authoritative signal that a cursor needs recovery.
+- A resumed subscription immediately flushes an SSE connection comment without an Event ID, then replays strictly after the supplied cursor. The comment establishes the HTTP stream and does not advance the client cursor.
+- A subscription with a valid Last-Event-ID for the requested Collection resumes strictly after that cursor. The order of delivered Events follows that Collection's sequence; hidden Events are skipped, and only visible Events advance the client-visible cursor. A cursor scoped to a different Collection is invalid.
+- The Project event log retains at most the most recent 10,000 events and 64 MiB of event plus authorization snapshot data, whichever limit is reached first. Until a Collection's first prune, no recovery watermark exists for it and its zero cursor remains valid. The Project then retains the highest pruned sequence per Collection as recovery watermarks. A cursor strictly before that Collection's watermark is an explicit recovery condition: the client reloads current Collection Records and opens a fresh stream; a cursor equal to the watermark can safely continue after it. Because the hard storage budget is Project-wide, writes in one Collection can shorten another Collection's replay window; an expiration response reveals only retention pressure and the requested cursor's recovery condition, not another Collection's event identity, type, or value. This bounded retention-pressure side channel is accepted for V0.1.x.
+- A single Event is at most 1 MiB, and one `ReadAfter` replay page is at most 1 MiB of encoded Event and authorization snapshot bytes. Each page checks its cursor against the retention watermark in the same SQLite read snapshot as the Events; if retention advances past an active stream's cursor, the stream closes so its reconnect receives the explicit expired-cursor recovery response. The first Event always fits a page because the per-Event limit is no greater than the page limit. At most eight replay pages are decoded or held for delivery concurrently; the 64 active subscription limit remains bounded independently.
+- A cursor later than the requested Collection's current sequence head or a malformed or differently scoped cursor is a client error. Numeric gaps alone do not imply lost Events; the retained watermark is the authoritative signal that a cursor needs recovery.
 - Realtime is an observation channel. The durable Record API remains the source of current state; clients must handle duplicate delivery idempotently by Event ID and may re-read a Record after receiving its ID.
 
 ## 6. Bounded Lifecycle and Request Observability
@@ -62,7 +64,7 @@ Create stores the committed Record snapshot. Update stores its before and after 
 - Runtime subscription count, per-connection buffered notifications, and write time are bounded. One slow client may lose its stream but cannot wait inside or block a Record transaction. Its next connection resumes from the last Event ID while the cursor remains in the retention window.
 - A disconnected client cancels its subscription promptly. Runtime shutdown closes all live streams within the Runtime shutdown deadline. A client may reconnect after same-Project restart using its last Event ID.
 - SSE heartbeat frames are comments and do not advance the Event cursor or create Record Events.
-- One long-lived SSE HTTP connection creates one redacted RequestRecord. It is persisted before response headers when possible; `X-Request-Record-Persisted` states whether that initial write succeeded. Duration and response-byte count are finalized when the connection ends. No Event frame body or Last-Event-ID is copied into RequestRecord.
+- One long-lived SSE HTTP connection creates one redacted RequestRecord. Its Endpoint uses a route template with Collection parameters redacted. It is persisted before response headers when possible; `X-Request-Record-Persisted` states whether that initial write succeeded. Duration and response-byte count are finalized when the connection ends. No Event frame body, Last-Event-ID, or dynamic path parameter is copied into RequestRecord.
 - `X-Request-Id` identifies the HTTP subscription request. It is not an Event ID or reconnect cursor.
 
 ## 7. Admin API Workspace Discovery
@@ -88,4 +90,5 @@ All visible copy and errors use the shared English / Simplified Chinese i18n res
 - A slow or non-reading HTTP client is bounded and does not block an independent Record mutation.
 - RequestRecord identifies the long-lived HTTP connection, preserves canonical request headers, records safe outcomes, and never stores SSE bodies or credentials.
 - The Collection API Workspace documents the endpoint and its Bearer-compatible JavaScript example.
-- The existing FLOW-001–010 and the WP21 real Runtime / SQLite / HTTP / Admin Chromium acceptance both pass.
+- admin/e2e/realtime-events.spec.ts runs against the real Runtime, SQLite, HTTP API, and Admin browser. It verifies stream discovery in the Collection API Workspace, a committed Record mutation arriving over SSE, current Access Rule filtering without a denied Record ID or value, reconnect from the last successfully applied cursor, same-root Runtime restart, and expired-cursor recovery by reloading current Records.
+- The existing FLOW-001–010 and the focused WP21 Chromium acceptance both pass.

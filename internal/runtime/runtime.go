@@ -22,6 +22,8 @@ import (
 	"github.com/liujingwen1225/modelry/internal/diagnostics"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/project"
+	"github.com/liujingwen1225/modelry/internal/realtimeapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 	"github.com/liujingwen1225/modelry/internal/serviceaccounts"
@@ -43,6 +45,7 @@ type Runtime struct {
 	root           project.Root
 	lock           *project.RuntimeLock
 	store          *storage.Store
+	events         *recordevents.Service
 	version        string
 	databaseHealth string
 	fileHealth     string
@@ -96,7 +99,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Access Rules: %w", err)
 	}
-	recordService, err := records.NewWithLocalFiles(store, backendModel, root.TempFiles, root.Objects, records.WithAuthorization(accessRules, nil))
+	eventService, err := recordevents.NewService(context.Background(), store)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Record Events: %w", err)
+	}
+	recordService, err := records.NewWithLocalFiles(store, backendModel, root.TempFiles, root.Objects, records.WithAuthorization(accessRules, nil), records.WithRecordEvents(eventService))
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Records and Local Files: %w", err)
 	}
@@ -135,6 +142,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		root:           root,
 		lock:           lock,
 		store:          store,
+		events:         eventService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -169,6 +177,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		accesscontrol.NewModule(accessRules),
 		appauth.NewModule(authService),
 		applicationapi.NewModule(backendModel, recordService, applicationapi.WithSessionAuthenticator(authService)),
+		realtimeapi.NewModule(backendModel, eventService, accessRules, authService),
 		recordService,
 		requests.NewModule(requestService),
 		serviceaccounts.NewModule(serviceAccountService),
@@ -260,6 +269,9 @@ func (instance *Runtime) Close() error {
 		instance.closed = true
 		instance.mu.Unlock()
 		var serverErr error
+		if instance.events != nil {
+			instance.events.Close()
+		}
 		if instance.server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
 			serverErr = instance.server.Shutdown(ctx)

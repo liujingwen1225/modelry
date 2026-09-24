@@ -120,13 +120,13 @@ V0.1.x 再进入：
 
 ## Record Events and Realtime
 
-**Record Event**：一个已提交的 Collection Record 创建、更新或删除事实。它属于 Project 的数据变更历史，与 API 请求遥测和管理审计分别建模。
+**Record Event**：一个已提交的 Collection Record 创建、更新或删除事实。它属于 Project 内该 Collection 的数据变更历史，与 API 请求遥测和管理审计分别建模。
 _Avoid_：Audit Event、Request Event、Activity Event
 
-**Event ID**：标识一个 Record Event，并确定它在同一 Project 事件序列中的位置。它可作为该 Event 之后恢复接收的游标值。
+**Event ID**：标识一个 Record Event，并确定它在所属 Collection 事件序列中的位置。ID 使用 `evt_<Collection ID 的 UTF-8 字节之无填充 Base64 URL-safe 编码>_<非零 20 位序号>`，因此在同一 Project 内唯一；它可作为从该 Event 之后恢复接收的游标值。零序号只表示首次订阅的 Event Cursor 边界，不代表 Event。
 _Avoid_：SQLite Row ID、Request ID
 
-**Event Cursor**：标识订阅者从 Project 事件序列继续接收的位置。它通常取最近已接收 Event 的 Event ID；首次订阅时也可表示尚无 Event 的空序列边界。
+**Event Cursor**：标识订阅者从一个 Collection 事件序列继续接收的位置。它通常取最近已接收 Event 的 Event ID；首次订阅时使用独立的 Collection-scoped cursor 表示建立订阅时的序列边界。不同 Collection 之间不承诺一个可观察的全序。
 _Avoid_：Page Cursor、Request ID
 
 **Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event Cursor 继续接收。

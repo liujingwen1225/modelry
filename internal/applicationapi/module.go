@@ -15,6 +15,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 )
@@ -361,6 +362,8 @@ func writeError(w http.ResponseWriter, request *http.Request, err error) {
 	problem := httpapi.APIError{Message: "Application request could not be completed", Details: map[string]any{}}
 	status := http.StatusInternalServerError
 	switch {
+	case errors.Is(err, recordevents.ErrEventTooLarge):
+		status, problem.Code, problem.Message = http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "This Record change exceeds the 1 MiB durable Event limit. Reduce the changed values and retry."
 	case errors.Is(err, errPayloadTooLarge):
 		status, problem.Code, problem.Message = http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Record request body exceeds the 1 MiB limit"
 	case errors.Is(err, errUnsupportedMediaType):

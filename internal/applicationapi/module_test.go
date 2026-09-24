@@ -15,6 +15,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 	"github.com/liujingwen1225/modelry/internal/storage"
@@ -143,7 +144,7 @@ func TestApplicationRecordHTTPCRUDAndDurableSafeRequestRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RequestRecord was not durable: %v", err)
 	}
-	if stored.Endpoint != "/api/v1/posts" || stored.Method != http.MethodPost || stored.Status != http.StatusCreated || stored.CollectionID != stack.collection.ID || stored.AuthenticationOutcome != requests.AuthenticationAnonymous || stored.AuthorizationOutcome != requests.AuthorizationAllowed {
+	if stored.Endpoint != "/api/v1/{collectionName}" || stored.Method != http.MethodPost || stored.Status != http.StatusCreated || stored.CollectionID != stack.collection.ID || stored.AuthenticationOutcome != requests.AuthenticationAnonymous || stored.AuthorizationOutcome != requests.AuthorizationAllowed {
 		t.Fatalf("unexpected safe RequestRecord: %+v", stored)
 	}
 	authenticatedResponse := perform(stack.handler, http.MethodGet, "/api/v1/posts?search=first", "", "", "Bearer valid-test-session")
@@ -154,7 +155,7 @@ func TestApplicationRecordHTTPCRUDAndDurableSafeRequestRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authenticated RequestRecord was not durable: %v", err)
 	}
-	if authenticatedRequest.Endpoint != "/api/v1/posts" || authenticatedRequest.AuthenticationOutcome != requests.AuthenticationAuthenticated || strings.Contains(authenticatedRequest.Endpoint, "search") {
+	if authenticatedRequest.Endpoint != "/api/v1/{collectionName}" || authenticatedRequest.AuthenticationOutcome != requests.AuthenticationAuthenticated || strings.Contains(authenticatedRequest.Endpoint, "search") {
 		t.Fatalf("RequestRecord captured query or missed auth outcome: %+v", authenticatedRequest)
 	}
 	encodedRequest, _ := json.Marshal(authenticatedRequest)
@@ -271,6 +272,26 @@ func TestApplicationPolicyDenialAndMissingEvaluatorFailClosed(t *testing.T) {
 				t.Fatalf("denied request record=%+v err=%v", stored, err)
 			}
 		})
+	}
+}
+
+func TestWriteErrorExplainsDurableEventSizeLimit(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/posts", nil)
+
+	writeError(response, request, recordevents.ErrEventTooLarge)
+
+	var envelope struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if response.Code != http.StatusRequestEntityTooLarge || json.Unmarshal(response.Body.Bytes(), &envelope) != nil {
+		t.Fatalf("oversized Event response = %d %s", response.Code, response.Body.String())
+	}
+	if envelope.Error.Code != "PAYLOAD_TOO_LARGE" || !strings.Contains(envelope.Error.Message, "1 MiB") || !strings.Contains(envelope.Error.Message, "retry") {
+		t.Fatalf("oversized Event error was not actionable: %+v", envelope.Error)
 	}
 }
 

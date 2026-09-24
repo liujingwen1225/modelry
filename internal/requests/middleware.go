@@ -90,10 +90,7 @@ func (service *Service) Middleware(next http.Handler) http.Handler {
 
 		metadata := &requestMetadata{authentication: AuthenticationUnknown, authorization: AuthorizationNotEvaluated}
 		request = request.WithContext(context.WithValue(request.Context(), metadataKey{}, metadata))
-		path := request.URL.EscapedPath()
-		if len(path) == 0 || len(path) > 1024 {
-			path = "/api/v1/{unmatched}"
-		}
+		path := safeEndpoint(request.URL.Path)
 		method := strings.ToUpper(strings.TrimSpace(request.Method))
 		if !methodPattern.MatchString(method) {
 			method = "OTHER"
@@ -122,6 +119,52 @@ func (service *Service) Middleware(next http.Handler) http.Handler {
 
 func isApplicationPath(path string) bool {
 	return path == "/api/v1" || strings.HasPrefix(path, "/api/v1/")
+}
+
+// safeEndpoint 保存路由模板，不持久化调用方提供的动态路径段。
+// Collection、Record、字段和 Session ID 都是路由参数，不能进入耐久遥测。
+func safeEndpoint(path string) string {
+	if path == "/api/v1" {
+		return path
+	}
+	const prefix = "/api/v1/"
+	if !strings.HasPrefix(path, prefix) {
+		return "/api/v1/{unmatched}"
+	}
+	segments := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	for _, segment := range segments {
+		if segment == "" {
+			return "/api/v1/{unmatched}"
+		}
+	}
+
+	if segments[0] == "auth" {
+		if len(segments) == 3 {
+			switch segments[2] {
+			case "register", "login", "session", "logout", "password", "sessions":
+				return "/api/v1/auth/{collectionName}/" + segments[2]
+			}
+		}
+		if len(segments) == 5 && segments[2] == "sessions" && segments[4] == "revoke" {
+			return "/api/v1/auth/{collectionName}/sessions/{sessionId}/revoke"
+		}
+		return "/api/v1/{unmatched}"
+	}
+
+	switch len(segments) {
+	case 1:
+		return "/api/v1/{collectionName}"
+	case 2:
+		if segments[1] == "events" {
+			return "/api/v1/{collectionName}/events"
+		}
+		return "/api/v1/{collectionName}/{recordId}"
+	case 4:
+		if segments[2] == "files" {
+			return "/api/v1/{collectionName}/{recordId}/files/{fieldName}"
+		}
+	}
+	return "/api/v1/{unmatched}"
 }
 
 type recordResponseWriter struct {
@@ -184,15 +227,17 @@ func (writer *recordResponseWriter) Write(body []byte) (int, error) {
 }
 
 func (writer *recordResponseWriter) Flush() {
+	_ = writer.FlushError()
+}
+
+func (writer *recordResponseWriter) FlushError() error {
 	if writer.status == 0 {
 		writer.WriteHeader(http.StatusOK)
 	}
 	if writer.bufferingJSON {
 		writer.beginStreaming()
 	}
-	if flusher, ok := writer.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	return http.NewResponseController(writer.ResponseWriter).Flush()
 }
 
 func (writer *recordResponseWriter) Unwrap() http.ResponseWriter {

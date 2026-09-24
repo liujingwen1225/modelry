@@ -21,7 +21,7 @@ x-modelry-request-record:
   values:
     'true': the redacted RequestRecord was durably written before response headers were committed
     'false': the RequestRecord could not be durably written before response headers were committed
-  streaming: response byte count and duration are finalized after the response body is written
+  streaming: response byte count and duration are finalized after the response closes; an SSE RequestRecord is initially written before response headers
 tags:
   - name: Bootstrap
     description: Read first-run state and establish the initial Owner on a locally authorized Runtime.
@@ -47,6 +47,8 @@ tags:
     description: Create, list, read, update, and delete records through the Application Data Plane.
   - name: ApplicationAuth
     description: Register and authenticate App Users and manage their Application Sessions.
+  - name: Realtime
+    description: Subscribe to authorized, committed Collection Record Events over Server-Sent Events.
 paths:
   '/admin/api/v1/bootstrap/status':
     get:
@@ -593,6 +595,135 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/{collectionName}/events':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    get:
+      tags: [Realtime]
+      operationId: subscribeToCollectionRecordEvents
+      summary: Subscribe to Collection Record Events
+      description: >-
+        Opens a long-lived Server-Sent Events response for one Collection. A supplied Application Session and
+        current Collection-level List admission are revalidated before each Event and at each heartbeat; the
+        current per-Record List rule is enforced for every Event. Without Last-Event-ID, stream.ready establishes
+        a current baseline;
+        with a retained cursor, Events resume strictly after it. A cursor outside the bounded retention window
+        returns EVENT_CURSOR_EXPIRED so the client can reload current Records and open a fresh stream.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/LastEventID'
+      security:
+        - ApplicationSession: []
+        - {}
+      x-modelry-access-rule:
+        operation: list
+        evaluation: collection-on-open-event-and-heartbeat; each-event-record
+        appliedRulesOnly: true
+        reevaluateOnDelivery: true
+      x-modelry-realtime:
+        eventIdFormat: evt_ followed by the Collection ID UTF-8 bytes in unpadded Base64 URL-safe encoding, an underscore, and a nonzero 20-digit zero-padded decimal sequence
+        cursorFormat: cur_ followed by the Collection ID UTF-8 bytes in unpadded Base64 URL-safe encoding, an underscore, and the 20-digit zero-padded Collection sequence position; zero is the empty stream boundary
+        cursorScope: the Collection resolved from collectionName in the request path
+        ordering: Record mutation commit order within the requested Collection; no cross-Collection total order is exposed
+        retention:
+          scope: project
+          maximumEvents: 10000
+          maximumBytes: 67108864
+          maximumSingleEventBytes: 1048576
+          maximumReplayPageBytes: 1048576
+          maximumConcurrentReplayPages: 8
+          crossCollectionRetentionPressure: accepted; events in another Collection may shorten this replay window and reveal retention pressure only
+        heartbeatSeconds: 15
+        maximumConnections: 64
+        writeDeadlineSeconds: 5
+        eventNames: [stream.ready, record.created, record.updated, record.deleted, record.removed]
+      responses:
+        '200':
+          description: >-
+            Long-lived SSE stream. `record.created` and `record.updated` carry an authorized Record snapshot;
+            `record.deleted` and `record.removed` carry only identity and event metadata. SSE comments are heartbeats.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+            Cache-Control:
+              description: Realtime stream responses are not stored by clients or shared caches.
+              schema:
+                const: no-store
+                type: string
+          content:
+            text/event-stream:
+              schema:
+                description: Complete response body encoded as Server-Sent Events text. Each named event's JSON data payload is defined by the matching entry in x-modelry-sse-events.
+                type: string
+              x-modelry-sse-events:
+                stream.ready:
+                  idField: cursor
+                  payload:
+                    $ref: '#/components/schemas/RealtimeStreamReadyEvent'
+                record.created:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordWithSnapshotEvent'
+                record.updated:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordWithSnapshotEvent'
+                record.deleted:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordEvent'
+                record.removed:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordEvent'
+                heartbeat:
+                  frame: comment
+                  id: omitted
+                  payload: none
+              example: |+
+                event: stream.ready
+                id: cur_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000042
+                data: {"cursor":"cur_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000042","collectionId":"col_0123456789abcdef0123456789abcdef"}
+
+                event: record.created
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000043
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000043","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:30:00Z","schemaVersion":3,"record":{"id":"rec_8k1m4p2x","createdAt":"2026-09-25T08:30:00Z","updatedAt":"2026-09-25T08:30:00Z","title":"Hello"}}
+
+                event: record.updated
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000044
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000044","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:31:00Z","schemaVersion":3,"record":{"id":"rec_8k1m4p2x","createdAt":"2026-09-25T08:30:00Z","updatedAt":"2026-09-25T08:31:00Z","title":"Updated"}}
+
+                event: record.deleted
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000045
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000045","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:32:00Z","schemaVersion":3}
+
+                event: record.removed
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000046
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000046","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:33:00Z","schemaVersion":3}
+
+                : heartbeat
+
+
+        '400':
+          $ref: '#/components/responses/ApplicationError'
+        '401':
+          $ref: '#/components/responses/ApplicationError'
+        '403':
+          $ref: '#/components/responses/ApplicationError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '410':
+          $ref: '#/components/responses/ApplicationError'
+        '429':
+          $ref: '#/components/responses/RealtimeCapacityReached'
         '4XX':
           $ref: '#/components/responses/ApplicationError'
         '5XX':
@@ -2048,6 +2179,15 @@ components:
       schema:
         type: string
         minLength: 1
+    LastEventID:
+      name: Last-Event-ID
+      in: header
+      required: false
+      description: >-
+        Resume strictly after this Collection-scoped cursor or Event ID. The Collection ID is encoded as unpadded Base64 URL-safe UTF-8 bytes. A cur_ zero position means before the
+        first Event; omission starts at the current stream baseline.
+      schema:
+        $ref: '#/components/schemas/RealtimeResumePosition'
     SessionId:
       name: sessionId
       in: path
@@ -2148,6 +2288,23 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    RealtimeCapacityReached:
+      description: The Runtime has reached its bounded active Realtime connection limit.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        X-Request-Record-Persisted:
+          $ref: '#/components/headers/RequestRecordPersisted'
+        Retry-After:
+          description: Retry after five seconds.
+          required: true
+          schema:
+            type: string
+            const: '5'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
     Id:
       type: string
@@ -2157,6 +2314,58 @@ components:
       type: string
       pattern: '^req_[A-Za-z0-9_-]{8,}$'
       description: Canonical server-generated ID shared by response header, Error and RequestRecord.
+    RealtimeEventID:
+      type: string
+      pattern: '^evt_[A-Za-z0-9_-]+_(?!0{20}$)[0-9]{20}$'
+      description: Stable Event identity and Collection-scoped order position; the Collection ID is UTF-8 encoded as unpadded Base64 URL-safe text. A nonzero sequence identifies a Record Event. Event IDs are sent only for Events authorized to the subscriber.
+    RealtimeEventCursor:
+      type: string
+      pattern: '^cur_[A-Za-z0-9_-]+_[0-9]{20}$'
+      description: Collection-scoped baseline position emitted by stream.ready; the Collection ID is UTF-8 encoded as unpadded Base64 URL-safe text and a zero sequence is the empty boundary before the first Event.
+    RealtimeResumePosition:
+      description: Last-Event-ID accepts either the current baseline cursor or the most recently received Event ID for the same Collection.
+      oneOf:
+        - $ref: '#/components/schemas/RealtimeEventCursor'
+        - $ref: '#/components/schemas/RealtimeEventID'
+    RealtimeStreamReadyEvent:
+      type: object
+      required: [cursor, collectionId]
+      properties:
+        cursor:
+          $ref: '#/components/schemas/RealtimeEventCursor'
+        collectionId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    RealtimeRecordEventBase:
+      type: object
+      required: [eventId, collectionId, recordId, occurredAt, schemaVersion]
+      properties:
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        recordId:
+          $ref: '#/components/schemas/Id'
+        occurredAt:
+          type: string
+          format: date-time
+          description: UTC mutation timestamp sampled while the Record transaction is active; the Collection Event sequence is authoritative for delivery order.
+        schemaVersion:
+          type: integer
+          minimum: 1
+    RealtimeRecordEvent:
+      allOf:
+        - $ref: '#/components/schemas/RealtimeRecordEventBase'
+      unevaluatedProperties: false
+    RealtimeRecordWithSnapshotEvent:
+      allOf:
+        - $ref: '#/components/schemas/RealtimeRecordEventBase'
+        - type: object
+          required: [record]
+          properties:
+            record:
+              $ref: '#/components/schemas/Record'
+      unevaluatedProperties: false
     ErrorResponse:
       type: object
       required: [error]
@@ -2171,7 +2380,7 @@ components:
       properties:
         code:
           type: string
-          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, INTERNAL_ERROR]
+          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, EVENT_CURSOR_INVALID, EVENT_CURSOR_EXPIRED, STREAM_CAPACITY_REACHED, STREAM_UNAVAILABLE, ACCESS_RULE_UNAVAILABLE, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, INTERNAL_ERROR]
         message:
           type: string
           description: Human-readable message without stack traces, SQL, credentials, sensitive body content, or anonymous diagnostic paths.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -37,6 +38,7 @@ type Service struct {
 	evaluator authorization.Evaluator
 	sessions  authorization.SessionAuthenticator
 	files     *LocalFileStore
+	events    *recordevents.Service
 }
 
 type Option func(*Service)
@@ -45,6 +47,13 @@ func WithAuthorization(evaluator authorization.Evaluator, sessions authorization
 	return func(service *Service) {
 		service.evaluator = evaluator
 		service.sessions = sessions
+	}
+}
+
+// WithRecordEvents enables atomic durable Record Event writes and post-commit notifications.
+func WithRecordEvents(events *recordevents.Service) Option {
+	return func(service *Service) {
+		service.events = events
 	}
 }
 
@@ -211,14 +220,20 @@ func (service *Service) create(ctx context.Context, collectionID string, values 
 	if err != nil {
 		return Record{}, err
 	}
-	now := service.now().UTC().Format(time.RFC3339Nano)
-	record := Record{ID: id, CreatedAt: now, UpdatedAt: now, Values: validated}
+	var record Record
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
-		return createInTransaction(ctx, tx, model, targets, record)
+		occurredAt := service.now().UTC()
+		now := occurredAt.Format(time.RFC3339Nano)
+		record = Record{ID: id, CreatedAt: now, UpdatedAt: now, Values: validated}
+		if err := createInTransaction(ctx, tx, model, targets, record); err != nil {
+			return err
+		}
+		return service.appendRecordEvent(ctx, tx, model, recordevents.Created, Record{}, record, occurredAt)
 	})
 	if err != nil {
 		return Record{}, err
 	}
+	service.PublishRecordEventsCommitted(collectionID)
 	return record, nil
 }
 
@@ -252,9 +267,13 @@ func (service *Service) CreateInTransaction(ctx context.Context, tx storage.Exec
 	if err != nil {
 		return Record{}, err
 	}
-	now := service.now().UTC().Format(time.RFC3339Nano)
+	occurredAt := service.now().UTC()
+	now := occurredAt.Format(time.RFC3339Nano)
 	record := Record{ID: id, CreatedAt: now, UpdatedAt: now, Values: validated}
 	if err := createInTransaction(ctx, tx, model, targets, record); err != nil {
+		return Record{}, err
+	}
+	if err := service.appendRecordEvent(ctx, tx, model, recordevents.Created, Record{}, record, occurredAt); err != nil {
 		return Record{}, err
 	}
 	return record, nil
@@ -333,7 +352,8 @@ func (service *Service) update(ctx context.Context, collectionID, recordID strin
 		if err := validateRelations(ctx, tx, model, validated, targets); err != nil {
 			return err
 		}
-		updated = Record{ID: previous.ID, CreatedAt: previous.CreatedAt, UpdatedAt: service.now().UTC().Format(time.RFC3339Nano), Values: validated}
+		occurredAt := service.now().UTC()
+		updated = Record{ID: previous.ID, CreatedAt: previous.CreatedAt, UpdatedAt: occurredAt.Format(time.RFC3339Nano), Values: validated}
 		statement, args, err := updateStatement(model, updated)
 		if err != nil {
 			return err
@@ -349,8 +369,11 @@ func (service *Service) update(ctx context.Context, collectionID, recordID strin
 		if count != 1 {
 			return fmt.Errorf("%w: Record does not exist", ErrNotFound)
 		}
-		return nil
+		return service.appendRecordEvent(ctx, tx, model, recordevents.Updated, previous, updated, occurredAt)
 	})
+	if err == nil {
+		service.PublishRecordEventsCommitted(collectionID)
+	}
 	return updated, err
 }
 
@@ -370,8 +393,12 @@ func (service *Service) delete(ctx context.Context, collectionID, recordID strin
 	if err != nil {
 		return err
 	}
-	return service.store.WithTransaction(ctx, func(tx storage.Executor) error {
+	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		if err := verifyModel(ctx, tx, model); err != nil {
+			return err
+		}
+		previous, err := getRecord(ctx, tx, model, recordID)
+		if err != nil {
 			return err
 		}
 		if err := ensureNoReferences(ctx, tx, collectionID, recordID, references); err != nil {
@@ -392,8 +419,67 @@ func (service *Service) delete(ctx context.Context, collectionID, recordID strin
 		if count != 1 {
 			return fmt.Errorf("%w: Record does not exist", ErrNotFound)
 		}
-		return nil
+		return service.appendRecordEvent(ctx, tx, model, recordevents.Deleted, previous, Record{}, service.now().UTC())
 	})
+	if err == nil {
+		service.PublishRecordEventsCommitted(collectionID)
+	}
+	return err
+}
+
+func (service *Service) appendRecordEvent(ctx context.Context, tx storage.Executor, model appliedModel, eventType recordevents.Type, before, after Record, occurredAt time.Time) error {
+	if service.events == nil {
+		return nil
+	}
+	var beforeSnapshot, afterSnapshot map[string]any
+	var err error
+	if before.ID != "" {
+		beforeSnapshot, err = recordSnapshot(before)
+		if err != nil {
+			return err
+		}
+	}
+	if after.ID != "" {
+		afterSnapshot, err = recordSnapshot(after)
+		if err != nil {
+			return err
+		}
+	}
+	recordID := after.ID
+	if recordID == "" {
+		recordID = before.ID
+	}
+	return service.events.AppendInTransaction(ctx, tx, recordevents.Mutation{
+		CollectionID:  model.collection.ID,
+		RecordID:      recordID,
+		Type:          eventType,
+		OccurredAt:    occurredAt,
+		SchemaVersion: model.collection.SchemaVersion,
+		Before:        beforeSnapshot,
+		After:         afterSnapshot,
+	})
+}
+
+func recordSnapshot(record Record) (map[string]any, error) {
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return nil, fmt.Errorf("encode Record Event authorization snapshot: %w", err)
+	}
+	var snapshot map[string]any
+	if err := json.Unmarshal(encoded, &snapshot); err != nil {
+		return nil, fmt.Errorf("decode Record Event authorization snapshot: %w", err)
+	}
+	if snapshot == nil {
+		return nil, errors.New("Record Event authorization snapshot is not an object")
+	}
+	return snapshot, nil
+}
+
+// PublishRecordEventsCommitted wakes subscribers after a caller-owned Record transaction commits.
+func (service *Service) PublishRecordEventsCommitted(collectionID string) {
+	if service != nil && service.events != nil {
+		service.events.PublishCommitted(collectionID)
+	}
 }
 
 func newRecordID() (string, error) {

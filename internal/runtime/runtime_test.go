@@ -303,7 +303,7 @@ func TestRuntimeAuthHTTPAndApplicationSessionSurviveRestart(t *testing.T) {
 	}
 	loginRequestDetail := getResponseWithCookie(t, baseURL+"/admin/api/v1/requests/"+login.requestID, "", ownerCookie)
 	if loginRequestDetail.status != http.StatusOK || !strings.Contains(string(loginRequestDetail.body), `"requestId":"`+login.requestID+`"`) ||
-		!strings.Contains(string(loginRequestDetail.body), `"endpoint":"/api/v1/auth/members/login"`) ||
+		!strings.Contains(string(loginRequestDetail.body), `"endpoint":"/api/v1/auth/{collectionName}/login"`) ||
 		!strings.Contains(string(loginRequestDetail.body), `"authenticationOutcome":"authenticated"`) {
 		t.Fatalf("Request Detail did not reflect the canonical durable Application Login: status=%d body=%s", loginRequestDetail.status, loginRequestDetail.body)
 	}
