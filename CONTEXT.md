@@ -126,7 +126,10 @@ _Avoid_：Audit Event、Request Event、Activity Event
 **Event ID**：标识一个 Record Event，并确定它在同一 Project 事件序列中的位置。它也是订阅者恢复接收位置的游标。
 _Avoid_：SQLite Row ID、Request ID
 
-**Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event ID 继续接收。
+**Event Cursor**：标识订阅者从 Project 事件序列继续接收的位置。它通常取最近已接收 Event 的 Event ID；首次订阅时也可表示尚无 Event 的空序列边界。
+_Avoid_：Page Cursor、Request ID
+
+**Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event Cursor 继续接收。
 _Avoid_：Record polling、Activity Timeline
 
 ## Change UX 不变量
