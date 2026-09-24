@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/liujingwen1225/modelry/internal/authorization"
@@ -243,5 +245,157 @@ func TestRelationReferencesValidatedAndTargetDeleteRestricted(t *testing.T) {
 	}
 	if err := records.Delete(ctx, authors.ID, author.ID); err != nil {
 		t.Fatalf("delete unreferenced target Record: %v", err)
+	}
+}
+
+type relationExpandEvaluator struct {
+	denyCollection string
+	failCollection string
+	seen           []string
+}
+
+func (evaluator *relationExpandEvaluator) Evaluate(_ context.Context, collectionID string, operation authorization.Operation, _ authorization.Principal, _ *authorization.Record) (authorization.Decision, error) {
+	evaluator.seen = append(evaluator.seen, collectionID+":"+string(operation))
+	if collectionID == evaluator.failCollection {
+		return authorization.Decision{}, errors.New("invalid applied rule")
+	}
+	if collectionID == evaluator.denyCollection {
+		return authorization.Decision{Code: "POLICY_DENIED"}, nil
+	}
+	return authorization.Decision{Allowed: true}, nil
+}
+
+func TestRelationExpandPreservesIDsAndFailsClosedForApplicationTargets(t *testing.T) {
+	ctx := context.Background()
+	store, models, adminRecords := newTestServices(t)
+	authors, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "authors", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "name", Type: backendmodel.FieldTypeText, Required: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "posts", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{
+			{Name: "title", Type: backendmodel.FieldTypeText, Required: true},
+			{Name: "author", Type: backendmodel.FieldTypeRelation, Relation: &backendmodel.Relation{TargetCollectionID: authors.ID, Cardinality: "many-to-one"}},
+			{Name: "reviewers", Type: backendmodel.FieldTypeRelation, Relation: &backendmodel.Relation{TargetCollectionID: authors.ID, Cardinality: "many-to-many"}},
+			{Name: "singleWriter", Type: backendmodel.FieldTypeRelation, Relation: &backendmodel.Relation{TargetCollectionID: authors.ID, Cardinality: "one-to-one"}},
+			{Name: "collaborators", Type: backendmodel.FieldTypeRelation, Relation: &backendmodel.Relation{TargetCollectionID: authors.ID, Cardinality: "one-to-many"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := adminRecords.Create(ctx, authors.ID, map[string]any{"name": "Ada Lovelace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grace, err := adminRecords.Create(ctx, authors.ID, map[string]any{"name": "Grace Hopper"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	post, err := adminRecords.Create(ctx, posts.ID, map[string]any{
+		"title": "Compiler", "author": ada.ID, "reviewers": []any{ada.ID, grace.ID},
+		"singleWriter": ada.ID, "collaborators": []any{grace.ID, ada.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plain, err := adminRecords.Get(ctx, posts.ID, post.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plainJSON, err := json.Marshal(plain)
+	if err != nil || strings.Contains(string(plainJSON), "_expand") {
+		t.Fatalf("default Record response changed: %s err=%v", plainJSON, err)
+	}
+	expanded, err := adminRecords.GetExpanded(ctx, posts.ID, post.ID, []string{"author", "reviewers", "singleWriter", "collaborators"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expanded.Values["author"] != ada.ID {
+		t.Fatalf("raw Relation ID changed: %#v", expanded.Values["author"])
+	}
+	author, ok := expanded.Expanded["author"].(Record)
+	if !ok || author.ID != ada.ID || author.Values["name"] != "Ada Lovelace" {
+		t.Fatalf("to-one expand = %#v", expanded.Expanded["author"])
+	}
+	reviewers, ok := expanded.Expanded["reviewers"].([]Record)
+	if !ok || len(reviewers) != 2 || reviewers[0].ID != ada.ID || reviewers[1].ID != grace.ID {
+		t.Fatalf("to-many expand = %#v", expanded.Expanded["reviewers"])
+	}
+	if writer, ok := expanded.Expanded["singleWriter"].(Record); !ok || writer.ID != ada.ID {
+		t.Fatalf("one-to-one expand = %#v", expanded.Expanded["singleWriter"])
+	}
+	collaborators, ok := expanded.Expanded["collaborators"].([]Record)
+	if !ok || len(collaborators) != 2 || collaborators[0].ID != grace.ID || collaborators[1].ID != ada.ID {
+		t.Fatalf("one-to-many expand = %#v", expanded.Expanded["collaborators"])
+	}
+	encoded, err := json.Marshal(expanded)
+	if err != nil || !strings.Contains(string(encoded), `"_expand"`) || !strings.Contains(string(encoded), ada.ID) {
+		t.Fatalf("expanded Record JSON = %s err=%v", encoded, err)
+	}
+	if _, err := adminRecords.GetExpanded(ctx, posts.ID, post.ID, []string{"title"}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("non-Relation expand error = %v", err)
+	}
+	if _, err := adminRecords.GetExpanded(ctx, posts.ID, post.ID, []string{"missing"}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("unknown expand Field error = %v", err)
+	}
+	if _, err := ParseExpandQuery(url.Values{"expand": {"author,author"}}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("repeated expand field error = %v", err)
+	}
+
+	principal := authorization.Principal{Type: authorization.PrincipalApplication, ID: "usr_test"}
+	allowedEvaluator := &relationExpandEvaluator{}
+	appAllowed, err := New(store, models, WithAuthorization(allowedEvaluator, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	appExpanded, err := appAllowed.GetApplicationExpanded(ctx, posts.ID, post.ID, principal, []string{"author"})
+	if err != nil || appExpanded.Expanded["author"].(Record).ID != ada.ID {
+		t.Fatalf("allowed Application expand=%#v err=%v", appExpanded.Expanded, err)
+	}
+	if len(allowedEvaluator.seen) != 2 || allowedEvaluator.seen[0] != posts.ID+":"+string(authorization.OperationView) || allowedEvaluator.seen[1] != authors.ID+":"+string(authorization.OperationView) {
+		t.Fatalf("View Rules were not re-evaluated for source and target: %#v", allowedEvaluator.seen)
+	}
+
+	for _, evaluator := range []*relationExpandEvaluator{{denyCollection: authors.ID}, {failCollection: authors.ID}} {
+		appRestricted, err := New(store, models, WithAuthorization(evaluator, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := appRestricted.GetApplicationExpanded(ctx, posts.ID, post.ID, principal, []string{"author"})
+		if err != nil {
+			t.Fatalf("restricted target must not fail the source read: %v", err)
+		}
+		if result.Values["author"] != ada.ID || len(result.Expanded) != 0 {
+			t.Fatalf("inaccessible target leaked or changed its raw ID: values=%#v expand=%#v", result.Values, result.Expanded)
+		}
+		body, err := json.Marshal(result)
+		if err != nil || strings.Contains(string(body), "Ada Lovelace") {
+			t.Fatalf("inaccessible target appeared in response %s err=%v", body, err)
+		}
+	}
+
+	targetModel, err := models.GetRecordProjection(ctx, authors.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quoted, err := storage.QuoteSQLiteIdentifier(targetModel.TableName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithTransaction(ctx, func(tx storage.Executor) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM `+quoted+` WHERE "id" = ?`, ada.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := adminRecords.GetExpanded(ctx, posts.ID, post.ID, []string{"author"})
+	if err != nil || len(missing.Expanded) != 0 {
+		t.Fatalf("missing target should be omitted safely: expanded=%#v err=%v", missing.Expanded, err)
 	}
 }

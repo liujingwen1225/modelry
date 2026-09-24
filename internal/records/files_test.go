@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,6 +130,101 @@ func TestLocalFileUploadBindReplaceAndOrphanReconciliation(t *testing.T) {
 	}
 }
 
+func TestRenameToUnusedObjectPreservesExistingImmutableObject(t *testing.T) {
+	root := t.TempDir()
+	objectsDir := filepath.Join(root, "objects")
+	if err := os.Mkdir(objectsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tempPath := filepath.Join(root, "upload")
+	if err := os.WriteFile(tempPath, []byte("new upload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	collisionPath := filepath.Join(objectsDir, "obj_collision")
+	if err := os.WriteFile(collisionPath, []byte("durable object"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keys := []string{"obj_collision", "obj_unused"}
+	keyIndex := 0
+	key, err := renameToUnusedObject(tempPath, objectsDir, func() (string, error) {
+		result := keys[keyIndex]
+		keyIndex++
+		return result, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != "obj_unused" {
+		t.Fatalf("selected object key=%q", key)
+	}
+	oldContents, err := os.ReadFile(collisionPath)
+	if err != nil || string(oldContents) != "durable object" {
+		t.Fatalf("existing immutable object changed: %q err=%v", oldContents, err)
+	}
+	newContents, err := os.ReadFile(filepath.Join(objectsDir, key))
+	if err != nil || string(newContents) != "new upload" {
+		t.Fatalf("renamed upload=%q err=%v", newContents, err)
+	}
+	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("successful atomic rename retained source: %v", err)
+	}
+}
+
+func TestActiveUploadSurvivesReconciliationAndMissingReferencedObjectIsActionable(t *testing.T) {
+	ctx := context.Background()
+	store, models, _ := newTestServices(t)
+	root := t.TempDir()
+	tempDir := filepath.Join(root, "tmp")
+	objectsDir := filepath.Join(root, "objects")
+	if err := os.Mkdir(tempDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(objectsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fileRecords, err := NewWithLocalFiles(store, models, tempDir, objectsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "assets", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText, Required: true}, {Name: "attachment", Type: backendmodel.FieldTypeFile}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := FilePolicy{MaxBytes: 64, AllowedMIMETypes: []string{"text/plain"}}
+	upload, err := fileRecords.UploadFile(ctx, collection.ID, "attachment", bytes.NewBufferString("durable attachment"), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tempPath := filepath.Join(tempDir, upload.TemporaryID)
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(tempPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := fileRecords.ReconcileFiles(ctx, time.Minute); err != nil {
+		t.Fatalf("reconcile active upload: %v", err)
+	}
+	if _, err := os.Stat(tempPath); err != nil {
+		t.Fatalf("active staged upload was removed: %v", err)
+	}
+	record, err := fileRecords.Create(ctx, collection.ID, map[string]any{"title": "report", "attachment": upload.TemporaryID})
+	if err != nil {
+		t.Fatalf("bind upload after reconciliation: %v", err)
+	}
+	objectKey := record.Values["attachment"].(string)
+	if err := os.Remove(filepath.Join(objectsDir, objectKey)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fileRecords.OpenFile(ctx, collection.ID, record.ID, "attachment"); !errors.Is(err, ErrFileNotFound) {
+		t.Fatalf("missing object read error = %v", err)
+	}
+	if err := fileRecords.ReconcileFiles(ctx, time.Minute); !errors.Is(err, ErrFileNotFound) || !strings.Contains(err.Error(), "referenced object is missing") {
+		t.Fatalf("missing durable object did not produce an actionable reconciliation error: %v", err)
+	}
+}
+
 func TestLocalFileUploadEnforcesSizeAndDetectedMIME(t *testing.T) {
 	ctx := context.Background()
 	store, models, _ := newTestServices(t)
@@ -193,6 +289,12 @@ func TestAdminFileHTTPUploadBindAndDownload(t *testing.T) {
 	mux := http.NewServeMux()
 	records.RegisterRoutes(mux)
 	path := "/admin/api/v1/collections/" + collection.ID
+
+	expandListResponse := httptest.NewRecorder()
+	mux.ServeHTTP(expandListResponse, httptest.NewRequest(http.MethodGet, path+"/records?expand=author", nil))
+	if expandListResponse.Code != http.StatusBadRequest || !strings.Contains(expandListResponse.Body.String(), `"code":"INVALID_ARGUMENT"`) {
+		t.Fatalf("Admin List must reject expand: status=%d body=%s", expandListResponse.Code, expandListResponse.Body.String())
+	}
 
 	uploadRequest := httptest.NewRequest(http.MethodPost, path+"/files?fieldName=file", bytes.NewBufferString("route upload"))
 	uploadResponse := httptest.NewRecorder()

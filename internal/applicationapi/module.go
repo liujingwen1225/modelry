@@ -135,7 +135,12 @@ func (module *Module) handleGet(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	requests.MarkCollection(request.Context(), collection.ID)
-	record, err := module.records.GetApplication(request.Context(), collection.ID, request.PathValue("recordId"), principal)
+	expands, err := records.ParseExpandQuery(request.URL.Query())
+	if err != nil {
+		writeError(w, request, err)
+		return
+	}
+	record, err := module.records.GetApplicationExpanded(request.Context(), collection.ID, request.PathValue("recordId"), principal, expands)
 	if err != nil {
 		markAuthorization(request, err)
 		writeError(w, request, err)

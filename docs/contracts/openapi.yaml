@@ -370,6 +370,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/CollectionId'
         - $ref: '#/components/parameters/RecordId'
+        - $ref: '#/components/parameters/Expand'
       responses:
         '200':
           description: Successful response.
@@ -609,6 +610,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/CollectionName'
         - $ref: '#/components/parameters/RecordId'
+        - $ref: '#/components/parameters/Expand'
       security:
         - ApplicationSession: []
         - {}
@@ -2112,6 +2114,19 @@ components:
       description: Comma-separated field keys with optional asc or desc; no SQL expressions.
       schema:
         type: string
+    Expand:
+      name: expand
+      in: query
+      required: false
+      description: >-
+        Comma-separated Applied Relation Field names for one-level expansion on a single Record read.
+        Supports at most 10 fields and 100 target Records per field. The original Relation IDs remain
+        in the Record fields. Application reads re-evaluate each target Collection View Access Rule;
+        a Relation is omitted from _expand if the target is missing or any target is not visible.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 639
   responses:
     StructuredError:
       description: Structured error response with the canonical request ID.
@@ -2441,6 +2456,30 @@ components:
       additionalProperties: false
     Record:
       type: object
+      required: [id, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        _expand:
+          type: object
+          description: Optional one-level Relation expansion. It never replaces the source Relation IDs.
+          additionalProperties:
+            oneOf:
+              - $ref: '#/components/schemas/ExpandedRecord'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/ExpandedRecord'
+              - type: 'null'
+      additionalProperties: true
+    ExpandedRecord:
+      type: object
+      description: Related Record fields without recursive _expand data.
       required: [id, createdAt, updatedAt]
       properties:
         id:

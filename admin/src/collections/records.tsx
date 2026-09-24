@@ -124,6 +124,7 @@ export function CollectionRecordsPage() {
   const sort = searchParams.get('sort') ?? 'createdAt desc';
   const rawColumns = searchParams.get('columns');
   const fields = collection.fields.filter((field) => !field.system);
+  const expandFields = fields.filter((field) => field.type === 'relation').slice(0, 10).map((field) => field.name);
   const visibleColumns = useMemo(() => {
     if (rawColumns !== null) return rawColumns.split(',').filter((name) => name === 'id' || name === 'createdAt' || name === 'updatedAt' || fields.some((field) => field.name === name));
     return ['id', ...fields.slice(0, 2).map((field) => field.name), 'updatedAt'];
@@ -171,7 +172,7 @@ export function CollectionRecordsPage() {
     const controller = new AbortController();
     setRecordState('loading');
     setRecordError(undefined);
-    void getRecord(collection.id, selectedId, controller.signal).then((record) => {
+    void getRecord(collection.id, selectedId, controller.signal, expandFields).then((record) => {
       if (controller.signal.aborted) return;
       setSelectedRecord(record);
       setRecordState('ready');
@@ -181,7 +182,7 @@ export function CollectionRecordsPage() {
       setRecordState('error');
     });
     return () => controller.abort();
-  }, [collection.id, selectedId]);
+  }, [collection.id, selectedId, expandFields.join(',')]);
 
   function updateParams(patch: Record<string, string | undefined>, resetPaging = false) {
     const next = new URLSearchParams(searchParams);
@@ -348,7 +349,7 @@ export function CollectionRecordsPage() {
         {isCreating && <RecordEditor collection={collection} fields={fields} key={`new-${collection.id}`} onCancel={closeSheet} onDelete={onRecordDeleted} onSaved={onRecordSaved} />}
         {!isCreating && selectedId && recordState === 'loading' && <LoadingState label="Loading record" />}
         {!isCreating && selectedId && recordState === 'error' && (() => { const copy = errorCopy(recordError, 'This record could not be opened.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => openRecord(selectedId, isEditing)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
-        {!isCreating && selectedId && recordState === 'ready' && activeRecord && <RecordEditor collection={collection} fields={fields} key={`${activeRecord.id}-${isEditing ? 'edit' : 'view'}`} mode={isEditing ? 'edit' : 'view'} onCancel={closeSheet} onDelete={onRecordDeleted} onEdit={() => openRecord(activeRecord.id, true)} onSaved={onRecordSaved} record={activeRecord} />}
+        {!isCreating && selectedId && recordState === 'ready' && activeRecord && <RecordEditor collection={collection} expandedFields={expandFields} fields={fields} key={`${activeRecord.id}-${isEditing ? 'edit' : 'view'}`} mode={isEditing ? 'edit' : 'view'} onCancel={closeSheet} onDelete={onRecordDeleted} onEdit={() => openRecord(activeRecord.id, true)} onSaved={onRecordSaved} record={activeRecord} />}
       </Sheet>
       <Dialog open={Boolean(rowDeleteTarget)} onClose={() => { if (!rowDeleting) { setRowDeleteTarget(undefined); setRowDeleteError(undefined); } }} title="Delete this record?">
         <p>This permanently removes record <code>{rowDeleteTarget?.id}</code> from {collection.name}.</p>
@@ -382,9 +383,30 @@ function fileRules(field: FieldDefinition) {
   return { maxBytes, allowed };
 }
 
-function RecordEditor({ collection, fields, record, mode = 'create', onCancel, onEdit, onSaved, onDelete }: {
+function expandedRelationCopy(record: CollectionRecord, fieldName: string, requestedFields: string[]) {
+  if (!requestedFields.includes(fieldName)) return '';
+  const expand = isRecord(record._expand) ? record._expand : undefined;
+  if (!expand || !Object.prototype.hasOwnProperty.call(expand, fieldName)) {
+    return record[fieldName] === undefined || record[fieldName] === null ? '' : 'Target unavailable or not visible.';
+  }
+  const value = expand[fieldName];
+  if (value === null) return 'No related record.';
+  const targets = Array.isArray(value) ? value : [value];
+  if (!targets.length) return 'No related records.';
+  return targets.map((target) => {
+    if (!isRecord(target)) return '';
+    const summary = Object.entries(target)
+      .filter(([name]) => !['id', 'createdAt', 'updatedAt'].includes(name))
+      .map(([name, targetValue]) => `${name}: ${formatValue(targetValue)}`)
+      .join(' · ');
+    return summary || String(target.id ?? 'Related record');
+  }).filter(Boolean).join(' · ');
+}
+
+function RecordEditor({ collection, fields, record, expandedFields = [], mode = 'create', onCancel, onEdit, onSaved, onDelete }: {
   collection: Collection;
   fields: FieldDefinition[];
+  expandedFields?: string[];
   record?: CollectionRecord;
   mode?: 'create' | 'view' | 'edit';
   onCancel: () => void;
@@ -526,7 +548,7 @@ function RecordEditor({ collection, fields, record, mode = 'create', onCancel, o
       {mode === 'view' && record ? <>
         <div className="record-detail-identity"><span>Record ID</span><code>{record.id}</code><span><Clock3 aria-hidden="true" size={13} /> Updated {displayDate(record.updatedAt)}</span></div>
         <dl className="record-detail-values">{fields.map((field) => <div key={field.name}><dt>{field.name}</dt><dd>
-          {field.type === 'file' && record[field.name] ? <><span>File attached</span><Button onClick={() => void download(field)} size="small" variant="quiet"><Download aria-hidden="true" size={13} />Download</Button></> : <span>{formatValue(record[field.name])}</span>}
+          {field.type === 'file' && record[field.name] ? <><span>File attached</span><Button onClick={() => void download(field)} size="small" variant="quiet"><Download aria-hidden="true" size={13} />Download</Button></> : <><span>{formatValue(record[field.name])}</span>{field.type === 'relation' && expandedRelationCopy(record, field.name, expandedFields) && <small className="record-relation-expand">Related: {expandedRelationCopy(record, field.name, expandedFields)}</small>}</>}
         </dd></div>)}</dl>
         {recordErrorCopy(formCopy)}
         {confirmDelete && <div className="record-delete-confirm" role="alert"><strong>Delete this record?</strong><span>This removes the durable record. You can’t undo this action.</span><div><Button disabled={deleting} onClick={() => setConfirmDelete(false)} size="small">Cancel</Button><Button disabled={deleting} onClick={() => void remove()} size="small" variant="danger">{deleting ? 'Deleting…' : 'Delete record'}</Button></div></div>}

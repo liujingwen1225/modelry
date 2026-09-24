@@ -126,6 +126,10 @@ func (service *Service) ListApplication(ctx context.Context, collectionID string
 }
 
 func (service *Service) GetApplication(ctx context.Context, collectionID, recordID string, principal authorization.Principal) (Record, error) {
+	return service.GetApplicationExpanded(ctx, collectionID, recordID, principal, nil)
+}
+
+func (service *Service) GetApplicationExpanded(ctx context.Context, collectionID, recordID string, principal authorization.Principal, expands []string) (Record, error) {
 	record, err := service.Get(ctx, collectionID, recordID)
 	if err != nil {
 		return Record{}, err
@@ -133,7 +137,9 @@ func (service *Service) GetApplication(ctx context.Context, collectionID, record
 	if err := service.authorize(ctx, collectionID, authorization.OperationView, principal, authorizedRecord(record)); err != nil {
 		return Record{}, err
 	}
-	return record, nil
+	return service.expandRecord(ctx, collectionID, record, expands, func(targetCollectionID string, target Record) error {
+		return service.authorize(ctx, targetCollectionID, authorization.OperationView, principal, authorizedRecord(target))
+	})
 }
 
 func (service *Service) OpenFileApplication(ctx context.Context, collectionID, recordID, fieldName string, principal authorization.Principal) (io.ReadCloser, FileInfo, error) {

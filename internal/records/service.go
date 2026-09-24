@@ -68,6 +68,7 @@ type Record struct {
 	CreatedAt string         `json:"-"`
 	UpdatedAt string         `json:"-"`
 	Values    map[string]any `json:"-"`
+	Expanded  map[string]any `json:"-"`
 }
 
 func (record Record) MarshalJSON() ([]byte, error) {
@@ -80,6 +81,9 @@ func (record Record) MarshalJSON() ([]byte, error) {
 			continue
 		}
 		result[name] = value
+	}
+	if record.Expanded != nil {
+		result["_expand"] = record.Expanded
 	}
 	return json.Marshal(result)
 }

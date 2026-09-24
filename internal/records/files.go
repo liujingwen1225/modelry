@@ -380,26 +380,37 @@ func (files *LocalFileStore) bind(temporaryID string) (string, error) {
 	if _, exists := files.staged[temporaryID]; !exists {
 		return "", ErrNotFound
 	}
-	objectKey, err := newOpaqueKey("obj_")
-	if err != nil {
-		return "", err
-	}
 	tempPath := filepath.Join(files.tempDir, temporaryID)
-	objectPath := filepath.Join(files.objectsDir, objectKey)
 	info, err := os.Lstat(tempPath)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 		return "", fmt.Errorf("%w: temporary upload is no longer available", ErrFileNotFound)
 	}
-	// 同一文件系统内创建硬链接是原子操作；若不可变目标已存在，操作会失败。
-	if err := os.Link(tempPath, objectPath); err != nil {
-		return "", fmt.Errorf("bind temporary upload to immutable object: %w", err)
-	}
-	if err := os.Remove(tempPath); err != nil {
-		_ = os.Remove(objectPath)
-		return "", fmt.Errorf("remove bound temporary upload: %w", err)
+	objectKey, err := renameToUnusedObject(tempPath, files.objectsDir, func() (string, error) {
+		return newOpaqueKey("obj_")
+	})
+	if err != nil {
+		return "", err
 	}
 	delete(files.staged, temporaryID)
 	return objectKey, nil
+}
+
+func renameToUnusedObject(tempPath, objectsDir string, newKey func() (string, error)) (string, error) {
+	for attempt := 0; attempt < 8; attempt++ {
+		objectKey, err := newKey()
+		if err != nil {
+			return "", err
+		}
+		objectPath := filepath.Join(objectsDir, objectKey)
+		if err := renameNoReplace(tempPath, objectPath); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				continue
+			}
+			return "", fmt.Errorf("atomically bind temporary upload to immutable object: %w", err)
+		}
+		return objectKey, nil
+	}
+	return "", fmt.Errorf("generate unused immutable object key: too many collisions")
 }
 
 func (files *LocalFileStore) openObject(objectKey string) (*os.File, error) {

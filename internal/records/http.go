@@ -42,6 +42,10 @@ func (service *Service) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (service *Service) handleList(w http.ResponseWriter, r *http.Request) {
+	if _, requested := r.URL.Query()["expand"]; requested {
+		writeRecordError(w, r, fmt.Errorf("%w: expand is only supported for single Record reads", ErrInvalidArgument))
+		return
+	}
 	options, err := parseQueryValues(r.URL.Query())
 	if err != nil {
 		writeRecordError(w, r, err)
@@ -56,7 +60,12 @@ func (service *Service) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (service *Service) handleGet(w http.ResponseWriter, r *http.Request) {
-	record, err := service.Get(r.Context(), r.PathValue("collectionId"), r.PathValue("recordId"))
+	expands, err := ParseExpandQuery(r.URL.Query())
+	if err != nil {
+		writeRecordError(w, r, err)
+		return
+	}
+	record, err := service.GetExpanded(r.Context(), r.PathValue("collectionId"), r.PathValue("recordId"), expands)
 	if err != nil {
 		writeRecordError(w, r, err)
 		return

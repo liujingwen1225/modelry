@@ -183,6 +183,30 @@ func TestApplicationRecordHTTPCRUDAndDurableSafeRequestRecord(t *testing.T) {
 	}
 }
 
+func TestApplicationRecordDetailRejectsUnsupportedExpandFieldsAndQueries(t *testing.T) {
+	evaluator := &testEvaluator{allowed: true}
+	principal := authorization.Principal{Type: authorization.PrincipalApplication, ID: "prf_0123456789abcdef0123456789abcdef"}
+	stack := newTestStack(t, backendmodel.CreateCollectionInput{
+		Name: "posts", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText}},
+	}, evaluator, testSessions{principal: principal}, false)
+	record, err := stack.records.Create(context.Background(), stack.collection.ID, map[string]any{"title": "first"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"/api/v1/posts/" + record.ID + "?expand=title",
+		"/api/v1/posts/" + record.ID + "?expand=missing",
+		"/api/v1/posts/" + record.ID + "?unsupported=true",
+		"/api/v1/posts/" + record.ID + "?expand=title&expand=title",
+	} {
+		response := perform(stack.handler, http.MethodGet, path, "", "", "Bearer valid-test-session")
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"INVALID_ARGUMENT"`) {
+			t.Errorf("detail query %q status=%d body=%s", path, response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestApplicationRejectsInvalidBearerWithoutAnonymousFallback(t *testing.T) {
 	evaluator := &testEvaluator{allowed: true}
 	stack := newTestStack(t, backendmodel.CreateCollectionInput{

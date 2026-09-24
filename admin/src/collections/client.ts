@@ -220,8 +220,11 @@ export async function listRecords(collectionId: string, options: RecordListOptio
   return { data: data.data as CollectionRecord[], ...(typeof data.nextCursor === 'string' ? { nextCursor: data.nextCursor } : {}) };
 }
 
-export async function getRecord(collectionId: string, recordId: string, signal?: AbortSignal): Promise<CollectionRecord> {
-  return unwrap<CollectionRecord>(await request(`/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records/${encodeURIComponent(recordId)}`, { method: 'GET', signal }));
+export async function getRecord(collectionId: string, recordId: string, signal?: AbortSignal, expands: string[] = []): Promise<CollectionRecord> {
+	const search = new URLSearchParams();
+	if (expands.length) search.set('expand', expands.join(','));
+	const suffix = search.size ? `?${search.toString()}` : '';
+	return unwrap<CollectionRecord>(await request(`/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records/${encodeURIComponent(recordId)}${suffix}`, { method: 'GET', signal }));
 }
 
 export async function createRecord(collectionId: string, values: Record<string, unknown>, signal?: AbortSignal): Promise<CollectionRecord> {

@@ -338,8 +338,9 @@
 .record-detail-values { display: grid; gap: 0; margin: 0; }
 .record-detail-values > div { display: grid; grid-template-columns: minmax(95px, .35fr) minmax(0, 1fr); gap: 10px; border-bottom: 1px solid var(--color-border); padding: 9px 0; }
 .record-detail-values dt { color: var(--color-ink-muted); font-size: 9px; font-weight: 650; }
-.record-detail-values dd { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: var(--color-ink-secondary); font-size: 9px; overflow-wrap: anywhere; }
+.record-detail-values dd { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: var(--color-ink-secondary); font-size: 9px; overflow-wrap: anywhere; flex-wrap: wrap; }
 .record-detail-values dd .button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; }
+.record-detail-values dd .record-relation-expand { flex-basis: 100%; color: var(--color-ink-muted); font-size: 8px; }
 .record-delete-confirm { display: grid; gap: 5px; border: 1px solid color-mix(in srgb, var(--color-danger) 25%, var(--color-border)); border-radius: 9px; background: var(--color-danger-soft); padding: 10px; }
 .record-delete-confirm strong { color: var(--color-danger); font-size: 10px; }
 .record-delete-confirm > span { color: var(--color-ink-secondary); font-size: 8px; }

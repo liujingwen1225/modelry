@@ -17,6 +17,7 @@ const ownerEmail = 'owner@example.test';
 const ownerPassword = 'Very-Strong-Owner-Password-42!';
 const appEmail = 'author@example.test';
 const appPassword = 'Valid-App-Password-42!';
+const wrongAppPassword = 'Wrong-App-Password-42!';
 const sharedCategory = 'same-category';
 
 let runtimeDirectory = '';
@@ -338,6 +339,9 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
   let usersId = '';
   let appUserRecordId = '';
   let appSession = '';
+  let wrongLoginRequestId = '';
+  let successfulLoginRequestId = '';
+  let successfulLoginSession = '';
   let deniedRequestId = '';
   let attachmentRequestId = '';
   let changeSetId = '';
@@ -470,6 +474,72 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByText('Record deleted.', { exact: true })).toBeVisible();
     await expect(activePage.getByRole('row').filter({ hasText: 'delete-target' })).toHaveCount(0);
 
+    for (let index = 0; index < 26; index++) {
+      const suffix = String(index).padStart(3, '0');
+      const created = await requestJSON(activePage, 'POST', `/admin/api/v1/collections/${postsId}/records`, {
+        values: { title: `page-record-${suffix}`, category: `browse-${suffix}` },
+      });
+      expect(created.status, `Create pagination fixture ${suffix}`).toBe(201);
+    }
+    await activePage.reload();
+    await activePage.getByLabel('Filter field').selectOption('category');
+    await activePage.getByLabel('Filter operator').selectOption('contains');
+    await activePage.getByLabel('Filter value').fill('browse-');
+    await activePage.getByLabel('Search records').fill('page-record');
+    await activePage.getByLabel('Sort field').selectOption('title');
+    await activePage.getByLabel('Sort direction').selectOption('asc');
+    await expect(activePage.locator('.records-table tbody tr')).toHaveCount(25);
+    await expect(activePage.locator('.records-table tbody tr').first()).toContainText('page-record-000');
+    const nextPage = activePage.getByRole('button', { name: 'Next', exact: true });
+    await expect(nextPage).toBeEnabled();
+    await nextPage.click();
+    await expect(activePage.locator('.records-table tbody tr')).toHaveCount(1);
+    const lastPageRow = activePage.locator('.records-table tbody tr').first();
+    await expect(lastPageRow).toContainText('page-record-025');
+    const previousPage = activePage.getByRole('button', { name: 'Previous', exact: true });
+    await expect(previousPage).toBeEnabled();
+    await previousPage.click();
+    await expect(activePage.locator('.records-table tbody tr')).toHaveCount(25);
+    await expect(activePage.locator('.records-table tbody tr').first()).toContainText('page-record-000');
+    await nextPage.click();
+    await expect(activePage.locator('.records-table tbody tr')).toHaveCount(1);
+    await expect(activePage.locator('.records-table tbody tr').first()).toContainText('page-record-025');
+    const contextURL = new URL(activePage.url());
+    expect(contextURL.searchParams.get('search')).toBe('page-record');
+    expect(contextURL.searchParams.get('filter')).toBe('category contains "browse-"');
+    expect(contextURL.searchParams.get('sort')).toBe('title asc');
+    expect(contextURL.searchParams.get('cursor')).toBeTruthy();
+    expect(contextURL.searchParams.get('cursorStack')).toBeTruthy();
+    const deepLinkRecordId = await lastPageRow.locator('button').first().textContent();
+    expect(deepLinkRecordId).toMatch(/^rec_/);
+    await lastPageRow.getByRole('button').filter({ hasText: 'page-record-025' }).click();
+    const detailURL = activePage.url();
+    expect(new URL(detailURL).searchParams.get('record')).toBe(deepLinkRecordId);
+    await activePage.goto(detailURL);
+    await expect(activePage.locator('.record-detail-identity code')).toHaveText(deepLinkRecordId!);
+    await expect(activePage.locator('.record-detail-values').getByText('page-record-025', { exact: true })).toBeVisible();
+    await activePage.reload();
+    await expect(activePage.locator('.record-detail-identity code')).toHaveText(deepLinkRecordId!);
+    await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Edit', exact: true }).click();
+    const editURL = new URL(activePage.url());
+    expect(editURL.searchParams.get('record')).toBe(deepLinkRecordId);
+    expect(editURL.searchParams.get('edit')).toBe('1');
+    expect(editURL.searchParams.get('search')).toBe('page-record');
+    expect(editURL.searchParams.get('filter')).toBe('category contains "browse-"');
+    expect(editURL.searchParams.get('sort')).toBe('title asc');
+    await expect(activePage.getByLabel('title · Required')).toHaveValue('page-record-025');
+    await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(activePage.locator('.records-table tbody tr')).toHaveCount(1);
+    await lastPageRow.getByRole('button').filter({ hasText: 'page-record-025' }).click();
+    await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
+    const returnedURL = new URL(activePage.url());
+    expect(returnedURL.searchParams.get('record')).toBeNull();
+    expect(returnedURL.searchParams.get('search')).toBe('page-record');
+    expect(returnedURL.searchParams.get('filter')).toBe('category contains "browse-"');
+    expect(returnedURL.searchParams.get('sort')).toBe('title asc');
+    expect(returnedURL.searchParams.get('cursor')).toBe(contextURL.searchParams.get('cursor'));
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}`);
+
     const listed = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/records/${firstPostId}`);
     expect(listed.status).toBe(200);
     expect(JSON.stringify(listed.body)).toContain('post-a-updated');
@@ -532,6 +602,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(appliedIndexRows.first()).toContainText('Applied');
 
     await activePage.getByRole('link', { name: 'Records', exact: true }).click();
+    await activePage.getByLabel('Search records').fill('post-a-updated');
     await activePage.getByRole('row').filter({ hasText: 'post-a-updated' }).getByRole('button', { name: 'Edit', exact: true }).click();
     await activePage.locator('#record-field-author').fill(authorRecordId);
     await activePage.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -539,6 +610,8 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
 
     await activePage.getByRole('row').filter({ hasText: 'post-a-updated' }).getByRole('button').filter({ hasText: 'post-a-updated' }).click();
+    await expect(activePage.locator('.record-detail-values')).toContainText(authorRecordId);
+    await expect(activePage.locator('.record-detail-values')).toContainText('Related: name: Ada Lovelace');
     await downloadAttachment(activePage, fileContents);
     await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
     const collection = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}`)).body);
@@ -558,6 +631,26 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByText('Record saved. The durable result is shown here.')).toBeVisible();
     await expect(activePage.getByText(appEmail, { exact: true }).first()).toBeVisible();
     expect(await activePage.locator('body').innerText()).not.toContain(appPassword);
+    appUserRecordId = (await activePage.locator('.record-detail-identity code').textContent()) ?? '';
+    expect(appUserRecordId).toMatch(/^rec_/);
+    const appUserRecord = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${usersId}/records/${appUserRecordId}`);
+    expect(appUserRecord.status).toBe(200);
+    expect(JSON.stringify(appUserRecord.body)).not.toContain(appPassword);
+    expect(JSON.stringify(appUserRecord.body)).not.toContain('accessToken');
+
+    const wrongLogin = await requestJSON(activePage, 'POST', '/api/v1/auth/users/login', { email: appEmail, password: wrongAppPassword }, undefined, 'omit', [401]);
+    expect(wrongLogin.status).toBe(401);
+    expect(JSON.stringify(wrongLogin.body)).not.toContain('accessToken');
+    expect(JSON.stringify(wrongLogin.body)).not.toContain(wrongAppPassword);
+    wrongLoginRequestId = wrongLogin.requestId ?? '';
+    expect(wrongLoginRequestId).toMatch(/^req_/);
+    const sessionWithoutToken = await requestJSON(activePage, 'GET', '/api/v1/auth/users/session', undefined, undefined, 'omit', [401]);
+    expect(sessionWithoutToken.status).toBe(401);
+    const wrongLoginDetail = await requestJSON(activePage, 'GET', `/admin/api/v1/requests/${wrongLoginRequestId}`);
+    expect(wrongLoginDetail.status).toBe(200);
+    expect(JSON.stringify(wrongLoginDetail.body)).not.toContain(appPassword);
+    expect(JSON.stringify(wrongLoginDetail.body)).not.toContain(wrongAppPassword);
+    expect(JSON.stringify(wrongLoginDetail.body)).not.toContain('accessToken');
 
     const loginURL = `${runtimeURL}/api?collection=${encodeURIComponent(usersId)}&endpoint=loginApplicationUser`;
     await activePage.goto(loginURL);
@@ -567,9 +660,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Send POST request' }).click();
     const loginResponse = await loginResponsePromise;
     expect(loginResponse.status()).toBe(200);
+    successfulLoginRequestId = loginResponse.headers()['x-request-id'] ?? '';
+    expect(successfulLoginRequestId).toMatch(/^req_/);
     const loginBody = await loginResponse.json() as unknown;
     appSession = findString(loginBody, 'accessToken') ?? '';
     expect(appSession).toMatch(/^app_/);
+    successfulLoginSession = appSession;
     expect(await activePage.locator('body').innerText()).not.toContain(appSession);
     const appSessionCheck = await requestJSON(activePage, 'GET', '/api/v1/auth/users/session', undefined, appSession, 'omit');
     expect(appSessionCheck.status).toBe(200);
@@ -593,6 +689,16 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(renewedLogin.status).toBe(200);
     appSession = findString(renewedLogin.body, 'accessToken') ?? '';
     expect(appSession).toMatch(/^app_/);
+    const renewedLoginRequestId = renewedLogin.requestId ?? '';
+    expect(renewedLoginRequestId).toMatch(/^req_/);
+    for (const requestId of [successfulLoginRequestId, renewedLoginRequestId]) {
+      const loginRequestDetail = await requestJSON(activePage, 'GET', `/admin/api/v1/requests/${requestId}`);
+      expect(loginRequestDetail.status).toBe(200);
+      expect(JSON.stringify(loginRequestDetail.body)).not.toContain(appPassword);
+      expect(JSON.stringify(loginRequestDetail.body)).not.toContain(appSession);
+      expect(JSON.stringify(loginRequestDetail.body)).not.toContain(successfulLoginSession);
+      expect(JSON.stringify(loginRequestDetail.body)).not.toContain('accessToken');
+    }
   });
 
   await test.step('FLOW-006 — Apply independent Access Rules and verify fail-closed HTTP behavior', async () => {
@@ -616,6 +722,39 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect([401, 403]).toContain(anonymousView.status);
     const signedInView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit');
     expect(signedInView.status).toBe(200);
+
+    const applyCollectionViewRule = async (collectionID: string, mode: string) => {
+      await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionID)}/security`);
+      await activePage.getByRole('button', { name: 'Edit View access' }).click();
+      await activePage.getByLabel(mode).check();
+      await activePage.getByRole('button', { name: 'Save pending rule' }).click();
+      await activePage.getByRole('button', { name: /Apply 1 change/ }).click();
+      await activePage.getByRole('button', { name: 'Confirm & apply' }).click();
+      await expect(activePage.getByText('All access rule changes are applied.')).toBeVisible();
+    };
+
+    await applyCollectionViewRule(authorsId, 'Anyone');
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/security`);
+    const visibleRelation = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}?expand=author`, undefined, appSession, 'omit');
+    expect(visibleRelation.status).toBe(200);
+    const visibleRelationRecord = unwrap(visibleRelation.body) as { author: string; _expand?: { author?: { id?: string; name?: string } } };
+    expect(visibleRelationRecord.author).toBe(authorRecordId);
+    expect(visibleRelationRecord._expand?.author).toMatchObject({ id: authorRecordId, name: 'Ada Lovelace' });
+    const listExpand = await requestJSON(activePage, 'GET', '/api/v1/posts?expand=author', undefined, appSession, 'omit', [400]);
+    expect(listExpand.status).toBe(400);
+    const adminListExpand = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/records?expand=author`, undefined, undefined, 'include', [400]);
+    expect(adminListExpand.status).toBe(400);
+
+    await applyCollectionViewRule(authorsId, 'No access');
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/security`);
+    const hiddenRelation = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}?expand=author`, undefined, appSession, 'omit');
+    expect(hiddenRelation.status).toBe(200);
+    const hiddenRelationRecord = unwrap(hiddenRelation.body) as { author: string; _expand?: unknown };
+    expect(hiddenRelationRecord.author).toBe(authorRecordId);
+    expect(hiddenRelationRecord._expand).toBeUndefined();
+    expect(JSON.stringify(hiddenRelation.body)).not.toContain('Ada Lovelace');
+    await applyCollectionViewRule(authorsId, 'Anyone');
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/security`);
 
     const applyViewRule = async (mode: string, configure?: () => Promise<void>) => {
       await activePage.getByRole('button', { name: 'Edit View access' }).click();
@@ -754,7 +893,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const keyRead = await requestJSON(activePage, 'GET', '/admin/api/v1/collections', undefined, revokedAPIKey, 'omit');
     expect(keyRead.status).toBe(200);
     const postsSummary = responseItems(keyRead.body).find((item) => findString(item, 'id') === postsId) as Record<string, unknown> | undefined;
-    expect(postsSummary?.recordCount).toBe(2);
+    expect(postsSummary?.recordCount).toBe(28);
     expect(postsSummary?.pendingChangeStatus).toBeUndefined();
     const httpRecords = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/records?limit=100`, undefined, revokedAPIKey, 'omit');
     expect(httpRecords.status).toBe(200);
@@ -838,6 +977,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(categoryField?.unique ?? false).toBe(false);
 
     await activePage.getByRole('link', { name: 'Records', exact: true }).click();
+    await activePage.getByLabel('Search records').fill('post-b');
     await activePage.getByRole('row').filter({ hasText: 'post-b' }).getByRole('button', { name: 'Edit', exact: true }).click();
     await activePage.locator('#record-field-category').fill('different-category');
     await activePage.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -902,9 +1042,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(durableSchemaHistory.status).toBe(200);
     expect(JSON.stringify(durableSchemaHistory.body)).toContain(changeSetId);
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}`);
+    await activePage.getByLabel('Search records').fill('post-');
     await expect(activePage.getByRole('row').filter({ hasText: 'post-a-updated' })).toBeVisible();
     await expect(activePage.getByRole('row').filter({ hasText: 'post-b' })).toBeVisible();
     await activePage.getByRole('row').filter({ hasText: 'post-a-updated' }).getByRole('button').filter({ hasText: 'post-a-updated' }).click();
+    await expect(activePage.locator('.record-detail-values')).toContainText(authorRecordId);
+    await expect(activePage.locator('.record-detail-values')).toContainText('Related: name: Ada Lovelace');
     await downloadAttachment(activePage, fileContents);
     await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
 
