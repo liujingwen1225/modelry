@@ -52,6 +52,7 @@ type RequestRecord struct {
 	Method                string    `json:"method"`
 	Status                int       `json:"status"`
 	DurationMS            int64     `json:"durationMs"`
+	ResponseSizeBytes     *int64    `json:"responseSizeBytes,omitempty"`
 	AuthenticationOutcome string    `json:"authenticationOutcome,omitempty"`
 	AuthorizationOutcome  string    `json:"authorizationOutcome,omitempty"`
 	ErrorCode             string    `json:"errorCode,omitempty"`
@@ -86,11 +87,15 @@ func NewService(ctx context.Context, store transactionalStore) (*Service, error)
 			method TEXT NOT NULL,
 			status INTEGER NOT NULL CHECK (status BETWEEN 100 AND 599),
 			duration_ms INTEGER NOT NULL CHECK (duration_ms >= 0),
+			response_size_bytes INTEGER CHECK (response_size_bytes >= 0),
 			authentication_outcome TEXT NOT NULL,
 			authorization_outcome TEXT NOT NULL,
 			error_code TEXT NOT NULL
 		)`); err != nil {
 			return fmt.Errorf("create RequestRecord table: %w", err)
+		}
+		if err := ensureResponseSizeColumn(ctx, tx); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS modelry_request_records_by_time ON modelry_request_records (occurred_unix_nano DESC, request_id DESC)`); err != nil {
 			return fmt.Errorf("create RequestRecord time index: %w", err)
@@ -103,6 +108,40 @@ func NewService(ctx context.Context, store transactionalStore) (*Service, error)
 	return service, nil
 }
 
+func ensureResponseSizeColumn(ctx context.Context, tx storage.Executor) error {
+	rows, err := tx.QueryContext(ctx, `PRAGMA table_info(modelry_request_records)`)
+	if err != nil {
+		return fmt.Errorf("inspect RequestRecord columns: %w", err)
+	}
+	exists := false
+	for rows.Next() {
+		var index, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&index, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan RequestRecord column: %w", err)
+		}
+		if name == "response_size_bytes" {
+			exists = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("finish inspecting RequestRecord columns: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close RequestRecord column inspection: %w", err)
+	}
+	if exists {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE modelry_request_records ADD COLUMN response_size_bytes INTEGER CHECK (response_size_bytes >= 0)`); err != nil {
+		return fmt.Errorf("add RequestRecord response size: %w", err)
+	}
+	return nil
+}
+
 func (service *Service) Append(ctx context.Context, record RequestRecord) error {
 	if err := validateRequestRecord(record); err != nil {
 		return err
@@ -110,10 +149,10 @@ func (service *Service) Append(ctx context.Context, record RequestRecord) error 
 	when := record.Time.UTC()
 	_, err := service.storeExec(ctx, `INSERT INTO modelry_request_records (
 		request_id, occurred_at, occurred_unix_nano, collection_id, endpoint, method, status,
-		duration_ms, authentication_outcome, authorization_outcome, error_code
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		duration_ms, response_size_bytes, authentication_outcome, authorization_outcome, error_code
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.RequestID, when.Format(time.RFC3339Nano), when.UnixNano(), record.CollectionID,
-		record.Endpoint, record.Method, record.Status, record.DurationMS,
+		record.Endpoint, record.Method, record.Status, record.DurationMS, nullableInt64(record.ResponseSizeBytes),
 		record.AuthenticationOutcome, record.AuthorizationOutcome, record.ErrorCode)
 	if err != nil {
 		return fmt.Errorf("%w: append RequestRecord: %v", ErrStorage, err)
@@ -121,14 +160,14 @@ func (service *Service) Append(ctx context.Context, record RequestRecord) error 
 	return nil
 }
 
-// UpdateDuration 更新流式响应在首字节写出后补齐的请求耗时。
-func (service *Service) UpdateDuration(ctx context.Context, requestID string, durationMS int64) error {
-	if !requestIDPattern.MatchString(requestID) || durationMS < 0 {
+// UpdateResponseMetrics 更新流式响应完成后的请求耗时和响应大小。
+func (service *Service) UpdateResponseMetrics(ctx context.Context, requestID string, durationMS, responseSizeBytes int64) error {
+	if !requestIDPattern.MatchString(requestID) || durationMS < 0 || responseSizeBytes < 0 {
 		return ErrInvalidArgument
 	}
-	result, err := service.storeExec(ctx, `UPDATE modelry_request_records SET duration_ms = ? WHERE request_id = ?`, durationMS, requestID)
+	result, err := service.storeExec(ctx, `UPDATE modelry_request_records SET duration_ms = ?, response_size_bytes = ? WHERE request_id = ?`, durationMS, responseSizeBytes, requestID)
 	if err != nil {
-		return fmt.Errorf("%w: update RequestRecord duration: %v", ErrStorage, err)
+		return fmt.Errorf("%w: update RequestRecord response metrics: %v", ErrStorage, err)
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
@@ -138,6 +177,13 @@ func (service *Service) UpdateDuration(ctx context.Context, requestID string, du
 		return ErrNotFound
 	}
 	return nil
+}
+
+func nullableInt64(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func (service *Service) storeExec(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -157,6 +203,7 @@ func validateRequestRecord(record RequestRecord) error {
 		record.Status < 100 || record.Status > 599 || record.DurationMS < 0 ||
 		len(record.CollectionID) > 128 || !validAuthenticationOutcome(record.AuthenticationOutcome) ||
 		!validAuthorizationOutcome(record.AuthorizationOutcome) ||
+		(record.ResponseSizeBytes != nil && *record.ResponseSizeBytes < 0) ||
 		(record.ErrorCode != "" && !errorCodePattern.MatchString(record.ErrorCode)) {
 		return ErrInvalidArgument
 	}

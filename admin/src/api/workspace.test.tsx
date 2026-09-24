@@ -27,6 +27,10 @@ const collection: Collection = {
     { id: 'fld_body', name: 'body', type: 'text' },
   ],
 };
+const fileCollection: Collection = {
+  ...collection,
+  fields: [...collection.fields, { id: 'fld_attachment', name: 'attachment', type: 'file' }],
+};
 const authCollection: Collection = {
   id: 'col_members', name: 'members', type: 'Auth', schemaVersion: 1,
   fields: [{ id: 'fld_email', name: 'email', type: 'text', required: true }],
@@ -34,7 +38,13 @@ const authCollection: Collection = {
 const requestRecord = {
   requestId: 'req_12345678', time: '2026-09-24T10:00:00Z', collectionId: 'col_posts',
   endpoint: '/api/v1/posts/rec_abc', method: 'GET', status: 403, durationMs: 18,
+  responseSizeBytes: 46,
   authenticationOutcome: 'anonymous', authorizationOutcome: 'denied', errorCode: 'FORBIDDEN',
+};
+const fileRequestRecord = {
+  ...requestRecord,
+  requestId: 'req_file_123456', endpoint: '/api/v1/posts/rec_abc/files/attachment', status: 200,
+  authenticationOutcome: 'authenticated', authorizationOutcome: 'allowed', errorCode: undefined,
 };
 
 function CurrentLocation() {
@@ -42,8 +52,8 @@ function CurrentLocation() {
   return <output data-testid="current-location">{location.pathname}{location.search}</output>;
 }
 
-function renderCollectionAPI(type: 'Normal' | 'Auth' = 'Normal') {
-  const value = type === 'Auth' ? authCollection : collection;
+function renderCollectionAPI(type: 'Normal' | 'Auth' = 'Normal', collectionOverride?: Collection) {
+  const value = collectionOverride ?? (type === 'Auth' ? authCollection : collection);
   return render(<MemoryRouter initialEntries={[`/collections/${value.id}/api`]}><Routes>
     <Route element={<><CurrentLocation /><Outlet context={{ collection: value, pendingChange: null, refreshCollection: vi.fn(), refreshPendingChange: vi.fn() }} /></>} path="/collections/:collectionId">
       <Route element={<CollectionAPIPage />} path="api" />
@@ -67,11 +77,13 @@ describe('API Workspace', () => {
 
     expect(await screen.findByRole('heading', { name: 'posts API' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /List records/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Read a file attachment/ })).not.toBeInTheDocument();
     expect(screen.getByText('title')).toBeInTheDocument();
     expect(screen.getByText('v3 · 2 fields')).toBeInTheDocument();
     await userEvent.click(screen.getByText('View OpenAPI'));
     expect(screen.getAllByText(/listApplicationRecords/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/"title"/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/X-Request-Record-Persisted/)).toBeInTheDocument();
   });
 
   it('does not expose generic Auth Collection writes and discovers canonical Auth routes', async () => {
@@ -83,6 +95,30 @@ describe('API Workspace', () => {
     expect(screen.queryByRole('button', { name: /Update a record/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Register an App User/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Log in an App User/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Read a file attachment/ })).not.toBeInTheDocument();
+  });
+
+  it('discovers file reads only for Applied File Fields and uses the view Access Rule in OpenAPI and Runner', async () => {
+    const user = userEvent.setup();
+    mocks.getAccessRules.mockResolvedValueOnce({ applied: [{ operation: 'view', mode: 'signedInUsers' }], pending: [], version: 2 });
+    mocks.runApplicationRequest.mockResolvedValueOnce({ status: 200, durationMs: 8, requestId: 'req_file_123456', requestRecordPersisted: true, textResponseHidden: true });
+    renderCollectionAPI('Normal', fileCollection);
+
+    await user.click(await screen.findByRole('button', { name: /Read a file attachment/ }));
+    expect(await screen.findByText('Signed-in users')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Record ID'), 'rec_123');
+    await user.selectOptions(screen.getByLabelText('File field'), 'attachment');
+    await user.click(screen.getByText('View OpenAPI'));
+    expect(screen.getAllByText(/readApplicationRecordFile/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/"\*\/\*"/)).toBeInTheDocument();
+    expect(screen.getByText(/X-Request-Record-Persisted/)).toBeInTheDocument();
+    expect(screen.getByText(/"x-modelry-access-rule"/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('App Session token (optional)'), 'session-example');
+    await user.click(screen.getByRole('button', { name: 'Send GET request' }));
+    await waitFor(() => expect(mocks.runApplicationRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'GET', path: '/api/v1/posts/rec_123/files/attachment', accept: '*/*', applicationSession: 'session-example',
+    })));
   });
 
   it('sends a real Application request and only links to detail after durable persistence is confirmed', async () => {
@@ -144,7 +180,20 @@ describe('API Workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
     expect(screen.getByText('FORBIDDEN')).toBeInTheDocument();
     expect(screen.getByText('denied')).toBeInTheDocument();
+    expect(screen.getByText('46 bytes')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/api?tab=requests');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=getApplicationRecord');
+  });
+
+  it('preserves file endpoint context in Request Detail links', async () => {
+    mocks.getRequestRecord.mockResolvedValue(fileRequestRecord);
+    mocks.listAllCollections.mockResolvedValue([fileCollection]);
+    render(<MemoryRouter initialEntries={['/requests/req_file_123456']}><Routes>
+      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
+    </Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
+    expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=readApplicationRecordFile');
   });
 });

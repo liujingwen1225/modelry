@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,7 +77,7 @@ func PersistBeforeResponse(ctx context.Context, status int, errorCode string) bo
 	return persist(status, errorCode)
 }
 
-// Middleware 记录所有 Application API 请求；它只保存路径和有限 outcome，不读取请求 Body、Header 或 Query。
+// Middleware 记录所有 Application API 请求；它只保存安全路径、有限 outcome 和响应字节数，不读取请求 Body、Header 或 Query。
 func (service *Service) Middleware(next http.Handler) http.Handler {
 	if next == nil {
 		next = http.NotFoundHandler()
@@ -133,9 +134,9 @@ type recordResponseWriter struct {
 	status              int
 	buffer              bytes.Buffer
 	bufferingJSON       bool
-	streaming           bool
 	committed           bool
 	finished            bool
+	responseBytes       int64
 	persisted           bool
 	persistAttempted    bool
 	persistBeforeCommit bool
@@ -177,7 +178,9 @@ func (writer *recordResponseWriter) Write(body []byte) (int, error) {
 		}
 		writer.beginStreaming()
 	}
-	return writer.ResponseWriter.Write(body)
+	written, err := writer.ResponseWriter.Write(body)
+	writer.responseBytes += int64(written)
+	return written, err
 }
 
 func (writer *recordResponseWriter) Flush() {
@@ -201,12 +204,14 @@ func (writer *recordResponseWriter) beginStreaming() {
 		return
 	}
 	writer.bufferingJSON = false
-	writer.streaming = true
-	writer.Header().Add("Trailer", PersistedHeader)
+	writer.persistBeforeCommit = true
+	writer.persist(writer.status, "")
+	writer.Header().Set(PersistedHeader, writer.persistedValue())
 	writer.ResponseWriter.WriteHeader(writer.status)
 	writer.committed = true
 	if writer.buffer.Len() != 0 {
-		_, _ = writer.ResponseWriter.Write(writer.buffer.Bytes())
+		written, _ := writer.ResponseWriter.Write(writer.buffer.Bytes())
+		writer.responseBytes += int64(written)
 		writer.buffer.Reset()
 	}
 }
@@ -224,6 +229,7 @@ func (writer *recordResponseWriter) finish() {
 		if writer.status >= 400 {
 			errorCode = errorCodeFromJSON(writer.buffer.Bytes())
 		}
+		writer.record.ResponseSizeBytes = responseSize(int64(writer.buffer.Len()))
 		writer.persist(writer.status, errorCode)
 		writer.Header().Set(PersistedHeader, writer.persistedValue())
 		writer.ResponseWriter.WriteHeader(writer.status)
@@ -233,20 +239,8 @@ func (writer *recordResponseWriter) finish() {
 		}
 		return
 	}
-	if !writer.committed {
-		writer.persist(writer.status, "")
-		writer.Header().Set(PersistedHeader, writer.persistedValue())
-		writer.ResponseWriter.WriteHeader(writer.status)
-		writer.committed = true
-		return
-	}
-	if writer.streaming {
-		if writer.persistBeforeCommit {
-			writer.updateDuration()
-		} else {
-			writer.persist(writer.status, "")
-			writer.Header().Set(PersistedHeader, writer.persistedValue())
-		}
+	if writer.persistBeforeCommit {
+		writer.updateResponseMetrics()
 	}
 }
 
@@ -255,6 +249,9 @@ func (writer *recordResponseWriter) persistBeforeResponse(status int, errorCode 
 		return false
 	}
 	writer.persistBeforeCommit = true
+	if size, err := strconv.ParseInt(strings.TrimSpace(writer.Header().Get("Content-Length")), 10, 64); err == nil && size >= 0 {
+		writer.record.ResponseSizeBytes = responseSize(size)
+	}
 	writer.persist(status, errorCode)
 	return writer.persisted
 }
@@ -271,6 +268,9 @@ func (writer *recordResponseWriter) persist(status int, errorCode string) {
 	writer.record.AuthorizationOutcome = metadata.authorization
 	metadata.mu.Unlock()
 	writer.record.Status = status
+	if writer.record.ResponseSizeBytes == nil && !writer.persistBeforeCommit {
+		writer.record.ResponseSizeBytes = responseSize(writer.responseBytes)
+	}
 	writer.record.DurationMS = time.Since(writer.startedAt).Milliseconds()
 	if writer.record.DurationMS < 0 {
 		writer.record.DurationMS = 0
@@ -283,15 +283,17 @@ func (writer *recordResponseWriter) persist(status int, errorCode string) {
 	writer.persisted = writer.service.Append(ctx, writer.record) == nil
 }
 
-func (writer *recordResponseWriter) updateDuration() {
+func (writer *recordResponseWriter) updateResponseMetrics() {
 	duration := time.Since(writer.startedAt).Milliseconds()
 	if duration < 0 {
 		duration = 0
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(writer.request.Context()), recordWriteTimeout)
 	defer cancel()
-	_ = writer.service.UpdateDuration(ctx, writer.record.RequestID, duration)
+	_ = writer.service.UpdateResponseMetrics(ctx, writer.record.RequestID, duration, writer.responseBytes)
 }
+
+func responseSize(size int64) *int64 { return &size }
 
 func (writer *recordResponseWriter) persistedValue() string {
 	if writer.persisted {

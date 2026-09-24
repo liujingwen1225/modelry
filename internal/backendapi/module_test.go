@@ -96,6 +96,50 @@ func TestCollectionAndSchemaHTTPFlowUsesDurableBackendModel(t *testing.T) {
 	}
 }
 
+func TestCollectionListRedactsRecordAndSchemaSummariesWithoutTheirPermissions(t *testing.T) {
+	store, err := storage.Open(filepath.Join(t.TempDir(), "modelry.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	service, err := backendmodel.NewService(t.Context(), store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection, err := service.CreateCollection(t.Context(), backendmodel.CreateCollectionInput{
+		Name: "posts", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SaveOperation(t.Context(), collection.ID, backendmodel.PendingOperationInput{
+		Kind: backendmodel.OperationField, Action: backendmodel.OperationAdd,
+		Definition: json.RawMessage(`{"name":"summary","type":"text"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := httpapi.NewHandler(nil, nil, httpapi.NewAPIRouter(NewModule(service)))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/api/v1/collections", nil))
+	var envelope struct {
+		Data []map[string]json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || len(envelope.Data) != 1 {
+		t.Fatalf("list Collections = %d %s", response.Code, response.Body.String())
+	}
+	item := envelope.Data[0]
+	if _, exists := item["recordCount"]; exists {
+		t.Fatal("Collection summary exposed Record count without records.read")
+	}
+	if _, exists := item["pendingChangeStatus"]; exists {
+		t.Fatal("Collection summary exposed Change status without schema.read")
+	}
+}
+
 func TestCollectionHTTPRejectsUnsupportedBodyAndKeepsStructuredRequestID(t *testing.T) {
 	store, err := storage.Open(filepath.Join(t.TempDir(), "modelry.sqlite"))
 	if err != nil {

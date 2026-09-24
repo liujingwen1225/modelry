@@ -8,6 +8,7 @@ export type RequestRecord = {
   method: string;
   status: number;
   durationMs: number;
+  responseSizeBytes?: number;
   authenticationOutcome?: string;
   authorizationOutcome?: string;
   errorCode?: string;
@@ -19,6 +20,7 @@ export type RequestRecordQuery = { limit?: number; cursor?: string; search?: str
 export type ApplicationRunInput = {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;
+  accept?: string;
   body?: string;
   applicationSession?: string;
   signal?: AbortSignal;
@@ -113,7 +115,7 @@ function errorFromBody(value: unknown, requestId?: string): ApplicationRunResult
 
 export async function runApplicationRequest(input: ApplicationRunInput): Promise<ApplicationRunResult> {
   const path = validateApplicationPath(input.path);
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: input.accept ?? 'application/json' };
   if (input.applicationSession) headers.Authorization = `Bearer ${input.applicationSession}`;
   if (input.body !== undefined) headers['Content-Type'] = 'application/json';
 

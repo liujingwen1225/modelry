@@ -213,7 +213,6 @@ func (module *Module) handleFileRead(w http.ResponseWriter, request *http.Reques
 	}
 	defer file.Close()
 	requests.MarkAuthorization(request.Context(), requests.AuthorizationAllowed)
-	requests.PersistBeforeResponse(request.Context(), http.StatusOK, "")
 	contentType := info.ContentType
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -228,6 +227,7 @@ func (module *Module) handleFileRead(w http.ResponseWriter, request *http.Reques
 	w.Header().Set("Content-Disposition", "attachment")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, no-store")
+	requests.PersistBeforeResponse(request.Context(), http.StatusOK, "")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, file)
 }

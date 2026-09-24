@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, FileStack, Plus, RefreshCw, Search, Shield, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, Plus, RefreshCw, Search, Shield, SlidersHorizontal } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
-import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
+import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionSummary, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
 import './collections.css';
 import type { CollectionWorkspaceContext } from './workspace-context';
 
@@ -61,7 +61,7 @@ function PageTitle({ eyebrow, title, description, action }: {
 
 export function CollectionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [items, setItems] = useState<Collection[]>([]);
+  const [items, setItems] = useState<CollectionSummary[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<unknown>();
   const [reloadKey, setReloadKey] = useState(0);
@@ -162,26 +162,45 @@ export function CollectionsPage() {
   );
 }
 
-function CollectionCard({ collection }: { collection: Collection }) {
+function CollectionCard({ collection }: { collection: CollectionSummary }) {
   return (
     <Link className="collection-card" to={`/collections/${encodeURIComponent(collection.id)}`}>
       <div className="collection-card__top"><span className="collection-card__icon"><Database aria-hidden="true" size={18} /></span><StatusChip state={collection.type}>{collection.type}</StatusChip></div>
       <h2>{collection.name}</h2>
       <p className="collection-card__description">{collection.description || 'No description'}</p>
-      <div className="collection-card__meta"><span><FileStack aria-hidden="true" size={14} />{collection.fields.length} {collection.fields.length === 1 ? 'field' : 'fields'}</span><span>Model v{collection.schemaVersion ?? 1}</span></div>
+      <div className="collection-card__meta">
+        <span>{collectionCount(collection.recordCount, 'record')}</span>
+        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field')}</span>
+        <CollectionChangeIndicator status={collection.pendingChangeStatus} />
+      </div>
       <span className="collection-card__open">Open workspace <ArrowRight aria-hidden="true" size={14} /></span>
     </Link>
   );
 }
 
-function CollectionListItem({ collection }: { collection: Collection }) {
+function CollectionListItem({ collection }: { collection: CollectionSummary }) {
   return <Link className="collection-list__item" role="listitem" to={`/collections/${encodeURIComponent(collection.id)}`}>
     <span className="collection-list__icon"><Database aria-hidden="true" size={17} /></span>
     <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || 'No description'}</span></span>
     <StatusChip state={collection.type}>{collection.type}</StatusChip>
-    <span className="collection-list__meta">{collection.fields.length} fields · Model v{collection.schemaVersion ?? 1}</span>
+    <span className="collection-list__meta">
+      {collectionCount(collection.recordCount, 'record')} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field')}
+      <CollectionChangeIndicator status={collection.pendingChangeStatus} />
+    </span>
     <ArrowRight aria-hidden="true" className="collection-list__arrow" size={15} />
   </Link>;
+}
+
+function collectionCount(count: number | undefined, noun: 'record' | 'field') {
+  if (typeof count !== 'number') return `— ${noun}s`;
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+function CollectionChangeIndicator({ status }: { status?: CollectionSummary['pendingChangeStatus'] }) {
+  if (!status) return null;
+  const label = status === 'failed' ? 'Failed change' : status === 'needsReview' ? 'Review needed' : 'Pending change';
+  const tone = status === 'failed' ? 'failed' : status === 'needsReview' ? 'needs-review' : 'pending';
+  return <span className={`collection-change collection-change--${tone}`}>{label}</span>;
 }
 
 function authDefaults(): AuthenticationConfiguration {
@@ -365,7 +384,7 @@ export function CreateCollectionPage() {
         </Surface>
 
         {type === 'Auth' && <Surface className="collection-create-section auth-initial-settings" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">AUTHENTICATION</p><h2>Sign-in defaults</h2><p>Email is the required, unique identifier. Passwords are credentials, not profile fields.</p></div></div>
+          <div className="collection-section-heading"><div><p className="eyebrow">AUTHENTICATION</p><h2>Sign-in defaults</h2><p>Email is the required, unique identifier. Passwords are stored separately from profile fields.</p></div></div>
           <div className="auth-default-grid">
             <label className="auth-default-row"><span><strong>Email + password</strong><small>Sign-in method for this Auth Collection.</small></span><span className="auth-default-control"><input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />Enabled</span></label>
             <label className="auth-default-row"><span><strong>Allow users to sign up</strong><small>When enabled, users can register through the Application API.</small></span><input aria-label="Allow users to sign up" checked={authentication.selfRegistration} onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" /></label>

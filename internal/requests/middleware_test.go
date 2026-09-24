@@ -58,6 +58,9 @@ func TestApplicationMiddlewarePersistsOnlyRedactedRequestMetadata(t *testing.T) 
 		created.AuthenticationOutcome != AuthenticationAuthenticated || created.AuthorizationOutcome != AuthorizationAllowed || created.Time.IsZero() {
 		t.Fatalf("persisted RequestRecord = %+v", created)
 	}
+	if created.ResponseSizeBytes == nil || *created.ResponseSizeBytes != int64(writeResponse.Body.Len()) {
+		t.Fatalf("persisted response size = %v, want %d bytes", created.ResponseSizeBytes, writeResponse.Body.Len())
+	}
 	encoded, err := json.Marshal(created)
 	if err != nil {
 		t.Fatal(err)
@@ -105,4 +108,72 @@ func TestApplicationMiddlewareDoesNotClaimMissingDurableDetail(t *testing.T) {
 	if _, err := service.Get(t.Context(), response.Header().Get("X-Request-Id")); err == nil || err == ErrNotFound {
 		t.Fatalf("Request ID was presented as a durable detail after storage failure: %v", err)
 	}
+}
+
+func TestApplicationStreamingResponsesPersistBeforeHeadersCommit(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		body        []byte
+	}{
+		{
+			name:        "large JSON",
+			contentType: "application/json",
+			body:        []byte(`{"data":"` + strings.Repeat("x", maximumBufferedJSON) + `"}`),
+		},
+		{
+			name:        "text stream",
+			contentType: "text/plain",
+			body:        []byte("streamed response"),
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			store, err := storage.Open(filepath.Join(t.TempDir(), "project.sqlite"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			service, err := NewService(t.Context(), store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v1/{responseType}", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", testCase.contentType)
+				if _, err := w.Write(testCase.body); err != nil {
+					t.Errorf("write response: %v", err)
+				}
+			})
+			server := httpapi.NewHandler(nil, nil, service.Middleware(mux))
+			response := &commitHeaderRecorder{ResponseRecorder: httptest.NewRecorder()}
+			server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/stream", nil))
+			if response.Code != http.StatusOK || response.persistedHeaderAtCommit != "true" {
+				t.Fatalf("response commit = %d, persisted header = %q; want 200 and true", response.Code, response.persistedHeaderAtCommit)
+			}
+			if response.trailerHeaderAtCommit != "" {
+				t.Fatalf("persistence header was deferred as a trailer: %q", response.trailerHeaderAtCommit)
+			}
+			if response.Header().Get(PersistedHeader) != "true" || !strings.EqualFold(response.Header().Get("Content-Type"), testCase.contentType) {
+				t.Fatalf("response headers = %v", response.Header())
+			}
+			requestID := response.Header().Get("X-Request-Id")
+			record, err := service.Get(t.Context(), requestID)
+			if err != nil || record.ResponseSizeBytes == nil || *record.ResponseSizeBytes != int64(len(testCase.body)) {
+				t.Fatalf("durable stream size = %v, error = %v; want %d bytes", record.ResponseSizeBytes, err, len(testCase.body))
+			}
+		})
+	}
+}
+
+type commitHeaderRecorder struct {
+	*httptest.ResponseRecorder
+	persistedHeaderAtCommit string
+	trailerHeaderAtCommit   string
+}
+
+func (recorder *commitHeaderRecorder) WriteHeader(status int) {
+	recorder.persistedHeaderAtCommit = recorder.Header().Get(PersistedHeader)
+	recorder.trailerHeaderAtCommit = recorder.Header().Get("Trailer")
+	recorder.ResponseRecorder.WriteHeader(status)
 }

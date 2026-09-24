@@ -69,6 +69,20 @@ describe('API Workspace client', () => {
     expect(result).toMatchObject({ status: 403, requestId: 'req_header_12345678', requestRecordPersisted: false, structuredError: { code: 'FORBIDDEN', message: 'Access denied.' } });
   });
 
+  it('requests file bytes with wildcard Accept and never includes them in the response preview', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('private-file-bytes', {
+      status: 200,
+      headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment', 'X-Request-Id': 'req_file_123456' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await runApplicationRequest({ method: 'GET', path: '/api/v1/posts/rec_1/files/attachment', accept: '*/*' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/posts/rec_1/files/attachment', expect.objectContaining({ headers: expect.objectContaining({ Accept: '*/*' }) }));
+    expect(result).toMatchObject({ status: 200, requestId: 'req_file_123456', textResponseHidden: true });
+    expect(JSON.stringify(result)).not.toContain('private-file-bytes');
+  });
+
   it('rejects paths outside the Application API before making a request', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

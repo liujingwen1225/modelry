@@ -447,7 +447,7 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
       {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{message}</div>}
       {actionError && (() => { const copy = errorCopy(actionError, 'Authentication settings could not be changed.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Reload settings</Button></ErrorState>; })()}
       <Surface className="security-auth-card" variant="standard">
-        <div className="security-rules-heading"><div><h2>Authentication</h2><p>Email is the Auth identifier. Password is stored as a credential and is never read back.</p></div><span className="security-version">Version {state.version}</span></div>
+        <div className="security-rules-heading"><div><h2>Authentication</h2><p>Email is the Auth identifier. The password is stored securely and is never shown again.</p></div><span className="security-version">Version {state.version}</span></div>
         {!editing ? <dl className="security-auth-values">
           <div><dt>Email + password</dt><dd><strong>{state.pending.emailPasswordEnabled ? 'Enabled' : 'Disabled'}</strong><span>{state.pending.emailPasswordEnabled ? 'Application users can authenticate with their email and password.' : 'Email and password login is unavailable.'}</span></dd></div>
           <div><dt>Self registration</dt><dd><strong>{state.pending.selfRegistration ? 'Enabled' : 'Disabled'}</strong><span>{state.pending.selfRegistration ? 'Users can create their own accounts.' : 'Only an Administrator can create users.'}</span></dd></div>

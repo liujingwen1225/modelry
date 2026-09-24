@@ -34,10 +34,11 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 
 1. 每个到达 HTTP Runtime 的请求由入口生成一个全新的 canonical Request ID，格式为 `req_<opaque>`。不信任调用方传入的 `X-Request-Id` 作为权威值；如实现保留上游追踪值，必须与本 ID 分开存放。
 2. Runtime 在**所有** HTTP 响应（含成功、错误和 204）设置 `X-Request-Id` 响应头；结构化错误的 `error.requestId` 必须与该头完全一致。每次重试是新 HTTP 请求，获得新 ID。
-3. 每次 Application HTTP 请求（成功或失败）在可持久化时形成一个 RequestRecord。至少保存 RequestID、时间、Endpoint、Method、Status、Duration，以及安全范围内的 Authentication / Authorization outcome 和 Error Code。RequestRecord 不记录 Raw Credential、Authorization Header、完整敏感 Body 或无限制 Raw Header / Query。
-4. API Runner 从响应读取 `X-Request-Id`，显示给用户，并以该值直接打开 Control Plane 的 `GET /admin/api/v1/requests/{requestId}`。错误详情、列表与 Request Detail 使用同一 ID，不要求复制后搜索。
-5. Control Plane 请求也有 canonical `X-Request-Id` 和同形错误关联；只有 Domain 认定适用时，其 AuditRecord 才关联该 ID。RequestRecord 是 Application HTTP 操作遥测，AuditRecord 是 Control Plane 安全 / 治理事实，二者不可合并。
-6. 如果存储故障导致 RequestRecord 无法持久化，HTTP 错误仍携带同一 Request ID；Runtime 不伪称该请求已有可打开的耐久 Request Detail，也不泄露请求秘密。
+3. 每个 `/api/v1` 响应还设置 `X-Request-Record-Persisted: true|false`。`true` 表示脱敏 RequestRecord 已在提交响应 Header 前耐久写入；`false` 表示初始写入失败。流式响应在传输结束后补齐 Duration 和响应字节数，但响应正文永不持久化。
+4. 每次 Application HTTP 请求（成功或失败）在可持久化时形成一个 RequestRecord。至少保存 RequestID、时间、Endpoint、Method、Status、Duration、响应字节数，以及安全范围内的 Authentication / Authorization outcome 和 Error Code。响应大小只保存字节计数，不保存响应正文；升级前的旧 RequestRecord 因无法回溯精确大小而省略该值。RequestRecord 不记录 Raw Credential、Authorization Header、完整敏感 Body 或无限制 Raw Header / Query。
+5. API Runner 从响应读取 `X-Request-Id`，显示给用户，并仅在 `X-Request-Record-Persisted` 为 `true` 时以该值直接打开 Control Plane 的 `GET /admin/api/v1/requests/{requestId}`。错误详情、列表与 Request Detail 使用同一 ID，不要求复制后搜索。
+6. Control Plane 请求也有 canonical `X-Request-Id` 和同形错误关联；只有 Domain 认定适用时，其 AuditRecord 才关联该 ID。RequestRecord 是 Application HTTP 操作遥测，AuditRecord 是 Control Plane 安全 / 治理事实，二者不可合并。
+7. 如果存储故障导致 RequestRecord 无法持久化，HTTP 错误仍携带同一 Request ID，并通过 `X-Request-Record-Persisted: false` 表明详情不可用；Runtime 不伪称该请求已有可打开的耐久 Request Detail，也不泄露请求秘密。
 
 ## 4. Structured Error Envelope
 
@@ -100,7 +101,7 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 
 ### Collections、Records 与 Schema
 
-- Control Plane `GET/POST /collections` 和 `GET /collections/{collectionId}` 列出、创建和读取 Collection。创建在一次操作中持久化 Normal / Auth 类型与初始 Model；初始结构不是原始 SQL 端点。
+- Control Plane `GET/POST /collections` 和 `GET /collections/{collectionId}` 列出、创建和读取 Collection。创建在一次操作中持久化 Normal / Auth 类型与初始 Model；初始结构不是原始 SQL 端点。列表项附带精确 `recordCount`；`recordCount` 仅在调用方具有 `records.read` Permission 时返回。具有 `schema.read` Permission 的调用方还会在存在耐久 Schema Pending Change 时获得 `pendingChangeStatus`（`ready`、`needsReview` 或 `failed`）；没有活动变更时省略该字段。Records 数与状态只用于 Collections 摘要，不返回 Record 内容或 Pending Operation；Fields 数由列表项中现有 `fields` 定义计算，不另行重复传输。
 - 管理面 Records 端点用于 Admin 在 Collection Workspace 读取 / 管理数据；Application Records 端点是 Collection 的稳定 REST CRUD 边界。两者权限检查分开。
 - Application `GET/POST /api/v1/{collectionName}` 与 `GET/PATCH/DELETE /api/v1/{collectionName}/{recordId}` 对应 List / Create / View / Update / Delete。所有操作使用 Applied Model、Validation、Default 与 Access Rule；系统字段由 Runtime 管理。Record CRUD 不进入 Schema Change。
 - Schema 先保存 Pending Operation，再 inspect、preview / apply / discard，最后读取 Applied History：`pending-change`、`pending-operations`、`preview`、`apply`、`discard`、`history` 端点见 OpenAPI。Schema Change 的作用域恰为一个 Collection；Field / Relation / Index 共用持久 Pending Change。

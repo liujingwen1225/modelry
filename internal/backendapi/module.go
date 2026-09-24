@@ -11,6 +11,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/serviceaccounts"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -65,18 +66,41 @@ type pageResponse[T any] struct {
 	NextCursor string `json:"nextCursor,omitempty"`
 }
 
+type collectionListItemResponse struct {
+	backendmodel.Collection
+	RecordCount         *int64                    `json:"recordCount,omitempty"`
+	PendingChangeStatus backendmodel.ChangeStatus `json:"pendingChangeStatus,omitempty"`
+}
+
 func (module *Module) listCollections(w http.ResponseWriter, request *http.Request) {
 	options, err := parseListOptions(request)
 	if err != nil {
 		writeProblem(w, request, err)
 		return
 	}
-	page, err := module.service.ListCollections(request.Context(), options)
+	canReadRecords := serviceaccounts.HasPermission(request.Context(), serviceaccounts.OperationRecordsRead)
+	canReadSchema := serviceaccounts.HasPermission(request.Context(), serviceaccounts.OperationSchemaRead)
+	page, err := module.service.ListCollectionSummaries(request.Context(), options, backendmodel.CollectionSummaryOptions{
+		IncludeRecordCount:         canReadRecords,
+		IncludePendingChangeStatus: canReadSchema,
+	})
 	if err != nil {
 		writeProblem(w, request, err)
 		return
 	}
-	httpapi.WriteAPIJSON(w, http.StatusOK, pageResponse[backendmodel.Collection]{Data: page.Data, NextCursor: page.NextCursor})
+	items := make([]collectionListItemResponse, 0, len(page.Data))
+	for _, summary := range page.Data {
+		item := collectionListItemResponse{Collection: summary.Collection}
+		if canReadRecords {
+			recordCount := summary.RecordCount
+			item.RecordCount = &recordCount
+		}
+		if canReadSchema {
+			item.PendingChangeStatus = summary.PendingChangeStatus
+		}
+		items = append(items, item)
+	}
+	httpapi.WriteAPIJSON(w, http.StatusOK, pageResponse[collectionListItemResponse]{Data: items, NextCursor: page.NextCursor})
 }
 
 func (module *Module) createCollection(w http.ResponseWriter, request *http.Request) {

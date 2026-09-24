@@ -1,10 +1,10 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, request, test, type Page } from '@playwright/test';
 
 type ReadyRecord = { state: string; url: string; projectId: string };
 type RuntimeProcess = ChildProcessWithoutNullStreams;
@@ -157,6 +157,25 @@ async function requestJSON(page: Page, method: string, requestPath: string, body
   return result;
 }
 
+function invokeMCP(apiKey: string, tool: string, args: Record<string, unknown>) {
+  const input = [
+    JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'product-closure', version: '1' } } }),
+    JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: args } }),
+  ].join('\n') + '\n';
+  const output = execFileSync(runtimeBinary, ['mcp', '--api-url', runtimeURL, '--api-key', apiKey], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    input,
+  });
+  const response = output.trim().split(/\r?\n/).map((line) => JSON.parse(line) as {
+    id?: number;
+    result?: { isError?: boolean; structuredContent?: unknown };
+  }).find((item) => item.id === 2);
+  if (!response?.result) throw new Error(`MCP did not return a result for ${tool}.`);
+  return response.result;
+}
+
 function unwrap(value: unknown): unknown {
   let current = value;
   while (current && typeof current === 'object' && !Array.isArray(current)) {
@@ -165,6 +184,16 @@ function unwrap(value: unknown): unknown {
     current = item.data;
   }
   return current;
+}
+
+function responseItems(value: unknown): unknown[] {
+  const current = unwrap(value);
+  if (Array.isArray(current)) return current;
+  if (current && typeof current === 'object' && !Array.isArray(current)) {
+    const data = (current as Record<string, unknown>).data;
+    if (Array.isArray(data)) return data;
+  }
+  return [];
 }
 
 function findString(value: unknown, key: string): string | undefined {
@@ -234,6 +263,34 @@ async function downloadAttachment(page: Page, expected: string) {
   expect(contents.toString('utf8')).toBe(expected);
 }
 
+async function actionButtonContrast(page: Page) {
+  return page.evaluate(() => {
+    const luminance = (color: string) => {
+      const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+      if (!channels || channels.length !== 3) throw new Error(`Could not read button color ${color}.`);
+      const linear = channels.map((value) => {
+        const channel = value / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+    };
+    const ratio = (foreground: string, background: string) => {
+      const [high, low] = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+      return (high! + 0.05) / (low! + 0.05);
+    };
+    const read = (className: string) => {
+      const button = document.createElement('button');
+      button.className = className;
+      document.body.append(button);
+      const style = getComputedStyle(button);
+      const result = ratio(style.color, style.backgroundColor);
+      button.remove();
+      return result;
+    };
+    return { primary: read('button button--primary'), danger: read('button button--danger') };
+  });
+}
+
 test.beforeAll(async () => {
   runtimeDirectory = await mkdtemp(path.join(tmpdir(), 'modelry-v01-closure-'));
   projectRoot = path.join(runtimeDirectory, 'project');
@@ -282,6 +339,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
   let appUserRecordId = '';
   let appSession = '';
   let deniedRequestId = '';
+  let attachmentRequestId = '';
   let changeSetId = '';
   let serviceAccountId = '';
   let revokedAPIKey = '';
@@ -314,6 +372,43 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(JSON.stringify(ownerState.body)).toContain('closed');
     const collections = await requestJSON(activePage, 'GET', '/admin/api/v1/collections');
     expect(JSON.stringify(collections.body)).toContain('authors');
+
+    const ownerCookie = (await browserContext.cookies(`${runtimeURL}/admin/api/v1`)).find((cookie) => cookie.name === 'modelry_admin_session');
+    expect(ownerCookie?.value).toBeTruthy();
+    const sessionClient = await request.newContext();
+    try {
+      const sessionURL = `${runtimeURL}/admin/api/v1/auth/session`;
+      const cookieHeader = `${ownerCookie!.name}=${ownerCookie!.value}`;
+      expect((await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } })).status()).toBe(200);
+
+      await activePage.locator('.owner-menu summary').click();
+      const logoutResponsePromise = activePage.waitForResponse((response) =>
+        new URL(response.url()).pathname === '/admin/api/v1/auth/logout' && response.request().method() === 'POST',
+      );
+      await activePage.getByRole('button', { name: 'Sign out', exact: true }).click();
+      expect((await logoutResponsePromise).status()).toBe(204);
+      await expect(activePage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+
+      const revokedSession = await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } });
+      expect(revokedSession.status()).toBe(401);
+
+      await activePage.getByLabel('Email').fill(ownerEmail);
+      await activePage.getByLabel('Password').fill(ownerPassword);
+      await activePage.getByRole('button', { name: 'Sign in' }).click();
+      await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
+      await expect(activePage.getByRole('row').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
+
+      await activePage.locator('.owner-menu summary').click();
+      await activePage.getByRole('button', { name: 'Switch to dark theme' }).click();
+      await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
+      const contrast = await actionButtonContrast(activePage);
+      expect(contrast.primary).toBeGreaterThanOrEqual(4.5);
+      expect(contrast.danger).toBeGreaterThanOrEqual(4.5);
+      await activePage.getByRole('button', { name: 'Switch to light theme' }).click();
+      await activePage.locator('.owner-menu summary').click();
+    } finally {
+      await sessionClient.dispose();
+    }
   });
 
   await test.step('FLOW-002 — Create Normal and Auth Collections with their initial fields', async () => {
@@ -601,6 +696,42 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
     await activePage.getByText(deniedRequestId, { exact: true }).first().click();
     await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
+
+    await activePage.goto(`${runtimeURL}/api?collection=${encodeURIComponent(postsId)}`);
+    await activePage.locator('.api-endpoint-option').filter({ hasText: 'Read a file attachment' }).click();
+    await activePage.getByLabel('Record ID').fill(firstPostId);
+    await activePage.getByLabel('File field').selectOption('attachment');
+    await activePage.getByLabel('App Session token (optional)').fill(appSession);
+    const attachmentResponsePromise = activePage.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/v1/posts/${firstPostId}/files/attachment`,
+    );
+    await activePage.getByRole('button', { name: 'Send GET request' }).click();
+    const attachmentResponse = await attachmentResponsePromise;
+    expect(attachmentResponse.status()).toBe(200);
+    attachmentRequestId = attachmentResponse.headers()['x-request-id'] ?? '';
+    expect(attachmentRequestId).toMatch(/^req_[A-Za-z0-9_-]{8,}$/);
+    expect(attachmentResponse.headers()['x-request-record-persisted']).toBe('true');
+    expect(attachmentResponse.headers()['content-type']).toBe('text/plain');
+    expect(attachmentResponse.headers()['content-disposition']).toBe('attachment');
+    expect(attachmentResponse.headers()['cache-control']).toBe('private, no-store');
+    expect(attachmentResponse.headers()['x-content-type-options']).toBe('nosniff');
+    const fileClient = await request.newContext();
+    try {
+      const fileResponse = await fileClient.get(`${runtimeURL}/api/v1/posts/${encodeURIComponent(firstPostId)}/files/attachment`, {
+        headers: { Authorization: `Bearer ${appSession}` },
+      });
+      expect(fileResponse.status()).toBe(200);
+      expect((await fileResponse.body()).toString('utf8')).toBe(fileContents);
+    } finally {
+      await fileClient.dispose();
+    }
+    await expect(activePage.getByText('Response content is hidden because it is not JSON.')).toBeVisible();
+    expect(await activePage.locator('.api-response__body').count()).toBe(0);
+    await activePage.getByRole('link', { name: 'View durable request details' }).click();
+    await expect(activePage).toHaveURL(/\/requests\/req_/);
+    await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
+    await expect(activePage.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=' + encodeURIComponent(postsId) + '&endpoint=readApplicationRecordFile');
+    await expect(activePage.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/api?endpoint=readApplicationRecordFile`);
   });
 
   await test.step('FLOW-008 — One-time Service Account key, authorization and revocation audit', async () => {
@@ -622,6 +753,34 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
     const keyRead = await requestJSON(activePage, 'GET', '/admin/api/v1/collections', undefined, revokedAPIKey, 'omit');
     expect(keyRead.status).toBe(200);
+    const postsSummary = responseItems(keyRead.body).find((item) => findString(item, 'id') === postsId) as Record<string, unknown> | undefined;
+    expect(postsSummary?.recordCount).toBe(2);
+    expect(postsSummary?.pendingChangeStatus).toBeUndefined();
+    const httpRecords = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/records?limit=100`, undefined, revokedAPIKey, 'omit');
+    expect(httpRecords.status).toBe(200);
+    const expectedRecordIds = responseItems(httpRecords.body).map((record) => findString(record, 'id')).sort();
+    const cliRecords = JSON.parse(execFileSync(runtimeBinary, [
+      'admin', 'records', 'list', postsId, '--api-url', runtimeURL, '--api-key', revokedAPIKey, '--limit', '100',
+    ], { cwd: repositoryRoot, encoding: 'utf8' })) as unknown;
+    expect(responseItems(cliRecords).map((record) => findString(record, 'id')).sort()).toEqual(expectedRecordIds);
+    const mcpRecords = invokeMCP(revokedAPIKey, 'records_list', { collectionId: postsId, limit: 100 });
+    expect(responseItems(mcpRecords.structuredContent).map((record) => findString(record, 'id')).sort()).toEqual(expectedRecordIds);
+
+    const deniedRecordBody = { values: { title: 'blocked-by-http', category: 'blocked' } };
+    const deniedHTTPWrite = await requestJSON(activePage, 'POST', `/admin/api/v1/collections/${postsId}/records`, deniedRecordBody, revokedAPIKey, 'omit', [403]);
+    expect(deniedHTTPWrite.status).toBe(403);
+    const deniedCLIWrite = spawnSync(runtimeBinary, [
+      'admin', 'records', 'create', postsId, '--api-url', runtimeURL, '--api-key', revokedAPIKey,
+      '--data', JSON.stringify({ values: { title: 'blocked-by-cli', category: 'blocked' } }),
+    ], { cwd: repositoryRoot, encoding: 'utf8' });
+    expect(deniedCLIWrite.status).toBe(1);
+    expect(JSON.parse(deniedCLIWrite.stderr).error.code).toBe('FORBIDDEN');
+    const deniedMCPWrite = invokeMCP(revokedAPIKey, 'records_create', {
+      collectionId: postsId, body: { values: { title: 'blocked-by-mcp', category: 'blocked' } },
+    });
+    expect(deniedMCPWrite.isError).toBe(true);
+    expect((deniedMCPWrite.structuredContent as { error?: { code?: string } }).error?.code).toBe('FORBIDDEN');
+
     const keyWrite = await requestJSON(activePage, 'POST', '/admin/api/v1/collections', {}, revokedAPIKey, 'omit', [403]);
     expect(keyWrite.status).toBe(403);
     const keyAsAppSession = await requestJSON(activePage, 'GET', '/api/v1/auth/users/session', undefined, revokedAPIKey, 'omit', [401]);
@@ -702,8 +861,9 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
   await test.step('FLOW-010 — Close page, gracefully restart same Project Root and verify durable state', async () => {
     const beforeRestart = readyRecord;
     expect(beforeRestart?.projectId).toBe(firstReady.projectId);
-    await activePage.goto(`${runtimeURL}/requests/${encodeURIComponent(deniedRequestId)}`);
-    await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
+    await activePage.goto(`${runtimeURL}/requests/${encodeURIComponent(attachmentRequestId)}`);
+    await expect(activePage.getByText(attachmentRequestId, { exact: true }).first()).toBeVisible();
+    await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
     await activePage.close();
     await stopRuntime();
 
@@ -720,14 +880,15 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     activePage = await browserContext.newPage();
     addBrowserHealthGate(activePage, healthIssues, expectedHTTPFailures);
     expectedHTTPFailures.add(`401 ${new URL('/admin/api/v1/auth/session', runtimeURL).toString()}`);
-    const deepLink = await activePage.goto(`${runtimeURL}/requests/${encodeURIComponent(deniedRequestId)}`);
+    const deepLink = await activePage.goto(`${runtimeURL}/requests/${encodeURIComponent(attachmentRequestId)}`);
     expect(deepLink?.status()).toBe(200);
     await expect(activePage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await activePage.getByLabel('Email').fill(ownerEmail);
     await activePage.getByLabel('Password').fill(ownerPassword);
     await activePage.getByRole('button', { name: 'Sign in' }).click();
-    await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
-    await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
+    await expect(activePage).toHaveURL(new RegExp(`/requests/${attachmentRequestId}`));
+    await expect(activePage.getByText(attachmentRequestId, { exact: true }).first()).toBeVisible();
+    await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
 
     const runtimeStatus = unwrap((await requestJSON(activePage, 'GET', '/admin/api/v1/runtime/status')).body) as {
       state: string;
@@ -737,6 +898,9 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(runtimeStatus.state).toBe('ready');
     expect(runtimeStatus.database.state).toBe('ready');
     expect(runtimeStatus.localStorage.state).toBe('ready');
+    const durableSchemaHistory = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/schema/history?limit=100`);
+    expect(durableSchemaHistory.status).toBe(200);
+    expect(JSON.stringify(durableSchemaHistory.body)).toContain(changeSetId);
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}`);
     await expect(activePage.getByRole('row').filter({ hasText: 'post-a-updated' })).toBeVisible();
     await expect(activePage.getByRole('row').filter({ hasText: 'post-b' })).toBeVisible();

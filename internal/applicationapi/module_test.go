@@ -281,6 +281,10 @@ func TestApplicationFileReadRequiresViewAndUsesSafeDownloadHeaders(t *testing.T)
 	if response.Header.Get(requests.PersistedHeader) != "true" || response.Header.Get("Trailer") != "" {
 		t.Fatalf("file RequestRecord must be a normal response header: %#v", response.Header)
 	}
+	stored, err := stack.requests.Get(context.Background(), response.Header.Get("X-Request-Id"))
+	if err != nil || stored.ResponseSizeBytes == nil || *stored.ResponseSizeBytes != int64(len(body)) {
+		t.Fatalf("durable file response size = %v, error = %v; want %d bytes", stored.ResponseSizeBytes, err, len(body))
+	}
 
 	evaluator.allowed = false
 	denied := perform(stack.handler, http.MethodGet, "/api/v1/documents/"+created.ID+"/files/file", "", "", "")

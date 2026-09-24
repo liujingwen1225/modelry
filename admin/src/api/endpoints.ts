@@ -10,6 +10,7 @@ export type EndpointDefinition = {
   collectionName: string;
   authOnly: boolean;
   requiresSession: boolean;
+  accept?: string;
   accessRuleMode?: AccessRuleMode;
   bodySchema?: string;
 };
@@ -20,6 +21,7 @@ const genericOperations: ContractOperation[] = [
   { operationId: 'listApplicationRecords', title: 'List records', method: 'GET', template: '/api/v1/{collectionName}', authOnly: false, requiresSession: false },
   { operationId: 'createApplicationRecord', title: 'Create a record', method: 'POST', template: '/api/v1/{collectionName}', authOnly: false, requiresSession: false, bodySchema: 'RecordWriteRequest' },
   { operationId: 'getApplicationRecord', title: 'Read a record', method: 'GET', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false },
+  { operationId: 'readApplicationRecordFile', title: 'Read a file attachment', method: 'GET', template: '/api/v1/{collectionName}/{recordId}/files/{fieldName}', authOnly: false, requiresSession: false, accept: '*/*' },
   { operationId: 'updateApplicationRecord', title: 'Update a record', method: 'PATCH', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false, bodySchema: 'RecordWriteRequest' },
   { operationId: 'deleteApplicationRecord', title: 'Delete a record', method: 'DELETE', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false },
 ];
@@ -39,9 +41,10 @@ function operationPath(template: string, collection: Collection): string {
 }
 
 export function endpointsForCollection(collection: Collection): EndpointDefinition[] {
+  const hasFileField = collection.fields.some((field) => field.type === 'file');
   const base = collection.type === 'Auth'
-    ? genericOperations.filter((operation) => operation.operationId === 'listApplicationRecords' || operation.operationId === 'getApplicationRecord')
-    : genericOperations;
+    ? genericOperations.filter((operation) => operation.operationId === 'listApplicationRecords' || operation.operationId === 'getApplicationRecord' || (hasFileField && operation.operationId === 'readApplicationRecordFile'))
+    : genericOperations.filter((operation) => hasFileField || operation.operationId !== 'readApplicationRecordFile');
   const operations = collection.type === 'Auth' ? [...base, ...authOperations] : base;
   return operations.map((operation) => ({
     ...operation,
@@ -60,6 +63,7 @@ export function endpointOpenApiSnippet(endpoint: EndpointDefinition, collection:
     listApplicationRecords: { '200': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordListResponse' } } } } },
     createApplicationRecord: { '201': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
     getApplicationRecord: { '200': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
+    readApplicationRecordFile: { '200': { description: 'Applied File Field content returned as an attachment; API Workspace hides the bytes from its response preview.', headers: { 'X-Request-Id': { $ref: '#/components/headers/RequestId' }, 'Content-Disposition': { schema: { type: 'string', const: 'attachment' } }, 'X-Content-Type-Options': { schema: { const: 'nosniff' } }, 'Cache-Control': { schema: { type: 'string', const: 'private, no-store' } }, 'Content-Length': { schema: { type: 'integer', minimum: 0 } } }, content: { '*/*': { schema: { type: 'string', format: 'binary' } } } } },
     updateApplicationRecord: { '200': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
     deleteApplicationRecord: { '204': { description: 'Operation completed' } },
     registerApplicationUser: { '201': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
@@ -74,10 +78,31 @@ export function endpointOpenApiSnippet(endpoint: EndpointDefinition, collection:
     operationId: endpoint.operationId,
     summary: endpoint.title,
     security: endpoint.requiresSession ? [{ ApplicationSession: [] }] : endpoint.authOnly ? [] : [{ ApplicationSession: [] }, {}],
-    responses: { ...successResponses[endpoint.operationId] as Record<string, unknown>, '4XX': { description: 'Structured error response', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } } },
+    responses: {
+      ...successResponses[endpoint.operationId] as Record<string, unknown>,
+      '4XX': { description: 'Structured error response', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+      '5XX': { description: 'Structured error response', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+      default: { description: 'Structured error response', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+    },
   };
+  const responses = operation.responses as Record<string, Record<string, unknown>>;
+  for (const [status, response] of Object.entries(responses)) {
+    const headers = (response.headers as Record<string, unknown> | undefined) ?? {};
+    responses[status] = {
+      ...response,
+      headers: {
+        ...headers,
+        'X-Request-Id': { $ref: '#/components/headers/RequestId' },
+        'X-Request-Record-Persisted': { $ref: '#/components/headers/RequestRecordPersisted' },
+      },
+    };
+  }
+  if (endpoint.operationId === 'readApplicationRecordFile') {
+    operation.description = 'The Applied Collection view Access Rule is enforced. The selected Applied File Field is returned as a private, no-store attachment with nosniff; file bytes are not shown in the API Workspace response preview.';
+  }
   if (endpoint.accessRuleMode) {
     operation['x-modelry-access-rule'] = {
+      ...(endpoint.operationId === 'readApplicationRecordFile' ? { operation: 'view' } : {}),
       mode: endpoint.accessRuleMode,
       ...(endpoint.accessRuleMode === 'noAccess' ? { description: 'This operation currently denies all Application Users.' } : {}),
     };

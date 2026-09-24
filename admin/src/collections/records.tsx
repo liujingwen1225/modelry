@@ -533,7 +533,7 @@ function RecordEditor({ collection, fields, record, mode = 'create', onCancel, o
         <div className="record-editor-actions"><Button onClick={onCancel} variant="quiet">Close</Button>{collection.type !== 'Auth' && <><Button onClick={onEdit} variant="primary">Edit</Button><Button onClick={() => setConfirmDelete(true)} size="small" variant="danger"><Trash2 aria-hidden="true" size={14} />Delete</Button></>}</div>
       </> : <form onSubmit={(event) => void save(event)}>
         {formCopy && <ErrorState description={formCopy.message} title={formCopy.title} />}
-        {collection.type === 'Auth' && isNew && <section className="record-auth-fields"><h3>Profile</h3><p>Email and profile details are saved together with the account credentials.</p></section>}
+        {collection.type === 'Auth' && isNew && <section className="record-auth-fields"><h3>Profile</h3><p>Email, profile details, and the account password are saved together.</p></section>}
         {fields.map((field) => <RecordField
           disabled={saving || readOnly}
           error={fieldErrors[field.name]}

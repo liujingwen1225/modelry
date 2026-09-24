@@ -71,14 +71,19 @@ func (service *Service) Get(ctx context.Context, requestID string) (RequestRecor
 }
 
 const requestRecordSelect = `SELECT request_id, occurred_at, occurred_unix_nano, collection_id, endpoint, method, status,
-	duration_ms, authentication_outcome, authorization_outcome, error_code FROM modelry_request_records`
+	duration_ms, response_size_bytes, authentication_outcome, authorization_outcome, error_code FROM modelry_request_records`
 
 func scanRecord(row interface{ Scan(...any) error }) (RequestRecord, error) {
 	var record RequestRecord
 	var timestamp string
+	var responseSizeBytes sql.NullInt64
 	if err := row.Scan(&record.RequestID, &timestamp, &record.occurredAtUnixNano, &record.CollectionID, &record.Endpoint,
-		&record.Method, &record.Status, &record.DurationMS, &record.AuthenticationOutcome, &record.AuthorizationOutcome, &record.ErrorCode); err != nil {
+		&record.Method, &record.Status, &record.DurationMS, &responseSizeBytes, &record.AuthenticationOutcome, &record.AuthorizationOutcome, &record.ErrorCode); err != nil {
 		return RequestRecord{}, err
+	}
+	if responseSizeBytes.Valid {
+		value := responseSizeBytes.Int64
+		record.ResponseSizeBytes = &value
 	}
 	parsed, err := time.Parse(time.RFC3339Nano, timestamp)
 	if err != nil {

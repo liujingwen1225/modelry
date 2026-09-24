@@ -29,6 +29,10 @@ export type Collection = {
   createdAt?: string;
   updatedAt?: string;
 };
+export type CollectionSummary = Collection & {
+  recordCount?: number;
+  pendingChangeStatus?: 'ready' | 'needsReview' | 'failed';
+};
 
 export type IndexDefinition = { id?: string; name: string; fields: string[]; unique?: boolean };
 export type CollectionCreateRequest = {
@@ -311,16 +315,16 @@ export async function revokeAllApplicationUserSessions(collectionId: string, rec
   await request(`/admin/api/v1/collections/${encodeURIComponent(collectionId)}/users/${encodeURIComponent(recordId)}/sessions/revoke-all`, { method: 'POST', signal });
 }
 
-export async function listCollections(options: { cursor?: string; limit?: number } = {}, signal?: AbortSignal): Promise<Page<Collection>> {
+export async function listCollections(options: { cursor?: string; limit?: number } = {}, signal?: AbortSignal): Promise<Page<CollectionSummary>> {
   const { data, response } = await request(`/admin/api/v1/collections${query({ limit: options.limit ?? 100, cursor: options.cursor })}`, { method: 'GET', signal });
   if (!isRecord(data) || !Array.isArray(data.data)) {
     throw errorFrom({ error: { code: 'INTERNAL_ERROR', message: 'The Runtime returned an invalid Collection list.' } }, response);
   }
-  return { data: data.data as Collection[], ...(typeof data.nextCursor === 'string' ? { nextCursor: data.nextCursor } : {}) };
+  return { data: data.data as CollectionSummary[], ...(typeof data.nextCursor === 'string' ? { nextCursor: data.nextCursor } : {}) };
 }
 
-export async function listAllCollections(signal?: AbortSignal): Promise<Collection[]> {
-  const items: Collection[] = [];
+export async function listAllCollections(signal?: AbortSignal): Promise<CollectionSummary[]> {
+  const items: CollectionSummary[] = [];
   let cursor: string | undefined;
   do {
     const page = await listCollections({ limit: 100, cursor }, signal);

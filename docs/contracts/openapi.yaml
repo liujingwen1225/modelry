@@ -15,6 +15,13 @@ x-modelry-request-id:
   generatedBy: server for every HTTP request; incoming values are not authoritative
   errorEnvelopeField: error.requestId
   applicationRequestRecord: RequestRecord.requestId
+x-modelry-request-record:
+  responseHeader: X-Request-Record-Persisted
+  scope: every /api/v1 Application response
+  values:
+    'true': the redacted RequestRecord was durably written before response headers were committed
+    'false': the RequestRecord could not be durably written before response headers were committed
+  streaming: response byte count and duration are finalized after the response body is written
 tags:
   - name: Bootstrap
     description: Read first-run state and establish the initial Owner on a locally authorized Runtime.
@@ -546,16 +553,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordListResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
     post:
       tags: [ApplicationRecords]
       operationId: createApplicationRecord
@@ -577,16 +586,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/{collectionName}/{recordId}':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -607,16 +618,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
     patch:
       tags: [ApplicationRecords]
       operationId: updateApplicationRecord
@@ -639,16 +652,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
     delete:
       tags: [ApplicationRecords]
       operationId: deleteApplicationRecord
@@ -665,12 +680,78 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/{collectionName}/{recordId}/files/{fieldName}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+      - $ref: '#/components/parameters/RecordId'
+      - name: fieldName
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    get:
+      tags: [ApplicationRecords]
+      operationId: readApplicationRecordFile
+      summary: Read an Application File Field
+      description: The Applied Collection view Access Rule is enforced. The Runtime reads only the opaque durable reference bound to this Record and returns the file as a private, no-store attachment with nosniff.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/RecordId'
+        - name: fieldName
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      security:
+        - ApplicationSession: []
+        - {}
+      x-modelry-access-rule:
+        operation: view
+      responses:
+        '200':
+          description: Bound file content with the server-detected safe MIME type.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Always attachment; user supplied filenames are not used as paths.
+              schema:
+                const: attachment
+            X-Content-Type-Options:
+              description: Always nosniff.
+              schema:
+                const: nosniff
+            Cache-Control:
+              description: Always private, no-store.
+              schema:
+                const: private, no-store
+            Content-Length:
+              schema:
+                type: integer
+                minimum: 0
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
   '/admin/api/v1/collections/{collectionId}/schema/pending-change':
     parameters:
       - $ref: '#/components/parameters/CollectionId'
@@ -1357,16 +1438,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/login':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1389,16 +1472,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationSessionResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/session':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1416,16 +1501,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/logout':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1443,12 +1530,14 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/password':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1472,12 +1561,14 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/sessions':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1495,16 +1586,18 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionListResponse'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/sessions/{sessionId}/revoke':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1524,12 +1617,14 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
         '4XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         '5XX':
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
         default:
-          $ref: '#/components/responses/StructuredError'
+          $ref: '#/components/responses/ApplicationError'
   '/admin/api/v1/service-accounts':
     get:
       tags: [ServiceAccounts]
@@ -1913,6 +2008,12 @@ components:
       description: Canonical server-generated request ID for this HTTP request.
       schema:
         $ref: '#/components/schemas/RequestId'
+    RequestRecordPersisted:
+      description: Whether a redacted Application RequestRecord was durably written before response headers were committed.
+      required: true
+      schema:
+        type: string
+        enum: ['true', 'false']
   parameters:
     CollectionId:
       name: collectionId
@@ -2017,6 +2118,17 @@ components:
       headers:
         X-Request-Id:
           $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ApplicationError:
+      description: Structured Application error response with the canonical request ID and RequestRecord persistence status.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        X-Request-Record-Persisted:
+          $ref: '#/components/headers/RequestRecordPersisted'
       content:
         application/json:
           schema:
@@ -2301,9 +2413,23 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Collection'
+            $ref: '#/components/schemas/CollectionListItem'
         nextCursor:
           type: string
+    CollectionListItem:
+      allOf:
+        - $ref: '#/components/schemas/Collection'
+        - type: object
+          properties:
+            recordCount:
+              type: integer
+              format: int64
+              minimum: 0
+              description: Included only when the caller has the records.read Permission.
+            pendingChangeStatus:
+              type: string
+              enum: [ready, needsReview, failed]
+              description: Included only when the caller has schema.read and an active durable Schema Pending Change exists; omitted when no active change exists.
     RecordWriteRequest:
       type: object
       description: Dynamic Field values; id, createdAt and updatedAt are Runtime-managed and rejected on write.
@@ -3003,6 +3129,11 @@ components:
         durationMs:
           type: integer
           minimum: 0
+        responseSizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Response body size in bytes. The body itself is never stored. Omitted for RequestRecords created before this measurement was introduced.
         authenticationOutcome:
           type: string
         authorizationOutcome:

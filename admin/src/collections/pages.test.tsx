@@ -30,6 +30,36 @@ describe('Collections pages', () => {
     }));
   });
 
+  it('shows record and user Field counts in Cards and List and surfaces only active Change states', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(Response.json({
+      data: [
+        { id: 'col_posts', name: 'posts', type: 'Normal', fields: [{ id: 'fld_id', name: 'id', type: 'text', system: true }, { id: 'fld_title', name: 'title', type: 'text' }, { id: 'fld_summary', name: 'summary', type: 'text' }], recordCount: 12, pendingChangeStatus: 'ready' },
+        { id: 'col_authors', name: 'authors', type: 'Normal', fields: [{ id: 'fld_id', name: 'id', type: 'text', system: true }, { id: 'fld_name', name: 'name', type: 'text' }], recordCount: 0 },
+        { id: 'col_drafts', name: 'drafts', type: 'Normal', fields: [{ id: 'fld_title', name: 'title', type: 'text' }], recordCount: 3, pendingChangeStatus: 'failed' },
+      ],
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MemoryRouter initialEntries={['/collections']}><CollectionsPage /></MemoryRouter>);
+
+    expect(await screen.findByText('12 records')).toBeInTheDocument();
+    expect(screen.getByText('2 fields')).toBeInTheDocument();
+    expect(screen.getByText('Pending change')).toBeInTheDocument();
+    expect(screen.getByText('0 records')).toBeInTheDocument();
+    expect(screen.getAllByText('1 field')).toHaveLength(2);
+    expect(screen.getByText('Failed change')).toBeInTheDocument();
+    expect(screen.queryByText('No pending changes')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /authors/i })).not.toHaveTextContent('change');
+
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByText('posts').closest('a')).toHaveTextContent('12 records · 2 fields');
+    expect(screen.getByText('Pending change')).toBeInTheDocument();
+    expect(screen.getByText('Failed change')).toBeInTheDocument();
+    expect(screen.getByText('authors').closest('a')).toHaveTextContent('0 records · 1 field');
+    expect(screen.getByText('authors').closest('a')).not.toHaveTextContent('change');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('creates a Collection with its initial Fields and shows the durable result in the workspace', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {

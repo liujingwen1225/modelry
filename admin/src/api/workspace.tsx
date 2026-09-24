@@ -63,6 +63,7 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
     listApplicationRecords: 'list',
     createApplicationRecord: 'create',
     getApplicationRecord: 'view',
+    readApplicationRecordFile: 'view',
     updateApplicationRecord: 'update',
     deleteApplicationRecord: 'delete',
   };
@@ -123,10 +124,10 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
   function buildPath() {
     if (!endpoint) return '';
     let path = endpoint.path;
-    for (const key of ['recordId', 'sessionId']) {
+    for (const key of ['recordId', 'sessionId', 'fieldName']) {
       if (path.includes(`{${key}}`)) {
         const value = pathValues[key]?.trim();
-        if (!value) throw new Error(`${key === 'recordId' ? 'Record ID' : 'Session ID'} is required for this endpoint.`);
+        if (!value) throw new Error(`${key === 'recordId' ? 'Record ID' : key === 'sessionId' ? 'Session ID' : 'File field'} is required for this endpoint.`);
         path = path.replace(`{${key}}`, encodeURIComponent(value));
       }
     }
@@ -153,6 +154,7 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
       const response = await runApplicationRequest({
         method: endpoint.method,
         path,
+        ...(endpoint.accept ? { accept: endpoint.accept } : {}),
         ...(endpoint.bodySchema ? { body } : {}),
         ...(appSession && (!endpoint.authOnly || endpoint.requiresSession) ? { applicationSession: appSession } : {}),
       });
@@ -191,11 +193,12 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
               <form onSubmit={(event) => void run(event)}>
                 {activeEndpoint.template.includes('{recordId}') && <FormField htmlFor="api-record-id" label="Record ID"><input autoComplete="off" id="api-record-id" onChange={(event) => setPathValues((value) => ({ ...value, recordId: event.target.value }))} value={pathValues.recordId ?? ''} /></FormField>}
                 {activeEndpoint.template.includes('{sessionId}') && <FormField htmlFor="api-session-id" label="Session ID"><input autoComplete="off" id="api-session-id" onChange={(event) => setPathValues((value) => ({ ...value, sessionId: event.target.value }))} value={pathValues.sessionId ?? ''} /></FormField>}
+                {activeEndpoint.template.includes('{fieldName}') && <FormField htmlFor="api-file-field" label="File field"><select id="api-file-field" onChange={(event) => setPathValues((value) => ({ ...value, fieldName: event.target.value }))} value={pathValues.fieldName ?? ''}><option value="">Choose a file field</option>{selectedCollection.fields.filter((field) => field.type === 'file').map((field) => <option key={field.id ?? field.name} value={field.name}>{field.name}</option>)}</select></FormField>}
                 {activeEndpoint.operationId === 'listApplicationRecords' && <div className="api-runner__query-fields"><FormField htmlFor="api-limit" label="Limit"><input id="api-limit" max="100" min="1" onChange={(event) => { setLimit(event.target.value); updateParam('runLimit', event.target.value); }} type="number" value={limit} /></FormField><FormField htmlFor="api-search" label="Search"><input id="api-search" onChange={(event) => { setSearchValue(event.target.value); updateParam('runSearch', event.target.value); }} value={searchValue} /></FormField><FormField htmlFor="api-filter" hint={'Example: status eq 200 or title contains "hello"'} label="Filter"><input id="api-filter" onChange={(event) => { setFilter(event.target.value); updateParam('runFilter', event.target.value); }} value={filter} /></FormField><FormField htmlFor="api-sort" label="Sort" hint="Comma-separated field and direction pairs."><input id="api-sort" onChange={(event) => { setSort(event.target.value); updateParam('runSort', event.target.value); }} value={sort} /></FormField></div>}
                 {(!activeEndpoint.authOnly || activeEndpoint.requiresSession) && <FormField htmlFor="api-app-session" hint="Kept in this page's memory only. It is never saved or shown in request history." label="App Session token (optional)"><input autoComplete="off" id="api-app-session" onChange={(event) => setAppSession(event.target.value)} type="password" value={appSession} /></FormField>}
                 {activeEndpoint.bodySchema && <FormField htmlFor="api-request-body" hint={`${activeEndpoint.bodySchema} · Request body stays in this page and is not stored in request history.`} label="JSON body"><textarea autoComplete="off" id="api-request-body" onChange={(event) => setBody(event.target.value)} rows={8} spellCheck={false} value={body} />{runError instanceof SyntaxError && <span className="api-validation" role="alert">Enter valid JSON before sending the request.</span>}</FormField>}
                 {runError !== undefined && !(runError instanceof SyntaxError) && (() => { const copy = errorCopy(runError, 'Request could not be sent.'); return <ErrorState description={copy.detail} title={copy.title} />; })()}
-                <div className="api-runner__actions"><Button disabled={running} type="submit" variant="primary">{running ? <><RefreshCw aria-hidden="true" className="spin" size={15} /> Sending…</> : `Send ${activeEndpoint.method} request`}</Button><CopyButton label="Copy request command without credentials or body" value={`curl -X ${activeEndpoint.method} '${activeEndpoint.path}'`} /></div>
+                <div className="api-runner__actions"><Button disabled={running} type="submit" variant="primary">{running ? <><RefreshCw aria-hidden="true" className="spin" size={15} /> Sending…</> : `Send ${activeEndpoint.method} request`}</Button><CopyButton label="Copy request command without the API key, session token, or body" value={`curl -X ${activeEndpoint.method} '${activeEndpoint.path}'`} /></div>
               </form>
               {running && <LoadingState label="Sending Application request" />}
               {result && <ApplicationResponse result={result} location={location} endpoint={activeEndpoint} />}
@@ -356,7 +359,7 @@ function matchingEndpoint(collections: Collection[], record: RequestRecord) {
   if (!collection) return undefined;
   return endpointsForCollection(collection).find((item) => {
     if (item.method !== record.method) return false;
-    const escaped = item.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\{(?:recordId|sessionId)\\\}/g, '[^/]+');
+    const escaped = item.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\{[^/{}]+\\\}/g, '[^/]+');
     return new RegExp(`^${escaped}/?$`).test(record.endpoint);
   });
 }
@@ -402,6 +405,7 @@ export function RequestDetailPage() {
       <dl className="api-detail-grid">
         <div><dt>Time</dt><dd><time dateTime={record.time}>{new Date(record.time).toLocaleString()}</time></dd></div>
         <div><dt>Duration</dt><dd>{record.durationMs} ms</dd></div>
+        <div><dt>Response size</dt><dd>{record.responseSizeBytes === undefined ? 'Not recorded' : `${record.responseSizeBytes} bytes`}</dd></div>
         <div><dt>Method and route</dt><dd><span className={`api-method api-method--${record.method.toLowerCase()}`}>{record.method}</span> <code>{record.endpoint}</code></dd></div>
         <div><dt>Collection</dt><dd>{collection?.name ?? record.collectionId ?? '—'}</dd></div>
         <div><dt>Authentication</dt><dd>{record.authenticationOutcome ?? 'Not recorded'}</dd></div>
