@@ -1,49 +1,171 @@
-# Modelry Reboot Context
+# Modelry 当前上下文
 
-## Project identity
+## 产品定位
 
-Modelry is a self-hosted application backend designed for both human developers and Coding Agents.
+Modelry 是一个面向人类开发者与 Coding Agent 的产品化 Backend Platform。
 
-This repository is the clean **Modelry Reboot** implementation. The previous implementation is preserved in `liujingwen1225/modelry-bf` and is not a code compatibility baseline.
+V0.1 的核心用户路径统一为：
 
-## Reboot baseline
+~~~text
+First Run
+→ Create Backend Model
+→ Manage Data
+→ Secure
+→ Use API
+→ Observe
+→ Evolve
+~~~
 
-- Backend: **Go**
-- Frontend: **React + TypeScript + Vite**
-- Storage: **SQLite First**
-- Packaging: **Single Binary**
-- Topology: **One Instance / One Project**
-- Architecture: **Modular Monolith**
-- Discipline: **Contract First**
+扩展能力是重要方向，但不作为第一个 V0.1 Release Gate 的前置条件。
 
-## Current phase
+Modelry 不能演变成“数据库管理工具 + 一堆附加功能”。
 
-The project is currently in **documentation consolidation and V0.1 re-planning**.
+## 产品化要求
 
-Do not begin production implementation until Product Vision, V0.1 Scope, Reboot ADRs, Foundation Spec, Contract, Admin Product UX and Browser Acceptance are rewritten and accepted.
+所有产品和技术决策必须优先服务：
 
-## Documentation authority
+- **易用**：少理解一个内部概念、少一次跳转、少一次无意义确认。
+- **好用**：真实工作流连续，默认值合理，结果原地可见。
+- **好看**：视觉、信息层级与交互统一。
+- **功能完整**：核心 Backend 工作流真正闭环，而不是拥有很多未闭环能力。
 
-When documents disagree:
+技术纯粹性、提前抽象和内部对象模型不得凌驾于产品体验。
 
-1. accepted Reboot decisions / ADRs / Specs / Contracts;
-2. current `docs/reboot/**`;
-3. `docs/archive/pre-reboot/**`;
-4. `docs/archive/legacy-v0.1/**`;
-5. legacy implementation/prototype/spike evidence.
+## 产品体系
 
-Nothing under `docs/archive/**` is automatically authoritative for the Go Reboot.
+### Community
 
-## Implementation principle
+开源、自托管、SQLite Only、零配置优先。
 
-Do not translate the old TypeScript backend into Go.
+Community 的长期产品可以持续拥有 Files、Realtime、Hooks、Secrets 等能力，但 V0.1 不要求一次完成所有长期 Community 能力。
 
-```text
-product semantics
-  -> accepted scope
-  -> ADR
-  -> contract
-  -> spec
-  -> Go / React implementation
-  -> acceptance
-```
+### Commercial / Enterprise
+
+面向正式生产、团队和组织的商业 Self-hosted 产品。
+
+PostgreSQL、Organization / Team Governance、Enterprise Identity、Advanced RBAC、Backup / Restore、Production Observability、HA / Scale、Fleet Operations、Compliance 与 Support 属于这一阶段。
+
+### Modelry Cloud
+
+官方 Managed SaaS。
+
+Cloud 使用独立 Cloud Control Plane 管理 Organization、Team、Project、Environment、Region、Usage、Billing、Backup 和托管运维。
+
+Project Backend Plane 的核心产品语义继续与 Self-hosted Modelry 共用。
+
+## V0.1 Community 固定基线
+
+- Go Runtime
+- SQLite Only
+- React + TypeScript + Vite
+- Modular Monolith
+- Contract First
+- Zero-config-first
+- 简单 Self-hosted Delivery
+- 一个 Runtime 服务一个 Project
+
+## V0.1 产品范围原则
+
+必须优先完成：
+
+~~~text
+Model
+→ Data
+→ Security
+→ API
+→ Observe
+→ Evolve
+~~~
+
+V0.1 保留：
+
+- Collections / Fields / Relations / Basic Index / Validation / Defaults
+- Records
+- Durable Pending Schema Changes / Apply / Recovery / Applied History
+- REST API / OpenAPI / Runner / Request Logs
+- Auth Collection / Email + Password / Sessions
+- Access Rules
+- Local Single-file Field
+- Owner + Service Account / API Key
+- Minimal Audit
+- Runtime / Storage Diagnostics
+- Minimal CLI
+- Core MCP
+
+V0.1.x 再进入：
+
+- Realtime
+- Lifecycle Hooks
+- Secrets UI
+- Event Hooks / Webhooks
+- Policy Simulation
+- Additional Administrator Management
+- Full Activity Timeline
+- Drift Product
+- Editable Runtime Settings
+- Multiple File Values
+- S3-compatible Storage
+
+## 架构不变量
+
+- Backend Model 定义 Modelry 产品语义，SQLite 不能反过来定义产品。
+- V0.1 只实现 SQLite，但未来 PostgreSQL 不应要求重写 Domain Model、Admin 或 Contract。
+- Application Data Plane 与 Modelry Control Plane 分离。
+- Admin Identity 与 Application User Identity 分离。
+- Principal 与 Credential 在 Domain 中分离，但 UI 使用 Administrator、Service Account、App User、Password、API Key、Session 等自然术语。
+- 受管 Backend Model Mutation 统一经过显式 Change Lifecycle。
+- Admin、HTTP、CLI 与 MCP 操作同一套 Backend Semantics。
+- Go 是 Runtime 实现语言，不是用户必须面对的扩展语言。
+- Domain Language 不等于 UI Language。
+
+## Change UX 不变量
+
+底层继续保留：
+
+~~~text
+ChangeSet
+→ Structured Diff
+→ Risk / Preconditions / Impact
+→ Apply Attempt
+→ Migration / Ledger
+~~~
+
+用户主界面优先使用：
+
+~~~text
+Pending
+Needs review
+Failed
+Applied
+~~~
+
+Schema 的 Pending Changes 必须耐久保存。用户离开 Collection、刷新页面或切换 Fields / Relations / Indexes 时不应丢失。
+
+Policy 与 Auth Configuration 不与 Schema 共用一个隐形 Collection-wide Draft。
+
+## 权威文档阅读顺序
+
+1. docs/00-product-vision.md
+2. docs/01-product-roadmap.md
+3. docs/02-technical-roadmap.md
+4. docs/03-editions-and-cloud.md
+5. docs/04-v0.1-community-scope.md
+6. docs/05-product-experience-and-acceptance.md
+7. docs/06-product-architecture.md
+8. docs/specs/0001-admin-product-ux-spec.md
+9. 后续 Accepted ADR
+10. 后续 Accepted Spec
+11. 后续 Accepted Contract
+
+历史文档不具备当前权威性。
+
+## 当前实施 Gate
+
+Admin Product UX Spec 已完成本轮范围和 UX 收敛。
+
+在大范围生产实现前仍需建立并接受：
+
+- Runtime / Storage ADR
+- Foundation Spec
+- HTTP Contract / OpenAPI
+- Browser Acceptance Spec
