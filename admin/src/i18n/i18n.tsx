@@ -29,9 +29,9 @@ const resourceCache = new Map<Locale, Promise<LocaleResources>>();
 export function resolveInitialLocale(preference: string | null | undefined, browserLocale: string | undefined): Locale {
   if (preference === 'en' || preference === 'zh-CN') return preference;
   if (preference !== null && preference !== undefined) return 'en';
-  const normalizedBrowserLocale = browserLocale?.toLowerCase();
-  if (normalizedBrowserLocale?.startsWith('zh')) return 'zh-CN';
-  if (normalizedBrowserLocale?.startsWith('en')) return 'en';
+  const normalizedBrowserLocale = browserLocale?.trim().toLowerCase();
+  if (normalizedBrowserLocale === 'zh-cn') return 'zh-CN';
+  if (normalizedBrowserLocale === 'en') return 'en';
   return 'en';
 }
 

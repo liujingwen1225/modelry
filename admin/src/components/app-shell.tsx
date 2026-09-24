@@ -273,7 +273,7 @@ function ShellCommands() {
       });
     }
 
-    return result;
+    return result.map((command) => ({ ...command, requiresCapabilities: ['admin:owner-session'] }));
   }, [currentId, locale, recentCollections, runtime, setLocale, storage, t, theme, toggleTheme]);
 
   useRegisterCommands(commands);

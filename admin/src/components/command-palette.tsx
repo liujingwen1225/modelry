@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { Command, Search, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useOwnerSession } from '../auth/owner-session';
 import { useI18n } from '../i18n/i18n';
-import { fuzzyMatch, useCommandRegistry, type AdminCommand, type CommandContext } from './command-registry';
+import { fuzzyMatch, isCommandVisible, useCommandRegistry, type AdminCommand, type CommandContext } from './command-registry';
 import { collectionIdFromPathname } from './route-context';
 
 function isMacPlatform(platform: string): boolean {
@@ -31,7 +32,7 @@ function CommandPaletteDialog({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const filtered = useMemo(() => commands
-    .filter((command) => !command.isVisible || command.isVisible(context))
+    .filter((command) => isCommandVisible(command, context))
     .map((command) => ({ command, label: command.label(context), keywords: command.keywords?.(context) ?? [] }))
     .filter(({ label, keywords }) => fuzzyMatch(query, label, keywords)), [commands, context, query]);
 
@@ -47,7 +48,7 @@ function CommandPaletteDialog({
 
   function execute(index: number) {
     const item = filtered[index];
-    if (!item || (item.command.isEnabled && !item.command.isEnabled(context))) return;
+    if (!item || !isCommandVisible(item.command, context) || (item.command.isEnabled && !item.command.isEnabled(context))) return;
     item.command.execute(context);
     onClose();
   }
@@ -155,15 +156,26 @@ export function CommandPaletteControl() {
   const { commands } = useCommandRegistry();
   const { pathname, search, hash } = useLocation();
   const navigate = useNavigate();
+  const { state: ownerSession } = useOwnerSession();
   const { t } = useI18n();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const shortcut = commandPaletteShortcut();
+  const ownerId = ownerSession.status === 'authenticated' ? ownerSession.session.owner.id : undefined;
   const context = useMemo<CommandContext>(() => {
     const collectionId = collectionIdFromPathname(pathname);
-    return { pathname, search, hash, ...(collectionId ? { collectionId } : {}), navigate: (to) => navigate(to) };
-  }, [pathname, search, hash, navigate]);
+    const principal = ownerId ? { kind: 'owner' as const, id: ownerId } : null;
+    return {
+      pathname,
+      search,
+      hash,
+      ...(collectionId ? { collectionId } : {}),
+      principal,
+      capabilities: principal ? ['admin:owner-session'] : [],
+      navigate: (to) => navigate(to),
+    };
+  }, [pathname, search, hash, navigate, ownerId]);
 
   function showPalette() {
     const active = document.activeElement;

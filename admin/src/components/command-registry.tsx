@@ -1,11 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TranslationKey } from '../i18n/i18n';
 
+export type AdminCapability = `admin:${string}`;
+
+export type CommandPrincipal = { kind: 'owner'; id: string };
+
 export type CommandContext = {
   pathname: string;
   search: string;
   hash: string;
   collectionId?: string;
+  principal: CommandPrincipal | null;
+  capabilities: readonly AdminCapability[];
   navigate: (to: string) => void;
 };
 
@@ -14,6 +20,7 @@ export type AdminCommand = {
   category: TranslationKey;
   label: (context: CommandContext) => string;
   keywords?: (context: CommandContext) => string[];
+  requiresCapabilities?: readonly AdminCapability[];
   isVisible?: (context: CommandContext) => boolean;
   isEnabled?: (context: CommandContext) => boolean;
   execute: (context: CommandContext) => void;
@@ -71,6 +78,12 @@ export function fuzzyMatch(query: string, label: string, keywords: readonly stri
   const normalizedQuery = normalize(query.trim());
   if (!normalizedQuery) return true;
   return [label, ...keywords].some((candidate) => subsequence(normalizedQuery, normalize(candidate)));
+}
+
+export function isCommandVisible(command: AdminCommand, context: CommandContext): boolean {
+  const required = command.requiresCapabilities;
+  if (required?.some((capability) => !context.capabilities.includes(capability))) return false;
+  return !command.isVisible || command.isVisible(context);
 }
 
 type RegistryContextValue = {

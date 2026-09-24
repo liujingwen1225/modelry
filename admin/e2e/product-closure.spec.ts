@@ -377,6 +377,27 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const collections = await requestJSON(activePage, 'GET', '/admin/api/v1/collections');
     expect(JSON.stringify(collections.body)).toContain('authors');
 
+    await activePage.goto(`${runtimeURL}/collections`);
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    let palette = activePage.getByRole('dialog', { name: 'Command palette' });
+    let paletteInput = palette.getByRole('combobox', { name: 'Search commands' });
+    await paletteInput.fill('Open authors');
+    await expect(palette.getByRole('option', { name: 'Open authors' })).toBeVisible();
+    await activePage.keyboard.press('Enter');
+    await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
+
+    await activePage.goto(`${runtimeURL}/collections`);
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    palette = activePage.getByRole('dialog', { name: 'Command palette' });
+    paletteInput = palette.getByRole('combobox', { name: 'Search commands' });
+    await paletteInput.fill('Create record');
+    await expect(palette.getByRole('option')).toHaveCount(0);
+    await expect(palette.getByRole('status')).toContainText('No commands match');
+    await activePage.keyboard.press('Escape');
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
+
     const ownerCookie = (await browserContext.cookies(`${runtimeURL}/admin/api/v1`)).find((cookie) => cookie.name === 'modelry_admin_session');
     expect(ownerCookie?.value).toBeTruthy();
     const sessionClient = await request.newContext();
@@ -392,6 +413,8 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.getByRole('button', { name: 'Sign out', exact: true }).click();
       expect((await logoutResponsePromise).status()).toBe(204);
       await expect(activePage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+      await expect(activePage.locator('.topbar')).toHaveCount(0);
+      await expect(activePage.locator('.command-palette-trigger')).toHaveCount(0);
 
       const revokedSession = await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } });
       expect(revokedSession.status()).toBe(401);
@@ -428,12 +451,17 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await expect(chineseNavigation.getByRole('link', { name: '集合' })).toBeVisible();
       await expect(activePage).toHaveURL(shellDeepLink);
       await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+      await activePage.reload();
+      await expect(activePage).toHaveURL(shellDeepLink);
+      await expect(activePage.getByRole('navigation', { name: '项目导航' })).toBeVisible();
+      await expect(activePage.getByRole('combobox', { name: '语言' })).toHaveValue('zh-CN');
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
 
       await activePage.getByRole('button', { name: '搜索命令' }).focus();
       await activePage.keyboard.press('Control+k');
-      let palette = activePage.getByRole('dialog', { name: '命令面板' });
+      palette = activePage.getByRole('dialog', { name: '命令面板' });
       await expect(palette).toBeVisible();
-      const paletteInput = palette.getByRole('combobox', { name: '搜索命令' });
+      paletteInput = palette.getByRole('combobox', { name: '搜索命令' });
       await paletteInput.fill('创建记录');
       await expect(palette.getByRole('option', { name: '在 authors 中创建记录' })).toBeVisible();
       await activePage.keyboard.press('Escape');
@@ -621,6 +649,14 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(pending).toMatchObject({ status: 'ready' });
     changeSetId = findString(pending, 'changeSetId') ?? '';
     expect(changeSetId).toBeTruthy();
+    await activePage.getByRole('link', { name: 'Records', exact: true }).click();
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    let palette = activePage.getByRole('dialog', { name: 'Command palette' });
+    await palette.getByRole('combobox', { name: 'Search commands' }).fill('Open pending change: posts');
+    await expect(palette.getByRole('option', { name: 'Open pending change: posts' })).toBeVisible();
+    await activePage.keyboard.press('Enter');
+    await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
     await activePage.getByRole('button', { name: 'Fields', exact: true }).click();
     await activePage.reload();
     await expect(activePage.getByRole('row').filter({ hasText: 'summary' })).toBeVisible();
@@ -1015,6 +1051,14 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const failedChange = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/changes/${changeSetId}`)).body) as Record<string, unknown>;
     expect(failedChange.status).toBe('failed');
     expect(failedChange.applyAttempts).toHaveLength(1);
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    const failedChangePalette = activePage.getByRole('dialog', { name: 'Command palette' });
+    await failedChangePalette.getByRole('combobox', { name: 'Search commands' }).fill('Open failed change: posts');
+    await expect(failedChangePalette.getByRole('option', { name: 'Open failed change: posts' })).toBeVisible();
+    await activePage.keyboard.press('Enter');
+    await expect(activePage).toHaveURL(`${runtimeURL}/changes?changeSet=${encodeURIComponent(changeSetId)}`);
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
     const unchanged = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}`)).body);
     const categoryField = (unchanged as { fields: Array<{ name: string; unique?: boolean }> }).fields.find((field) => field.name === 'category');
     expect(categoryField).toBeDefined();

@@ -509,6 +509,7 @@ export function CollectionWorkspacePage() {
       category: 'commands.categories.changes',
       label: () => t(failed ? 'commands.failedChange' : 'commands.pendingChange', { name: collection.name }),
       keywords: () => ['pending', 'failed', 'change', 'schema', collection.name],
+      requiresCapabilities: ['admin:owner-session'],
       execute: (context) => context.navigate(route),
     }];
   }, [collection, pending, t]);

@@ -23,7 +23,9 @@ function LocaleProbe() {
 describe('Admin i18n foundation', () => {
   it('uses a saved preference before the browser locale and uses the browser only for first default', () => {
     expect(resolveInitialLocale('en', 'zh-CN')).toBe('en');
-    expect(resolveInitialLocale(undefined, 'zh-TW')).toBe('zh-CN');
+    expect(resolveInitialLocale(undefined, 'zh-CN')).toBe('zh-CN');
+    expect(resolveInitialLocale(undefined, 'zh-cn')).toBe('zh-CN');
+    expect(resolveInitialLocale(undefined, 'zh-TW')).toBe('en');
     expect(resolveInitialLocale(undefined, 'en-US')).toBe('en');
     expect(resolveInitialLocale(undefined, 'fr-FR')).toBe('en');
   });

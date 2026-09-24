@@ -1438,7 +1438,7 @@ Project / Context | Command Palette | Runtime | Language | Theme | Owner
 
 Admin 初始支持 `en`（English）和 `zh-CN`（简体中文）。所有用户可见的共享 Shell、导航、状态控件和 Command Palette 文案必须使用结构化、按产品域组织的 locale resources 与稳定 translation keys。后续 V0.1.x Surface 从首次实现开始使用同一 i18n API，不得自建页面翻译表。
 
-- 首次选择：有有效 Modelry locale preference 时使用该值；否则仅在首次默认值中参考浏览器 locale；未知 locale 安全回退到 English。
+- 首次选择：有有效 Modelry locale preference 时使用该值；否则仅在首次默认值中匹配明确支持的浏览器 locale（`en`、`zh-CN`，标签匹配不区分大小写）；`zh-TW` 等不支持的 locale 安全回退到 English，不按语言前缀推断区域变体。
 - 用户选择持久化；切换即时生效，不重新加载页面，也不改变当前 pathname、query、hash 或局部工作上下文。
 - 日期、时间、相对时间、数字和复数通过 `Intl` locale-aware formatter 提供共享入口。
 - Collection/Field 名称、ID、用户数据、API/domain 标识符及稳定服务端错误码是数据或契约，不翻译。已支持的服务端错误码可以映射到本地化的说明文案。
@@ -1455,6 +1455,8 @@ Command Palette 是通过共享、可扩展的 Command Registry 注册的操作�
 - `⌘K`（macOS）和 `Ctrl+K`（Windows/Linux）打开 palette；输入只对可见 command 的 label/keywords 做模糊匹配，不对后台数据做全文搜索。
 - 支持键盘上下移动、Enter 执行、Escape 关闭、focus trap 与关闭后的 focus restoration。
 - 只显示当前用户能力、项目、路由和资源上下文中真实可执行的命令。命令经正常导航和业务动作执行，不提供授权旁路。
+- V0.1.x Admin session 的真实授权主体只有经 Runtime 校验的 Owner；当前 Admin Session contract 不含细粒度 capability claims。CommandContext 从实时 Owner session 表达 `admin:owner-session` capability 与 Owner principal，并携带当前 route / Collection context。声明了所需 capability 的命令仅在上下文包含全部所需 capability 时可见；没有 capability requirement 的命令仍由其真实 route/resource `isVisible` 条件决定。Application Service Account / API Key 的 Permission 不属于 Admin authorization，也不得被复用于此处。
+- Command visibility 仅控制发现和调用入口；运行时 API 的 Owner session 校验仍是授权权威，不能由客户端命令注册替代或绕过。
 - 可用命令限于已实现的导航页、近期 Collection、当前 Collection tabs 与 Create actions、适用的 Pending/Failed Change，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
 - 导航只在语义匹配时保留 URL/deep-link context；切换无关的一级工作区不继承另一页面的 query/hash。
 
