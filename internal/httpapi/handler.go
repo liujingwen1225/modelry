@@ -63,16 +63,20 @@ type requestIDKey struct{}
 
 var fallbackRequestID atomic.Uint64
 
-func NewHandler(diagnostics Diagnostics, adminUI http.Handler) http.Handler {
+func NewHandler(diagnostics Diagnostics, adminUI http.Handler, apiRouters ...http.Handler) http.Handler {
 	if adminUI == nil {
 		adminUI = http.NotFoundHandler()
+	}
+	var apiRouter http.Handler
+	if len(apiRouters) > 0 {
+		apiRouter = apiRouters[0]
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		requestID := newRequestID()
 		w.Header().Set("X-Request-Id", requestID)
 		request = request.WithContext(context.WithValue(request.Context(), requestIDKey{}, requestID))
 
-		if isRuntimeStatusPath(request.URL.Path) || isStorageStatusPath(request.URL.Path) {
+		if apiRouter == nil && (isRuntimeStatusPath(request.URL.Path) || isStorageStatusPath(request.URL.Path)) {
 			if request.Method != http.MethodGet {
 				writeError(w, request, http.StatusNotFound, "NOT_FOUND", "The requested API endpoint was not found.", "")
 				return
@@ -96,6 +100,10 @@ func NewHandler(diagnostics Diagnostics, adminUI http.Handler) http.Handler {
 		}
 
 		if isAPIPath(request.URL.Path) {
+			if apiRouter != nil {
+				apiRouter.ServeHTTP(w, request)
+				return
+			}
 			writeError(w, request, http.StatusNotFound, "NOT_FOUND", "The requested API endpoint was not found.", "")
 			return
 		}

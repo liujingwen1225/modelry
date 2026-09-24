@@ -100,6 +100,13 @@ export function DiagnosticsCards() {
             <div><span>Provider</span><strong>{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
             <div><span>Local storage</span><HealthValue label="local storage" resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
             <div><span>Database</span><HealthValue label="database" resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
+            {storage.state === 'ready' && storage.value.localStorage.path && (
+              <div className="diagnostic-path">
+                <span>Local path</span>
+                <code className="diagnostic-path__value">{storage.value.localStorage.path}</code>
+                <CopyButton label="Copy Local Storage path" value={storage.value.localStorage.path} />
+              </div>
+            )}
             {storage.state === 'ready' && storage.value.localStorage.message && <p className="diagnostic-note">{storage.value.localStorage.message}</p>}
           </div>
         )}

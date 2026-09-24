@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,6 +66,41 @@ func TestOpenUsesRealSQLiteAndDurableProjectIdentity(t *testing.T) {
 	defer restarted.Close()
 	if restarted.ProjectID() != projectID {
 		t.Fatalf("restart changed project ID from %q to %q", projectID, restarted.ProjectID())
+	}
+}
+
+func TestTransactionBoundaryCommitsOrRollsBackWholeCallback(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "project.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	if err := store.WithTransaction(context.Background(), func(tx Executor) error {
+		_, err := tx.ExecContext(context.Background(), "CREATE TABLE transaction_boundary_test (value TEXT NOT NULL)")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rollback := errors.New("rollback this product operation")
+	if err := store.WithTransaction(context.Background(), func(tx Executor) error {
+		if _, err := tx.ExecContext(context.Background(), "INSERT INTO transaction_boundary_test (value) VALUES (?)", "must not persist"); err != nil {
+			return err
+		}
+		return rollback
+	}); !errors.Is(err, rollback) {
+		t.Fatalf("WithTransaction error = %v, want callback error %v", err, rollback)
+	}
+
+	var count int
+	if err := store.WithReadSnapshot(context.Background(), func(tx Executor) error {
+		return tx.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM transaction_boundary_test").Scan(&count)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rolled-back operation left %d rows, want 0", count)
 	}
 }
 

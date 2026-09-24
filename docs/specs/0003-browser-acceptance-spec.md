@@ -44,26 +44,23 @@
 
 某项能力尚未进入候选版本时，不得把该流程记为通过，也不得把它伪装成已交付功能。该能力进入候选版本后，其流程必须按本 Spec 使用真实 Runtime、真实 SQLite、真实 HTTP、真实 Admin 和真实 Chromium；不得使用 Mock Backend、Stub、网络拦截或录制响应通过发布门禁。API 请求成功、Go 单元 / 集成测试通过或静态 OpenAPI 校验均不能单独替代浏览器流程结果。任何适用流程失败须先修复或阻断相应发布；不得把失败项标作通过。
 
-### 1.4 本次 Foundation Closure 的发布门禁子集
+### 1.4 V0.1 Product Closure 发布门禁
 
-Issue #2 / #9 的目标是关闭 Runtime、HTTP、Admin Shell 与持久化基础，不提前交付后续产品功能。本次 Foundation Closure 只执行 #9 指定的 foundation smoke：
+GitHub Issue #11 将 FLOW-001 至 FLOW-010 纳入同一 V0.1 Product Closure。候选版本必须从空 Project Root 开始，按顺序完成全部产品流程，并在同一 Root 上执行重启验证：
 
 ```text
 empty Project Root
-→ start Modelry
-→ Runtime becomes READY
-→ Admin loads in Chromium
-→ Runtime / Storage status is read through real HTTP
-→ structured error + canonical requestId path works
-→ reload and implemented-route deep-link smoke works
+→ Owner Bootstrap and first Collection / Record
+→ Collections, Records, Schema Pending Changes, and Apply
+→ Application User, Session, and Access Rules
+→ API Runner, Request Detail, Service Account, and API Key
+→ failed Schema Apply recovery
 → close the browser page and stop Runtime
 → restart against the same Project Root
-→ durable foundation state remains valid
+→ durable product state, revoked credentials, Requests, and Audit remain valid
 ```
 
-该子集必须满足本节的真实栈要求和全局 Browser Health Gate。它不等同于完整 FLOW-001：本次不要求 Owner Bootstrap、创建 Collection 或创建 Record；也不等同于完整 FLOW-010：本次不要求重启后验证尚未实现的 Collection、Schema、Auth、Access、Service Account、RequestRecord 或 AuditRecord。Foundation durable state 只核验 ADR-0001 定义且当前实现承诺的 Project 身份、真实 SQLite / Local Storage 状态及其重启连续性。
-
-Issue #7 明确不实现 Collections、Records、Schema、Auth、Access Rules、Service Accounts 等后续功能；Issue #8 明确不实现完整业务页面。OpenAPI 中定义这些后续边界不表示 Runtime 已提供对应操作。当前 smoke 仅访问真实实现的 Runtime / Storage 状态和结构化错误路径；不得为了满足未来流程而添加伪产品 Endpoint 或 UI。
+此发布门禁执行全部十条流程，不得用旧的 Runtime / Storage foundation smoke 替代。Runtime / Storage 诊断和结构化错误仍是各流程的辅助核验；它们不能代替真实的产品操作、耐久状态检查或 Chromium 流程。候选版本声明完整支持 V0.1 Community 时，任何适用流程失败都阻断发布，不得将尚未实现的功能标为通过。
 
 ## 2. FLOW-001 — First Run
 
@@ -446,7 +443,7 @@ Issue #7 明确不实现 Collections、Records、Schema、Auth、Access Rules、
 - [x] 每条流程都具备 Preconditions、User Actions、Visible Result、Durable Result、Secondary Verification、Failure Conditions。
 - [x] Mandatory 环境要求 Real Runtime、Real SQLite、Real HTTP、Real Admin、Real Chromium。
 - [x] Reload / Restart 与全局 Browser Health Gate 已定义。
-- [x] 区分十条产品能力流程与 Issue #2 / #9 的 Foundation Closure 发布门禁子集；没有将未实现的后续功能列为本次必须交付项。
-- [x] 主 Agent 已复核 Accepted HTTP Contract / OpenAPI、十条流程结构与 Foundation Closure smoke 子集，并接受本 Spec。
+- [x] GitHub Issue #11 要求的十条产品能力流程均属于 V0.1 Product Closure 发布门禁；foundation smoke 不能替代产品流程。
+- [x] 主 Agent 已复核 Accepted HTTP Contract / OpenAPI、十条流程结构与 V0.1 Product Closure 发布门禁，并接受本 Spec。
 
 ## 13. 明确排除

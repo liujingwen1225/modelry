@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ApiClientError } from '../api/client';
 import { fetchRuntimeStatus, fetchStorageStatus, type RuntimeStatus, type StorageStatus } from '../api/status';
+import { useOwnerSession } from '../auth/owner-session';
 
 type Resource<T> =
   | { state: 'loading'; value?: T; error?: undefined }
@@ -16,6 +17,7 @@ type Diagnostics = {
 const DiagnosticsContext = createContext<Diagnostics | null>(null);
 
 export function DiagnosticsProvider({ children }: { children: React.ReactNode }) {
+  const { state: ownerSession } = useOwnerSession();
   const [generation, setGeneration] = useState(0);
   const [runtime, setRuntime] = useState<Resource<RuntimeStatus>>({ state: 'loading' });
   const [storage, setStorage] = useState<Resource<StorageStatus>>({ state: 'loading' });
@@ -23,6 +25,7 @@ export function DiagnosticsProvider({ children }: { children: React.ReactNode })
   const refresh = useCallback(() => setGeneration((value) => value + 1), []);
 
   useEffect(() => {
+    if (ownerSession.status === 'loading') return;
     const controller = new AbortController();
     setRuntime((previous) => ({ state: 'loading', value: previous.value }));
     setStorage((previous) => ({ state: 'loading', value: previous.value }));
@@ -46,7 +49,7 @@ export function DiagnosticsProvider({ children }: { children: React.ReactNode })
     );
 
     return () => controller.abort();
-  }, [generation]);
+  }, [generation, ownerSession.status]);
 
   const value = useMemo(() => ({ runtime, storage, refresh }), [runtime, storage, refresh]);
   return <DiagnosticsContext.Provider value={value}>{children}</DiagnosticsContext.Provider>;

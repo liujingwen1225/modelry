@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CircleDot, HeartPulse, Layers3, LockKeyhole, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CircleDot, HeartPulse, Layers3, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { DiagnosticsCards } from '../components/runtime-status';
 import { Button, PartialState, StatusChip, Surface } from '../components/ui';
+import { listAllCollections, type CollectionSummary } from '../collections/client';
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
@@ -48,33 +50,64 @@ function HealthSummary() {
 }
 
 export function OverviewPage() {
-  const { refresh } = useDiagnostics();
+  const { runtime, storage, refresh } = useDiagnostics();
+  const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
+  const [overviewLoaded, setOverviewLoaded] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listAllCollections(controller.signal).then(
+      (value) => {
+        if (controller.signal.aborted) return;
+        setCollections(value);
+        setOverviewLoaded(true);
+      },
+      () => {
+        if (controller.signal.aborted) return;
+        setCollections(null);
+        setOverviewLoaded(true);
+      },
+    );
+    return () => controller.abort();
+  }, []);
+
+  const recentCollections = useMemo(() => (collections ?? [])
+    .slice()
+    .sort((left, right) => (right.updatedAt ?? right.createdAt ?? '').localeCompare(left.updatedAt ?? left.createdAt ?? ''))
+    .slice(0, 3), [collections]);
+  const emptyProject = collections?.length === 0;
+  const failedCollections = (collections ?? []).filter((collection) => collection.pendingChangeStatus === 'failed');
+  const pendingCollections = (collections ?? []).filter((collection) => collection.pendingChangeStatus === 'ready' || collection.pendingChangeStatus === 'needsReview');
+  const schemaHealth = !overviewLoaded ? 'loading' : collections === null ? 'unavailable' : failedCollections.length > 0 ? 'failed' : pendingCollections.length > 0 ? 'pending' : 'ready';
+  const runtimeUnavailable = runtime.state === 'error' || (runtime.state === 'ready' && runtime.value.state !== 'ready');
+  const storageUnavailable = storage.state === 'error' || (storage.state === 'ready' && storage.value.localStorage.state !== 'ready');
+  const collectionsUnavailable = overviewLoaded && collections === null;
+  const needsAttention = runtimeUnavailable || storageUnavailable || collectionsUnavailable || failedCollections.length > 0;
+
   return (
     <div className="page-stack">
       <PageHeading
-        description="A clear view of your local backend and its runtime health."
+        description="Review project health and continue where you left off."
         eyebrow="PROJECT OVERVIEW"
         title="Overview"
       />
-      <Surface className="overview-hero" variant="raised">
-        <div className="hero-decoration" aria-hidden="true"><span /><span /><span /></div>
-        <div className="overview-hero__content">
-          <div className="hero-kicker"><span className="hero-kicker__mark"><Layers3 size={15} /></span> MODELRY WORKSPACE</div>
-          <h2>Everything starts with a<br className="desktop-only" /> healthy foundation.</h2>
-          <p>Runtime and storage status are read directly from this local project. Product workflows will arrive in their own release gates.</p>
-          <div className="hero-links">
-            <Link className="text-link" to="/settings">Review system status <ArrowRight aria-hidden="true" size={15} /></Link>
-            <span className="hero-separator" aria-hidden="true">·</span>
-            <Link className="text-link text-link--muted" to="/collections">Collections</Link>
-          </div>
-        </div>
-        <div className="hero-emblem" aria-hidden="true">
-          <div className="emblem-core"><Layers3 size={31} strokeWidth={1.4} /></div>
-          <span className="emblem-orbit emblem-orbit--one" />
-          <span className="emblem-orbit emblem-orbit--two" />
-          <span className="emblem-orbit emblem-orbit--three" />
-        </div>
-      </Surface>
+      {emptyProject && <Surface className="overview-empty" variant="raised">
+        <div><h2>Your backend is ready</h2><p>Create your first Collection to define application data and API.</p></div>
+        <Link className="button button--primary" to="/collections/new"><Layers3 aria-hidden="true" size={15} />Create Collection</Link>
+      </Surface>}
+      {needsAttention && <section aria-labelledby="overview-attention-heading" className="overview-attention">
+        <div><p className="eyebrow">ACTION CENTER</p><h2 id="overview-attention-heading">Needs attention</h2></div>
+        <ul>
+          {failedCollections.map((collection) => <li key={collection.id}>
+            <AlertTriangle aria-hidden="true" size={16} />
+            <span>A schema change needs recovery in {collection.name}.</span>
+            <Link to={`/collections/${encodeURIComponent(collection.id)}/schema`}>View</Link>
+          </li>)}
+          {collectionsUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>Collection status is unavailable.</span><Link to="/collections">Open Collections</Link></li>}
+          {runtimeUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>Runtime health needs review.</span><Link to="/settings">Open settings</Link></li>}
+          {storageUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>Local Storage is unavailable.</span><Link to="/settings">Open settings</Link></li>}
+        </ul>
+      </section>}
       <section aria-labelledby="health-heading" className="health-section">
         <div className="section-heading-row">
           <div>
@@ -88,29 +121,32 @@ export function OverviewPage() {
         </div>
         <HealthSummary />
         <DiagnosticsCards />
+        <Surface className={`overview-schema-health overview-schema-health--${schemaHealth}`} variant="standard">
+          <div>
+            <p className="eyebrow">SCHEMA</p>
+            <h3>{schemaHealth === 'ready' ? 'Up to date' : schemaHealth === 'pending' ? 'Pending changes' : schemaHealth === 'failed' ? 'Recovery needed' : schemaHealth === 'loading' ? 'Checking status' : 'Unavailable'}</h3>
+            <p>{schemaHealth === 'ready' ? 'No Collection has a pending change.' : schemaHealth === 'pending' ? `${pendingCollections.length} ${pendingCollections.length === 1 ? 'Collection has' : 'Collections have'} changes to review.` : schemaHealth === 'failed' ? `Recovery is needed for ${failedCollections.length} ${failedCollections.length === 1 ? 'Collection' : 'Collections'}.` : schemaHealth === 'loading' ? 'Checking saved schema changes…' : 'Collection schema status could not be loaded.'}</p>
+          </div>
+          <StatusChip state={schemaHealth === 'pending' ? 'degraded' : schemaHealth === 'failed' || schemaHealth === 'unavailable' ? 'unavailable' : schemaHealth}>{schemaHealth === 'ready' ? 'Healthy' : schemaHealth === 'pending' ? 'Review' : schemaHealth === 'failed' ? 'Action needed' : schemaHealth === 'loading' ? 'Checking' : 'Unavailable'}</StatusChip>
+          {schemaHealth === 'pending' && <Link to="/changes?view=pending">Review changes<ArrowRight aria-hidden="true" size={14} /></Link>}
+        </Surface>
       </section>
-      <section aria-labelledby="scope-heading" className="scope-section">
+      {recentCollections.length > 0 && <section aria-labelledby="recent-work-heading" className="overview-recent-work">
         <div className="section-heading-row">
           <div>
             <p className="eyebrow">WORKSPACE</p>
-            <h2 id="scope-heading">A focused foundation</h2>
+            <h2 id="recent-work-heading">Continue recent work</h2>
           </div>
         </div>
-        <div className="scope-grid">
-          <Surface className="scope-card" variant="standard">
-            <span className="scope-icon"><Layers3 aria-hidden="true" size={18} /></span>
-            <h3>Build your model</h3>
-            <p>Collections and API workflows have a place in the workspace. Their product operations are not delivered in this foundation closure.</p>
-            <Link className="text-link" to="/collections">View Collections area <ArrowRight aria-hidden="true" size={15} /></Link>
-          </Surface>
-          <Surface className="scope-card" variant="standard">
-            <span className="scope-icon scope-icon--violet"><LockKeyhole aria-hidden="true" size={18} /></span>
-            <h3>Operate with clarity</h3>
-            <p>Access and change workflows are reserved for their own release gates. This shell does not show sample data or pretend actions.</p>
-            <Link className="text-link text-link--muted" to="/access">View Access area <ArrowRight aria-hidden="true" size={15} /></Link>
-          </Surface>
+        <div className="overview-recent-work__list">
+          {recentCollections.map((collection) => <Surface className="overview-recent-work__item" key={collection.id} variant="standard">
+            <span><strong>{collection.name}</strong><small>{collection.type === 'Auth' ? 'Auth Collection' : 'Collection'}</small></span>
+            <Link to={collection.type === 'Auth' ? `/collections/${encodeURIComponent(collection.id)}/security` : `/collections/${encodeURIComponent(collection.id)}`}>
+              {collection.type === 'Auth' ? 'Edit security' : 'Open records'}<ArrowRight aria-hidden="true" size={14} />
+            </Link>
+          </Surface>)}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
@@ -125,7 +161,7 @@ export function SettingsPage() {
           <div>
             <p className="eyebrow">DIAGNOSTICS</p>
             <h2 id="settings-status-heading">Runtime &amp; storage</h2>
-            <p className="section-description">Anonymous snapshots contain health state and provider only. Local paths are not displayed.</p>
+            <p className="section-description">Review Local Storage health, provider, and project path.</p>
           </div>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={15} /> Refresh status</Button>
         </div>
@@ -134,31 +170,7 @@ export function SettingsPage() {
       </section>
       <Surface className="settings-note" variant="inset">
         <span className="scope-icon"><LockKeyhole aria-hidden="true" size={17} /></span>
-        <div><strong>Safe diagnostics</strong><p>Status requests use the anonymous, read-only Runtime and Storage endpoints. No Owner session is sent.</p></div>
-      </Surface>
-    </div>
-  );
-}
-
-const pageDescriptions = {
-  Collections: 'Define the data model for your application.',
-  API: 'Explore the API generated from your backend model.',
-  Changes: 'Review and apply model changes with confidence.',
-  Access: 'Understand how applications and users can access data.',
-} as const;
-
-export function FoundationScopePage({ title }: { title: keyof typeof pageDescriptions }) {
-  return (
-    <div className="page-stack">
-      <PageHeading description={pageDescriptions[title]} eyebrow={title === 'Collections' || title === 'API' ? 'BUILD' : 'OPERATE'} title={title} />
-      <Surface className="scope-empty" variant="raised">
-        <div className="scope-empty__mark" aria-hidden="true"><Layers3 size={24} strokeWidth={1.6} /></div>
-        <div>
-          <p className="eyebrow">FOUNDATION SCOPE</p>
-          <h2>This workflow is not delivered yet</h2>
-          <p>The V0.1 navigation is in place. The {title.toLowerCase()} product workflow is outside this Foundation closure, so this page has no sample data or pretend actions.</p>
-          <Link className="text-link" to="/">Return to Overview <ArrowRight aria-hidden="true" size={15} /></Link>
-        </div>
+        <div><strong>Read-only diagnostics</strong><p>Status requests show safe health snapshots. Only a signed-in Owner can see the Local Storage path.</p></div>
       </Surface>
     </div>
   );

@@ -194,9 +194,10 @@ export function Dialog({
   size?: 'standard' | 'wide';
   presentation?: 'dialog' | 'sheet';
 }) {
+  const titleId = useId();
   return (
     <dialog
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
       className={`dialog dialog--${size}${presentation === 'sheet' ? ' sheet' : ''}`}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
@@ -209,9 +210,9 @@ export function Dialog({
           element.close();
         }
       }}
-    >
+      >
       <header className="dialog__header">
-        <h2 id="dialog-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <Button aria-label="Close dialog" onClick={onClose} variant="quiet"><X aria-hidden="true" size={18} /></Button>
       </header>
       <div className="dialog__body">{children}</div>

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, PartialState, StatusChip } from './ui';
+import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, PartialState, StatusChip } from './ui';
 
 describe('Admin interface primitives', () => {
   it('exposes the status with its visual state and readable label', () => {
@@ -29,6 +29,24 @@ describe('Admin interface primitives', () => {
 
     expect(button).toHaveClass('button--primary');
     expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('keeps concurrent dialog titles uniquely associated for screen readers', () => {
+    render(
+      <>
+        <Dialog open onClose={() => undefined} title="Record">
+          <p>Record details</p>
+        </Dialog>
+        <Dialog open onClose={() => undefined} title="Delete this record?">
+          <button type="button">Delete record</button>
+        </Dialog>
+      </>,
+    );
+
+    const recordDialog = screen.getByRole('dialog', { name: 'Record' });
+    const deleteDialog = screen.getByRole('dialog', { name: 'Delete this record?' });
+    expect(recordDialog.getAttribute('aria-labelledby')).not.toBe(deleteDialog.getAttribute('aria-labelledby'));
+    expect(screen.getByRole('button', { name: 'Delete record' })).toBeInTheDocument();
   });
 
   it('offers accessible loading, empty, partial and error states', () => {

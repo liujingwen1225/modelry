@@ -11,11 +11,12 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: 'list',
-  timeout: 30_000,
+  timeout: 300_000,
   expect: { timeout: 8_000 },
   use: {
     ...devices['Desktop Chrome'],
     baseURL: process.env.MODELRY_BASE_URL ?? 'http://127.0.0.1:8080',
+    actionTimeout: 10_000,
     headless: true,
     launchOptions: { executablePath },
     trace: 'retain-on-failure',

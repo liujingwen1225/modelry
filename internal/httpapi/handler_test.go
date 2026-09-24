@@ -91,6 +91,55 @@ func TestUnknownAPIPathReturnsStructured404WithMatchingRequestID(t *testing.T) {
 	}
 }
 
+func TestRegisteredAPIModuleReceivesRequestAndUnknownAPIUsesStructuredError(t *testing.T) {
+	routes := NewAPIRouter(testAPIModule{})
+	handler := NewHandler(testDiagnostics{}, http.NotFoundHandler(), routes)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/module-check", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "module route" {
+		t.Fatalf("registered route response = %d %q, want 200 %q", response.Code, response.Body.String(), "module route")
+	}
+	if response.Header().Get("X-Request-Id") == "" {
+		t.Fatal("registered API route has no canonical request ID")
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/admin/api/v1/not-registered", nil)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	var body errorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusNotFound || body.Error.Code != "NOT_FOUND" || response.Header().Get("X-Request-Id") != body.Error.RequestID {
+		t.Fatalf("unexpected API fallback: status=%d body=%#v header=%q", response.Code, body, response.Header().Get("X-Request-Id"))
+	}
+}
+
+type testAPIModule struct{}
+
+func (testAPIModule) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/module-check", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("module route"))
+	})
+}
+
+func TestAPIModuleMethodMismatchUsesStructuredNotFound(t *testing.T) {
+	handler := NewHandler(nil, nil, NewAPIRouter(testAPIModule{}))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/module-check", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	var body errorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusNotFound || body.Error.Code != "NOT_FOUND" || body.Error.RequestID == "" || body.Error.RequestID != response.Header().Get("X-Request-Id") {
+		t.Fatalf("API method mismatch was not a structured 404: status=%d body=%#v header=%q", response.Code, body, response.Header().Get("X-Request-Id"))
+	}
+}
+
 func TestUnvalidatedCredentialsDoNotFallBackToAnonymousDiagnostics(t *testing.T) {
 	handler := NewHandler(testDiagnostics{}, http.NotFoundHandler())
 	request := httptest.NewRequest(http.MethodGet, "/admin/api/v1/runtime/status", nil)

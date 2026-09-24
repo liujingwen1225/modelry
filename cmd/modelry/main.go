@@ -56,6 +56,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stdout, "modelry %s\n", version)
 		return 0
 	}
+	switch args[0] {
+	case "admin":
+		return runAdmin(args[1:], stdout, stderr)
+	case "mcp":
+		return runMCP(args[1:], os.Stdin, stdout, stderr)
+	}
 	workingDirectory, err := os.Getwd()
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "cannot read process working directory: %v\n", err)
@@ -189,7 +195,9 @@ func directoryExists(name string) bool {
 }
 
 func printUsage(writer io.Writer) {
-	_, _ = fmt.Fprintln(writer, "Usage: modelry <start|status|version>")
+	_, _ = fmt.Fprintln(writer, "Usage: modelry <start|status|admin|mcp|version>")
 	_, _ = fmt.Fprintln(writer, "  start [--project-root PATH] [--listen ADDRESS]")
 	_, _ = fmt.Fprintln(writer, "  status [--project-root PATH] [--json]")
+	_, _ = fmt.Fprintln(writer, "  admin [--api-url URL] [--api-key KEY] <collections|records|schema|access|requests|audit> <operation>")
+	_, _ = fmt.Fprintln(writer, "  mcp [--api-url URL] [--api-key KEY]")
 }
