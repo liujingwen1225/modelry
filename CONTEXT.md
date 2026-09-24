@@ -118,6 +118,17 @@ V0.1.x 再进入：
 - Go 是 Runtime 实现语言，不是用户必须面对的扩展语言。
 - Domain Language 不等于 UI Language。
 
+## Record Events and Realtime
+
+**Record Event**：一个已提交的 Collection Record 创建、更新或删除事实。它属于 Project 的数据变更历史，与 API 请求遥测和管理审计分别建模。
+_Avoid_：Audit Event、Request Event、Activity Event
+
+**Event ID**：标识一个 Record Event，并确定它在同一 Project 事件序列中的位置。它也是订阅者恢复接收位置的游标。
+_Avoid_：SQLite Row ID、Request ID
+
+**Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event ID 继续接收。
+_Avoid_：Record polling、Activity Timeline
+
 ## Change UX 不变量
 
 底层继续保留：
