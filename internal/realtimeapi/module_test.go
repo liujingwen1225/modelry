@@ -362,6 +362,19 @@ func TestBlockedSSEWriteDoesNotBlockIndependentRecordMutation(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("independent Record mutation waited for the blocked SSE client")
 	}
+	independentDone := make(chan error, 1)
+	go func() {
+		_, err := stack.records.Create(ctx, stack.posts.ID, map[string]any{"title": "INDEPENDENT_WHILE_SSE_BLOCKED_MARKER", "visibility": "public"})
+		independentDone <- err
+	}()
+	select {
+	case err := <-independentDone:
+		if err != nil {
+			t.Fatalf("second Record mutation failed while SSE write was blocked: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("second Record mutation waited for the blocked SSE client")
+	}
 	releaseWriter()
 	cancel()
 	select {
