@@ -2,6 +2,7 @@ import { useDiagnostics } from './diagnostics-context';
 import { Button, CopyButton, ErrorState, JsonViewer, StatusChip, Surface } from './ui';
 import type { HealthSnapshot } from '../api/status';
 import type { ApiClientError } from '../api/client';
+import { useI18n } from '../i18n/i18n';
 
 function titleCase(value: string): string {
   return value.replace(/([A-Z])/g, ' $1').replace(/[-_]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -39,15 +40,16 @@ function HealthValue({
 
 export function RuntimeBadge() {
   const { runtime } = useDiagnostics();
+  const { t } = useI18n();
 
   if (runtime.state === 'loading' && !runtime.value) {
-    return <StatusChip state="loading"><span className="pulse-dot" aria-hidden="true" /> Connecting</StatusChip>;
+    return <StatusChip state="loading"><span className="pulse-dot" aria-hidden="true" /> {t('runtime.connecting')}</StatusChip>;
   }
-  if (runtime.state === 'error') return <StatusChip state="unavailable">Runtime unavailable</StatusChip>;
-  if (!runtime.value) return <StatusChip state="unknown">Runtime unknown</StatusChip>;
+  if (runtime.state === 'error') return <StatusChip state="unavailable">{t('runtime.unavailable')}</StatusChip>;
+  if (!runtime.value) return <StatusChip state="unknown">{t('runtime.unknown')}</StatusChip>;
 
   const state = runtime.value.state;
-  const label = state === 'ready' ? 'Runtime ready' : `Runtime ${titleCase(state)}`;
+  const label = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: titleCase(state) });
   return <StatusChip state={state}>{state === 'ready' && <span className="pulse-dot" aria-hidden="true" />}{label}</StatusChip>;
 }
 

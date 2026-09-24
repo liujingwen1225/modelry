@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Collection } from './client';
 import { CollectionWorkspacePage } from './pages';
 import { CollectionSchemaPage } from './schema';
+import { CommandRegistryProvider } from '../components/command-registry';
+import { LocaleProvider } from '../i18n/i18n';
 
 const collection: Collection = {
   id: 'col_posts', name: 'posts', type: 'Normal', schemaVersion: 1,
@@ -17,13 +19,13 @@ const collection: Collection = {
 };
 
 function renderSchema() {
-  return render(<MemoryRouter initialEntries={['/collections/col_posts/schema']}>
+  return render(<LocaleProvider><CommandRegistryProvider><MemoryRouter initialEntries={['/collections/col_posts/schema']}>
     <Routes>
       <Route element={<CollectionWorkspacePage />} path="/collections/:collectionId">
         <Route element={<CollectionSchemaPage />} path="schema" />
       </Route>
     </Routes>
-  </MemoryRouter>);
+  </MemoryRouter></CommandRegistryProvider></LocaleProvider>);
 }
 
 describe('Collection schema workflow', () => {

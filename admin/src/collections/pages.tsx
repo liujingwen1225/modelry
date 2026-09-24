@@ -3,6 +3,8 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, Plus,
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { useI18n } from '../i18n/i18n';
+import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionSummary, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
 import './collections.css';
 import type { CollectionWorkspaceContext } from './workspace-context';
@@ -486,6 +488,8 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
 export function CollectionWorkspacePage() {
   const { collectionId = '' } = useParams();
   const location = useLocation();
+  const { t } = useI18n();
+  const { rememberCollection } = useCommandRegistry();
   const [collection, setCollection] = useState<Collection | null>(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [collectionError, setCollectionError] = useState<unknown>();
@@ -493,6 +497,28 @@ export function CollectionWorkspacePage() {
   const [loadingCollection, setLoadingCollection] = useState(true);
   const [loadingPending, setLoadingPending] = useState(true);
   const [newlyCreated, setNewlyCreated] = useState(Boolean((location.state as { newlyCreated?: boolean } | null)?.newlyCreated));
+
+  const workspaceCommands = useMemo<AdminCommand[]>(() => {
+    if (!collection || !pending) return [];
+    const failed = pending.status === 'failed';
+    const route = failed
+      ? `/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`
+      : `/collections/${encodeURIComponent(collection.id)}/schema`;
+    return [{
+      id: `change.open.${pending.changeSetId}`,
+      category: 'commands.categories.changes',
+      label: () => t(failed ? 'commands.failedChange' : 'commands.pendingChange', { name: collection.name }),
+      keywords: () => ['pending', 'failed', 'change', 'schema', collection.name],
+      requiresCapabilities: ['admin:owner-session'],
+      execute: (context) => context.navigate(route),
+    }];
+  }, [collection, pending, t]);
+
+  useRegisterCommands(workspaceCommands);
+
+  useEffect(() => {
+    if (collection) rememberCollection({ id: collection.id, name: collection.name, type: collection.type });
+  }, [collection, rememberCollection]);
 
   async function refreshCollection() {
     setLoadingCollection(true);
@@ -530,7 +556,7 @@ export function CollectionWorkspacePage() {
   const context: CollectionWorkspaceContext = { collection, pendingChange: pending, refreshCollection, refreshPendingChange };
   return (
     <div className="page-stack collection-page collection-workspace-page">
-      <div className="collection-breadcrumb"><Link to="/collections">Collections</Link><span aria-hidden="true">/</span><span>{collection.name}</span></div>
+      <div className="collection-breadcrumb"><Link to="/collections">{t('navigation.collections')}</Link><span aria-hidden="true">/</span><span>{collection.name}</span></div>
       <header className="collection-workspace-header">
         <div className="collection-workspace-identity"><span className="collection-workspace-icon"><Database aria-hidden="true" size={20} /></span><div><div className="collection-workspace-title"><h1>{collection.name}</h1><StatusChip state={collection.type}>{collection.type}</StatusChip></div><p>{collection.description || 'Collection workspace'}</p></div></div>
         <span className="collection-workspace-meta">Model v{collection.schemaVersion ?? 1} · {collection.fields.length} fields</span>
@@ -538,12 +564,12 @@ export function CollectionWorkspacePage() {
       {newlyCreated && <div className="collection-created-notice" role="status"><Check aria-hidden="true" size={16} /><div><strong>Your collection is ready.</strong><span>The Collection and its initial model are saved. Continue with Records or edit the schema.</span></div><button aria-label="Dismiss collection created notice" onClick={() => setNewlyCreated(false)} type="button">Dismiss</button></div>}
       {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, 'Schema status is unavailable.').message} title="Could not load the Pending Change"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button></ErrorState>}
       {!loadingPending && pending?.status === 'failed' && <div className="collection-recovery-banner" role="status"><CircleAlert aria-hidden="true" size={17} /><div><strong>A schema change needs attention.</strong><span>Your pending changes are saved. Review the recovery details before retrying.</span></div><Link className="text-link" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>View recovery details <ArrowRight aria-hidden="true" size={14} /></Link></div>}
-      <nav aria-label="Collection workspace" className="collection-workspace-tabs">
+      <nav aria-label={t('navigation.collectionWorkspace')} className="collection-workspace-tabs">
         {[
-          { label: 'Records', to: `/collections/${collectionId}`, end: true },
-          { label: 'Schema', to: `/collections/${collectionId}/schema` },
-          { label: 'Security', to: `/collections/${collectionId}/security` },
-          { label: 'API', to: `/collections/${collectionId}/api` },
+          { label: t('navigation.records'), to: `/collections/${collectionId}`, end: true },
+          { label: t('navigation.schema'), to: `/collections/${collectionId}/schema` },
+          { label: t('navigation.security'), to: `/collections/${collectionId}/security` },
+          { label: t('navigation.api'), to: `/collections/${collectionId}/api` },
         ].map((tab) => <NavLink end={tab.end} key={tab.label} to={tab.to}>{tab.label}</NavLink>)}
       </nav>
       <Outlet context={context} />

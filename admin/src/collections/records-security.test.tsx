@@ -6,6 +6,8 @@ import type { AccessRule, AccessRulesState, ApplicationSession, AuthenticationCo
 import { CollectionRecordsPage } from './records';
 import { CollectionSecurityPage } from './security';
 import { CollectionWorkspacePage } from './pages';
+import { CommandRegistryProvider } from '../components/command-registry';
+import { LocaleProvider } from '../i18n/i18n';
 
 const collection: Collection = {
   id: 'col_posts', name: 'posts', type: 'Normal', schemaVersion: 1,
@@ -36,14 +38,14 @@ function CurrentLocation() {
 }
 
 function renderCollection(path: string) {
-  return render(<MemoryRouter initialEntries={[path]}>
+  return render(<LocaleProvider><CommandRegistryProvider><MemoryRouter initialEntries={[path]}>
     <Routes>
       <Route element={<><CurrentLocation /><CollectionWorkspacePage /></>} path="/collections/:collectionId">
         <Route element={<CollectionRecordsPage />} index />
         <Route element={<CollectionSecurityPage />} path="security" />
       </Route>
     </Routes>
-  </MemoryRouter>);
+  </MemoryRouter></CommandRegistryProvider></LocaleProvider>);
 }
 
 function workspaceResponse(path: string) {
