@@ -12,6 +12,10 @@
 6. **05-product-experience-and-acceptance.md** — 跨页面 UX、Design System 与验收原则
 7. **06-product-architecture.md** — Domain、Plane、Boundary 与共享产品语义
 8. **specs/0001-admin-product-ux-spec.md** — Admin Exact IA、页面、交互与 Durable Result
+9. **adr/0001-runtime-storage-architecture.md** — V0.1 Runtime、Project Root、SQLite 与 Local Storage 决策
+10. **specs/0002-v0.1-foundation-spec.md** — Domain 对象、身份、生命周期与安全边界
+11. **contracts/core-http-contract.md**、**contracts/openapi.yaml** — HTTP 平面、资源、错误与 DTO
+12. **specs/0003-browser-acceptance-spec.md** — 产品流程及 Foundation Closure 验收门禁
 
 后续正式设计统一进入：
 
@@ -47,6 +51,18 @@
 
 0001 Admin UX
 → exact sidebar / workspace / page / interaction
+
+ADR-0001 Runtime / Storage
+→ runtime / project / persistence architecture decisions
+
+SPEC-0002 Domain Foundation
+→ domain identity / lifecycle / ownership / security semantics
+
+Core HTTP Contract / OpenAPI
+→ canonical API boundary / operations / DTO / errors
+
+SPEC-0003 Browser Acceptance
+→ real-stack product flows / browser health gate / foundation smoke
 ~~~
 
 Exact Admin IA 只由 Admin UX Spec 定义。其它文档引用它，不复制 Sidebar 作为第二份权威来源。

@@ -68,11 +68,6 @@ Realtime、Lifecycle Hooks、Secrets UI、独立 Activity、Policy Simulation �
 
 ## 当前阶段
 
-当前处于 **产品路线、V0.1 范围、产品架构与 Admin UX 冻结阶段**。
+**V0.1 Foundation Closure 已完成实现与集成验收**：Runtime / Storage ADR、Foundation Domain Spec、Core HTTP Contract / OpenAPI 与 Browser Acceptance Spec 已建立并接受；Go Runtime、Admin Shell、真实 HTTP、SQLite 重启连续性与 Chromium smoke 均按这些基线完成验证。
 
-Admin Product UX Spec 已按当前 V0.1 范围收敛。大规模生产实现前还需要继续建立：
-
-- Runtime / Storage ADR
-- Foundation Spec
-- HTTP Contract / OpenAPI
-- Browser Acceptance Spec
+Foundation Closure 只交付单 Project Runtime、SQLite 与本地文件存储基础、状态诊断、结构化 HTTP 错误和 Admin Shell。Collections、Records、Schema、认证授权与其他 V0.1 产品工作流仍按权威规格后续实现；当前导航不会把它们呈现为已交付能力。
