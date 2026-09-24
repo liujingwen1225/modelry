@@ -47,6 +47,55 @@ describe('Command Registry', () => {
     expect(isCommandVisible(command, base)).toBe(false);
     expect(isCommandVisible(command, { ...base, capabilities: ['admin:owner-session'] })).toBe(true);
     expect(isCommandVisible(command, { ...base, capabilities: ['admin:owner-session'], collectionId: undefined })).toBe(false);
-    expect(isCommandVisible({ ...command, requiresCapabilities: undefined, isVisible: undefined }, base)).toBe(true);
+  });
+
+  it('uses route visibility when no capability requirement is declared', () => {
+    const context: CommandContext = {
+      pathname: '/collections/col_posts',
+      search: '',
+      hash: '',
+      collectionId: 'col_posts',
+      principal: null,
+      capabilities: [],
+      navigate: () => undefined,
+    };
+
+    const visibleByDefault: AdminCommand = {
+      id: 'navigation.workspace',
+      category: 'commands.categories.navigate',
+      label: () => 'Open workspace',
+      execute: () => undefined,
+    };
+    const routeScoped: AdminCommand = {
+      ...visibleByDefault,
+      id: 'collection.create-record',
+      isVisible: (value) => Boolean(value.collectionId),
+    };
+
+    expect(isCommandVisible(visibleByDefault, context)).toBe(true);
+    expect(isCommandVisible(routeScoped, context)).toBe(true);
+    expect(isCommandVisible({ ...routeScoped, isVisible: () => false }, context)).toBe(false);
+    expect(isCommandVisible({ ...routeScoped, requiresCapabilities: [] }, context)).toBe(true);
+  });
+
+  it('supports future Admin capability names and hides commands until they are present', () => {
+    const context: CommandContext = {
+      pathname: '/settings',
+      search: '',
+      hash: '',
+      principal: { kind: 'owner', id: 'owner_1' },
+      capabilities: ['admin:owner-session'],
+      navigate: () => undefined,
+    };
+    const command: AdminCommand = {
+      id: 'settings.manage',
+      category: 'commands.categories.system',
+      label: () => 'Manage settings',
+      requiresCapabilities: ['admin:settings-write'],
+      execute: () => undefined,
+    };
+
+    expect(isCommandVisible(command, context)).toBe(false);
+    expect(isCommandVisible(command, { ...context, capabilities: ['admin:settings-write'] })).toBe(true);
   });
 });
