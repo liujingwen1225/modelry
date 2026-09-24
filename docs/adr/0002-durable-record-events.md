@@ -14,7 +14,7 @@ Realtime 必须在 Record 已耐久提交后发布，并支持断线、进程退
 
 Event ID 在一个 Project 的事件序列中单调递增，标识事件并作为重放游标；不承诺连续无间断。序列顺序与 Record mutation 的提交顺序一致。V0.1.x 只为 Record Create / Update / Delete 产生事件，不把 RequestRecord、AuditRecord、Schema Change 或通用 Activity 合并到事件序列。
 
-Realtime Delivery 由当前单 Runtime 内的有界订阅协调器完成。它以有界通知唤醒订阅者，订阅者按 Event ID 从耐久日志读取并发送；每条连接单独取消、限流和设写入时限，业务 mutation 不等待 SSE 网络写入。运行时关闭时取消连接；相同 Project 重启后，客户端用 Last-Event-ID 从事件日志恢复。
+Realtime Delivery 由当前单 Runtime 内的有界订阅协调器完成。它以有界通知唤醒订阅者，订阅者按 Event ID 从耐久日志读取并发送；每条连接单独取消、限流和设写入时限，业务 mutation 不等待 SSE 网络写入。每个 protected Event 发送前及每个 heartbeat interval 都重新验证 Application Session；验证失败立即关闭该连接。运行时关闭时取消连接；相同 Project 重启后，客户端用 Last-Event-ID 从事件日志恢复。
 
 事件日志为有界恢复窗口，最多保留最近 10,000 条事件且事件及授权评估快照合计不超过 64 MiB，先达到的上限生效；追加新事件时在同一事务中清理最旧记录。游标早于最旧保留事件时返回明确的过期错误，客户端重新读取 Collection 当前 Records 并从新的 stream.ready 游标继续。实现必须将单条事件大小限制在日志字节预算之内，不能为了绕过上限静默丢弃 Record Event。
 
