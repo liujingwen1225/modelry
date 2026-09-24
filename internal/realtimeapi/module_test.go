@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -314,6 +315,62 @@ func TestStreamRejectsInvalidBearerInsteadOfDowngradingToAnonymous(t *testing.T)
 	}
 }
 
+func TestBlockedSSEWriteDoesNotBlockIndependentRecordMutation(t *testing.T) {
+	stack := newTestStack(t)
+	stack.applyListRule(t, accesscontrol.ModeAnyone, nil)
+	module := NewModule(stack.models, stack.events, stack.rules, nil)
+	handler := httpapi.NewAPIRouter(module)
+	writer := &blockedStreamResponseWriter{
+		header:  make(http.Header),
+		ready:   make(chan struct{}),
+		blocked: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	var releaseOnce sync.Once
+	releaseWriter := func() { releaseOnce.Do(func() { close(writer.release) }) }
+	defer releaseWriter()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/posts/events", nil).WithContext(ctx)
+	request.Header.Set("Accept", "text/event-stream")
+	handlerDone := make(chan struct{})
+	go func() {
+		handler.ServeHTTP(writer, request)
+		close(handlerDone)
+	}()
+	select {
+	case <-writer.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Realtime stream did not flush its baseline frame")
+	}
+
+	mutationDone := make(chan error, 1)
+	go func() {
+		_, err := stack.records.Create(ctx, stack.posts.ID, map[string]any{"title": "BLOCKED_WRITER_PUBLIC_MARKER", "visibility": "public"})
+		mutationDone <- err
+	}()
+	select {
+	case <-writer.blocked:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Realtime stream did not enter its blocked Event write")
+	}
+	select {
+	case err := <-mutationDone:
+		if err != nil {
+			t.Fatalf("independent Record mutation failed while SSE write was blocked: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("independent Record mutation waited for the blocked SSE client")
+	}
+	releaseWriter()
+	cancel()
+	select {
+	case <-handlerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Realtime handler did not release after client cancellation")
+	}
+}
+
 func TestStreamCursorErrorsAreReportedBeforeSSEHeaders(t *testing.T) {
 	stack := newTestStack(t)
 	stack.applyListRule(t, accesscontrol.ModeAnyone, nil)
@@ -428,6 +485,32 @@ type deadlineOnlyResponseWriter struct {
 	status int
 	body   bytes.Buffer
 }
+
+type blockedStreamResponseWriter struct {
+	header  http.Header
+	ready   chan struct{}
+	blocked chan struct{}
+	release chan struct{}
+}
+
+func (writer *blockedStreamResponseWriter) Header() http.Header { return writer.header }
+
+func (writer *blockedStreamResponseWriter) WriteHeader(int) {}
+
+func (writer *blockedStreamResponseWriter) Write(body []byte) (int, error) {
+	if bytes.Contains(body, []byte("event: stream.ready\n")) {
+		close(writer.ready)
+	}
+	if bytes.Contains(body, []byte("event: record.created\n")) {
+		close(writer.blocked)
+		<-writer.release
+	}
+	return len(body), nil
+}
+
+func (writer *blockedStreamResponseWriter) FlushError() error { return nil }
+
+func (writer *blockedStreamResponseWriter) SetWriteDeadline(time.Time) error { return nil }
 
 func (writer *deadlineOnlyResponseWriter) Header() http.Header {
 	if writer.header == nil {
