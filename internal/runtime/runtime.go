@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/liujingwen1225/modelry/internal/diagnostics"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/storage"
@@ -69,8 +70,10 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry SQLite storage: %w", err)
 	}
-	if err := probeLocalStorage(root.TempFiles); err != nil {
-		return nil, fmt.Errorf("cannot initialize Modelry Local Storage: %w", err)
+	for _, directory := range []string{root.TempFiles, root.Objects} {
+		if err := probeLocalStorage(directory); err != nil {
+			return nil, fmt.Errorf("cannot initialize Modelry Local Storage: %w", err)
+		}
 	}
 	if err := webui.Validate(); err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Admin HTTP module: %w", err)
@@ -189,21 +192,21 @@ func (instance *Runtime) Close() error {
 	return instance.closeErr
 }
 
-func (instance *Runtime) RuntimeStatus() httpapi.RuntimeStatusResponse {
+func (instance *Runtime) RuntimeStatus() diagnostics.RuntimeStatus {
 	instance.refreshHealth()
 	instance.mu.RLock()
 	state := instance.state
 	databaseState := instance.databaseHealth
 	fileState := instance.fileHealth
 	instance.mu.RUnlock()
-	return httpapi.RuntimeStatusResponse{
+	return diagnostics.RuntimeStatus{
 		State:      state,
 		ObservedAt: time.Now().UTC(),
-		Database: httpapi.Health{
+		Database: diagnostics.Health{
 			State:   databaseState,
 			Message: healthMessage("SQLite database", databaseState),
 		},
-		LocalStorage: httpapi.Health{
+		LocalStorage: diagnostics.Health{
 			State:   fileState,
 			Message: healthMessage("Local Storage", fileState),
 		},
@@ -212,18 +215,18 @@ func (instance *Runtime) RuntimeStatus() httpapi.RuntimeStatusResponse {
 	}
 }
 
-func (instance *Runtime) StorageStatus() httpapi.StorageStatusResponse {
+func (instance *Runtime) StorageStatus() diagnostics.StorageStatus {
 	instance.refreshHealth()
 	instance.mu.RLock()
 	databaseState := instance.databaseHealth
 	fileState := instance.fileHealth
 	instance.mu.RUnlock()
-	return httpapi.StorageStatusResponse{
-		Database: httpapi.Health{
+	return diagnostics.StorageStatus{
+		Database: diagnostics.Health{
 			State:   databaseState,
 			Message: healthMessage("SQLite database", databaseState),
 		},
-		LocalStorage: httpapi.LocalStorageHealth{
+		LocalStorage: diagnostics.LocalStorageStatus{
 			State:    fileState,
 			Message:  healthMessage("Local Storage", fileState),
 			Provider: "Local",
@@ -269,8 +272,11 @@ func (instance *Runtime) refreshHealth() {
 	}
 	cancel()
 	fileState := "ready"
-	if err := probeLocalStorage(instance.root.TempFiles); err != nil {
-		fileState = "unavailable"
+	for _, directory := range []string{instance.root.TempFiles, instance.root.Objects} {
+		if err := probeLocalStorage(directory); err != nil {
+			fileState = "unavailable"
+			break
+		}
 	}
 	instance.mu.Lock()
 	instance.databaseHealth = databaseState

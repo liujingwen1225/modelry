@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/liujingwen1225/modelry/internal/diagnostics"
 )
 
 type Health struct {
@@ -41,8 +43,8 @@ type StorageStatusResponse struct {
 }
 
 type Diagnostics interface {
-	RuntimeStatus() RuntimeStatusResponse
-	StorageStatus() StorageStatusResponse
+	RuntimeStatus() diagnostics.RuntimeStatus
+	StorageStatus() diagnostics.StorageStatus
 }
 
 type apiError struct {
@@ -84,10 +86,10 @@ func NewHandler(diagnostics Diagnostics, adminUI http.Handler) http.Handler {
 				return
 			}
 			if isRuntimeStatusPath(request.URL.Path) {
-				writeJSON(w, http.StatusOK, diagnostics.RuntimeStatus())
+				writeJSON(w, http.StatusOK, runtimeStatusResponse(diagnostics.RuntimeStatus()))
 				return
 			}
-			status := diagnostics.StorageStatus()
+			status := storageStatusResponse(diagnostics.StorageStatus())
 			status.LocalStorage.Path = ""
 			writeJSON(w, http.StatusOK, status)
 			return
@@ -103,6 +105,34 @@ func NewHandler(diagnostics Diagnostics, adminUI http.Handler) http.Handler {
 		}
 		writeError(w, request, http.StatusNotFound, "NOT_FOUND", "The requested resource was not found.", "")
 	})
+}
+
+func runtimeStatusResponse(status diagnostics.RuntimeStatus) RuntimeStatusResponse {
+	return RuntimeStatusResponse{
+		State:         status.State,
+		ObservedAt:    status.ObservedAt,
+		Database:      healthResponse(status.Database),
+		LocalStorage:  healthResponse(status.LocalStorage),
+		ProjectSource: status.ProjectSource,
+		Version:       status.Version,
+	}
+}
+
+func storageStatusResponse(status diagnostics.StorageStatus) StorageStatusResponse {
+	return StorageStatusResponse{
+		Database: healthResponse(status.Database),
+		LocalStorage: LocalStorageHealth{
+			State:    status.LocalStorage.State,
+			Message:  status.LocalStorage.Message,
+			Hint:     status.LocalStorage.Hint,
+			Provider: status.LocalStorage.Provider,
+			Path:     status.LocalStorage.Path,
+		},
+	}
+}
+
+func healthResponse(status diagnostics.Health) Health {
+	return Health{State: status.State, Message: status.Message, Hint: status.Hint}
 }
 
 func RequestID(ctx context.Context) string {

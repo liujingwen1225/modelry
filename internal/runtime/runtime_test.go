@@ -98,23 +98,25 @@ func TestEmptyProjectStartsReadyServesRealHTTPAndRestartsDurably(t *testing.T) {
 	if storageStatus.LocalStorage.State != "ready" || storageStatus.LocalStorage.Provider != "Local" || storageStatus.LocalStorage.Path != "" {
 		t.Fatalf("unexpected anonymous Local Storage health: %#v", storageStatus.LocalStorage)
 	}
-	if err := os.Remove(instance.root.TempFiles); err != nil {
-		t.Fatal(err)
-	}
-	degradedStorage := getResponse(t, baseURL+"/admin/api/v1/storage/status", "")
-	if degradedStorage.status != http.StatusOK || !strings.Contains(string(degradedStorage.body), `"state":"unavailable"`) {
-		t.Fatalf("Local Storage failure was not visible over HTTP: status=%d body=%s", degradedStorage.status, degradedStorage.body)
-	}
-	degradedRuntime := getResponse(t, baseURL+"/admin/api/v1/runtime/status", "")
-	if !strings.Contains(string(degradedRuntime.body), `"state":"degraded"`) {
-		t.Fatalf("Runtime did not revoke READY when Local Storage became unavailable: %s", degradedRuntime.body)
-	}
-	if err := os.Mkdir(instance.root.TempFiles, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	recoveredRuntime := getResponse(t, baseURL+"/admin/api/v1/runtime/status", "")
-	if !strings.Contains(string(recoveredRuntime.body), `"state":"ready"`) {
-		t.Fatalf("Runtime did not recover readiness after Local Storage became available: %s", recoveredRuntime.body)
+	for _, directory := range []string{instance.root.TempFiles, instance.root.Objects} {
+		if err := os.Remove(directory); err != nil {
+			t.Fatal(err)
+		}
+		degradedStorage := getResponse(t, baseURL+"/admin/api/v1/storage/status", "")
+		if degradedStorage.status != http.StatusOK || !strings.Contains(string(degradedStorage.body), `"state":"unavailable"`) {
+			t.Fatalf("Local Storage failure at %q was not visible over HTTP: status=%d body=%s", directory, degradedStorage.status, degradedStorage.body)
+		}
+		degradedRuntime := getResponse(t, baseURL+"/admin/api/v1/runtime/status", "")
+		if !strings.Contains(string(degradedRuntime.body), `"state":"degraded"`) {
+			t.Fatalf("Runtime did not revoke READY when Local Storage path %q became unavailable: %s", directory, degradedRuntime.body)
+		}
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		recoveredRuntime := getResponse(t, baseURL+"/admin/api/v1/runtime/status", "")
+		if !strings.Contains(string(recoveredRuntime.body), `"state":"ready"`) {
+			t.Fatalf("Runtime did not recover readiness when Local Storage path %q became available: %s", directory, recoveredRuntime.body)
+		}
 	}
 
 	errorResponse := getResponse(t, baseURL+"/admin/api/v1/not-implemented", "req_forged-client-id")

@@ -7,16 +7,18 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/liujingwen1225/modelry/internal/diagnostics"
 )
 
 type testDiagnostics struct{}
 
-func (testDiagnostics) RuntimeStatus() RuntimeStatusResponse {
-	return RuntimeStatusResponse{
+func (testDiagnostics) RuntimeStatus() diagnostics.RuntimeStatus {
+	return diagnostics.RuntimeStatus{
 		State:      "ready",
 		ObservedAt: time.Date(2026, 9, 24, 1, 2, 3, 0, time.UTC),
-		Database:   Health{State: "ready", Message: "SQLite database is ready."},
-		LocalStorage: Health{
+		Database:   diagnostics.Health{State: "ready", Message: "SQLite database is ready."},
+		LocalStorage: diagnostics.Health{
 			State:   "ready",
 			Message: "Local Storage is ready.",
 		},
@@ -25,10 +27,10 @@ func (testDiagnostics) RuntimeStatus() RuntimeStatusResponse {
 	}
 }
 
-func (testDiagnostics) StorageStatus() StorageStatusResponse {
-	return StorageStatusResponse{
-		Database: Health{State: "ready"},
-		LocalStorage: LocalStorageHealth{
+func (testDiagnostics) StorageStatus() diagnostics.StorageStatus {
+	return diagnostics.StorageStatus{
+		Database: diagnostics.Health{State: "ready"},
+		LocalStorage: diagnostics.LocalStorageStatus{
 			State:    "ready",
 			Provider: "Local",
 			Path:     `C:\private\project\.modelry\files`,
