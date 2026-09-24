@@ -16,7 +16,7 @@ func getRecord(ctx context.Context, query storage.Executor, model appliedModel, 
 	if recordID == "" {
 		return Record{}, fmt.Errorf("%w: Record ID is required", ErrInvalidArgument)
 	}
-	table, err := backendmodel.QuoteSQLiteIdentifier(model.projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(model.projection.TableName)
 	if err != nil {
 		return Record{}, err
 	}
@@ -70,7 +70,7 @@ func scanRecord(row scanner, model appliedModel) (Record, error) {
 func projectionColumns(model appliedModel) ([]string, error) {
 	columns := make([]string, 0, len(model.projection.Fields))
 	for _, field := range model.projection.Fields {
-		column, err := backendmodel.QuoteSQLiteIdentifier(field.ColumnName)
+		column, err := storage.QuoteSQLiteIdentifier(field.ColumnName)
 		if err != nil {
 			return nil, fmt.Errorf("build safe Record projection column: %w", err)
 		}
@@ -80,7 +80,7 @@ func projectionColumns(model appliedModel) ([]string, error) {
 }
 
 func insertStatement(model appliedModel, record Record) (string, []any, error) {
-	table, err := backendmodel.QuoteSQLiteIdentifier(model.projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(model.projection.TableName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -119,7 +119,7 @@ func insertStatement(model appliedModel, record Record) (string, []any, error) {
 }
 
 func updateStatement(model appliedModel, record Record) (string, []any, error) {
-	table, err := backendmodel.QuoteSQLiteIdentifier(model.projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(model.projection.TableName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -129,7 +129,7 @@ func updateStatement(model appliedModel, record Record) (string, []any, error) {
 		if field.System && field.Name != "updatedAt" {
 			continue
 		}
-		column, err := backendmodel.QuoteSQLiteIdentifier(field.ColumnName)
+		column, err := storage.QuoteSQLiteIdentifier(field.ColumnName)
 		if err != nil {
 			return "", nil, err
 		}

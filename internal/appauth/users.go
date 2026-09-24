@@ -147,11 +147,11 @@ func (service *Service) SetPassword(ctx context.Context, collectionID, recordID,
 	if emailField.ID == "" {
 		return fmt.Errorf("%w: Auth Collection email identifier is unavailable", ErrInvalidArgument)
 	}
-	table, err := backendmodel.QuoteSQLiteIdentifier(projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(projection.TableName)
 	if err != nil {
 		return err
 	}
-	column, err := backendmodel.QuoteSQLiteIdentifier(emailField.ColumnName)
+	column, err := storage.QuoteSQLiteIdentifier(emailField.ColumnName)
 	if err != nil {
 		return err
 	}

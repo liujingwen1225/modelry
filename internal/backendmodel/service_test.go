@@ -52,7 +52,7 @@ func TestCollectionsAreDurableAndProjectionIdentifiersAreGenerated(t *testing.T)
 	if !found || !strings.HasPrefix(title.ColumnName, "mry_field_") {
 		t.Fatalf("Field is not mapped to a generated physical column: %+v", title)
 	}
-	if _, err := QuoteSQLiteIdentifier(`title"; DROP TABLE modelry_backend_collections;--`); !errors.Is(err, ErrInvalidArgument) {
+	if _, err := storage.QuoteSQLiteIdentifier(`title"; DROP TABLE modelry_backend_collections;--`); err == nil {
 		t.Fatalf("unsafe identifier was accepted: %v", err)
 	}
 	if _, err := service.CreateCollection(ctx, CreateCollectionInput{
@@ -162,7 +162,7 @@ func TestCollectionInitializerSharesCreateTransaction(t *testing.T) {
 	var failedCollectionID, failedProjectionTable string
 	failedCollection, err := service.CreateCollectionWithInitializer(ctx, CreateCollectionInput{Name: "Rolled Back", Type: CollectionTypeNormal}, func(ctx context.Context, tx storage.Executor, collection Collection) error {
 		failedCollectionID = collection.ID
-		failedProjectionTable = recordsTableName(collection.ID)
+		failedProjectionTable = storage.RecordTableName(collection.ID)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO initializer_probe (collection_id) VALUES (?)`, collection.ID); err != nil {
 			return err
 		}
@@ -458,11 +458,11 @@ func TestFlow009BlockedUniqueApplyIsDurableAndCanBeRetried(t *testing.T) {
 		t.Fatalf("failed Apply and recovery did not survive restart: change=%+v err=%v", change, err)
 	}
 
-	quotedTable, err := QuoteSQLiteIdentifier(projection.TableName)
+	quotedTable, err := storage.QuoteSQLiteIdentifier(projection.TableName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	quotedCategory, err := QuoteSQLiteIdentifier(category.ColumnName)
+	quotedCategory, err := storage.QuoteSQLiteIdentifier(category.ColumnName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -647,7 +647,7 @@ func openTestStore(t *testing.T, databasePath string) *storage.Store {
 
 func insertRecord(t *testing.T, ctx context.Context, store *storage.Store, tableName, fieldColumn, recordID, textValue string) {
 	t.Helper()
-	quotedTable, err := QuoteSQLiteIdentifier(tableName)
+	quotedTable, err := storage.QuoteSQLiteIdentifier(tableName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +655,7 @@ func insertRecord(t *testing.T, ctx context.Context, store *storage.Store, table
 	placeholders := "?, ?, ?"
 	args := []any{recordID, time.Now().UTC().Format(time.RFC3339Nano), time.Now().UTC().Format(time.RFC3339Nano)}
 	if fieldColumn != "" {
-		quotedColumn, err := QuoteSQLiteIdentifier(fieldColumn)
+		quotedColumn, err := storage.QuoteSQLiteIdentifier(fieldColumn)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -673,11 +673,11 @@ func insertRecord(t *testing.T, ctx context.Context, store *storage.Store, table
 
 func assertProjectedValue(t *testing.T, ctx context.Context, store *storage.Store, tableName, fieldColumn, recordID string, expected any) {
 	t.Helper()
-	quotedTable, err := QuoteSQLiteIdentifier(tableName)
+	quotedTable, err := storage.QuoteSQLiteIdentifier(tableName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	quotedColumn, err := QuoteSQLiteIdentifier(fieldColumn)
+	quotedColumn, err := storage.QuoteSQLiteIdentifier(fieldColumn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -712,7 +712,7 @@ func hasPrecondition(preview SchemaPreview, code, status string) bool {
 
 func mustQuote(t *testing.T, name string) string {
 	t.Helper()
-	quoted, err := QuoteSQLiteIdentifier(name)
+	quoted, err := storage.QuoteSQLiteIdentifier(name)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -373,7 +373,7 @@ func (service *Service) delete(ctx context.Context, collectionID, recordID strin
 		if err := ensureNoReferences(ctx, tx, collectionID, recordID, references); err != nil {
 			return err
 		}
-		table, err := backendmodel.QuoteSQLiteIdentifier(model.projection.TableName)
+		table, err := storage.QuoteSQLiteIdentifier(model.projection.TableName)
 		if err != nil {
 			return err
 		}

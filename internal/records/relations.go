@@ -49,7 +49,7 @@ func validateRelations(ctx context.Context, tx storage.Executor, model appliedMo
 		if err != nil {
 			return err
 		}
-		table, err := backendmodel.QuoteSQLiteIdentifier(target.projection.TableName)
+		table, err := storage.QuoteSQLiteIdentifier(target.projection.TableName)
 		if err != nil {
 			return err
 		}
@@ -127,11 +127,11 @@ func ensureNoReferences(ctx context.Context, tx storage.Executor, targetCollecti
 		if err := verifyModel(ctx, tx, reference.model); err != nil {
 			return err
 		}
-		table, err := backendmodel.QuoteSQLiteIdentifier(reference.model.projection.TableName)
+		table, err := storage.QuoteSQLiteIdentifier(reference.model.projection.TableName)
 		if err != nil {
 			return err
 		}
-		column, err := backendmodel.QuoteSQLiteIdentifier(reference.field.ColumnName)
+		column, err := storage.QuoteSQLiteIdentifier(reference.field.ColumnName)
 		if err != nil {
 			return err
 		}

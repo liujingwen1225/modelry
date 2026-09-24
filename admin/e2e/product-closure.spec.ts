@@ -279,6 +279,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
   let secondPostId = '';
   let deletedPostId = '';
   let usersId = '';
+  let appUserRecordId = '';
   let appSession = '';
   let deniedRequestId = '';
   let changeSetId = '';
@@ -315,7 +316,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(JSON.stringify(collections.body)).toContain('authors');
   });
 
-  await test.step('FLOW-002 — Create a Normal Collection with all initial fields', async () => {
+  await test.step('FLOW-002 — Create Normal and Auth Collections with their initial fields', async () => {
     await activePage.getByRole('link', { name: 'Collections', exact: true }).first().click();
     await activePage.getByRole('link', { name: 'Create Collection', exact: true }).click();
     await activePage.getByLabel('Collection name').fill('posts');
@@ -334,6 +335,18 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(JSON.stringify(detail.body)).toContain('attachment');
     await activePage.reload();
     await expect(activePage.getByRole('button', { name: 'Create first record', exact: true })).toBeVisible();
+
+    await activePage.getByRole('link', { name: 'Collections', exact: true }).first().click();
+    await activePage.getByRole('link', { name: 'Create Collection', exact: true }).click();
+    await activePage.getByLabel('Auth Collection').check();
+    await activePage.getByLabel('Collection name').fill('users');
+    await expect(activePage.getByLabel('Allow users to sign up')).not.toBeChecked();
+    await activePage.getByLabel('Field name 1').fill('displayName');
+    await activePage.getByRole('button', { name: 'Create Collection', exact: true }).click();
+    await expect(activePage.getByRole('heading', { name: 'users' })).toBeVisible();
+    usersId = collectionId(activePage);
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}`);
+    await expect(activePage.getByRole('heading', { name: 'posts' })).toBeVisible();
   });
 
   await test.step('FLOW-003 — Record CRUD, relation values and Local Single-file Field', async () => {
@@ -379,6 +392,10 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Add relation', exact: true }).click();
     await activePage.getByLabel('Field name', { exact: true }).fill('author');
     await activePage.getByLabel('Target Collection').selectOption({ label: 'authors' });
+    await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
+    await activePage.getByRole('button', { name: 'Add relation', exact: true }).click();
+    await activePage.getByLabel('Field name', { exact: true }).fill('owner');
+    await activePage.getByLabel('Target Collection').selectOption({ label: 'users' });
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
     await activePage.getByRole('button', { name: 'Indexes', exact: true }).click();
     await activePage.getByRole('button', { name: 'Add index', exact: true }).click();
@@ -434,16 +451,9 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(JSON.stringify(collection)).toContain('posts_title_category');
   });
 
-  await test.step('FLOW-005 — Create an Auth Collection, App User and real Session', async () => {
-    await activePage.getByRole('link', { name: 'Collections', exact: true }).first().click();
-    await activePage.getByRole('link', { name: 'Create Collection', exact: true }).click();
-    await activePage.getByLabel('Auth Collection').check();
-    await activePage.getByLabel('Collection name').fill('users');
-    await expect(activePage.getByLabel('Allow users to sign up')).not.toBeChecked();
-    await activePage.getByLabel('Field name 1').fill('displayName');
-    await activePage.getByRole('button', { name: 'Create Collection', exact: true }).click();
+  await test.step('FLOW-005 — Create an App User and revoke a real Session', async () => {
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(usersId)}`);
     await expect(activePage.getByRole('heading', { name: 'users' })).toBeVisible();
-    usersId = collectionId(activePage);
     await activePage.getByRole('button', { name: /Create user/ }).first().click();
     await activePage.locator('#record-field-email').fill(appEmail);
     await activePage.locator('#record-field-displayName').fill('Ada');
@@ -470,8 +480,24 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(appSessionCheck.status).toBe(200);
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(usersId)}/security`);
     await activePage.getByRole('tab', { name: 'Sessions', exact: true }).click();
-    await activePage.locator('.security-user-row').filter({ hasText: appEmail }).getByRole('button', { name: 'View sessions' }).click();
-    await expect(activePage.getByText('active', { exact: true })).toBeVisible();
+    const appUserRow = activePage.locator('.security-user-row').filter({ hasText: appEmail });
+    await expect(appUserRow).toBeVisible();
+    appUserRecordId = (await appUserRow.locator('span').textContent()) ?? '';
+    expect(appUserRecordId).toMatch(/^rec_/);
+    await appUserRow.getByRole('button', { name: 'View sessions' }).click();
+    const activeSession = activePage.locator('.security-session-row').filter({ hasText: 'active' });
+    await expect(activeSession).toHaveCount(1);
+    await activeSession.getByRole('button', { name: 'Revoke', exact: true }).click();
+    await activePage.getByRole('button', { name: 'Confirm revoke', exact: true }).click();
+    await expect(activePage.getByText('Session revoked.', { exact: true })).toBeVisible();
+    await expect(activePage.locator('.security-session-row').filter({ hasText: 'revoked' })).toHaveCount(1);
+    const revokedAppSession = await requestJSON(activePage, 'GET', '/api/v1/auth/users/session', undefined, appSession, 'omit', [401, 403]);
+    expect([401, 403]).toContain(revokedAppSession.status);
+
+    const renewedLogin = await requestJSON(activePage, 'POST', '/api/v1/auth/users/login', { email: appEmail, password: appPassword }, undefined, 'omit');
+    expect(renewedLogin.status).toBe(200);
+    appSession = findString(renewedLogin.body, 'accessToken') ?? '';
+    expect(appSession).toMatch(/^app_/);
   });
 
   await test.step('FLOW-006 — Apply independent Access Rules and verify fail-closed HTTP behavior', async () => {
@@ -495,6 +521,48 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect([401, 403]).toContain(anonymousView.status);
     const signedInView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit');
     expect(signedInView.status).toBe(200);
+
+    const applyViewRule = async (mode: string, configure?: () => Promise<void>) => {
+      await activePage.getByRole('button', { name: 'Edit View access' }).click();
+      await activePage.getByLabel(mode).check();
+      if (configure) await configure();
+      await activePage.getByRole('button', { name: 'Save pending rule' }).click();
+      await activePage.getByRole('button', { name: /Apply 1 change/ }).click();
+      await activePage.getByRole('button', { name: 'Confirm & apply' }).click();
+      await expect(activePage.getByText('All access rule changes are applied.')).toBeVisible();
+    };
+
+    await applyViewRule('No access');
+    const signedInNoAccess = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit', [401, 403]);
+    expect([401, 403]).toContain(signedInNoAccess.status);
+
+    await applyViewRule('Anyone');
+    const anonymousAnyoneView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, undefined, 'omit');
+    expect(anonymousAnyoneView.status).toBe(200);
+
+    const assignOwner = await requestJSON(activePage, 'PATCH', `/admin/api/v1/collections/${postsId}/records/${firstPostId}`, {
+      values: { owner: appUserRecordId },
+    });
+    expect(assignOwner.status).toBe(200);
+    await applyViewRule('Record owner', async () => {
+      await activePage.locator('#access-owner-field').selectOption({ label: 'owner' });
+    });
+    const ownerView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit');
+    expect(ownerView.status).toBe(200);
+    const nonOwnerView = await requestJSON(activePage, 'GET', `/api/v1/posts/${secondPostId}`, undefined, appSession, 'omit', [401, 403]);
+    expect([401, 403]).toContain(nonOwnerView.status);
+
+    await applyViewRule('Custom rule', async () => {
+      await activePage.getByRole('button', { name: 'Add condition', exact: true }).click();
+      await activePage.getByLabel('Condition 1 field').selectOption({ label: 'title' });
+      await activePage.getByLabel('Condition value', { exact: true }).fill('post-a-updated');
+    });
+    const matchingCustomView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit');
+    expect(matchingCustomView.status).toBe(200);
+    const nonMatchingCustomView = await requestJSON(activePage, 'GET', `/api/v1/posts/${secondPostId}`, undefined, appSession, 'omit', [401, 403]);
+    expect([401, 403]).toContain(nonMatchingCustomView.status);
+
+    await applyViewRule('Signed-in users');
     await activePage.reload();
     await expect(activePage.getByText('All access rule changes are applied.')).toBeVisible();
   });

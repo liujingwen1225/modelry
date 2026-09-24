@@ -85,7 +85,7 @@ func (service *Service) List(ctx context.Context, collectionID string, options L
 			where += clause
 			args = append(args, cursorArgs...)
 		}
-		table, err := backendmodel.QuoteSQLiteIdentifier(model.projection.TableName)
+		table, err := storage.QuoteSQLiteIdentifier(model.projection.TableName)
 		if err != nil {
 			return err
 		}
@@ -292,7 +292,7 @@ func compileWhere(model appliedModel, search string, filters []filterExpression)
 	clauses := make([]string, 0, 2)
 	args := make([]any, 0)
 	if search != "" {
-		quotedID, err := backendmodel.QuoteSQLiteIdentifier("id")
+		quotedID, err := storage.QuoteSQLiteIdentifier("id")
 		if err != nil {
 			return "", nil, err
 		}
@@ -301,7 +301,7 @@ func compileWhere(model appliedModel, search string, filters []filterExpression)
 			if field.Type != backendmodel.FieldTypeText || field.System {
 				continue
 			}
-			column, err := backendmodel.QuoteSQLiteIdentifier(field.ColumnName)
+			column, err := storage.QuoteSQLiteIdentifier(field.ColumnName)
 			if err != nil {
 				return "", nil, err
 			}
@@ -316,7 +316,7 @@ func compileWhere(model appliedModel, search string, filters []filterExpression)
 		clauses = append(clauses, `(`+strings.Join(parts, " OR ")+`)`)
 	}
 	for _, filter := range filters {
-		column, err := backendmodel.QuoteSQLiteIdentifier(filter.field.ColumnName)
+		column, err := storage.QuoteSQLiteIdentifier(filter.field.ColumnName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -359,7 +359,7 @@ func compileOrder(model appliedModel, sorts []sortField) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("%w: invalid sort field", ErrInvalidArgument)
 		}
-		column, err := backendmodel.QuoteSQLiteIdentifier(field.ColumnName)
+		column, err := storage.QuoteSQLiteIdentifier(field.ColumnName)
 		if err != nil {
 			return "", err
 		}
@@ -458,7 +458,7 @@ func compileAfterCursor(model appliedModel, sorts []sortField, cursor listCursor
 	args := make([]any, 0, len(sorts)*len(sorts))
 	for index, item := range sorts {
 		field := model.byName[item.name]
-		column, err := backendmodel.QuoteSQLiteIdentifier(field.ColumnName)
+		column, err := storage.QuoteSQLiteIdentifier(field.ColumnName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -466,7 +466,7 @@ func compileAfterCursor(model appliedModel, sorts []sortField, cursor listCursor
 		branchArgs := make([]any, 0, index+1)
 		for prior := 0; prior < index; prior++ {
 			priorField := model.byName[sorts[prior].name]
-			priorColumn, err := backendmodel.QuoteSQLiteIdentifier(priorField.ColumnName)
+			priorColumn, err := storage.QuoteSQLiteIdentifier(priorField.ColumnName)
 			if err != nil {
 				return "", nil, err
 			}

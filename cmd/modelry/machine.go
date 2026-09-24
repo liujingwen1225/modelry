@@ -199,10 +199,14 @@ func (problem *machineAPIError) output() any {
 }
 
 func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall, error) {
+	operation, supported := machineOperationCatalog[tool]
+	if !supported {
+		return machineAPICall{}, fmt.Errorf("unsupported Modelry operation %q", tool)
+	}
 	if arguments == nil {
 		arguments = map[string]any{}
 	}
-	call := machineAPICall{query: make(url.Values)}
+	call := machineAPICall{method: operation.method, path: operation.path, query: make(url.Values)}
 	addListQuery := func(allowed ...string) error {
 		return addMachineListQuery(&call, arguments, nil, allowed...)
 	}
@@ -235,12 +239,17 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		}
 		return nil
 	}
-	collectionPath := func(suffix string) (string, error) {
-		id, err := addID("collectionId")
+	setRouteID := func(name string) error {
+		id, err := addID(name)
 		if err != nil {
-			return "", err
+			return err
 		}
-		return "/admin/api/v1/collections/" + id + suffix, nil
+		placeholder := "{" + name + "}"
+		if !strings.Contains(call.path, placeholder) {
+			return fmt.Errorf("operation %q does not define route parameter %q", tool, name)
+		}
+		call.path = strings.Replace(call.path, placeholder, id, 1)
+		return nil
 	}
 	setBody := func() error {
 		body, err := getBody()
@@ -253,7 +262,6 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 
 	switch tool {
 	case "collections_list":
-		call.method, call.path = http.MethodGet, "/admin/api/v1/collections"
 		if err := addListQuery("limit", "cursor"); err != nil {
 			return machineAPICall{}, err
 		}
@@ -261,37 +269,30 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		if err := checkArgs("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		id, err := addID("collectionId")
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, "/admin/api/v1/collections/"+id
 	case "collections_create":
 		if err := checkArgs("body"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodPost, "/admin/api/v1/collections"
 		if err := setBody(); err != nil {
 			return machineAPICall{}, err
 		}
 	case "records_list":
-		path, err := collectionPath("/records")
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, path
 		if err := addListQueryWithRouteIDs([]string{"collectionId"}, "limit", "cursor", "search", "filter", "sort"); err != nil {
 			return machineAPICall{}, err
 		}
 	case "records_create":
-		path, err := collectionPath("/records")
-		if err != nil {
-			return machineAPICall{}, err
-		}
 		if err := checkArgs("collectionId", "body"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodPost, path
+		if err := setRouteID("collectionId"); err != nil {
+			return machineAPICall{}, err
+		}
 		if err := setBody(); err != nil {
 			return machineAPICall{}, err
 		}
@@ -299,23 +300,18 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		if err := checkArgs("collectionId", "recordId", "body"); err != nil {
 			return machineAPICall{}, err
 		}
-		collectionID, err := addID("collectionId")
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		recordID, err := addID("recordId")
-		if err != nil {
+		if err := setRouteID("recordId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.path = "/admin/api/v1/collections/" + collectionID + "/records/" + recordID
 		switch tool {
 		case "records_get":
 			if _, exists := arguments["body"]; exists {
 				return machineAPICall{}, errors.New("body is not accepted for records_get")
 			}
-			call.method = http.MethodGet
 		case "records_update":
-			call.method = http.MethodPatch
 			if err := setBody(); err != nil {
 				return machineAPICall{}, err
 			}
@@ -323,17 +319,14 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 			if _, exists := arguments["body"]; exists {
 				return machineAPICall{}, errors.New("body is not accepted for records_delete")
 			}
-			call.method = http.MethodDelete
 		}
 	case "schema_pending_get":
-		path, err := collectionPath("/schema/pending-change")
-		if err != nil {
-			return machineAPICall{}, err
-		}
 		if err := checkArgs("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, path
+		if err := setRouteID("collectionId"); err != nil {
+			return machineAPICall{}, err
+		}
 	case "schema_operation_add", "schema_operation_update":
 		allowedArgs := []string{"collectionId", "body"}
 		if tool == "schema_operation_update" {
@@ -342,21 +335,13 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		if err := checkArgs(allowedArgs...); err != nil {
 			return machineAPICall{}, err
 		}
-		suffix := "/schema/pending-operations"
-		if tool == "schema_operation_update" {
-			operationID, err := addID("operationId")
-			if err != nil {
-				return machineAPICall{}, err
-			}
-			suffix += "/" + operationID
-		}
-		path, err := collectionPath(suffix)
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.path, call.method = path, http.MethodPost
 		if tool == "schema_operation_update" {
-			call.method = http.MethodPatch
+			if err := setRouteID("operationId"); err != nil {
+				return machineAPICall{}, err
+			}
 		}
 		if err := setBody(); err != nil {
 			return machineAPICall{}, err
@@ -365,74 +350,47 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		if err := checkArgs("collectionId", "operationId"); err != nil {
 			return machineAPICall{}, err
 		}
-		operationID, err := addID("operationId")
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		path, err := collectionPath("/schema/pending-operations/" + operationID)
-		if err != nil {
+		if err := setRouteID("operationId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodDelete, path
 	case "schema_preview", "schema_apply", "schema_discard":
 		if err := checkArgs("collectionId", "body"); err != nil {
 			return machineAPICall{}, err
 		}
-		suffix := "/schema/preview"
-		if tool == "schema_apply" {
-			suffix = "/schema/apply"
-		} else if tool == "schema_discard" {
-			suffix = "/schema/discard"
-		}
-		path, err := collectionPath(suffix)
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodPost, path
 		if err := setBody(); err != nil {
 			return machineAPICall{}, err
 		}
 	case "schema_history":
-		path, err := collectionPath("/schema/history")
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, path
 		if err := addListQueryWithRouteIDs([]string{"collectionId"}, "limit", "cursor"); err != nil {
 			return machineAPICall{}, err
 		}
 	case "access_rules_get":
-		path, err := collectionPath("/access-rules")
-		if err != nil {
-			return machineAPICall{}, err
-		}
 		if err := checkArgs("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, path
+		if err := setRouteID("collectionId"); err != nil {
+			return machineAPICall{}, err
+		}
 	case "access_rules_save", "access_rules_apply", "access_rules_discard":
 		if err := checkArgs("collectionId", "body"); err != nil {
 			return machineAPICall{}, err
 		}
-		suffix := "/access-rules"
-		call.method = http.MethodPut
-		if tool == "access_rules_apply" {
-			suffix += "/apply"
-			call.method = http.MethodPost
-		} else if tool == "access_rules_discard" {
-			suffix += "/discard"
-			call.method = http.MethodPost
-		}
-		path, err := collectionPath(suffix)
-		if err != nil {
+		if err := setRouteID("collectionId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.path = path
 		if err := setBody(); err != nil {
 			return machineAPICall{}, err
 		}
 	case "requests_list":
-		call.method, call.path = http.MethodGet, "/admin/api/v1/requests"
 		if err := addListQuery("limit", "cursor", "search", "filter", "sort"); err != nil {
 			return machineAPICall{}, err
 		}
@@ -440,13 +398,10 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		if err := checkArgs("requestId"); err != nil {
 			return machineAPICall{}, err
 		}
-		id, err := addID("requestId")
-		if err != nil {
+		if err := setRouteID("requestId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, "/admin/api/v1/requests/"+id
 	case "audit_list":
-		call.method, call.path = http.MethodGet, "/admin/api/v1/audit"
 		if err := addListQuery("limit", "cursor"); err != nil {
 			return machineAPICall{}, err
 		}
@@ -454,13 +409,14 @@ func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall,
 		if err := checkArgs("auditRecordId"); err != nil {
 			return machineAPICall{}, err
 		}
-		id, err := addID("auditRecordId")
-		if err != nil {
+		if err := setRouteID("auditRecordId"); err != nil {
 			return machineAPICall{}, err
 		}
-		call.method, call.path = http.MethodGet, "/admin/api/v1/audit/"+id
 	default:
 		return machineAPICall{}, fmt.Errorf("unsupported Modelry operation %q", tool)
+	}
+	if strings.Contains(call.path, "{") {
+		return machineAPICall{}, fmt.Errorf("operation %q has an unresolved route parameter", tool)
 	}
 	return call, nil
 }

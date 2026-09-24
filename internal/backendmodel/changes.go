@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -489,7 +488,7 @@ func evaluateChange(ctx context.Context, query storage.Executor, current Collect
 		return preview, nil
 	}
 	preview.Diff = buildDiff(current, target, change.Operations)
-	count, err := countCollectionRecords(ctx, query, current.ID)
+	count, err := storage.CountCollectionRecords(ctx, query, current.ID)
 	if err != nil {
 		return SchemaPreview{}, err
 	}
@@ -561,34 +560,24 @@ func checkTargetPreconditions(ctx context.Context, query storage.Executor, curre
 }
 
 func checkExistingFieldValues(ctx context.Context, query storage.Executor, current Collection, previous, target Field) (*Precondition, error) {
-	quotedTable, err := QuoteSQLiteIdentifier(recordsTableName(current.ID))
-	if err != nil {
-		return nil, err
-	}
-	quotedColumn, err := QuoteSQLiteIdentifier(fieldColumnName(previous))
-	if err != nil {
-		return nil, err
-	}
-	rows, err := query.QueryContext(ctx, "SELECT "+quotedColumn+" FROM "+quotedTable)
+	incompatible := false
+	err := storage.VisitRecordFieldValues(ctx, query, current.ID, previous.ID, previous.Name, previous.System, func(raw any) (bool, error) {
+		value, err := decodeStoredValue(target, raw)
+		if err != nil {
+			incompatible = true
+			return false, nil
+		}
+		if err := validateFieldValue(target, value, true); err != nil {
+			incompatible = true
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("inspect existing values for Field %q: %w", target.Name, err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var raw any
-		if err := rows.Scan(&raw); err != nil {
-			return nil, fmt.Errorf("read existing values for Field %q: %w", target.Name, err)
-		}
-		value, err := decodeStoredValue(target, raw)
-		if err != nil {
-			return &Precondition{Code: "FIELD_VALUE_INCOMPATIBLE", Status: "failed", Message: fmt.Sprintf("Existing values in field %q do not match the updated type.", target.Name)}, nil
-		}
-		if err := validateFieldValue(target, value, true); err != nil {
-			return &Precondition{Code: "FIELD_VALUE_INCOMPATIBLE", Status: "failed", Message: fmt.Sprintf("Existing values in field %q do not satisfy the updated type or validation.", target.Name)}, nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("finish checking existing Field values: %w", err)
+	if incompatible {
+		return &Precondition{Code: "FIELD_VALUE_INCOMPATIBLE", Status: "failed", Message: fmt.Sprintf("Existing values in field %q do not match the updated type or validation.", target.Name)}, nil
 	}
 	return nil, nil
 }
@@ -657,50 +646,30 @@ func decodeStoredValue(field Field, raw any) (any, error) {
 }
 
 func uniqueConflictCountForModel(ctx context.Context, query storage.Executor, current, target Collection) (int64, error) {
-	quotedTable, err := QuoteSQLiteIdentifier(recordsTableName(current.ID))
-	if err != nil {
-		return 0, err
-	}
 	oldFields := make(map[string]Field, len(current.Fields))
 	for _, field := range current.Fields {
 		oldFields[field.ID] = field
 	}
-	var total int64
+	constraints := make([][]storage.UniqueConstraintValue, 0)
 	check := func(fields []Field) error {
-		selectExprs, groups, nonNull := make([]string, 0, len(fields)), make([]string, 0, len(fields)), make([]string, 0, len(fields))
-		for i, field := range fields {
+		values := make([]storage.UniqueConstraintValue, 0, len(fields))
+		for _, field := range fields {
 			if old, ok := oldFields[field.ID]; ok {
-				quoted, err := QuoteSQLiteIdentifier(fieldColumnName(old))
-				if err != nil {
-					return err
-				}
-				alias := fmt.Sprintf("k%d", i)
-				selectExprs = append(selectExprs, quoted+" AS "+alias)
-				groups = append(groups, alias)
-				nonNull = append(nonNull, alias+" IS NOT NULL")
+				values = append(values, storage.UniqueConstraintValue{
+					ColumnName: storage.RecordFieldColumnName(old.ID, old.Name, old.System),
+				})
 			} else {
-				literal, err := defaultLiteral(field)
-				if err != nil {
-					return err
-				}
-				alias := fmt.Sprintf("k%d", i)
-				selectExprs = append(selectExprs, literal+" AS "+alias)
-				groups = append(groups, alias)
-				nonNull = append(nonNull, alias+" IS NOT NULL")
+				defaultField := storageFieldProjection(field)
+				values = append(values, storage.UniqueConstraintValue{DefaultField: &defaultField})
 			}
 		}
-		sqlText := "SELECT COUNT(*) FROM (SELECT " + strings.Join(selectExprs, ", ") + " FROM " + quotedTable + " GROUP BY " + strings.Join(groups, ", ") + " HAVING COUNT(*) > 1 AND " + strings.Join(nonNull, " AND ") + ")"
-		var conflicts int64
-		if err := query.QueryRowContext(ctx, sqlText).Scan(&conflicts); err != nil {
-			return fmt.Errorf("check pending unique constraints: %w", err)
-		}
-		total += conflicts
+		constraints = append(constraints, values)
 		return nil
 	}
 	for _, field := range target.Fields {
 		if !field.System && field.Unique {
 			if err := check([]Field{field}); err != nil {
-				return total, err
+				return 0, err
 			}
 		}
 	}
@@ -712,54 +681,15 @@ func uniqueConflictCountForModel(ctx context.Context, query storage.Executor, cu
 		for _, fieldID := range index.Fields {
 			field, found := fieldByID(target.Fields, fieldID)
 			if !found || field.System {
-				return total, fmt.Errorf("%w: Index %q refers to a missing Field", ErrInvalidArgument, index.Name)
+				return 0, fmt.Errorf("%w: Index %q refers to a missing Field", ErrInvalidArgument, index.Name)
 			}
 			fields = append(fields, field)
 		}
 		if err := check(fields); err != nil {
-			return total, err
+			return 0, err
 		}
 	}
-	return total, nil
-}
-
-func defaultLiteral(field Field) (string, error) {
-	if len(field.Default) == 0 {
-		return "NULL", nil
-	}
-	var value any
-	decoder := json.NewDecoder(strings.NewReader(string(field.Default)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&value); err != nil {
-		return "", fmt.Errorf("decode Field default: %w", err)
-	}
-	switch typed := value.(type) {
-	case nil:
-		return "NULL", nil
-	case string:
-		return "'" + strings.ReplaceAll(typed, "'", "''") + "'", nil
-	case bool:
-		if typed {
-			return "1", nil
-		}
-		return "0", nil
-	case json.Number:
-		if _, err := typed.Float64(); err != nil {
-			return "", fmt.Errorf("invalid numeric default: %w", err)
-		}
-		return typed.String(), nil
-	case float64:
-		if math.IsNaN(typed) || math.IsInf(typed, 0) {
-			return "", fmt.Errorf("invalid numeric default")
-		}
-		return strconv.FormatFloat(typed, 'g', -1, 64), nil
-	default:
-		encoded, err := json.Marshal(typed)
-		if err != nil {
-			return "", fmt.Errorf("encode structured Field default: %w", err)
-		}
-		return "'" + strings.ReplaceAll(string(encoded), "'", "''") + "'", nil
-	}
+	return storage.CountUniqueValueConflicts(ctx, query, current.ID, constraints)
 }
 
 func applyOperations(current Collection, operations []PendingOperation) (Collection, error) {

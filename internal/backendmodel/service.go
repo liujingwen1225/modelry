@@ -24,7 +24,7 @@ type Service struct {
 }
 
 // CollectionInitializer runs inside the same transaction as the new Collection
-// row and its SQLite Records projection. Domain modules can use it to seed
+// row and its Records projection. Domain modules can use it to seed
 // independent applied configuration without coupling that state to the schema
 // Pending Change.
 type CollectionInitializer func(context.Context, storage.Executor, Collection) error
@@ -131,7 +131,7 @@ func (service *Service) recoverInterrupted(ctx context.Context, tx storage.Execu
 	now := timestamp(time.Now())
 	recovery := RecoveryState{
 		State:   "interrupted",
-		Summary: "The previous process stopped during schema Apply. Applied Model and SQLite projection were rolled back; the Pending Change is retained.",
+		Summary: "The previous process stopped during schema Apply. The Applied Model and Records projection were rolled back; the Pending Change is retained.",
 		Actions: []string{"reviewPendingChange", "retryApply", "discardPendingChange"},
 	}
 	recoveryJSON, err := json.Marshal(recovery)
@@ -225,7 +225,7 @@ func (service *Service) CreateCollectionWithInitializer(ctx context.Context, inp
 				}
 			}
 		}
-		if err := createRecordProjection(ctx, tx, collection, true); err != nil {
+		if err := storage.CreateRecordProjection(ctx, tx, storageProjection(collection)); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO modelry_backend_collections (id, name, type, model_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, collection.ID, collection.Name, collection.Type, string(modelJSON), timestamp(now), timestamp(now)); err != nil {
@@ -347,14 +347,11 @@ func (service *Service) GetRecordProjection(ctx context.Context, collectionID st
 	projection := RecordProjection{
 		CollectionID:  collection.ID,
 		SchemaVersion: collection.SchemaVersion,
-		TableName:     recordsTableName(collection.ID),
+		TableName:     storage.RecordTableName(collection.ID),
 		Fields:        make([]ProjectedField, 0, len(collection.Fields)),
 	}
 	for _, field := range collection.Fields {
-		column := fieldColumnName(field)
-		if field.System {
-			column = field.Name
-		}
+		column := storage.RecordFieldColumnName(field.ID, field.Name, field.System)
 		projection.Fields = append(projection.Fields, ProjectedField{
 			ID: field.ID, Name: field.Name, Type: field.Type, ColumnName: column,
 			Required: field.Required, Unique: field.Unique, Validation: cloneJSON(field.Validation),
@@ -453,6 +450,15 @@ func scanCollection(rows *sql.Rows) (Collection, error) {
 func fieldByName(fields []Field, name string) (Field, bool) {
 	for _, field := range fields {
 		if field.Name == name {
+			return field, true
+		}
+	}
+	return Field{}, false
+}
+
+func fieldByID(fields []Field, id string) (Field, bool) {
+	for _, field := range fields {
+		if field.ID == id {
 			return field, true
 		}
 	}

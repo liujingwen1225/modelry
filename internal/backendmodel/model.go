@@ -263,7 +263,7 @@ type ProjectedField struct {
 	System     bool            `json:"system"`
 }
 
-// RecordProjection 向 Records 模块提供稳定 Model 到当前 SQLite 物理列的映射。
+// RecordProjection 向 Records 模块提供 Applied Model 到当前物理列的映射。
 // TableName/ColumnName 仅由 Modelry 生成的 opaque IDs 派生，绝不可替换为用户输入。
 type RecordProjection struct {
 	CollectionID  string           `json:"collectionId"`

@@ -79,7 +79,7 @@ func (service *Service) Login(ctx context.Context, collectionName, email, passwo
 	if err != nil {
 		return LoginResult{}, ErrUnauthenticated
 	}
-	table, err := backendmodel.QuoteSQLiteIdentifier(projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(projection.TableName)
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -260,7 +260,7 @@ func (service *Service) ListUserSessions(ctx context.Context, collectionID, user
 	if err != nil {
 		return nil, mapBackendError(err)
 	}
-	table, err := backendmodel.QuoteSQLiteIdentifier(projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(projection.TableName)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func (service *Service) RevokeAllUserSessions(ctx context.Context, collectionID,
 	if err != nil {
 		return mapBackendError(err)
 	}
-	table, err := backendmodel.QuoteSQLiteIdentifier(projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(projection.TableName)
 	if err != nil {
 		return err
 	}
@@ -372,7 +372,7 @@ func (service *Service) sessionForToken(ctx context.Context, token, collectionID
 	if err != nil {
 		return sessionRecord{}, ErrUnauthenticated
 	}
-	table, err := backendmodel.QuoteSQLiteIdentifier(projection.TableName)
+	table, err := storage.QuoteSQLiteIdentifier(projection.TableName)
 	if err != nil {
 		return sessionRecord{}, ErrUnauthenticated
 	}

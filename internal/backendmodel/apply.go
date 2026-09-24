@@ -124,7 +124,7 @@ func (service *Service) Apply(ctx context.Context, collectionID string, expected
 		if err != nil {
 			return err
 		}
-		if err := rebuildRecordProjection(ctx, tx, collection, target); err != nil {
+		if err := storage.RebuildRecordProjection(ctx, tx, storageProjection(collection), storageProjection(target)); err != nil {
 			return err
 		}
 		target.SchemaVersion = collection.SchemaVersion + 1

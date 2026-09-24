@@ -562,7 +562,7 @@ func (service *Service) fileReferences(ctx context.Context) (map[string]struct{}
 			if err := verifyModel(ctx, snapshot, model); err != nil {
 				return err
 			}
-			table, err := backendmodel.QuoteSQLiteIdentifier(model.projection.TableName)
+			table, err := storage.QuoteSQLiteIdentifier(model.projection.TableName)
 			if err != nil {
 				return err
 			}
@@ -570,7 +570,7 @@ func (service *Service) fileReferences(ctx context.Context) (map[string]struct{}
 				if field.Type != backendmodel.FieldTypeFile || field.System {
 					continue
 				}
-				column, err := backendmodel.QuoteSQLiteIdentifier(field.ColumnName)
+				column, err := storage.QuoteSQLiteIdentifier(field.ColumnName)
 				if err != nil {
 					return err
 				}
