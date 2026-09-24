@@ -7,5 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   window.localStorage.clear();
   window.sessionStorage.clear();
+  window.history.replaceState({}, '', '/');
   document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('lang');
 });

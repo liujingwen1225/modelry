@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { AppShell } from './components/app-shell';
 import { DiagnosticsProvider } from './components/diagnostics-context';
 import { ThemeProvider } from './components/theme-context';
+import { LocaleProvider } from './i18n/i18n';
 import { OwnerSessionProvider, useOwnerSession } from './auth/owner-session';
 import { BootstrapPage, LoginPage, fetchBootstrapStatus, resolveOwnerReturnTo } from './auth';
 import type { BootstrapStatus } from './auth/client';
@@ -146,14 +147,16 @@ function OwnerGate() {
 
 export function App() {
   return (
-    <ThemeProvider>
-      <OwnerSessionProvider>
-        <DiagnosticsProvider>
-          <BrowserRouter>
-            <OwnerGate />
-          </BrowserRouter>
-        </DiagnosticsProvider>
-      </OwnerSessionProvider>
-    </ThemeProvider>
+    <LocaleProvider>
+      <ThemeProvider>
+        <OwnerSessionProvider>
+          <DiagnosticsProvider>
+            <BrowserRouter>
+              <OwnerGate />
+            </BrowserRouter>
+          </DiagnosticsProvider>
+        </OwnerSessionProvider>
+      </ThemeProvider>
+    </LocaleProvider>
   );
 }

@@ -1425,3 +1425,39 @@ Admin V0.1 必须满足：
 - Editable Runtime Settings
 
 当 Runtime Capability 真正进入对应版本时，再通过新的 Spec 增加 Product Surface，而不是提前在 V0.1 Sidebar 留空入口。
+
+# 31. V0.1.x Admin Shell Evolution
+
+本节是 V0.1.x 的 UX 演进附录，不改写第 3 节所记录的 V0.1 决策。V0.1.x 的 Admin Shell 在保留既有 Project Admin 路由和业务语义的基础上，明确演进为共享的全局工作面：
+
+~~~text
+Project / Context | Command Palette | Runtime | Language | Theme | Owner
+~~~
+
+## 31.1 Language
+
+Admin 初始支持 `en`（English）和 `zh-CN`（简体中文）。所有用户可见的共享 Shell、导航、状态控件和 Command Palette 文案必须使用结构化、按产品域组织的 locale resources 与稳定 translation keys。后续 V0.1.x Surface 从首次实现开始使用同一 i18n API，不得自建页面翻译表。
+
+- 首次选择：有有效 Modelry locale preference 时使用该值；否则仅在首次默认值中参考浏览器 locale；未知 locale 安全回退到 English。
+- 用户选择持久化；切换即时生效，不重新加载页面，也不改变当前 pathname、query、hash 或局部工作上下文。
+- 日期、时间、相对时间、数字和复数通过 `Intl` locale-aware formatter 提供共享入口。
+- Collection/Field 名称、ID、用户数据、API/domain 标识符及稳定服务端错误码是数据或契约，不翻译。已支持的服务端错误码可以映射到本地化的说明文案。
+- 单个 locale 缺少已知 key 时回退到 English。未知 key 在 development/test 显式失败；production 使用可见但安全的 key 标记回退。诊断不得包含插值值、credential 或 secret。
+
+## 31.2 Theme
+
+Light / Dark 是独立的全局 Theme action，位于 Topbar，与 Owner 身份、Session 和 Sign out 分开。沿用当前持久化 preference 行为；控件必须可键盘访问，具有可理解的可访问名称、可见 focus 与满足 Design System 的对比度。
+
+## 31.3 Command Palette
+
+Command Palette 是通过共享、可扩展的 Command Registry 注册的操作与导航表面。Command metadata 至少包括稳定 ID、产品域分类、显示文案、可选关键词、上下文/能力可见条件与执行动作。后续 V0.1.x Surface 可以从自己的模块注册和移除 commands，无需扩展一个集中巨型组件。
+
+- `⌘K`（macOS）和 `Ctrl+K`（Windows/Linux）打开 palette；输入只对可见 command 的 label/keywords 做模糊匹配，不对后台数据做全文搜索。
+- 支持键盘上下移动、Enter 执行、Escape 关闭、focus trap 与关闭后的 focus restoration。
+- 只显示当前用户能力、项目、路由和资源上下文中真实可执行的命令。命令经正常导航和业务动作执行，不提供授权旁路。
+- 可用命令限于已实现的导航页、近期 Collection、当前 Collection tabs 与 Create actions、适用的 Pending/Failed Change，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
+- 导航只在语义匹配时保留 URL/deep-link context；切换无关的一级工作区不继承另一页面的 query/hash。
+
+## 31.4 Acceptance
+
+使用 Admin tests/build 与真实 Chromium 验证 Shell 双语、locale 持久化与无重载切换、当前深链状态保留、数据标识不变、Theme 持久化、平台快捷键、keyboard/focus 行为、命令上下文可见性与实际导航。此附录不改变 V0.1 Core Browser Flows 或服务端 Product Semantics。

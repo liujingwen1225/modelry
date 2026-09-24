@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { ArrowRight, Check, CircleAlert, Command, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { ApiClientError } from '../api/client';
 import { Button, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { useI18n } from '../i18n/i18n';
 import {
   createOwner,
   fetchBootstrapStatus,
@@ -30,12 +31,13 @@ function fieldViolation(error: unknown, field: 'email' | 'password'): string | u
 function AuthError({ error, fallback, title }: { error: unknown; fallback: string; title: string }) {
   const apiError = error instanceof ApiClientError ? error.apiError : undefined;
   const violations = readViolations(error);
+  const { errorMessage } = useI18n();
   return (
     <section aria-label={title} className="auth-error" role="alert">
       <span aria-hidden="true" className="auth-error__icon"><CircleAlert size={17} /></span>
       <div className="auth-error__content">
         <h2>{title}</h2>
-        <p>{apiError?.message ?? fallback}</p>
+        <p>{apiError ? errorMessage(apiError.code) ?? apiError.message : fallback}</p>
         {apiError && <p className="auth-error__code">Error code <code>{apiError.code}</code></p>}
         {apiError?.hint && <p className="auth-error__hint">{apiError.hint}</p>}
         {violations.length > 0 && (

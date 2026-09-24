@@ -402,14 +402,58 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
       await expect(activePage.getByRole('row').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
 
-      await activePage.locator('.owner-menu summary').click();
-      await activePage.getByRole('button', { name: 'Switch to dark theme' }).click();
+      const shellDeepLink = `${runtimeURL}/collections/${encodeURIComponent(authorsId)}?tab=records#selected`;
+      await activePage.goto(shellDeepLink);
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+
+      const ownerMenu = activePage.locator('.owner-menu');
+      await ownerMenu.locator('summary').click();
+      await expect(ownerMenu.getByRole('button', { name: /theme|主题/i })).toHaveCount(0);
+      await ownerMenu.locator('summary').click();
+
+      const darkThemeButton = activePage.locator('.topbar').getByRole('button', { name: 'Switch to dark theme' });
+      await expect(darkThemeButton).toBeVisible();
+      await darkThemeButton.click();
+      await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await activePage.reload();
+      await expect(activePage).toHaveURL(shellDeepLink);
       await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
       const contrast = await actionButtonContrast(activePage);
       expect(contrast.primary).toBeGreaterThanOrEqual(4.5);
       expect(contrast.danger).toBeGreaterThanOrEqual(4.5);
-      await activePage.getByRole('button', { name: 'Switch to light theme' }).click();
-      await activePage.locator('.owner-menu summary').click();
+
+      await activePage.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN');
+      const chineseNavigation = activePage.getByRole('navigation', { name: '项目导航' });
+      await expect(chineseNavigation).toBeVisible();
+      await expect(chineseNavigation.getByRole('link', { name: '集合' })).toBeVisible();
+      await expect(activePage).toHaveURL(shellDeepLink);
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+
+      await activePage.getByRole('button', { name: '搜索命令' }).focus();
+      await activePage.keyboard.press('Control+k');
+      let palette = activePage.getByRole('dialog', { name: '命令面板' });
+      await expect(palette).toBeVisible();
+      const paletteInput = palette.getByRole('combobox', { name: '搜索命令' });
+      await paletteInput.fill('创建记录');
+      await expect(palette.getByRole('option', { name: '在 authors 中创建记录' })).toBeVisible();
+      await activePage.keyboard.press('Escape');
+      await expect(activePage.getByRole('button', { name: '搜索命令' })).toBeFocused();
+
+      await activePage.keyboard.press('Control+k');
+      palette = activePage.getByRole('dialog', { name: '命令面板' });
+      await expect(palette).toBeVisible();
+      await palette.getByRole('combobox', { name: '搜索命令' }).fill('');
+      await activePage.keyboard.press('ArrowDown');
+      await expect(palette.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+      await activePage.keyboard.press('Enter');
+      await expect(activePage).toHaveURL(`${runtimeURL}/collections`);
+      await activePage.goto(shellDeepLink);
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+
+      await activePage.getByRole('combobox', { name: '语言' }).selectOption('en');
+      await expect(activePage.getByRole('navigation', { name: 'Project navigation' })).toBeVisible();
+      await activePage.locator('.topbar').getByRole('button', { name: 'Switch to light theme' }).click();
+      await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'light');
     } finally {
       await sessionClient.dispose();
     }
