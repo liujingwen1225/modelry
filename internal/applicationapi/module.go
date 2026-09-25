@@ -56,6 +56,7 @@ func (module *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/{collectionName}/{recordId}", module.handleUpdate)
 	mux.HandleFunc("DELETE /api/v1/{collectionName}/{recordId}", module.handleDelete)
 	mux.HandleFunc("GET /api/v1/{collectionName}/{recordId}/files/{fieldName}", module.handleFileRead)
+	mux.HandleFunc("GET /api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}", module.handleFileReadAt)
 }
 
 type recordWriteRequest struct {
@@ -201,6 +202,20 @@ func (module *Module) handleDelete(w http.ResponseWriter, request *http.Request)
 }
 
 func (module *Module) handleFileRead(w http.ResponseWriter, request *http.Request) {
+	module.writeApplicationFile(w, request, nil)
+}
+
+// handleFileReadAt 读取有序 files Field 的第 index 个对象，越界与缺失都返回 NOT_FOUND。
+func (module *Module) handleFileReadAt(w http.ResponseWriter, request *http.Request) {
+	index, err := strconv.Atoi(request.PathValue("fileIndex"))
+	if err != nil || index < 0 || index > backendmodel.MaximumFileCount-1 {
+		writeError(w, request, fmt.Errorf("%w: fileIndex must be an integer between 0 and %d", records.ErrInvalidArgument, backendmodel.MaximumFileCount-1))
+		return
+	}
+	module.writeApplicationFile(w, request, &index)
+}
+
+func (module *Module) writeApplicationFile(w http.ResponseWriter, request *http.Request, index *int) {
 	principal, err := module.authenticate(request)
 	if err != nil {
 		writeError(w, request, err)
@@ -212,7 +227,13 @@ func (module *Module) handleFileRead(w http.ResponseWriter, request *http.Reques
 		return
 	}
 	requests.MarkCollection(request.Context(), collection.ID)
-	file, info, err := module.records.OpenFileApplication(request.Context(), collection.ID, request.PathValue("recordId"), request.PathValue("fieldName"), principal)
+	var file io.ReadCloser
+	var info records.FileInfo
+	if index == nil {
+		file, info, err = module.records.OpenFileApplication(request.Context(), collection.ID, request.PathValue("recordId"), request.PathValue("fieldName"), principal)
+	} else {
+		file, info, err = module.records.OpenFileApplicationAt(request.Context(), collection.ID, request.PathValue("recordId"), request.PathValue("fieldName"), *index, principal)
+	}
 	if err != nil {
 		markAuthorization(request, err)
 		writeError(w, request, err)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"strings"
 
@@ -164,43 +163,12 @@ func (service *Service) GetApplicationExpanded(ctx context.Context, collectionID
 }
 
 func (service *Service) OpenFileApplication(ctx context.Context, collectionID, recordID, fieldName string, principal authorization.Principal) (io.ReadCloser, FileInfo, error) {
-	record, err := service.GetApplication(ctx, collectionID, recordID, principal)
-	if err != nil {
-		return nil, FileInfo{}, err
-	}
-	model, err := service.loadModel(ctx, collectionID)
-	if err != nil {
-		return nil, FileInfo{}, err
-	}
-	field, ok := model.byName[fieldName]
-	if !ok || field.Type != backendmodel.FieldTypeFile {
-		return nil, FileInfo{}, ErrNotFound
-	}
-	key, ok := record.Values[fieldName].(string)
-	if !ok || !objectKeyPattern.MatchString(key) || service.files == nil {
-		return nil, FileInfo{}, ErrFileNotFound
-	}
-	file, err := service.files.openObject(key)
-	if err != nil {
-		return nil, FileInfo{}, fmt.Errorf("%w: stored object is missing or unavailable", ErrFileNotFound)
-	}
-	buffer := make([]byte, 512)
-	n, readErr := file.Read(buffer)
-	if readErr != nil && readErr != io.EOF {
-		_ = file.Close()
-		return nil, FileInfo{}, fmt.Errorf("read stored object metadata: %w", readErr)
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		_ = file.Close()
-		return nil, FileInfo{}, err
-	}
-	info, err := file.Stat()
-	if err != nil {
-		_ = file.Close()
-		return nil, FileInfo{}, err
-	}
-	contentType, _, _ := mime.ParseMediaType(http.DetectContentType(buffer[:n]))
-	return file, FileInfo{ContentType: contentType, Size: info.Size()}, nil
+	return service.openFile(ctx, collectionID, recordID, fieldName, nil, &principal)
+}
+
+// OpenFileApplicationAt 读取 files Field 中第 index 个对象，并执行同一个 view Access Rule。
+func (service *Service) OpenFileApplicationAt(ctx context.Context, collectionID, recordID, fieldName string, index int, principal authorization.Principal) (io.ReadCloser, FileInfo, error) {
+	return service.openFile(ctx, collectionID, recordID, fieldName, &index, &principal)
 }
 
 func (service *Service) CreateApplication(ctx context.Context, collectionID string, values map[string]any, principal authorization.Principal) (Record, error) {

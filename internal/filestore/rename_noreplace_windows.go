@@ -1,6 +1,6 @@
 //go:build windows
 
-package records
+package filestore
 
 import (
 	"path/filepath"

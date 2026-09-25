@@ -167,6 +167,12 @@ func databaseValue(field backendmodel.ProjectedField, value any) (any, error) {
 			}
 			return string(encoded), nil
 		}
+	case backendmodel.FieldTypeFiles:
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("encode files Field %q: %w", field.Name, err)
+		}
+		return string(encoded), nil
 	case backendmodel.FieldTypeNumber:
 		if number, ok := value.(json.Number); ok {
 			parsed, err := number.Float64()
@@ -210,6 +216,14 @@ func decodeField(field backendmodel.ProjectedField, stored any) (any, error) {
 			return values, nil
 		}
 		return textValue(stored), nil
+	case backendmodel.FieldTypeFiles:
+		var values []any
+		decoder := json.NewDecoder(strings.NewReader(textValue(stored)))
+		decoder.UseNumber()
+		if err := decoder.Decode(&values); err != nil {
+			return nil, err
+		}
+		return values, nil
 	case backendmodel.FieldTypeNumber:
 		switch value := stored.(type) {
 		case int64:

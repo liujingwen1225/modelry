@@ -229,6 +229,8 @@ func parseFilter(model appliedModel, raw string) ([]filterExpression, error) {
 func validateFilterValue(field backendmodel.ProjectedField, value any) error {
 	valid := false
 	switch field.Type {
+	case backendmodel.FieldTypeFiles:
+		return fmt.Errorf("%w: filter is not supported for files fields", ErrInvalidArgument)
 	case backendmodel.FieldTypeText, backendmodel.FieldTypeDateTime, backendmodel.FieldTypeFile:
 		_, valid = value.(string)
 	case backendmodel.FieldTypeNumber:

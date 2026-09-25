@@ -1,6 +1,6 @@
 //go:build darwin
 
-package records
+package filestore
 
 import "golang.org/x/sys/unix"
 

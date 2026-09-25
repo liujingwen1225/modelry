@@ -1,6 +1,6 @@
 //go:build !linux && !darwin && !windows
 
-package records
+package filestore
 
 import (
 	"fmt"

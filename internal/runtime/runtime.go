@@ -22,6 +22,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/diagnostics"
 	"github.com/liujingwen1225/modelry/internal/extensions"
+	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
@@ -35,8 +36,11 @@ import (
 )
 
 const (
-	drainWindow        = 10 * time.Second
-	fileReconcileGrace = 24 * time.Hour
+	drainWindow = 10 * time.Second
+	// stagingReconcileGrace 是未绑定暂存上传的最短保留时间。
+	stagingReconcileGrace = 15 * time.Minute
+	// objectReconcileGrace 是未被引用对象的最短保留时间。
+	objectReconcileGrace = time.Hour
 )
 
 type Options struct {
@@ -51,6 +55,7 @@ type Runtime struct {
 	events         *recordevents.Service
 	extensions     *extensions.Service
 	automation     *automation.Service
+	files          *filestore.Service
 	version        string
 	databaseHealth string
 	fileHealth     string
@@ -76,10 +81,14 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	var store *storage.Store
 	var extensionService *extensions.Service
 	var automationService *automation.Service
+	var fileService *filestore.Service
 	defer func() {
 		if resultErr != nil {
 			if automationService != nil {
 				resultErr = errors.Join(resultErr, automationService.Close(context.Background()))
+			}
+			if fileService != nil {
+				resultErr = errors.Join(resultErr, fileService.Close(context.Background()))
 			}
 			if extensionService != nil {
 				resultErr = errors.Join(resultErr, extensionService.Close(context.Background()))
@@ -137,6 +146,15 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Records and Local Files: %w", err)
 	}
+	fileService, err = filestore.NewService(context.Background(), filestore.ServiceOptions{
+		Store: store, Secrets: extensionService, Audits: auditService,
+		References: recordService, Staging: recordService, ObjectsDir: root.Objects,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry File Storage: %w", err)
+	}
+	// Records 通过注入的解析器读取当前 Provider；配置切换不需要重建 Records Service。
+	recordService.SetFileProviders(fileService)
 	authService, err := appauth.NewService(context.Background(), store, backendModel, recordService)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Application authentication: %w", err)
@@ -149,9 +167,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Service Accounts: %w", err)
 	}
-	if err := recordService.ReconcileFiles(context.Background(), fileReconcileGrace); err != nil {
-		return nil, fmt.Errorf("cannot reconcile Modelry Local Files: %w", err)
+	if err := recordService.ReconcileStaging(context.Background(), stagingReconcileGrace); err != nil {
+		return nil, fmt.Errorf("cannot reconcile Modelry staged uploads: %w", err)
 	}
+	// Provider 不可用时 Runtime 仍必须启动：诊断会显示 degraded，文件操作 fail closed。
+	_ = fileService.Reconcile(context.Background(), objectReconcileGrace)
 	for _, directory := range []string{root.TempFiles, root.Objects} {
 		if err := probeLocalStorage(directory); err != nil {
 			return nil, fmt.Errorf("cannot initialize Modelry Local Storage: %w", err)
@@ -171,6 +191,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		events:         eventService,
 		extensions:     extensionService,
 		automation:     automationService,
+		files:          fileService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -204,6 +225,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		}),
 		accesscontrol.NewModule(accessRules),
 		automation.NewModule(automationService),
+		filestore.NewModule(fileService),
 		extensions.NewModule(extensionService),
 		appauth.NewModule(authService),
 		applicationapi.NewModule(backendModel, recordService, applicationapi.WithSessionAuthenticator(authService)),
@@ -257,6 +279,12 @@ func (instance *Runtime) Run(ctx context.Context, listenAddress string, onReady 
 		if err := instance.automation.Start(ctx); err != nil {
 			instance.setState("unavailable")
 			return errors.Join(fmt.Errorf("cannot start Modelry Webhooks and Jobs dispatcher: %w", err), instance.Close())
+		}
+	}
+	if instance.files != nil {
+		if err := instance.files.Start(ctx); err != nil {
+			instance.setState("unavailable")
+			return errors.Join(fmt.Errorf("cannot start Modelry File Storage reconciliation: %w", err), instance.Close())
 		}
 	}
 
@@ -319,6 +347,12 @@ func (instance *Runtime) Close() error {
 			automationErr = instance.automation.Close(ctx)
 			cancel()
 		}
+		var filesErr error
+		if instance.files != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
+			filesErr = instance.files.Close(ctx)
+			cancel()
+		}
 		var extensionErr error
 		if instance.extensions != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
@@ -336,7 +370,7 @@ func (instance *Runtime) Close() error {
 		if instance.lock != nil {
 			lockErr = instance.lock.Release()
 		}
-		instance.closeErr = errors.Join(serverErr, automationErr, extensionErr, storageErr, lockErr)
+		instance.closeErr = errors.Join(serverErr, automationErr, filesErr, extensionErr, storageErr, lockErr)
 	})
 	return instance.closeErr
 }
@@ -381,6 +415,20 @@ func (instance *Runtime) StorageStatus() diagnostics.StorageStatus {
 			Provider: "Local",
 			Path:     instance.root.Files,
 		},
+		FileStorage: instance.fileStorageStatus(),
+	}
+}
+
+// fileStorageStatus 返回 Provider 中立的活动 Provider 健康快照。
+// 它不返回 endpoint、桶名、对象引用或任何凭据。
+func (instance *Runtime) fileStorageStatus() diagnostics.FileStorageStatus {
+	if instance.files == nil {
+		return diagnostics.FileStorageStatus{State: "unknown", ActiveProvider: "local", Provider: "Local", Message: "File Storage is not initialized."}
+	}
+	kind, health := instance.files.ProviderHealth(context.Background())
+	return diagnostics.FileStorageStatus{
+		State: health.State, Provider: filestore.ProviderLabel(kind), ActiveProvider: string(kind),
+		Message: health.Message, Hint: health.Hint,
 	}
 }
 

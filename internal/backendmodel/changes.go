@@ -629,7 +629,7 @@ func decodeStoredValue(field Field, raw any) (any, error) {
 		default:
 			return nil, errors.New("boolean value is outside its domain")
 		}
-	case FieldTypeJSON, FieldTypeRelation:
+	case FieldTypeJSON, FieldTypeRelation, FieldTypeFiles:
 		var value any
 		decoder := json.NewDecoder(strings.NewReader(text))
 		decoder.UseNumber()

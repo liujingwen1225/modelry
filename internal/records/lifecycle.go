@@ -50,10 +50,8 @@ func (service *Service) SetPreparedCreateValues(prepared *PreparedCreate, values
 	if err := validateFileValues(prepared.model.collection, validated); err != nil {
 		return err
 	}
-	for _, field := range prepared.model.collection.Fields {
-		if field.Type == backendmodel.FieldTypeFile && validated[field.Name] != nil {
-			return fmt.Errorf("%w: caller-owned Auth transactions do not accept File Fields", ErrInvalidArgument)
-		}
+	if hasFileFieldValue(prepared.model.collection, validated) {
+		return fmt.Errorf("%w: caller-owned Auth transactions do not accept File Fields", ErrInvalidArgument)
 	}
 	prepared.values = validated
 	return nil
@@ -125,10 +123,8 @@ func (service *Service) PrepareCreate(ctx context.Context, collectionID string, 
 	if err != nil {
 		return nil, err
 	}
-	for _, field := range prepared.model.collection.Fields {
-		if field.Type == backendmodel.FieldTypeFile && prepared.values[field.Name] != nil {
-			return nil, fmt.Errorf("%w: caller-owned Auth transactions do not accept File Fields", ErrInvalidArgument)
-		}
+	if hasFileFieldValue(prepared.model.collection, prepared.values) {
+		return nil, fmt.Errorf("%w: caller-owned Auth transactions do not accept File Fields", ErrInvalidArgument)
 	}
 	return prepared, nil
 }
@@ -148,10 +144,8 @@ func (service *Service) persistPreparedCreate(ctx context.Context, tx storage.Ex
 	}
 	fillOptionalValues(prepared.model.collection, validated)
 	if !allowFiles {
-		for _, field := range prepared.model.collection.Fields {
-			if field.Type == backendmodel.FieldTypeFile && validated[field.Name] != nil {
-				return Record{}, recordevents.Event{}, fmt.Errorf("%w: caller-owned Auth transactions do not accept File Fields", ErrInvalidArgument)
-			}
+		if hasFileFieldValue(prepared.model.collection, validated) {
+			return Record{}, recordevents.Event{}, fmt.Errorf("%w: caller-owned Auth transactions do not accept File Fields", ErrInvalidArgument)
 		}
 	}
 	if err := validateFileValues(prepared.model.collection, validated); err != nil {

@@ -38,7 +38,8 @@ type Service struct {
 	now       func() time.Time
 	evaluator authorization.Evaluator
 	sessions  authorization.SessionAuthenticator
-	files     *LocalFileStore
+	staging       *fileStaging
+	fileProviders FileProviders
 	events    *recordevents.Service
 	lifecycle recordlifecycle.Hooks
 }
@@ -208,7 +209,7 @@ func (service *Service) createWithPrincipal(ctx context.Context, collectionID st
 	if err != nil {
 		return Record{}, err
 	}
-	releaseFiles, err := service.prepareFileValues(prepared.model.collection, prepared.values)
+	releaseFiles, err := service.prepareFileValues(ctx, prepared.model.collection, prepared.values)
 	if err != nil {
 		return Record{}, err
 	}
@@ -247,10 +248,8 @@ func (service *Service) CreateInTransaction(ctx context.Context, tx storage.Exec
 	if err := validateFileValues(model.collection, validated); err != nil {
 		return Record{}, err
 	}
-	for _, field := range model.collection.Fields {
-		if field.Type == backendmodel.FieldTypeFile && validated[field.Name] != nil {
-			return Record{}, fmt.Errorf("%w: external transaction Record writes do not accept File Fields", ErrInvalidArgument)
-		}
+	if hasFileFieldValue(model.collection, validated) {
+		return Record{}, fmt.Errorf("%w: external transaction Record writes do not accept File Fields", ErrInvalidArgument)
 	}
 	targets, err := service.relationTargets(ctx, model)
 	if err != nil {
@@ -369,10 +368,11 @@ func (service *Service) updateWithPrincipal(ctx context.Context, collectionID, r
 			return Record{}, err
 		}
 	}
-	if service.files != nil {
-		service.files.mu.Lock()
-		defer service.files.mu.Unlock()
+	releaseFiles, err := service.prepareFileValues(ctx, model.collection, validated)
+	if err != nil {
+		return Record{}, err
 	}
+	defer releaseFiles()
 	var updated Record
 	var event recordevents.Event
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
@@ -390,9 +390,6 @@ func (service *Service) updateWithPrincipal(ctx context.Context, collectionID, r
 			if err := service.authorizeInTransaction(ctx, tx, collectionID, authorization.OperationUpdate, *principal, authorizedRecord(current)); err != nil {
 				return err
 			}
-		}
-		if err := service.prepareFileValuesLocked(model.collection, validated); err != nil {
-			return err
 		}
 		if err := validateFileValues(model.collection, validated); err != nil {
 			return err
