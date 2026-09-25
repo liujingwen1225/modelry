@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import {
+  useMemo, useState } from 'react';
+import {
+  NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity as ActivityIcon,
   ChevronDown,
   Command,
   FileStack,
@@ -14,6 +17,8 @@ import {
   Network,
   Puzzle,
   Settings2,
+  SlidersHorizontal,
+  Stethoscope,
   ShieldCheck,
   Sun,
   UserCog,
@@ -21,13 +26,20 @@ import {
 } from 'lucide-react';
 import type { TranslationKey } from '../i18n/i18n';
 import type { ControlPlanePermission } from '../auth/client';
-import { useI18n } from '../i18n/i18n';
-import { RuntimeBadge } from './runtime-status';
-import { useDiagnostics } from './diagnostics-context';
-import { CommandPaletteControl } from './command-palette';
-import { CommandRegistryProvider, useCommandRegistry, useRegisterCommands, type AdminCommand, type CommandContext } from './command-registry';
-import { collectionIdFromPathname } from './route-context';
-import { useTheme } from './theme-context';
+import {
+  useI18n } from '../i18n/i18n';
+import {
+  RuntimeBadge } from './runtime-status';
+import {
+  useDiagnostics } from './diagnostics-context';
+import {
+  CommandPaletteControl } from './command-palette';
+import {
+  CommandRegistryProvider, useCommandRegistry, useRegisterCommands, type AdminCommand, type CommandContext } from './command-registry';
+import {
+  collectionIdFromPathname } from './route-context';
+import {
+  useTheme } from './theme-context';
 
 const groups: Array<{
   label: TranslationKey | null;
@@ -46,6 +58,7 @@ const groups: Array<{
     items: [
       { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
       { label: 'navigation.access', to: '/access', icon: ShieldCheck, operation: 'accessRules.read' },
+      { label: 'navigation.activity', to: '/activity', icon: ActivityIcon, operation: 'activity.read' },
       { label: 'navigation.automations', to: '/automations', icon: Webhook },
       { label: 'navigation.extensions', to: '/extensions', icon: Puzzle },
       { label: 'navigation.secrets', to: '/secrets', icon: KeyRound },
@@ -53,6 +66,8 @@ const groups: Array<{
   },
   { label: 'navigation.system', items: [
     { label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' },
+    { label: 'navigation.drift', to: '/settings/drift', icon: Stethoscope, operation: 'drift.read' },
+    { label: 'navigation.runtimeSettings', to: '/settings/runtime', icon: SlidersHorizontal, operation: 'settings.read' },
     { label: 'navigation.administrators', to: '/administrators', icon: UserCog },
     { label: 'navigation.mail', to: '/settings/mail', icon: Mail },
   ] },

@@ -38,7 +38,7 @@ func (principal Principal) Allows(operation permissions.Operation) bool {
 // 即使 Administrator 持有 fullAccess，也不能创建其它 Administrator 或改写邮件凭据。
 func OwnerOnlyResources(operation permissions.Operation) bool {
 	switch operation {
-	case permissions.OperationAdministratorsManage, permissions.OperationMailManage:
+	case permissions.OperationAdministratorsManage, permissions.OperationMailManage, permissions.OperationSettingsWrite, permissions.OperationDriftReconcile:
 		return true
 	default:
 		return false

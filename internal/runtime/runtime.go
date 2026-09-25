@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/liujingwen1225/modelry/internal/accesscontrol"
+	"github.com/liujingwen1225/modelry/internal/activity"
 	"github.com/liujingwen1225/modelry/internal/adminauth"
+	"github.com/liujingwen1225/modelry/internal/drift"
+	"github.com/liujingwen1225/modelry/internal/runtimesettings"
 	"github.com/liujingwen1225/modelry/internal/appauth"
 	"github.com/liujingwen1225/modelry/internal/applicationapi"
 	"github.com/liujingwen1225/modelry/internal/audit"
@@ -47,6 +50,10 @@ const (
 type Options struct {
 	ProjectRoot project.RootConfig
 	Version     string
+	// ListenFlag 只在 --listen 被显式提供时非空；它优先于 Project Runtime Settings。
+	ListenFlag string
+	// ListenDefault 是既没有 flag 也没有 Project 取值时使用的内建默认值。
+	ListenDefault string
 }
 
 type Runtime struct {
@@ -58,6 +65,10 @@ type Runtime struct {
 	automation     *automation.Service
 	files          *filestore.Service
 	mail           *mail.Service
+	activity       *activity.Service
+	drift          *drift.Service
+	settings       *runtimesettings.Service
+	requests       *requests.Service
 	version        string
 	databaseHealth string
 	fileHealth     string
@@ -180,6 +191,27 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Request History: %w", err)
 	}
+	// Runtime Settings 是 Runtime 自身的 durable 配置；它不属于 Backend Model。
+	settingsService, err := runtimesettings.NewService(context.Background(), store, runtimesettings.Options{
+		DefaultListenAddress: defaultListenAddress(options), FlagListenAddress: options.ListenFlag,
+	}, settingsAuditSink{audits: auditService})
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Runtime Settings: %w", err)
+	}
+	// Drift Detection 比较 Applied Model、物理投影与 runtime-managed state。
+	driftService, err := drift.NewService(store, backendModel, driftAuditSink{audits: auditService})
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Drift Detection: %w", err)
+	}
+	// Activity 只读取各子系统自己拥有的事实。
+	activityService, err := activity.NewService(store,
+		activityFactsFunc(backendModel.ActivityFacts), activityFactsFunc(automationService.ActivityFacts),
+		activityFactsFunc(extensionService.ActivityFacts), activityFactsFunc(mailService.ActivityFacts),
+		activityFactsFunc(fileService.ActivityFacts), activityFactsFunc(authService.ActivityFacts))
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Activity: %w", err)
+	}
+	accessRules.SetSimulationRecordLookup(simulationRecordLookup{records: recordService})
 	serviceAccountService, err := serviceaccounts.NewService(context.Background(), store, auditService)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Service Accounts: %w", err)
@@ -210,6 +242,10 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		automation:     automationService,
 		files:          fileService,
 		mail:           mailService,
+		activity:       activityService,
+		drift:          driftService,
+		settings:       settingsService,
+		requests:       requestService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -251,6 +287,9 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		recordService,
 		requests.NewModule(requestService),
 		mail.NewModule(mailService),
+		activity.NewModule(activityService),
+		drift.NewModule(driftService),
+		runtimesettings.NewModule(settingsService),
 		serviceaccounts.NewModule(serviceAccountService),
 		audit.NewModule(auditService),
 	)
@@ -269,6 +308,19 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	return instance, nil
 }
 
+// ListenAddress 返回当前生效的监听地址：显式 flag 优先于 Project Runtime Settings，
+// 两者都没有时使用内建默认值。
+func (instance *Runtime) ListenAddress(ctx context.Context) string {
+	if instance == nil {
+		return ""
+	}
+	if instance.settings != nil {
+		if settings, err := instance.settings.Get(ctx); err == nil && settings.ListenAddress.Value != "" {
+			return settings.ListenAddress.Value
+		}
+	}
+	return defaultListenAddress(Options{})
+}
 func (instance *Runtime) Run(ctx context.Context, listenAddress string, onReady func(net.Addr)) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -283,7 +335,22 @@ func (instance *Runtime) Run(ctx context.Context, listenAddress string, onReady 
 	}
 	instance.runStarted = true
 	instance.mu.Unlock()
-
+	// 记录本次进程实际使用的监听值，用于判断 Runtime Settings 是否需要重启。
+	if instance.settings != nil {
+		instance.settings.SetRunningListen(listenAddress)
+	}
+	if instance.requests != nil && instance.settings != nil {
+		if err := instance.requests.StartRetention(ctx, func(sourceCtx context.Context) (int, error) {
+			current, err := instance.settings.Get(sourceCtx)
+			if err != nil {
+				return 0, err
+			}
+			return current.RequestRetentionDaysValue(), nil
+		}); err != nil {
+			instance.setState("unavailable")
+			return errors.Join(fmt.Errorf("cannot start Modelry Request retention: %w", err), instance.Close())
+		}
+	}
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		instance.setState("unavailable")
@@ -378,6 +445,12 @@ func (instance *Runtime) Close() error {
 			mailErr = instance.mail.Close(ctx)
 			cancel()
 		}
+		var retentionErr error
+		if instance.requests != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
+			retentionErr = instance.requests.CloseRetention(ctx)
+			cancel()
+		}
 		var filesErr error
 		if instance.files != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
@@ -401,7 +474,7 @@ func (instance *Runtime) Close() error {
 		if instance.lock != nil {
 			lockErr = instance.lock.Release()
 		}
-		instance.closeErr = errors.Join(serverErr, automationErr, filesErr, mailErr, extensionErr, storageErr, lockErr)
+		instance.closeErr = errors.Join(serverErr, automationErr, retentionErr, filesErr, mailErr, extensionErr, storageErr, lockErr)
 	})
 	return instance.closeErr
 }

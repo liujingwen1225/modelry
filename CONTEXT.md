@@ -106,6 +106,25 @@ V0.1.x 再进入：
 - Multiple File Values
 - S3-compatible Storage
 
+## Policy, Activity, Drift, and Runtime Settings
+
+**Policy Simulation**：针对已应用 Access Rules 的非权威预演，使用与真实请求相同的 evaluator。它不写 RequestRecord、不写 Audit、不改变规则。
+_Avoid_：Dry Run、Policy Test、Rule Preview
+
+**Activity**：由各子系统产品事实构成的有界运维时间线（Model 变更、Automation 投递、Extension Run、Mail Delivery、Storage Migration、App User 恢复）。
+_Avoid_：Audit Log、Request Log、Event Stream、Debug Log
+
+**Drift**：Applied Model、物理 SQLite 投影与 runtime-managed state 三者之间的不一致。
+_Avoid_：Corruption、Migration Failure、Schema Mismatch
+
+**Expected Pending Change**：已保存但尚未 Apply 的变更。它以信息项呈现，不是 Drift。
+_Avoid_：Pending Drift、Unapplied Drift
+
+**Reconcile**：只重建 Applied Model 的物理投影（表、列、索引）的修复动作。它不 Apply Pending Change、不删除 Record、不删除列或表。
+_Avoid_：Repair Migration、Reapply、Reset Schema
+
+**Runtime Setting**：带 value source、validation 与 restart requirement 的 durable Runtime 配置项。
+_Avoid_：Env Var、Config File、Flag
 ## 架构不变量
 
 - Backend Model 定义 Modelry 产品语义，SQLite 不能反过来定义产品。

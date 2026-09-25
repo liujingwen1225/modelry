@@ -98,13 +98,16 @@ func runStartContext(ctx context.Context, args []string, stdout, stderr io.Write
 		return 2
 	}
 	rootConfig := makeRootConfig(flags, rootPath, workingDirectory)
-	instance, err := runtimeapp.New(runtimeapp.Options{ProjectRoot: rootConfig, Version: version})
+	// 只有显式提供 --listen 时才让 flag 覆盖 Project Runtime Settings。
+	listenFlag := ""
+	flags.Visit(func(visited *flag.Flag) { if visited.Name == "listen" { listenFlag = *listenAddress } })
+	instance, err := runtimeapp.New(runtimeapp.Options{ProjectRoot: rootConfig, Version: version, ListenFlag: listenFlag, ListenDefault: *listenAddress})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "cannot start Modelry: %v\n", err)
 		return 1
 	}
 	defer instance.Close()
-	err = instance.Run(ctx, *listenAddress, func(address net.Addr) {
+	err = instance.Run(ctx, instance.ListenAddress(ctx), func(address net.Addr) {
 		record := readyRecord{
 			State:         "ready",
 			URL:           "http://" + address.String(),

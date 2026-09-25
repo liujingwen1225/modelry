@@ -273,6 +273,27 @@ export async function downloadRecordFile(collectionId: string, recordId: string,
   return response.blob();
 }
 
+export type PolicySimulationPrincipalKind = 'anonymous' | 'owner' | 'applicationUser' | 'serviceAccount';
+export type PolicySimulationInput = {
+  operation: string;
+  principal: { kind: PolicySimulationPrincipalKind; id?: string };
+  record?: { recordId?: string; payload?: Record<string, unknown> };
+};
+export type PolicySimulationResult = {
+  allowed: boolean;
+  code?: string;
+  message?: string;
+  decidingOperation?: string;
+  decidingMode?: string;
+  authoritative: boolean;
+  notice: string;
+};
+
+// simulateAccessRule 只做非权威预演：它使用 Runtime 的同一个 evaluator，不写入任何状态。
+export async function simulateAccessRule(collectionId: string, input: PolicySimulationInput, signal?: AbortSignal): Promise<PolicySimulationResult> {
+  const path = `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/access-rules/simulate`;
+  return unwrap<PolicySimulationResult>(await request(path, { method: 'POST', body: JSON.stringify(input), signal }));
+}
 export async function getAccessRules(collectionId: string, signal?: AbortSignal): Promise<AccessRulesState> {
   return unwrap<AccessRulesState>(await request(`/admin/api/v1/collections/${encodeURIComponent(collectionId)}/access-rules`, { method: 'GET', signal }));
 }

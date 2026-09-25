@@ -17,6 +17,9 @@ import { AutomationPage } from './automation/pages';
 import { FileStoragePage } from './storage/pages';
 import { AdministratorsPage } from './administrators/pages';
 import { MailPage } from './mail/pages';
+import { ActivityPage } from './activity/pages';
+import { DriftPage } from './drift/pages';
+import { RuntimeSettingsPage } from './settings/pages';
 
 function NotFoundPage() {
   return (
@@ -89,6 +92,9 @@ function AuthenticatedWorkspace() {
         <Route element={<SettingsPage />} path="/settings" />
         <Route element={<FileStoragePage />} path="/settings/storage" />
         <Route element={<MailPage />} path="/settings/mail" />
+        <Route element={<ActivityPage />} path="/activity" />
+        <Route element={<DriftPage />} path="/settings/drift" />
+        <Route element={<RuntimeSettingsPage />} path="/settings/runtime" />
         <Route element={<AdministratorsPage />} path="/administrators" />
         <Route element={<AuthenticatedRedirect />} path="/login" />
         <Route element={<NotFoundPage />} path="*" />

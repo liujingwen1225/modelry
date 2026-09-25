@@ -33,6 +33,7 @@ import {
   type EmailVerificationMode,
   type FieldDefinition,
 } from './client';
+import { AccessRuleSimulation } from './simulate';
 import { useCollectionWorkspace } from './workspace-context';
 
 const OPERATIONS: AccessOperation[] = ['list', 'view', 'create', 'update', 'delete'];
@@ -243,6 +244,7 @@ export function CollectionSecurityPage() {
         </>}
       </nav>
       {activePanel === 'rules' && <div aria-labelledby="security-tab-rules" className="page-stack security-panel" id="security-panel-rules" role="tabpanel">
+      {loadState === 'ready' && <AccessRuleSimulation collectionId={collection.id} />}
       {loadState === 'loading' && <LoadingState label="Loading access rules" />}
       {loadState === 'error' && (() => { const copy = errorCopy(error, 'Access rules could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
       {loadState === 'ready' && state && <>

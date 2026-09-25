@@ -57,6 +57,12 @@ const (
 	OperationAdministratorsManage Operation = "administrators.manage"
 	OperationMailRead Operation = "mail.read"
 	OperationMailManage Operation = "mail.manage"
+	OperationActivityRead Operation = "activity.read"
+	OperationDriftRead Operation = "drift.read"
+	OperationDriftReconcile Operation = "drift.reconcile"
+	OperationPolicySimulate Operation = "policy.simulate"
+	OperationSettingsRead Operation = "settings.read"
+	OperationSettingsWrite Operation = "settings.write"
 )
 
 // Grant 是 Owner 之外的 Control Plane 主体持有的许可。
@@ -111,6 +117,12 @@ var allOperationsV1 = []Operation{
 	Operation("administrators.manage"),
 	Operation("mail.read"),
 	Operation("mail.manage"),
+	Operation("activity.read"),
+	Operation("drift.read"),
+	Operation("drift.reconcile"),
+	Operation("policy.simulate"),
+	Operation("settings.read"),
+	Operation("settings.write"),
 }
 
 var readOnlyOperations = map[Operation]struct{}{
@@ -130,6 +142,10 @@ var readOnlyOperations = map[Operation]struct{}{
 	Operation("audit.read"): {},
 	Operation("administrators.read"): {},
 	Operation("mail.read"): {},
+	Operation("activity.read"): {},
+	Operation("drift.read"): {},
+	Operation("policy.simulate"): {},
+	Operation("settings.read"): {},
 }
 
 // AllOperations 返回当前受支持的 Control Plane 操作枚举副本。

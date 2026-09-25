@@ -1,0 +1,18 @@
+.drift-page { gap: 18px; }
+.drift-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.drift-state__heading { display: flex; align-items: center; gap: 12px; }
+.drift-state__heading h2 { margin: 0; }
+.drift-state__heading .status-chip { margin-left: auto; }
+.drift-state__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 14px 0 0; }
+.drift-state__facts div { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-soft); padding: 10px 12px; }
+.drift-state__facts dt { color: var(--color-ink-muted); font-size: 11px; }
+.drift-state__facts dd { margin: 4px 0 0; font-weight: 650; }
+.drift-finding-list { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+.drift-finding-list li { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px; }
+.drift-finding__heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.drift-finding__values { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0; }
+.drift-finding__values dt { color: var(--color-ink-muted); font-size: 11px; }
+.drift-finding__values dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.drift-finding__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.drift-finding__link { font-size: 12px; }
+.drift-manual { color: var(--color-ink-muted); font-size: 12px; }

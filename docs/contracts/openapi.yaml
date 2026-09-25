@@ -61,6 +61,12 @@ tags:
     description: Configure the Project Mail Provider and inspect durable verification and password reset delivery.
   - name: Automation
     description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history. Outbound Webhook requests use the stable Delivery ID as Idempotency-Key; Record Event requests also repeat the body Event ID in X-Modelry-Event-Id.
+  - name: Activity
+    description: Read the curated operational Activity timeline built from product facts owned by each Runtime subsystem.
+  - name: Drift
+    description: Compare the applied model, its physical SQLite projection, and runtime-managed state, and reconcile a Collection's projection.
+  - name: RuntimeSettings
+    description: Read and save durable Project Runtime Settings with explicit value sources and restart requirements.
 paths:
   '/admin/api/v1/extensions':
     get:
@@ -3799,6 +3805,179 @@ paths:
           $ref: '#/components/responses/StructuredError'
         '5XX':
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/access-rules/simulate':
+    post:
+      tags: [AccessRules]
+      operationId: simulateCollectionAccessRule
+      summary: Preview one Access Rule decision against the applied rules
+      description: >-
+        Non-authoritative preview. The decision comes from the same evaluator the Application API uses, but the
+        response never replaces a real request: it writes no RequestRecord, no Audit fact, and no Access Rule change.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySimulationInput'
+      responses:
+        '200':
+          description: Non-authoritative Access Rule decision with its deciding rule.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicySimulationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/activity':
+    get:
+      tags: [Activity]
+      operationId: listActivity
+      summary: Read the bounded Activity timeline
+      description: >-
+        Curated operational product facts from the owning modules. Activity is not the Request log and not the Audit
+        trail, and it never returns payloads, message bodies, tokens, credentials, or App User email addresses.
+      parameters:
+        - $ref: '#/components/parameters/ActivityLimit'
+        - $ref: '#/components/parameters/ActivityCursor'
+        - $ref: '#/components/parameters/ActivityKinds'
+        - $ref: '#/components/parameters/ActivityCollectionId'
+      responses:
+        '200':
+          description: One page of structured Activity facts.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPageResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/drift':
+    get:
+      tags: [Drift]
+      operationId: getDriftReport
+      summary: Read the Runtime Drift report
+      description: >-
+        Compares the applied model, its physical SQLite projection, and runtime-managed state. A saved but unapplied
+        pending change is reported as an expected pending change, never as drift.
+      parameters:
+        - $ref: '#/components/parameters/DriftCollectionId'
+      responses:
+        '200':
+          description: Drift findings with expected values, observed values, remedies, and deep links.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriftReportResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/drift/reconcile':
+    post:
+      tags: [Drift]
+      operationId: reconcileCollectionProjection
+      summary: Reconcile one Collection's physical projection with the applied model
+      description: >-
+        Owner-only. Re-creates a missing Record table, missing columns, and missing indexes for the applied model.
+        It never applies a pending change, never changes the applied model, never deletes Records, and never drops a
+        column or table. The repair and its Audit fact commit in the same transaction.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriftReconcileInput'
+      responses:
+        '200':
+          description: The repaired Collection and the Drift report observed after the repair.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriftReportResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/settings':
+    get:
+      tags: [RuntimeSettings]
+      operationId: getRuntimeSettings
+      summary: Read the durable Project Runtime Settings
+      description: Every setting reports its value, its source, and whether a restart is required.
+      responses:
+        '200':
+          description: Runtime Settings with value sources and restart requirements.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSettingsResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [RuntimeSettings]
+      operationId: updateRuntimeSettings
+      summary: Save durable Project Runtime Settings
+      description: >-
+        Owner-only. A restart-required value is persisted and reported as requiring a restart; the running Runtime is
+        never silently reconfigured.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeSettingsInput'
+      responses:
+        '200':
+          description: Saved Runtime Settings; restart-required values report their requirement.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSettingsResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
 components:
   securitySchemes:
     OwnerSession:
@@ -3826,6 +4005,45 @@ components:
         type: string
         enum: ['true', 'false']
   parameters:
+    ActivityLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of Activity facts to return. Defaults to 20 and never exceeds 50.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+    ActivityCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor returned by the previous Activity page.
+      schema:
+        type: string
+        maxLength: 512
+    ActivityKinds:
+      name: kinds
+      in: query
+      required: false
+      description: Comma-separated Activity kinds to include. Omit for every supported kind.
+      schema:
+        type: string
+        maxLength: 256
+    ActivityCollectionId:
+      name: collectionId
+      in: query
+      required: false
+      description: Restrict Activity facts to one Collection.
+      schema:
+        $ref: '#/components/schemas/Id'
+    DriftCollectionId:
+      name: collectionId
+      in: query
+      required: false
+      description: Restrict the Drift report to one Collection.
+      schema:
+        $ref: '#/components/schemas/Id'
     AdministratorId:
       name: administratorId
       in: path
@@ -5657,7 +5875,7 @@ components:
     ServiceAccountOperation:
       type: string
       description: Version 1 fixed Control Plane allowlist; application data-plane operations use their corresponding explicit grants.
-      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read, administrators.read, administrators.manage, mail.read, mail.manage]
+      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read, administrators.read, administrators.manage, mail.read, mail.manage, activity.read, drift.read, drift.reconcile, policy.simulate, settings.read, settings.write]
     ServiceAccountResponse:
       type: object
       required: [data]
@@ -6586,4 +6804,237 @@ components:
             $ref: '#/components/schemas/DeliverySummary'
         nextCursor:
           type: string
+      additionalProperties: false
+    PolicySimulationPrincipal:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [anonymous, owner, applicationUser, serviceAccount]
+        id:
+          type: string
+          maxLength: 128
+      additionalProperties: false
+    PolicySimulationRecordSource:
+      type: object
+      description: Exactly one of recordId or payload must be supplied.
+      properties:
+        recordId:
+          $ref: '#/components/schemas/Id'
+        payload:
+          type: object
+          description: Inline field values evaluated as supplied; never persisted and never validated against the applied model.
+          additionalProperties: true
+      additionalProperties: false
+    PolicySimulationInput:
+      type: object
+      required: [operation, principal]
+      properties:
+        operation:
+          type: string
+          enum: [list, view, create, update, delete]
+        principal:
+          $ref: '#/components/schemas/PolicySimulationPrincipal'
+        record:
+          $ref: '#/components/schemas/PolicySimulationRecordSource'
+      additionalProperties: false
+    PolicySimulationDecision:
+      type: object
+      required: [allowed, authoritative, notice]
+      properties:
+        allowed:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+        reason:
+          description: Structured evaluator reason for the decision.
+        decidingOperation:
+          type: string
+          enum: [list, view, create, update, delete]
+        decidingMode:
+          type: string
+          enum: [noAccess, anyone, signedInUsers, recordOwner, custom]
+        authoritative:
+          type: boolean
+          enum: [false]
+        notice:
+          type: string
+      additionalProperties: false
+    PolicySimulationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PolicySimulationDecision'
+      additionalProperties: false
+    ActivityFact:
+      type: object
+      required: [id, kind, status, occurredAt, resource, deepLink]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [change.applied, change.pending, change.failed, webhook.delivery, job.run, extension.run, mail.delivery, storage.migration, auth.recovery]
+        status:
+          type: string
+          maxLength: 64
+        occurredAt:
+          type: string
+          format: date-time
+        resource:
+          type: object
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              maxLength: 64
+            id:
+              type: string
+              maxLength: 128
+          additionalProperties: false
+        collectionId:
+          type: string
+        title:
+          type: string
+          maxLength: 128
+        deepLink:
+          type: string
+          maxLength: 512
+      additionalProperties: false
+    ActivityPageResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ActivityFact'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    DriftFinding:
+      type: object
+      required: [id, class, severity, code, expected, actual, expectedPendingChange, remedy, deepLink, detectedAt]
+      properties:
+        id:
+          type: string
+        class:
+          type: string
+          enum: [appliedModel, physicalProjection, runtimeState]
+        severity:
+          type: string
+          enum: [info, warning, error]
+        code:
+          type: string
+          maxLength: 64
+        collectionId:
+          type: string
+        collectionName:
+          type: string
+          maxLength: 128
+        expected:
+          type: string
+          maxLength: 512
+        actual:
+          type: string
+          maxLength: 512
+        expectedPendingChange:
+          type: boolean
+        remedy:
+          type: string
+          enum: [none, manual, reconcile]
+        deepLink:
+          type: string
+          maxLength: 512
+        detectedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    DriftReport:
+      type: object
+      required: [state, findings, detectedAt]
+      properties:
+        state:
+          type: string
+          enum: [healthy, attention, degraded]
+        findings:
+          type: array
+          maxItems: 2048
+          items:
+            $ref: '#/components/schemas/DriftFinding'
+        detectedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    DriftReportResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DriftReport'
+      additionalProperties: false
+    DriftReconcileInput:
+      type: object
+      required: [collectionId]
+      properties:
+        collectionId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    RuntimeSetting:
+      type: object
+      required: [value, source, restartRequired]
+      properties:
+        value:
+          type: string
+          maxLength: 256
+        source:
+          type: string
+          enum: [flag, project, default]
+        restartRequired:
+          type: boolean
+        bounds:
+          type: string
+          maxLength: 256
+      additionalProperties: false
+    RuntimeSettings:
+      type: object
+      required: [listenAddress, requestRetentionDays, revision, updatedAt]
+      properties:
+        listenAddress:
+          $ref: '#/components/schemas/RuntimeSetting'
+        requestRetentionDays:
+          $ref: '#/components/schemas/RuntimeSetting'
+        revision:
+          type: integer
+          minimum: 1
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    RuntimeSettingsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/RuntimeSettings'
+      additionalProperties: false
+    RuntimeSettingsInput:
+      type: object
+      required: [expectedRevision, listenAddress, requestRetentionDays]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        listenAddress:
+          type: string
+          maxLength: 256
+        requestRetentionDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
       additionalProperties: false
