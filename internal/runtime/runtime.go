@@ -137,6 +137,8 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Audit History: %w", err)
 	}
+	// Administrator 生命周期审计通过注入的 AuditSink 写入，避免 adminauth 依赖 Audit 包。
+	ownerAuth.SetAuditSink(adminAuthAuditSink{audits: auditService})
 	automationService, err = newAutomationService(context.Background(), store, extensionService, auditService)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Webhooks and Jobs: %w", err)

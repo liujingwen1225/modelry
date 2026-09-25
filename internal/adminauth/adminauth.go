@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liujingwen1225/modelry/internal/permissions"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -43,9 +44,47 @@ func OwnerFromContext(ctx context.Context) (Owner, bool) {
 	return owner, ok
 }
 
-// Service 提供首次 Owner、登录、Session 与保护管理路由的能力。
+// ControlPlaneFact 是一个 Control Plane 安全事实；adminauth 不依赖 Audit 实现。
+type ControlPlaneFact struct {
+	ActorKind    string
+	ActorID      string
+	Action       string
+	ResourceKind string
+	ResourceID   string
+	Result       string
+}
+
+// AuditSink 由 Runtime 注入，用于写入 Control Plane 安全事实。
+type AuditSink interface {
+	AppendControlPlaneFact(ctx context.Context, fact ControlPlaneFact) error
+	AppendControlPlaneFactInTransaction(ctx context.Context, tx storage.Executor, fact ControlPlaneFact) error
+}
+
+// Service 提供首次 Owner、登录、Session、Administrator 与保护管理路由的能力。
 type Service struct {
 	store *storage.Store
+	sink  AuditSink
+}
+
+// SetAuditSink 在 Runtime 启动阶段注入 Audit 边界。
+func (service *Service) SetAuditSink(sink AuditSink) {
+	if service != nil {
+		service.sink = sink
+	}
+}
+
+func (service *Service) appendControlPlaneAudit(ctx context.Context, tx storage.Executor, action, resourceID string) error {
+	if service == nil || service.sink == nil {
+		return nil
+	}
+	principal, ok := PrincipalFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	return service.sink.AppendControlPlaneFactInTransaction(ctx, tx, ControlPlaneFact{
+		ActorKind: string(principal.Kind), ActorID: principal.ID, Action: action,
+		ResourceKind: "administrator", ResourceID: resourceID, Result: "success",
+	})
 }
 
 // New 初始化管理面认证的耐久结构；同一 Store 必须由 Runtime 统一持有。
@@ -82,6 +121,10 @@ func New(store *storage.Store) (*Service, error) {
 			)`,
 			`CREATE INDEX IF NOT EXISTS modelry_admin_sessions_expiry_idx
 				ON modelry_admin_sessions (expires_at)`,
+			administratorSchema,
+			administratorSessionSchema,
+			`CREATE INDEX IF NOT EXISTS modelry_administrator_sessions_expiry_idx
+				ON modelry_administrator_sessions (expires_at)`,
 		}
 		for _, statement := range statements {
 			if _, err := tx.ExecContext(context.Background(), statement); err != nil {
@@ -132,10 +175,10 @@ func validSessionToken(token string) ([]byte, bool) {
 }
 
 type durableSession struct {
-	owner     Owner
+	principal Principal
+	sessionID string
 	expiresAt time.Time
 }
-
 func (service *Service) bootstrap(ctx context.Context, email, password string) (Owner, durableSession, string, error) {
 	emailKey, err := normalizeEmail(email)
 	if err != nil {
@@ -170,7 +213,7 @@ func (service *Service) bootstrap(ctx context.Context, email, password string) (
 		return Owner{}, durableSession{}, "", err
 	}
 	now := time.Now().UTC().Truncate(time.Second)
-	session := durableSession{owner: Owner{ID: ownerID, Email: emailKey}, expiresAt: now.Add(sessionLifetime)}
+	session := durableSession{principal: Principal{Kind: PrincipalOwner, ID: ownerID, Email: emailKey, Grant: FullAccessGrant()}, sessionID: sessionID, expiresAt: now.Add(sessionLifetime)}
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		result, err := tx.ExecContext(ctx, `UPDATE modelry_admin_bootstrap SET closed = 1
 			WHERE singleton = 1 AND closed = 0
@@ -202,60 +245,66 @@ func (service *Service) bootstrap(ctx context.Context, email, password string) (
 		err = unavailableError{cause: err}
 		return Owner{}, durableSession{}, "", err
 	}
-	return session.owner, session, token, nil
+	return Owner{ID: session.principal.ID, Email: session.principal.Email}, session, token, nil
 }
 
-func (service *Service) login(ctx context.Context, email, password string) (Owner, durableSession, string, error) {
+func (service *Service) login(ctx context.Context, email, password string) (Principal, durableSession, string, error) {
 	emailKey, err := normalizeEmail(email)
 	if err != nil {
-		return Owner{}, durableSession{}, "", validationFailure("/email", "INVALID_EMAIL", "Enter a valid email address.")
+		return Principal{}, durableSession{}, "", validationFailure("/email", "INVALID_EMAIL", "Enter a valid email address.")
 	}
 	if err := validatePassword(password); err != nil {
-		return Owner{}, durableSession{}, "", err
+		return Principal{}, durableSession{}, "", err
 	}
 	var owner Owner
 	var storedHash string
 	lookupErr := service.store.WithReadSnapshot(ctx, func(tx storage.Executor) error {
-		return tx.QueryRowContext(ctx, `SELECT id, email, password_hash FROM modelry_admin_owner
-			WHERE singleton = ? AND email_key = ?`, ownerSingleton, emailKey).Scan(&owner.ID, &owner.Email, &storedHash)
+		return tx.QueryRowContext(ctx, "SELECT id, email, password_hash FROM modelry_admin_owner WHERE singleton = ? AND email_key = ?", ownerSingleton, emailKey).Scan(&owner.ID, &owner.Email, &storedHash)
 	})
-	if lookupErr != nil {
-		if !errors.Is(lookupErr, sql.ErrNoRows) {
-			return Owner{}, durableSession{}, "", unavailableError{cause: lookupErr}
+	switch {
+	case lookupErr == nil:
+		if !verifyPassword(password, storedHash) {
+			return Principal{}, durableSession{}, "", ErrUnauthenticated
+		}
+		principal := Principal{Kind: PrincipalOwner, ID: owner.ID, Email: owner.Email, Grant: FullAccessGrant()}
+		session, token, err := service.createSession(ctx, principal)
+		if err != nil {
+			return Principal{}, durableSession{}, "", unavailableError{cause: err}
+		}
+		return principal, session, token, nil
+	case errors.Is(lookupErr, sql.ErrNoRows):
+		principal, session, token, found, err := service.loginAdministrator(ctx, emailKey, password)
+		if err != nil {
+			return Principal{}, durableSession{}, "", err
+		}
+		if found {
+			return principal, session, token, nil
 		}
 		_ = verifyPassword(password, dummyPasswordHash)
-		return Owner{}, durableSession{}, "", ErrUnauthenticated
+		return Principal{}, durableSession{}, "", ErrUnauthenticated
+	default:
+		return Principal{}, durableSession{}, "", unavailableError{cause: lookupErr}
 	}
-	if !verifyPassword(password, storedHash) {
-		return Owner{}, durableSession{}, "", ErrUnauthenticated
-	}
-	owner, session, token, err := service.createSession(ctx, owner)
-	if err != nil {
-		return Owner{}, durableSession{}, "", unavailableError{cause: err}
-	}
-	return owner, session, token, nil
 }
 
-func (service *Service) createSession(ctx context.Context, owner Owner) (Owner, durableSession, string, error) {
+func (service *Service) createSession(ctx context.Context, principal Principal) (durableSession, string, error) {
 	sessionID, err := newOpaque("ses_", 16)
 	if err != nil {
-		return Owner{}, durableSession{}, "", err
+		return durableSession{}, "", err
 	}
 	token, tokenHash, err := newSessionToken()
 	if err != nil {
-		return Owner{}, durableSession{}, "", err
+		return durableSession{}, "", err
 	}
 	now := time.Now().UTC().Truncate(time.Second)
-	session := durableSession{owner: owner, expiresAt: now.Add(sessionLifetime)}
+	session := durableSession{principal: principal, sessionID: sessionID, expiresAt: now.Add(sessionLifetime)}
 	if err := service.store.WithTransaction(ctx, func(tx storage.Executor) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO modelry_admin_sessions
-			(id, owner_id, token_hash, created_at, expires_at)
-			VALUES (?, ?, ?, ?, ?)`, sessionID, owner.ID, tokenHash, now.Unix(), session.expiresAt.Unix())
+		_, err := tx.ExecContext(ctx, "INSERT INTO modelry_admin_sessions (id, owner_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)", sessionID, principal.ID, tokenHash, now.Unix(), session.expiresAt.Unix())
 		return err
 	}); err != nil {
-		return Owner{}, durableSession{}, "", err
+		return durableSession{}, "", err
 	}
-	return owner, session, token, nil
+	return session, token, nil
 }
 
 func (service *Service) authenticate(ctx context.Context, token string) (durableSession, error) {
@@ -263,15 +312,29 @@ func (service *Service) authenticate(ctx context.Context, token string) (durable
 	if !ok {
 		return durableSession{}, ErrUnauthenticated
 	}
+	nowUnix := time.Now().UTC().Unix()
 	var session durableSession
-	now := time.Now().UTC().Unix()
-	var expiresAt int64
+	var ownerID, ownerEmail string
+	var ownerExpires int64
 	err := service.store.WithReadSnapshot(ctx, func(tx storage.Executor) error {
-		return tx.QueryRowContext(ctx, `SELECT o.id, o.email, s.expires_at
-			FROM modelry_admin_sessions AS s
-			JOIN modelry_admin_owner AS o ON o.id = s.owner_id
-			WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`, tokenHash, now).
-			Scan(&session.owner.ID, &session.owner.Email, &expiresAt)
+		return tx.QueryRowContext(ctx, "SELECT o.id, o.email, s.id, s.expires_at FROM modelry_admin_sessions AS s JOIN modelry_admin_owner AS o ON o.id = s.owner_id WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?", tokenHash, nowUnix).
+			Scan(&ownerID, &ownerEmail, &session.sessionID, &ownerExpires)
+	})
+	if err == nil {
+		session.principal = Principal{Kind: PrincipalOwner, ID: ownerID, Email: ownerEmail, Grant: FullAccessGrant()}
+		session.expiresAt = time.Unix(ownerExpires, 0).UTC()
+		return session, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return durableSession{}, unavailableError{cause: err}
+	}
+	var administratorID, administratorEmail, status, preset, encoded string
+	var version int
+	var expiresAt int64
+	var lastUsedNull sql.NullInt64
+	err = service.store.WithReadSnapshot(ctx, func(tx storage.Executor) error {
+		return tx.QueryRowContext(ctx, "SELECT a.id, a.email, a.status, a.permission_preset, a.permission_version, a.permission_operations, s.id, s.expires_at, s.last_used_at FROM modelry_administrator_sessions AS s JOIN modelry_administrators AS a ON a.id = s.administrator_id WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?", tokenHash, nowUnix).
+			Scan(&administratorID, &administratorEmail, &status, &preset, &version, &encoded, &session.sessionID, &expiresAt, &lastUsedNull)
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -279,7 +342,25 @@ func (service *Service) authenticate(ctx context.Context, token string) (durable
 		}
 		return durableSession{}, unavailableError{cause: err}
 	}
+	if AdministratorStatus(status) != AdministratorActive {
+		return durableSession{}, ErrUnauthenticated
+	}
+	grant, err := permissionFromColumns(preset, version, encoded)
+	if err != nil {
+		return durableSession{}, unavailableError{cause: err}
+	}
+	session.principal = Principal{Kind: PrincipalAdministrator, ID: administratorID, Email: administratorEmail, Grant: grant}
 	session.expiresAt = time.Unix(expiresAt, 0).UTC()
+	lastUsed := int64(0)
+	if lastUsedNull.Valid {
+		lastUsed = lastUsedNull.Int64
+	}
+	if nowUnix-lastUsed > 60 {
+		_ = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
+			_, err := tx.ExecContext(ctx, "UPDATE modelry_administrator_sessions SET last_used_at = ? WHERE id = ?", nowUnix, session.sessionID)
+			return err
+		})
+	}
 	return session, nil
 }
 
@@ -290,8 +371,10 @@ func (service *Service) revoke(ctx context.Context, token string) error {
 	}
 	now := time.Now().UTC().Unix()
 	err := service.store.WithTransaction(ctx, func(tx storage.Executor) error {
-		_, err := tx.ExecContext(ctx, `UPDATE modelry_admin_sessions SET revoked_at = ?
-			WHERE token_hash = ? AND revoked_at IS NULL`, now, tokenHash)
+		if _, err := tx.ExecContext(ctx, "UPDATE modelry_admin_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL", now, tokenHash); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "UPDATE modelry_administrator_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL", now, tokenHash)
 		return err
 	})
 	if err != nil {
@@ -305,8 +388,9 @@ func (service *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/admin/api/v1/bootstrap/status", methodHandler(http.MethodGet, http.HandlerFunc(service.handleBootstrapStatus)))
 	mux.Handle("/admin/api/v1/bootstrap/owner", methodHandler(http.MethodPost, http.HandlerFunc(service.handleBootstrapOwner)))
 	mux.Handle("/admin/api/v1/auth/login", methodHandler(http.MethodPost, http.HandlerFunc(service.handleLogin)))
-	mux.Handle("/admin/api/v1/auth/session", service.RequireOwner(methodHandler(http.MethodGet, http.HandlerFunc(service.handleSession))))
-	mux.Handle("/admin/api/v1/auth/logout", service.RequireOwner(methodHandler(http.MethodPost, http.HandlerFunc(service.handleLogout))))
+	mux.Handle("/admin/api/v1/auth/session", service.RequirePrincipal(methodHandler(http.MethodGet, http.HandlerFunc(service.handleSession))))
+	mux.Handle("/admin/api/v1/auth/logout", service.RequirePrincipal(methodHandler(http.MethodPost, http.HandlerFunc(service.handleLogout))))
+	service.RegisterAdministratorRoutes(mux)
 }
 
 func methodHandler(method string, next http.Handler) http.Handler {
@@ -321,8 +405,9 @@ func methodHandler(method string, next http.Handler) http.Handler {
 
 // Middleware protects Control Plane routes while leaving Application routes and
 // the explicitly public first-run / diagnostics endpoints to their own contracts.
+// Administrator 请求在进入模块之前按 Permission fail closed。
 func (service *Service) Middleware(next http.Handler) http.Handler {
-	protected := service.RequireOwner(next)
+	protected := service.RequirePrincipal(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if !strings.HasPrefix(request.URL.Path, "/admin/api/v1/") && request.URL.Path != "/admin/api/v1" {
 			next.ServeHTTP(w, request)
@@ -347,8 +432,8 @@ func isPublicAdminPath(request *http.Request) bool {
 	}
 }
 
-// RequireOwner validates the Owner cookie and same-origin checks unsafe browser writes.
-func (service *Service) RequireOwner(next http.Handler) http.Handler {
+// RequirePrincipal 认证 Owner 或 Administrator Cookie，并对 Administrator 强制 Permission。
+func (service *Service) RequirePrincipal(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if isUnsafeMethod(request.Method) {
 			if err := requireSameOrigin(request); err != nil {
@@ -356,28 +441,66 @@ func (service *Service) RequireOwner(next http.Handler) http.Handler {
 				return
 			}
 		}
-		if _, ok := request.Context().Value(ownerSessionContextKey{}).(durableSession); ok {
-			next.ServeHTTP(w, request)
-			return
+		session, ok := request.Context().Value(ownerSessionContextKey{}).(durableSession)
+		if !ok {
+			token, err := ownerCookie(request)
+			if err != nil {
+				writeAuthError(w, request, ErrUnauthenticated)
+				return
+			}
+			if request.Header.Get("Authorization") != "" {
+				writeAuthError(w, request, ErrUnauthenticated)
+				return
+			}
+			session, err = service.authenticate(request.Context(), token)
+			if err != nil {
+				writeAuthError(w, request, err)
+				return
+			}
 		}
-		token, err := ownerCookie(request)
-		if err != nil {
-			writeAuthError(w, request, ErrUnauthenticated)
-			return
+		principal := session.principal
+		if principal.Kind == PrincipalAdministrator {
+			operation, found := permissions.ControlPlaneOperation(request.Method, request.URL.Path)
+			denied := !found || OwnerOnlyResources(operation) || !principal.Allows(operation)
+			if denied {
+				service.recordDeniedControlPlaneRequest(request.Context(), principal, operation, request)
+				hint := "Ask the Owner to grant the required Permission."
+				if !found || OwnerOnlyResources(operation) {
+					hint = "This Control Plane resource is managed by the Owner."
+				}
+				writeAuthError(w, request, &apiFault{status: http.StatusForbidden, code: "FORBIDDEN", message: "This Administrator does not have Permission for this Control Plane operation.", hint: hint})
+				return
+			}
 		}
-		if request.Header.Get("Authorization") != "" {
-			writeAuthError(w, request, ErrUnauthenticated)
-			return
-		}
-		session, err := service.authenticate(request.Context(), token)
-		if err != nil {
-			writeAuthError(w, request, err)
-			return
-		}
-		ctx := context.WithValue(request.Context(), ownerContextKey{}, session.owner)
+		ctx := withPrincipal(request.Context(), principal)
 		ctx = context.WithValue(ctx, ownerSessionContextKey{}, session)
 		next.ServeHTTP(w, request.WithContext(ctx))
 	})
+}
+
+func (service *Service) recordDeniedControlPlaneRequest(ctx context.Context, principal Principal, operation permissions.Operation, request *http.Request) {
+	if service == nil || service.sink == nil {
+		return
+	}
+	resourceID := string(operation)
+	if resourceID == "" {
+		resourceID = "unmapped"
+	}
+	_ = service.sink.AppendControlPlaneFact(ctx, ControlPlaneFact{
+		ActorKind: string(principal.Kind), ActorID: principal.ID, Action: "controlPlane.denied",
+		ResourceKind: "controlPlaneOperation", ResourceID: resourceID, Result: "denied",
+	})
+}
+
+// RequireOwner 只在当前请求由 Owner 发起时继续，供 Owner-only 资源使用。
+func (service *Service) RequireOwner(next http.Handler) http.Handler {
+	return service.RequirePrincipal(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if _, ok := OwnerFromContext(request.Context()); !ok {
+			writeAuthError(w, request, &apiFault{status: http.StatusForbidden, code: "FORBIDDEN", message: "Only the Owner can perform this action.", hint: "Ask the Owner to change this configuration."})
+			return
+		}
+		next.ServeHTTP(w, request)
+	}))
 }
 
 func isUnsafeMethod(method string) bool {

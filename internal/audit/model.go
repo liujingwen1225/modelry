@@ -16,6 +16,7 @@ type ActorKind string
 
 const (
 	ActorOwner          ActorKind = "owner"
+	ActorAdministrator  ActorKind = "administrator"
 	ActorServiceAccount ActorKind = "serviceAccount"
 )
 

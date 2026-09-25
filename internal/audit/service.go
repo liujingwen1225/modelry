@@ -94,6 +94,16 @@ func ActorFromContext(ctx context.Context) (Actor, bool) {
 			return actor, validActor(actor)
 		}
 	}
+	if principal, ok := adminauth.PrincipalFromContext(ctx); ok {
+		kind := ActorOwner
+		if principal.Kind == adminauth.PrincipalAdministrator {
+			kind = ActorAdministrator
+		}
+		actor := Actor{Kind: kind, ID: principal.ID}
+		if validActor(actor) {
+			return actor, true
+		}
+	}
 	if owner, ok := adminauth.OwnerFromContext(ctx); ok {
 		actor := Actor{Kind: ActorOwner, ID: owner.ID}
 		return actor, validActor(actor)
@@ -258,7 +268,12 @@ func validateAppendInput(input AppendInput, when time.Time) error {
 }
 
 func validActor(actor Actor) bool {
-	return (actor.Kind == ActorOwner || actor.Kind == ActorServiceAccount) && actorIDPattern.MatchString(actor.ID)
+	switch actor.Kind {
+	case ActorOwner, ActorAdministrator, ActorServiceAccount:
+		return actorIDPattern.MatchString(actor.ID)
+	default:
+		return false
+	}
 }
 
 func validResult(result string) bool {

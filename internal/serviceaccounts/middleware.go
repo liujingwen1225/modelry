@@ -25,6 +25,14 @@ func HasPermission(ctx context.Context, operation Operation) bool {
 	if owner, ok := adminauth.OwnerFromContext(ctx); ok && owner.ID != "" {
 		return true
 	}
+	if principal, ok := adminauth.PrincipalFromContext(ctx); ok {
+		switch principal.Kind {
+		case adminauth.PrincipalOwner:
+			return true
+		case adminauth.PrincipalAdministrator:
+			return permissions.GrantAllows(principal.Grant, operation)
+		}
+	}
 	principal, ok := authorization.PrincipalFromContext(ctx)
 	if !ok || principal.ID == "" {
 		return false
