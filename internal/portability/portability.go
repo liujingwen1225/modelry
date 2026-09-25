@@ -59,8 +59,9 @@ const (
 const (
 	// maximumBundleObjects 是一个 bundle 能携带的 File object 数量。
 	maximumBundleObjects = 100000
-	// maximumArchiveEntries 是一个归档能包含的条目数量（含 manifest 与数据库）。
-	maximumArchiveEntries = 100000
+	// maximumArchiveEntries 是一个归档能包含的条目数量。它必须容纳 manifest、数据库载荷
+	// 以及上限数量的 File object，否则 Backup 能写出一个自己拒绝读取的 bundle。
+	maximumArchiveEntries = maximumBundleObjects + 2
 	// maximumManifestBytes 只约束 manifest.json 自身。
 	maximumManifestBytes = 64 << 20
 	// maximumObjectPayloadBytes 约束单个 File object 载荷。它与产品的单对象硬上限
@@ -257,7 +258,8 @@ func hashCollections(collections []backendmodel.Collection) (string, error) {
 func (service *Service) appliedCollections(ctx context.Context) ([]backendmodel.Collection, error) {
 	collections, err := collectCollections(ctx, service.models)
 	if err != nil {
-		return nil, fmt.Errorf("%w: read Applied Model: %v", ErrStorage, err)
+		// %w 让调用方仍能识别具体原因，而不是把所有失败折叠成「Runtime 未就绪」。
+		return nil, fmt.Errorf("%w: read Applied Model: %w", ErrStorage, err)
 	}
 	return collections, nil
 }
@@ -481,8 +483,9 @@ func checkPayloadBounds(databaseBytes int64, objects []ObjectEntry) error {
 	}
 	total := databaseBytes
 	for _, entry := range objects {
-		if entry.Bytes > maximumObjectPayloadBytes {
-			return fmt.Errorf("%w: file object %q exceeds the %d byte object limit", ErrPayloadTooLarge, entry.Key, int64(maximumObjectPayloadBytes))
+		// 零字节对象是合法的；负长度永远不合法。
+		if entry.Bytes < 0 || entry.Bytes > maximumObjectPayloadBytes {
+			return fmt.Errorf("%w: file object %q has a size this bundle cannot carry", ErrPayloadTooLarge, entry.Key)
 		}
 		total += entry.Bytes
 	}

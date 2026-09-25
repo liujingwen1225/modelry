@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -418,8 +419,9 @@ func TestRestoreRollsBackWhenObjectActivationFails(t *testing.T) {
 	if _, err := targetRecords.Create(ctx, targetCollection.ID, map[string]any{"note": "original"}); err != nil {
 		t.Fatal(err)
 	}
-	originalKey := "obj_33333333333333333333333333333333"
-	if err := os.WriteFile(filepath.Join(targetObjects, originalKey), []byte("original-object-bytes"), 0o600); err != nil {
+	// 目标对象与 bundle 的第一个对象使用同一个 key、不同的字节，因此这个条目走的是
+	// 「原件被移开、回滚时放回去」这条分支，而不是「目标原本不存在」。
+	if err := os.WriteFile(filepath.Join(targetObjects, firstObjectKey), []byte("the-original-object-bytes"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := targetStore.Close(); err != nil {
@@ -437,9 +439,11 @@ func TestRestoreRollsBackWhenObjectActivationFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 故障注入：数据库已经激活完成，第二个 object 的激活失败。
+	// 故障注入必须落在阶段三：此时数据库已经激活完成、第二个 object 尚未激活。
+	var observed []string
 	restoreFault = func(step string) error {
-		if strings.HasSuffix(step, secondObjectKey) {
+		observed = append(observed, step)
+		if step == restorePhaseActivate+":"+filepath.Join(targetObjects, secondObjectKey) {
 			return errors.New("injected restore failure")
 		}
 		return nil
@@ -449,7 +453,18 @@ func TestRestoreRollsBackWhenObjectActivationFails(t *testing.T) {
 	if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: targetDatabase, ObjectsDir: targetObjects}); err == nil {
 		t.Fatal("restore reported success although object activation was injected to fail")
 	}
+	// 这个测试必须真的覆盖「数据库已经激活完成之后 object 激活失败」，而不是更早的
+	// 准备阶段失败：因此数据库与第一个 object 的激活都必须已经发生过。
+	for _, required := range []string{
+		restorePhaseActivate + ":" + targetDatabase,
+		restorePhaseActivate + ":" + filepath.Join(targetObjects, firstObjectKey),
+	} {
+		if !slices.Contains(observed, required) {
+			t.Fatalf("the failure was injected before %q was activated; observed steps: %v", required, observed)
+		}
+	}
 
+	// 故障确实发生在阶段三之后：目标数据库此刻曾经是 bundle 的内容。
 	if after := hashFile(t, targetDatabase); after != beforeDatabase {
 		t.Fatalf("restore left a half-replaced database: sha256 %s -> %s", beforeDatabase, after)
 	}
@@ -824,6 +839,224 @@ func TestRestoreRollsBackDespiteATornJournalLine(t *testing.T) {
 	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
 }
 
+// TestRestoreReplacesAndRollsBackTheDatabaseSidecars 证明替换数据库时旧的 WAL 边车
+// 必须一起消失，而回滚必须把它们的字节原样放回去：把新数据库留在旧 WAL 旁边会让下一次
+// 启动把旧日志回放到新数据库上，得到新旧混合的数据。
+func TestRestoreReplacesAndRollsBackTheDatabaseSidecars(t *testing.T) {
+	ctx := context.Background()
+	fixture := newPortabilityFixtureWithFiles(t)
+	collection, err := fixture.models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "posts", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.records.Create(ctx, collection.ID, map[string]any{"title": "restored"}); err != nil {
+		t.Fatal(err)
+	}
+	bundlePath := filepath.Join(fixture.managed, "bundle.tar")
+	if _, err := fixture.service.CreateBackup(ctx, BackupOptions{Destination: bundlePath}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 目标项目带一个非空 WAL 边车，模拟上一次进程被非正常终止。
+	targetRoot := t.TempDir()
+	targetDatabase := filepath.Join(targetRoot, "project.sqlite")
+	targetObjects := filepath.Join(targetRoot, "objects")
+	if err := os.MkdirAll(targetObjects, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	targetStore, targetModels, targetRecords, err := openProject(targetDatabase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := targetModels.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "target", Type: backendmodel.CollectionTypeNormal,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := targetStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	oldWAL := []byte("stale-wal-frames-from-the-previous-database")
+	oldSHM := []byte("stale-shm")
+	for suffix, payload := range map[string][]byte{"-wal": oldWAL, "-shm": oldSHM} {
+		if err := os.WriteFile(targetDatabase+suffix, payload, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	beforeDatabase := hashFile(t, targetDatabase)
+
+	inspection, err := NewInspectionService(InspectionOptions{ManagedDir: fixture.managed, Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 回滚路径：在侧车被移开之后、激活之前失败，旧 WAL/SHM 必须字节还原。
+	restoreFault = func(step string) error {
+		if step == restorePhasePreserve+":"+targetDatabase+"-wal" {
+			return errors.New("injected failure before preserving the old WAL")
+		}
+		return nil
+	}
+	if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: targetDatabase, ObjectsDir: targetObjects}); err == nil {
+		restoreFault = nil
+		t.Fatal("restore reported success although preserving the old WAL was injected to fail")
+	}
+	restoreFault = nil
+	if after := hashFile(t, targetDatabase); after != beforeDatabase {
+		t.Fatalf("the failed restore changed the database: %s -> %s", beforeDatabase, after)
+	}
+	for suffix, payload := range map[string][]byte{"-wal": oldWAL, "-shm": oldSHM} {
+		contents, err := os.ReadFile(targetDatabase + suffix)
+		if err != nil {
+			t.Fatalf("the failed restore lost the %s sidecar: %v", suffix, err)
+		}
+		if !bytes.Equal(contents, payload) {
+			t.Fatalf("the failed restore changed the %s sidecar: %q", suffix, contents)
+		}
+	}
+	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
+	_ = targetRecords
+
+	// 成功路径：新的数据库旁边绝不能留下旧 WAL/SHM。
+	if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: targetDatabase, ObjectsDir: targetObjects}); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(targetDatabase + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("a stale %s sidecar survived a successful restore: %v", suffix, err)
+		}
+	}
+	restored := factsFromDatabase(t, targetDatabase)
+	manifest := readBundleManifest(t, bundlePath)
+	if restored.records != manifest.Counts.Records {
+		t.Fatalf("restored database = %+v, want the bundle's %+v", restored, manifest.Counts)
+	}
+	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
+}
+
+// TestRollbackIsIdempotent 证明回滚可以被重放：一次只完成一半的回滚之后，第二遍必须
+// 成功收敛，而不是报错留下永远无法消费的 journal（那会让项目再也无法启动）。
+func TestRollbackIsIdempotent(t *testing.T) {
+	fixture := newPortabilityFixtureWithFiles(t)
+	targetRoot := t.TempDir()
+	targetDatabase := filepath.Join(targetRoot, "project.sqlite")
+	original := []byte("the-original-project-database-bytes")
+	if err := os.WriteFile(targetDatabase, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	journal := writeJournal(t, fixture.managed,
+		journalRecord{Op: journalStage, Dest: targetDatabase, Path: targetDatabase + ".replay.new"},
+		journalRecord{Op: journalBackup, Dest: targetDatabase, Path: targetDatabase + ".replay.old"},
+		journalRecord{Op: journalActivate, Dest: targetDatabase, Path: targetDatabase + ".replay.new"},
+	)
+	if err := os.Rename(targetDatabase, targetDatabase+".replay.old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(targetDatabase, []byte("half-activated"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// 第一遍回滚把原件放回去，然后模拟进程在删除 journal 之前被杀。
+	if err := rollbackJournal(journal); err != nil {
+		t.Fatalf("first rollback: %v", err)
+	}
+	contents, err := os.ReadFile(targetDatabase)
+	if err != nil || !bytes.Equal(contents, original) {
+		t.Fatalf("first rollback restored %q (%v), want %q", contents, err, original)
+	}
+	// 第二遍必须成功且幂等，而不是把已经回位的结果当成「原件丢失」。
+	if err := rollbackInterruptedRestore(fixture.managed); err != nil {
+		t.Fatalf("replaying the rollback must succeed, got %v", err)
+	}
+	contents, err = os.ReadFile(targetDatabase)
+	if err != nil || !bytes.Equal(contents, original) {
+		t.Fatalf("replayed rollback restored %q (%v), want %q", contents, err, original)
+	}
+	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
+}
+
+// TestRollbackAfterCommitOnlyCleansBackups 证明一个已提交的 journal 只清理备份，
+// 绝不回滚已经生效的新内容。
+func TestRollbackAfterCommitOnlyCleansBackups(t *testing.T) {
+	fixture := newPortabilityFixtureWithFiles(t)
+	targetRoot := t.TempDir()
+	targetDatabase := filepath.Join(targetRoot, "project.sqlite")
+	committed := []byte("the-newly-restored-database")
+	if err := os.WriteFile(targetDatabase, committed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backup := targetDatabase + ".committed.old"
+	if err := os.WriteFile(backup, []byte("the-old-database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, fixture.managed,
+		journalRecord{Op: journalStage, Dest: targetDatabase, Path: targetDatabase + ".committed.new"},
+		journalRecord{Op: journalBackup, Dest: targetDatabase, Path: backup},
+		journalRecord{Op: journalActivate, Dest: targetDatabase, Path: targetDatabase + ".committed.new"},
+		journalRecord{Op: journalDone},
+	)
+
+	if err := rollbackInterruptedRestore(fixture.managed); err != nil {
+		t.Fatalf("recovering a committed journal: %v", err)
+	}
+	contents, err := os.ReadFile(targetDatabase)
+	if err != nil || !bytes.Equal(contents, committed) {
+		t.Fatalf("a committed restore was rolled back: %q (%v)", contents, err)
+	}
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the committed journal left its backup behind: %v", err)
+	}
+	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
+}
+
+// TestRollbackRemovesNewContentWhoseOriginalNeverExisted 覆盖 absent + activate 这条
+// 重放分支：目标原本不存在，因此回滚必须撤掉我们创建的内容。
+func TestRollbackRemovesNewContentWhoseOriginalNeverExisted(t *testing.T) {
+	fixture := newPortabilityFixtureWithFiles(t)
+	targetRoot := t.TempDir()
+	targetDatabase := filepath.Join(targetRoot, "project.sqlite")
+	writeJournal(t, fixture.managed,
+		journalRecord{Op: journalStage, Dest: targetDatabase, Path: targetDatabase + ".absent.new"},
+		journalRecord{Op: journalAbsent, Dest: targetDatabase},
+		journalRecord{Op: journalActivate, Dest: targetDatabase, Path: targetDatabase + ".absent.new"},
+	)
+	if err := os.WriteFile(targetDatabase, []byte("our-activated-content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := rollbackInterruptedRestore(fixture.managed); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	if _, err := os.Stat(targetDatabase); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("rollback left content whose original never existed: %v", err)
+	}
+	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
+}
+
+// TestStaleWorkspaceCleanupNeverRemovesTheJournal 证明暂存目录清理不会连 journal 一起删掉：
+// journal 是项目处于中间态的唯一记录，丢了它 Runtime 就会在一个被移开数据库的项目上启动。
+func TestStaleWorkspaceCleanupNeverRemovesTheJournal(t *testing.T) {
+	fixture := newPortabilityFixtureWithFiles(t)
+	journal := writeJournal(t, fixture.managed, journalRecord{Op: journalAbsent, Dest: "nowhere"})
+	for _, name := range []string{"restore-work-stale", "preflight-stale", "backup-work-stale"} {
+		if err := os.MkdirAll(filepath.Join(fixture.managed, name), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removeStaleWorkspaces(fixture.managed)
+	if _, err := os.Stat(journal); err != nil {
+		t.Fatalf("the restore journal was removed by workspace cleanup: %v", err)
+	}
+	for _, name := range []string{"restore-work-stale", "preflight-stale", "backup-work-stale"} {
+		if _, err := os.Stat(filepath.Join(fixture.managed, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("the stale workspace %q survived cleanup: %v", name, err)
+		}
+	}
+}
+
 // assertNoRestoreLeftovers 断言 restore 没有留下任何暂存、备份或 journal 痕迹。
 func assertNoRestoreLeftovers(t *testing.T, targetRoot, managedDir string) {
 	t.Helper()
@@ -834,7 +1067,7 @@ func assertNoRestoreLeftovers(t *testing.T, targetRoot, managedDir string) {
 					t.Fatalf("restore left %q in %q", name, directory)
 				}
 			}
-			if strings.HasPrefix(name, "restore-") || strings.HasPrefix(name, "preflight-") || strings.HasPrefix(name, "backup-work-") {
+			if strings.HasPrefix(name, restoreWorkPrefix) || strings.HasPrefix(name, "preflight-") || strings.HasPrefix(name, "backup-work-") {
 				t.Fatalf("restore left the workspace %q in %q", name, directory)
 			}
 		}
@@ -1558,13 +1791,27 @@ func TestImportRejectsLinesThatAreNotRecordLines(t *testing.T) {
 	}
 	stream := string(header) + "\n" +
 		`{"values":{"title":"no-kind"}}` + "\n" +
+		// 一行里粘了两个对象：第二个绝不能被静默丢弃。
+		`{"kind":"record","values":{"title":"first"}}{"kind":"record","values":{"title":"second"}}` + "\n" +
 		`{"kind":"record","values":{"title":"proper"}}` + "\n"
 	summary, err := fixture.service.ImportStream(ctx, fixture.records, fixture.models, collection.ID, strings.NewReader(stream))
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
-	if summary.Created != 1 || summary.Failed != 1 || summary.Results[0].Code != "INVALID_ARGUMENT" {
-		t.Fatalf("import summary = %+v", summary)
+	if summary.Created != 1 || summary.Failed != 2 {
+		t.Fatalf("import summary = %+v, want 1 created and 2 failed", summary)
+	}
+	for _, result := range summary.Results {
+		if result.Status == "failed" && result.Code != "INVALID_ARGUMENT" {
+			t.Fatalf("failed result = %+v, want INVALID_ARGUMENT", result)
+		}
+	}
+	page, err := fixture.records.List(ctx, collection.ID, records.ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 1 || page.Data[0].Values["title"] != "proper" {
+		t.Fatalf("imported Records = %+v, want only the well formed one", page.Data)
 	}
 }
 
@@ -1596,15 +1843,89 @@ func (source pagedCollections) ListCollections(_ context.Context, options backen
 
 func TestCollectCollectionsRefusesToTruncateTheAppliedModel(t *testing.T) {
 	ctx := context.Background()
-	atLimit, err := collectCollections(ctx, pagedCollections{total: maximumContractCollections})
+	for _, total := range []int{maximumContractCollections, maximumContractCollections + 1, maximumContractCollections*3 + 7} {
+		collected, err := collectCollections(ctx, pagedCollections{total: total})
+		if err != nil {
+			t.Fatalf("collecting %d collections: %v", total, err)
+		}
+		if len(collected) != total {
+			t.Fatalf("collected %d collections, want all %d", len(collected), total)
+		}
+	}
+}
+
+// TestBuildContractRefusesMoreCollectionsThanItCanDescribe 证明 Contract 的 Collection
+// 上限只约束 Contract，且它是明确失败而不是静默缺少一部分 Collection。
+func TestBuildContractRefusesMoreCollectionsThanItCanDescribe(t *testing.T) {
+	ctx := context.Background()
+	service := &Service{models: pagedCollections{total: maximumContractCollections + 1}, version: "test"}
+	if _, err := service.BuildContract(ctx, nil); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("error = %v, want ErrInvalidArgument", err)
+	}
+	service = &Service{models: pagedCollections{total: maximumContractCollections}, version: "test"}
+	contract, err := service.BuildContract(ctx, nil)
 	if err != nil {
 		t.Fatalf("a project at the Collection limit was rejected: %v", err)
 	}
-	if len(atLimit) != maximumContractCollections {
-		t.Fatalf("collected %d collections, want %d", len(atLimit), maximumContractCollections)
+	if len(contract.Collections) != maximumContractCollections {
+		t.Fatalf("contract describes %d collections, want %d", len(contract.Collections), maximumContractCollections)
 	}
-	if _, err := collectCollections(ctx, pagedCollections{total: maximumContractCollections + 1}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("error = %v, want ErrInvalidArgument when the Applied Model exceeds the contract limit", err)
+}
+
+// TestBackupAndPreflightAgreeOnZeroByteAndBoundaryObjects 证明 Backup 与 Preflight 对
+// 边界大小的对象给出一致结论：零字节对象合法，恰好 128 MiB 合法，再多一字节非法。
+func TestBackupAndPreflightAgreeOnZeroByteAndBoundaryObjects(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		bytes    int64
+		rejected bool
+	}{
+		{name: "empty object", bytes: 0},
+		{name: "one byte", bytes: 1},
+		{name: "at the object limit", bytes: int64(maximumObjectPayloadBytes)},
+		{name: "one byte over the object limit", bytes: int64(maximumObjectPayloadBytes) + 1, rejected: true},
+		{name: "negative length", bytes: -1, rejected: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			objects := []ObjectEntry{{Key: firstObjectKey, Bytes: testCase.bytes, SHA256: strings.Repeat("b", 64)}}
+			backupErr := checkPayloadBounds(1<<20, objects)
+			manifest := Manifest{
+				Format: FormatName, FormatVersion: FormatVersion, ProjectID: "prj_test",
+				RuntimeVersion: "test", AppliedModelHash: strings.Repeat("a", 64),
+				Database: DatabaseEntry{Path: DatabaseArchivePath, Bytes: 1 << 20, SHA256: strings.Repeat("c", 64)},
+				Objects:  objects,
+			}
+			_, findings, planErr := planBundle(manifest)
+			preflightRejects := planErr != nil
+			for _, finding := range findings {
+				if finding.Severity == "error" {
+					preflightRejects = true
+				}
+			}
+			if testCase.rejected {
+				if backupErr == nil {
+					t.Fatal("backup accepted an object size the bundle cannot carry")
+				}
+				if !preflightRejects {
+					t.Fatal("preflight accepted an object size backup rejects")
+				}
+				return
+			}
+			if backupErr != nil {
+				t.Fatalf("backup rejected a legal object size: %v", backupErr)
+			}
+			if preflightRejects {
+				t.Fatalf("preflight rejected a legal object size: %v %+v", planErr, findings)
+			}
+		})
+	}
+}
+
+// TestArchiveEntryBoundAccommodatesAFullBundle 证明归档条目上限容得下一个满载的 bundle：
+// manifest + 数据库载荷 + 上限数量的 File object。
+func TestArchiveEntryBoundAccommodatesAFullBundle(t *testing.T) {
+	if int(maximumArchiveEntries) < maximumBundleObjects+2 {
+		t.Fatalf("maximumArchiveEntries = %d cannot hold %d objects plus a manifest and a database payload", maximumArchiveEntries, maximumBundleObjects)
 	}
 }
 

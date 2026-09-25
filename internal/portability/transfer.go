@@ -190,7 +190,9 @@ func (service *Service) ImportStream(ctx context.Context, source RecordSource, r
 		// float64，否则 Export -> Import 会静默改值。
 		decoder := json.NewDecoder(strings.NewReader(line))
 		decoder.UseNumber()
-		if err := decoder.Decode(&payload); err != nil || payload.Kind != "record" {
+		// More() 必须为假：一行里粘了两个对象时，Decode 只会读走第一个，
+		// 剩下的会被静默丢弃。
+		if err := decoder.Decode(&payload); err != nil || payload.Kind != "record" || decoder.More() {
 			summary.Failed++
 			summary.Results = append(summary.Results, ImportResult{Index: index, Status: "failed", Code: "INVALID_ARGUMENT"})
 			index++
@@ -279,6 +281,11 @@ func (service *Service) BuildContract(ctx context.Context, rules RuleSummarySour
 		return ApplicationAPIContract{}, err
 	}
 	entries := contractCollections(collections)
+	// Contract 的 Collection 上限只约束 Contract：超过它时明确拒绝，绝不生成一份
+	// 缺少部分 Collection、看起来却完整的契约。
+	if len(entries) > maximumContractCollections {
+		return ApplicationAPIContract{}, fmt.Errorf("%w: this project has %d Applied Collections; the typed Application API contract can describe at most %d", ErrInvalidArgument, len(entries), maximumContractCollections)
+	}
 	contract := ApplicationAPIContract{Version: service.version, APIBasePath: "/api/v1", Collections: make([]ContractCollection, 0, len(entries))}
 	for index, entry := range entries {
 		collection := collections[index]

@@ -4576,6 +4576,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Violation'
+        created:
+          type: integer
+          minimum: 0
+          description: Records already committed when a request-level Import failure was reported.
+        failed:
+          type: integer
+          minimum: 0
+          description: Records already reported as failed when a request-level Import failure was reported.
       additionalProperties: true
     Violation:
       type: object

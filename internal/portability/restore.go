@@ -67,7 +67,7 @@ func (service *Service) Apply(ctx context.Context, archivePath string, options A
 			return preflight, ErrProjectNotEmpty
 		}
 	}
-	workDir, err := os.MkdirTemp(service.managed, "restore-")
+	workDir, err := os.MkdirTemp(service.managed, restoreWorkPrefix)
 	if err != nil {
 		return preflight, fmt.Errorf("%w: prepare restore workspace: %v", ErrStorage, err)
 	}
@@ -139,7 +139,8 @@ func planBundle(manifest Manifest) (bundlePlan, []Finding, error) {
 		case !validDigest(entry.SHA256):
 			invalid("object.invalidDigest", "The manifest lists an invalid object digest.")
 			continue
-		case entry.Bytes <= 0 || entry.Bytes > maximumObjectPayloadBytes:
+		// 零字节 File object 是合法的（产品允许空文件），因此这里只拒绝负长度。
+		case entry.Bytes < 0 || entry.Bytes > maximumObjectPayloadBytes:
 			invalid("object.invalidSize", "The manifest lists a file object size this Runtime does not accept.")
 			continue
 		}
@@ -654,12 +655,10 @@ func rollbackJournal(journalPath string) error {
 				failures = append(failures, err)
 			}
 		case state.hasBackup:
-			// 备份不存在说明「移开原件」这件事从未发生，目标位置仍然是原件：
-			// 绝不能删除它。只有在我们已经激活过的情况下才是真正的异常，此时
-			// 目标上的新内容是仅存的数据，同样不能删除，只报告。
-			if state.activated {
-				failures = append(failures, fmt.Errorf("the preserved original of %q is missing", destination))
-			}
+			// 备份文件不存在：要么「移开原件」从未发生（目标是原件），要么上一次回滚
+			// 已经把原件放了回去（目标还是原件）。两种情况下目标都是原件，绝不能删除。
+			// 这里也绝不报错：回滚必须幂等，否则一次只完成一半的回滚会让 journal 永远
+			// 无法被消费，项目将再也无法启动，也无法再次 restore。
 		case state.activated:
 			// 目标原本不存在；撤掉我们创建的内容即可。
 			if err := removePath(destination); err != nil {
@@ -684,14 +683,23 @@ func removeEmptyDirectories(directories []string) {
 	}
 }
 
+// restoreWorkPrefix 是 restore staging 目录的前缀。
+// 它刻意不与 RestoreJournalName 共享前缀，否则清理暂存目录会连 journal 一起删掉。
+const restoreWorkPrefix = "restore-work-"
+
 // removeStaleWorkspaces 清理崩溃留下的暂存目录；它们可能包含整个项目的明文副本。
+// journal 永远不在清理范围内：它是项目处于中间态的唯一记录。
 func removeStaleWorkspaces(managedDir string) {
-	for _, pattern := range []string{"restore-*", "preflight-*", "backup-work-*"} {
+	journalPath := filepath.Join(managedDir, RestoreJournalName)
+	for _, pattern := range []string{restoreWorkPrefix + "*", "preflight-*", "backup-work-*"} {
 		matches, err := filepath.Glob(filepath.Join(managedDir, pattern))
 		if err != nil {
 			return
 		}
 		for _, match := range matches {
+			if match == journalPath {
+				continue
+			}
 			_ = os.RemoveAll(match)
 		}
 	}

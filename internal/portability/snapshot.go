@@ -2,7 +2,6 @@ package portability
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
@@ -91,9 +90,10 @@ type collectionLister interface {
 
 // collectCollections 分页读取 Applied Collections 并按 Name 稳定排序。
 //
-// 它必须读到完整的 Applied Model：appliedModelHash 与 Typed Application API Contract
-// 都建立在这份列表上，静默丢弃一部分 Collection 会让 hash 描述一个不完整的模型，
-// 从而让 import 的 model compatibility gate 失效。因此超过上限时它明确失败，而不是截断。
+// 它必须读到完整的 Applied Model：appliedModelHash 建立在这份列表上，静默丢弃一部分
+// Collection 会让 hash 描述一个不完整的模型，从而让 import 的 model compatibility gate
+// 失效。Contract 的 Collection 上限属于 Contract 生成，不在这里施加——它由 BuildContract
+// 明确拒绝，绝不截断。
 func collectCollections(ctx context.Context, source collectionLister) ([]backendmodel.Collection, error) {
 	collections := make([]backendmodel.Collection, 0, 16)
 	cursor := ""
@@ -103,9 +103,6 @@ func collectCollections(ctx context.Context, source collectionLister) ([]backend
 			return nil, err
 		}
 		collections = append(collections, page.Data...)
-		if len(collections) > maximumContractCollections {
-			return nil, fmt.Errorf("%w: this project has more than %d Applied Collections, which the typed Application API contract cannot describe", ErrInvalidArgument, maximumContractCollections)
-		}
 		if page.NextCursor == "" || len(page.Data) == 0 {
 			break
 		}

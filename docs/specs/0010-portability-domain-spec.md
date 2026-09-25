@@ -99,9 +99,9 @@
 这些上限各自约束自己描述的对象，任何一条都不能被当作整个 bundle 的上限：
 
 - Backup：最多 100,000 个 File object；快照写入 managed directory；归档 32 KiB 缓冲流式写出。
-- Restore：最多 100,000 个归档条目；manifest 最大 64 MiB；单个 File object 载荷最大 128 MiB（与产品单文件上限一致）；单个数据库载荷最大 4 GiB；一个 bundle 声明的载荷总量最大 4 GiB。Preflight 按 manifest 自己声明的长度收紧读取预算，因此合法的大对象不会被整体上限误伤。
+- Restore：最多 100,002 个归档条目（含 manifest、数据库载荷与上限数量的 File object）；manifest 最大 64 MiB；单个 File object 载荷最大 128 MiB（与产品单文件上限一致，零字节对象合法）；单个数据库载荷最大 4 GiB；一个 bundle 声明的载荷总量最大 4 GiB。Preflight 按 manifest 自己声明的长度收紧读取预算，因此合法的大对象不会被整体上限误伤。Backup 使用同一组边界，因此它绝不会产出一份自己无法恢复的 bundle。
 - Export：单次最多 100,000 条 Record；Import：单次最多 1,000 条 Record 且请求体最大 8 MiB。
-- Contract：最多 512 个 Collection、每 Collection 最多 4,096 个 Field。
+- Contract：最多 512 个 Collection、每 Collection 最多 4,096 个 Field。这个上限只约束 Contract 的生成与读取：超过它时 Contract 明确失败，而 Backup、Export、Import 仍然读取完整的 Applied Model 并计算覆盖全部 Collection 的 `appliedModelHash`。
 
 ## 6. Errors
 

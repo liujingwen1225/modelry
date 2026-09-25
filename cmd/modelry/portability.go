@@ -56,6 +56,12 @@ func runBackup(args []string, stdout, stderr io.Writer, workingDirectory string)
 		return 1
 	}
 	defer lock.Release()
+	// 一个半恢复的项目必须先用 restore 收敛；否则 storage.Open 会创建一个全新的空项目，
+	// 并产出一份看起来合法、实际是空的备份。
+	if err := portability.CheckInterruptedRestore(root.ManagedDir); err != nil {
+		_, _ = fmt.Fprintf(stderr, "cannot back up the project: %v\n", err)
+		return 1
+	}
 
 	store, err := storage.Open(root.Database)
 	if err != nil {
@@ -185,6 +191,11 @@ func runGenerate(args []string, stdout, stderr io.Writer, workingDirectory strin
 	root, err := project.ResolveRoot(rootConfig)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "cannot resolve project root: %v\n", err)
+		return 1
+	}
+	// 与 Runtime 一致：一个半恢复的项目必须先用 restore 收敛。
+	if err := portability.CheckInterruptedRestore(root.ManagedDir); err != nil {
+		_, _ = fmt.Fprintf(stderr, "cannot generate artifacts: %v\n", err)
 		return 1
 	}
 	store, err := storage.Open(root.Database)
