@@ -152,38 +152,44 @@ var eventSchema = []string{
 // AppendInTransaction adds the durable Event and applies retention in the
 // caller's Record transaction. Any error must roll back the whole mutation.
 func (service *Service) AppendInTransaction(ctx context.Context, tx storage.Executor, mutation Mutation) error {
+	_, err := service.AppendEventInTransaction(ctx, tx, mutation)
+	return err
+}
+
+// AppendEventInTransaction returns the durable Event identity to the owning Record transaction.
+func (service *Service) AppendEventInTransaction(ctx context.Context, tx storage.Executor, mutation Mutation) (Event, error) {
 	if service == nil || tx == nil {
-		return fmt.Errorf("%w: active storage transaction is required", ErrInvalidMutation)
+		return Event{}, fmt.Errorf("%w: active storage transaction is required", ErrInvalidMutation)
 	}
 	if err := validateMutation(mutation); err != nil {
-		return err
+		return Event{}, err
 	}
 	beforeJSON, err := encodeSnapshot(mutation.Before)
 	if err != nil {
-		return fmt.Errorf("%w: encode prior authorization snapshot", ErrInvalidMutation)
+		return Event{}, fmt.Errorf("%w: encode prior authorization snapshot", ErrInvalidMutation)
 	}
 	afterJSON, err := encodeSnapshot(mutation.After)
 	if err != nil {
-		return fmt.Errorf("%w: encode resulting authorization snapshot", ErrInvalidMutation)
+		return Event{}, fmt.Errorf("%w: encode resulting authorization snapshot", ErrInvalidMutation)
 	}
 	eventIDTemplate, err := EventID(mutation.CollectionID, 1)
 	if err != nil {
-		return err
+		return Event{}, err
 	}
 	byteSize := int64(len(eventIDTemplate) + len(mutation.CollectionID) + len(mutation.RecordID) + len(mutation.Type) + len(mutation.OccurredAt.UTC().Format(time.RFC3339Nano)) + 256 + len(beforeJSON) + len(afterJSON))
 	if byteSize > maximumSingleEventBytes {
-		return fmt.Errorf("%w: maximum encoded Event size is %d bytes", ErrEventTooLarge, maximumSingleEventBytes)
+		return Event{}, fmt.Errorf("%w: maximum encoded Event size is %d bytes", ErrEventTooLarge, maximumSingleEventBytes)
 	}
 	var sequence int64
 	if err := tx.QueryRowContext(ctx, `INSERT INTO modelry_record_event_sequences (collection_id, last_sequence)
 		VALUES (?, 1)
 		ON CONFLICT(collection_id) DO UPDATE SET last_sequence = last_sequence + 1
 		RETURNING last_sequence`, mutation.CollectionID).Scan(&sequence); err != nil {
-		return fmt.Errorf("allocate Collection Event sequence: %w", err)
+		return Event{}, fmt.Errorf("allocate Collection Event sequence: %w", err)
 	}
 	eventID, err := EventID(mutation.CollectionID, sequence)
 	if err != nil {
-		return err
+		return Event{}, err
 	}
 	var beforeValue, afterValue any
 	if beforeJSON != nil {
@@ -197,9 +203,16 @@ func (service *Service) AppendInTransaction(ctx context.Context, tx storage.Exec
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		eventID, mutation.CollectionID, sequence, mutation.RecordID, string(mutation.Type),
 		mutation.OccurredAt.UTC().Format(time.RFC3339Nano), mutation.SchemaVersion, beforeValue, afterValue, byteSize); err != nil {
-		return fmt.Errorf("persist Record Event: %w", err)
+		return Event{}, fmt.Errorf("persist Record Event: %w", err)
 	}
-	return service.pruneInTransaction(ctx, tx)
+	if err := service.pruneInTransaction(ctx, tx); err != nil {
+		return Event{}, err
+	}
+	return Event{
+		ID: eventID, CollectionID: mutation.CollectionID, Sequence: sequence, RecordID: mutation.RecordID,
+		Type: mutation.Type, OccurredAt: mutation.OccurredAt.UTC(), SchemaVersion: mutation.SchemaVersion,
+		Before: mutation.Before, After: mutation.After,
+	}, nil
 }
 
 func validateMutation(mutation Mutation) error {

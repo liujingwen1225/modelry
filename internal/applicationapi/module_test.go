@@ -34,6 +34,10 @@ func (evaluator *testEvaluator) Evaluate(_ context.Context, _ string, _ authoriz
 	return authorization.Decision{Allowed: true}, nil
 }
 
+func (evaluator *testEvaluator) EvaluateInTransaction(ctx context.Context, _ storage.Executor, collectionID string, operation authorization.Operation, principal authorization.Principal, record *authorization.Record) (authorization.Decision, error) {
+	return evaluator.Evaluate(ctx, collectionID, operation, principal, record)
+}
+
 type testSessions struct {
 	principal authorization.Principal
 	err       error
@@ -179,8 +183,8 @@ func TestApplicationRecordHTTPCRUDAndDurableSafeRequestRecord(t *testing.T) {
 	if deleteResponse.Code != http.StatusNoContent {
 		t.Fatalf("delete status=%d body=%s", deleteResponse.Code, deleteResponse.Body.String())
 	}
-	if len(evaluator.seen) != 8 {
-		t.Fatalf("Access Evaluator calls=%d, want 8 including List gates and row checks", len(evaluator.seen))
+	if len(evaluator.seen) != 11 {
+		t.Fatalf("Access Evaluator calls=%d, want 11 including transaction rechecks", len(evaluator.seen))
 	}
 }
 

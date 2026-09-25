@@ -151,6 +151,30 @@ func TestAppendIsAtomicAndNotificationFollowsCommit(t *testing.T) {
 	}
 }
 
+func TestAppendEventReturnsCommittedEventIdentity(t *testing.T) {
+	store, service := openService(t)
+	mutation := Mutation{
+		CollectionID: "col_returned", RecordID: "rec_returned", Type: Created,
+		OccurredAt: time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC), SchemaVersion: 2,
+		After: map[string]any{"id": "rec_returned", "title": "returned"},
+	}
+	var appended Event
+	if err := store.WithTransaction(context.Background(), func(tx storage.Executor) error {
+		var err error
+		appended, err = service.AppendEventInTransaction(context.Background(), tx, mutation)
+		return err
+	}); err != nil {
+		t.Fatalf("append Event: %v", err)
+	}
+	if appended.ID != mustEventID(t, mutation.CollectionID, 1) || appended.Sequence != 1 || appended.After["title"] != "returned" {
+		t.Fatalf("AppendEventInTransaction() = %+v", appended)
+	}
+	stored, err := service.ReadAfter(context.Background(), mutation.CollectionID, 0, 1)
+	if err != nil || len(stored) != 1 || stored[0].ID != appended.ID {
+		t.Fatalf("stored Event = %+v, %v; want returned identity", stored, err)
+	}
+}
+
 func TestSequenceIsCollectionScopedAndRetentionKeepsRecoveryWatermark(t *testing.T) {
 	store, service := openService(t)
 	service.retentionEventLimit = 2

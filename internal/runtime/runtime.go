@@ -20,6 +20,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/backendapi"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/diagnostics"
+	"github.com/liujingwen1225/modelry/internal/extensions"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
@@ -46,6 +47,7 @@ type Runtime struct {
 	lock           *project.RuntimeLock
 	store          *storage.Store
 	events         *recordevents.Service
+	extensions     *extensions.Service
 	version        string
 	databaseHealth string
 	fileHealth     string
@@ -69,8 +71,12 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		return nil, err
 	}
 	var store *storage.Store
+	var extensionService *extensions.Service
 	defer func() {
 		if resultErr != nil {
+			if extensionService != nil {
+				resultErr = errors.Join(resultErr, extensionService.Close(context.Background()))
+			}
 			if store != nil {
 				resultErr = errors.Join(resultErr, store.Close())
 			}
@@ -103,7 +109,15 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Record Events: %w", err)
 	}
-	recordService, err := records.NewWithLocalFiles(store, backendModel, root.TempFiles, root.Objects, records.WithAuthorization(accessRules, nil), records.WithRecordEvents(eventService))
+	extensionService, err = extensions.NewService(context.Background(), store, backendModel, extensions.ServiceOptions{
+		ManagedDir: root.ManagedDir,
+		ProjectID:  store.ProjectID(),
+		Invoker:    extensions.HookInvoker{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Extension Runtime: %w", err)
+	}
+	recordService, err := records.NewWithLocalFiles(store, backendModel, root.TempFiles, root.Objects, records.WithAuthorization(accessRules, nil), records.WithRecordEvents(eventService), records.WithLifecycleHooks(extensionService.LifecycleHooks()))
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Records and Local Files: %w", err)
 	}
@@ -143,6 +157,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		lock:           lock,
 		store:          store,
 		events:         eventService,
+		extensions:     extensionService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -175,6 +190,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 			return accesscontrol.InitializeCollection(ctx, tx, collection, initialRules)
 		}),
 		accesscontrol.NewModule(accessRules),
+		extensions.NewModule(extensionService),
 		appauth.NewModule(authService),
 		applicationapi.NewModule(backendModel, recordService, applicationapi.WithSessionAuthenticator(authService)),
 		realtimeapi.NewModule(backendModel, eventService, accessRules, authService),
@@ -269,9 +285,6 @@ func (instance *Runtime) Close() error {
 		instance.closed = true
 		instance.mu.Unlock()
 		var serverErr error
-		if instance.events != nil {
-			instance.events.Close()
-		}
 		if instance.server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
 			serverErr = instance.server.Shutdown(ctx)
@@ -279,6 +292,15 @@ func (instance *Runtime) Close() error {
 			if serverErr != nil {
 				serverErr = errors.Join(serverErr, instance.server.Close())
 			}
+		}
+		var extensionErr error
+		if instance.extensions != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
+			extensionErr = instance.extensions.Close(ctx)
+			cancel()
+		}
+		if instance.events != nil {
+			instance.events.Close()
 		}
 		var storageErr error
 		if instance.store != nil {
@@ -288,7 +310,7 @@ func (instance *Runtime) Close() error {
 		if instance.lock != nil {
 			lockErr = instance.lock.Release()
 		}
-		instance.closeErr = errors.Join(serverErr, storageErr, lockErr)
+		instance.closeErr = errors.Join(serverErr, extensionErr, storageErr, lockErr)
 	})
 	return instance.closeErr
 }

@@ -184,6 +184,7 @@ export function Dialog({
   title,
   children,
   onClose,
+  closeLabel = 'Close dialog',
   size = 'standard',
   presentation = 'dialog',
 }: {
@@ -191,6 +192,7 @@ export function Dialog({
   title: string;
   children: ReactNode;
   onClose: () => void;
+  closeLabel?: string;
   size?: 'standard' | 'wide';
   presentation?: 'dialog' | 'sheet';
 }) {
@@ -213,7 +215,7 @@ export function Dialog({
       >
       <header className="dialog__header">
         <h2 id={titleId}>{title}</h2>
-        <Button aria-label="Close dialog" onClick={onClose} variant="quiet"><X aria-hidden="true" size={18} /></Button>
+        <Button aria-label={closeLabel} onClick={onClose} variant="quiet"><X aria-hidden="true" size={18} /></Button>
       </header>
       <div className="dialog__body">{children}</div>
     </dialog>

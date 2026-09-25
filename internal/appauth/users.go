@@ -26,14 +26,34 @@ const (
 	passwordMaxBytes   = 1024
 )
 
+type preparedProfileWriter interface {
+	PrepareCreate(context.Context, string, map[string]any) (*records.PreparedCreate, error)
+	SetPreparedCreateValues(*records.PreparedCreate, map[string]any) error
+	CreatePreparedInTransaction(context.Context, storage.Executor, *records.PreparedCreate) (records.Record, error)
+	CompletePreparedCommit(context.Context, *records.PreparedCreate)
+}
+
 func (service *Service) CreateUser(ctx context.Context, collectionID string, profile map[string]any, password string) (records.Record, error) {
 	prepared, email, err := prepareProfile(profile)
 	if err != nil {
 		return records.Record{}, err
 	}
+	if err := service.preflightAuthCollection(ctx, collectionID); err != nil {
+		return records.Record{}, err
+	}
 	salt, passwordHash, err := derivePassword(password)
 	if err != nil {
 		return records.Record{}, err
+	}
+	profileChange, err := service.prepareProfileChange(ctx, collectionID, prepared)
+	if err != nil {
+		return records.Record{}, fmt.Errorf("prepare App User Profile: %w", mapProfileError(err))
+	}
+	if profileChange != nil {
+		email, err = service.normalizePreparedProfile(profileChange, profileChange.Values())
+		if err != nil {
+			return records.Record{}, err
+		}
 	}
 	var created records.Record
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
@@ -44,7 +64,7 @@ func (service *Service) CreateUser(ctx context.Context, collectionID string, pro
 		if err := requireAuthCollection(collection); err != nil {
 			return err
 		}
-		created, err = service.profiles.CreateInTransaction(ctx, tx, collection.ID, prepared)
+		created, err = service.createPreparedProfile(ctx, tx, collection.ID, prepared, profileChange)
 		if err != nil {
 			return fmt.Errorf("create App User Profile: %w", mapProfileError(err))
 		}
@@ -56,7 +76,7 @@ func (service *Service) CreateUser(ctx context.Context, collectionID string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
-	publishProfileRecordEvents(service.profiles, collectionID)
+	service.completeProfileCommit(ctx, collectionID, profileChange)
 	return created, nil
 }
 
@@ -65,9 +85,41 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
+	var preflightCollection backendmodel.Collection
+	err = service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		collection, err := collectionByName(ctx, snapshot, collectionName)
+		if err != nil {
+			return err
+		}
+		if err := requireAuthCollection(collection); err != nil {
+			return err
+		}
+		configuration, _, err := readConfig(ctx, snapshot, collection)
+		if err != nil {
+			return err
+		}
+		if err := validateAuthConfig(configuration.Applied); err != nil || !configuration.Applied.EmailPasswordEnabled || !configuration.Applied.SelfRegistration {
+			return ErrRegistrationDisabled
+		}
+		preflightCollection = collection
+		return nil
+	})
+	if err != nil {
+		return records.Record{}, err
+	}
 	salt, passwordHash, err := derivePassword(password)
 	if err != nil {
 		return records.Record{}, err
+	}
+	profileChange, err := service.prepareProfileChange(ctx, preflightCollection.ID, prepared)
+	if err != nil {
+		return records.Record{}, fmt.Errorf("prepare registered App User Profile: %w", mapProfileError(err))
+	}
+	if profileChange != nil {
+		email, err = service.normalizePreparedProfile(profileChange, profileChange.Values())
+		if err != nil {
+			return records.Record{}, err
+		}
 	}
 	var created records.Record
 	var createdCollectionID string
@@ -90,7 +142,7 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 		if !configuration.Applied.SelfRegistration {
 			return ErrRegistrationDisabled
 		}
-		created, err = service.profiles.CreateInTransaction(ctx, tx, collection.ID, prepared)
+		created, err = service.createPreparedProfile(ctx, tx, collection.ID, prepared, profileChange)
 		if err != nil {
 			return fmt.Errorf("create registered App User Profile: %w", mapProfileError(err))
 		}
@@ -102,8 +154,62 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
-	publishProfileRecordEvents(service.profiles, createdCollectionID)
+	service.completeProfileCommit(ctx, createdCollectionID, profileChange)
 	return created, nil
+}
+
+func (service *Service) preflightAuthCollection(ctx context.Context, collectionID string) error {
+	return service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		collection, err := loadCollection(ctx, snapshot, collectionID)
+		if err != nil {
+			return err
+		}
+		return requireAuthCollection(collection)
+	})
+}
+
+func (service *Service) prepareProfileChange(ctx context.Context, collectionID string, values map[string]any) (*records.PreparedCreate, error) {
+	writer, ok := service.profiles.(preparedProfileWriter)
+	if !ok {
+		return nil, nil
+	}
+	return writer.PrepareCreate(ctx, collectionID, values)
+}
+
+func (service *Service) normalizePreparedProfile(prepared *records.PreparedCreate, values map[string]any) (string, error) {
+	normalized, email, err := prepareProfile(values)
+	if err != nil {
+		return "", err
+	}
+	writer, ok := service.profiles.(preparedProfileWriter)
+	if !ok {
+		return "", ErrInvalidArgument
+	}
+	if err := writer.SetPreparedCreateValues(prepared, normalized); err != nil {
+		return "", fmt.Errorf("validate prepared App User Profile: %w", mapProfileError(err))
+	}
+	return email, nil
+}
+
+func (service *Service) createPreparedProfile(ctx context.Context, tx storage.Executor, collectionID string, values map[string]any, prepared *records.PreparedCreate) (records.Record, error) {
+	if prepared != nil {
+		writer, ok := service.profiles.(preparedProfileWriter)
+		if !ok {
+			return records.Record{}, ErrInvalidArgument
+		}
+		return writer.CreatePreparedInTransaction(ctx, tx, prepared)
+	}
+	return service.profiles.CreateInTransaction(ctx, tx, collectionID, values)
+}
+
+func (service *Service) completeProfileCommit(ctx context.Context, collectionID string, prepared *records.PreparedCreate) {
+	if prepared != nil {
+		if writer, ok := service.profiles.(preparedProfileWriter); ok {
+			writer.CompletePreparedCommit(ctx, prepared)
+			return
+		}
+	}
+	publishProfileRecordEvents(service.profiles, collectionID)
 }
 
 func publishProfileRecordEvents(profiles ProfileWriter, collectionID string) {

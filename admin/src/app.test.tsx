@@ -27,7 +27,7 @@ function diagnosticResponse(path: string): Response {
 }
 
 describe('Modelry Admin shell', () => {
-  it('renders the exact V0.1 sidebar and reads runtime health through the diagnostics client', async () => {
+  it('renders the shared sidebar and reads runtime health through the diagnostics client', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     const fetchMock = vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input))));
     vi.stubGlobal('fetch', fetchMock);
@@ -36,9 +36,9 @@ describe('Modelry Admin shell', () => {
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Settings',
+      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Extensions', 'Secrets', 'Settings',
     ]);
-    expect(navigation).not.toHaveTextContent(/Hooks|Activity|Secrets/);
+    expect(navigation).not.toHaveTextContent(/Activity/);
     expect(await screen.findByText('Runtime ready')).toBeInTheDocument();
     const storageCard = screen.getByRole('heading', { name: 'Local project data' }).closest('.diagnostic-card');
     expect(storageCard).not.toBeNull();

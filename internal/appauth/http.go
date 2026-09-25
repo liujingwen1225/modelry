@@ -12,6 +12,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 )
@@ -435,6 +436,22 @@ func (module *Module) writeError(w http.ResponseWriter, request *http.Request, e
 	var violation *ValidationFailure
 	var recordValueError *backendmodel.RecordValueError
 	switch {
+	case errors.Is(err, recordlifecycle.ErrRuntimeUnavailable):
+		status = http.StatusServiceUnavailable
+		problem.Code = "EXTENSION_RUNTIME_UNAVAILABLE"
+		problem.Message = "A required Record lifecycle Extension is unavailable; no Profile or Credential was committed."
+	case errors.Is(err, recordlifecycle.ErrRejected):
+		status = http.StatusUnprocessableEntity
+		problem.Code = "CHANGE_REJECTED_BY_EXTENSION"
+		problem.Message = "A Record lifecycle Extension rejected this profile change."
+	case errors.Is(err, recordlifecycle.ErrBudgetExceeded):
+		status = http.StatusUnprocessableEntity
+		problem.Code = "EXTENSION_BUDGET_EXCEEDED"
+		problem.Message = "A Record lifecycle Extension exceeded its execution budget; no Profile or Credential was committed."
+	case errors.Is(err, recordlifecycle.ErrInvalidOutput):
+		status = http.StatusUnprocessableEntity
+		problem.Code = "VALIDATION_FAILED"
+		problem.Message = "A Record lifecycle Extension returned values that do not match the Applied Model."
 	case errors.Is(err, recordevents.ErrEventTooLarge):
 		status = http.StatusRequestEntityTooLarge
 		problem.Code = "PAYLOAD_TOO_LARGE"

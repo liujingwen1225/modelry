@@ -16,6 +16,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 )
@@ -362,6 +363,14 @@ func writeError(w http.ResponseWriter, request *http.Request, err error) {
 	problem := httpapi.APIError{Message: "Application request could not be completed", Details: map[string]any{}}
 	status := http.StatusInternalServerError
 	switch {
+	case errors.Is(err, recordlifecycle.ErrRuntimeUnavailable):
+		status, problem.Code, problem.Message = http.StatusServiceUnavailable, "EXTENSION_RUNTIME_UNAVAILABLE", "A required Record lifecycle Extension is unavailable; no Record change was committed."
+	case errors.Is(err, recordlifecycle.ErrRejected):
+		status, problem.Code, problem.Message = http.StatusUnprocessableEntity, "CHANGE_REJECTED_BY_EXTENSION", "A Record lifecycle Extension rejected this change."
+	case errors.Is(err, recordlifecycle.ErrBudgetExceeded):
+		status, problem.Code, problem.Message = http.StatusUnprocessableEntity, "EXTENSION_BUDGET_EXCEEDED", "A Record lifecycle Extension exceeded its execution budget; no Record change was committed."
+	case errors.Is(err, recordlifecycle.ErrInvalidOutput):
+		status, problem.Code, problem.Message = http.StatusUnprocessableEntity, "VALIDATION_FAILED", "A Record lifecycle Extension returned values that do not match the Applied Model."
 	case errors.Is(err, recordevents.ErrEventTooLarge):
 		status, problem.Code, problem.Message = http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "This Record change exceeds the 1 MiB durable Event limit. Reduce the changed values and retry."
 	case errors.Is(err, errPayloadTooLarge):

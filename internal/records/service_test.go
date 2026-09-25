@@ -163,6 +163,10 @@ func (allowAllTestEvaluator) Evaluate(context.Context, string, authorization.Ope
 	return authorization.Decision{Allowed: true}, nil
 }
 
+func (allowAllTestEvaluator) EvaluateInTransaction(context.Context, storage.Executor, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
+	return authorization.Decision{Allowed: true}, nil
+}
+
 func TestAuthCollectionGenericAdminWritesRequireAuthUserFlow(t *testing.T) {
 	ctx := context.Background()
 	store, models, adminRecords := newTestServices(t)

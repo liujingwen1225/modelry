@@ -13,6 +13,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -39,6 +40,7 @@ type Service struct {
 	sessions  authorization.SessionAuthenticator
 	files     *LocalFileStore
 	events    *recordevents.Service
+	lifecycle recordlifecycle.Hooks
 }
 
 type Option func(*Service)
@@ -54,6 +56,12 @@ func WithAuthorization(evaluator authorization.Evaluator, sessions authorization
 func WithRecordEvents(events *recordevents.Service) Option {
 	return func(service *Service) {
 		service.events = events
+	}
+}
+
+func WithLifecycleHooks(hooks recordlifecycle.Hooks) Option {
+	return func(service *Service) {
+		service.lifecycle = hooks
 	}
 }
 
@@ -192,48 +200,30 @@ func (service *Service) Create(ctx context.Context, collectionID string, values 
 }
 
 func (service *Service) create(ctx context.Context, collectionID string, values map[string]any, applicationWrite bool) (Record, error) {
-	model, err := service.loadModel(ctx, collectionID)
+	return service.createWithPrincipal(ctx, collectionID, values, applicationWrite, nil)
+}
+
+func (service *Service) createWithPrincipal(ctx context.Context, collectionID string, values map[string]any, applicationWrite bool, principal *authorization.Principal) (Record, error) {
+	prepared, err := service.prepareCreate(ctx, collectionID, values, applicationWrite, principal)
 	if err != nil {
 		return Record{}, err
 	}
-	if !applicationWrite && model.collection.Type == backendmodel.CollectionTypeAuth {
-		return Record{}, ErrAuthCollectionWriteRequiresAuthAPI
-	}
-	validated, err := backendmodel.ValidateRecordValues(model.collection, values)
-	if err != nil {
-		return Record{}, mapModelError(err)
-	}
-	fillOptionalValues(model.collection, validated)
-	if err := validateFileValues(model.collection, validated); err != nil {
-		return Record{}, err
-	}
-	releaseFiles, err := service.prepareFileValues(model.collection, validated)
+	releaseFiles, err := service.prepareFileValues(prepared.model.collection, prepared.values)
 	if err != nil {
 		return Record{}, err
 	}
 	defer releaseFiles()
-	targets, err := service.relationTargets(ctx, model)
-	if err != nil {
-		return Record{}, err
-	}
-	id, err := newRecordID()
-	if err != nil {
-		return Record{}, err
-	}
 	var record Record
+	var event recordevents.Event
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
-		occurredAt := service.now().UTC()
-		now := occurredAt.Format(time.RFC3339Nano)
-		record = Record{ID: id, CreatedAt: now, UpdatedAt: now, Values: validated}
-		if err := createInTransaction(ctx, tx, model, targets, record); err != nil {
-			return err
-		}
-		return service.appendRecordEvent(ctx, tx, model, recordevents.Created, Record{}, record, occurredAt)
+		var createErr error
+		record, event, createErr = service.persistPreparedCreate(ctx, tx, prepared, true)
+		return createErr
 	})
 	if err != nil {
 		return Record{}, err
 	}
-	service.PublishRecordEventsCommitted(collectionID)
+	service.completeCommittedMutation(ctx, event)
 	return record, nil
 }
 
@@ -242,6 +232,9 @@ func (service *Service) create(ctx context.Context, collectionID string, values 
 func (service *Service) CreateInTransaction(ctx context.Context, tx storage.Executor, collectionID string, values map[string]any) (Record, error) {
 	if tx == nil {
 		return Record{}, fmt.Errorf("%w: caller transaction is required", ErrInvalidArgument)
+	}
+	if service.lifecycle != nil {
+		return Record{}, ErrLifecyclePreparationRequired
 	}
 	model, err := service.loadModel(ctx, collectionID)
 	if err != nil {
@@ -273,7 +266,7 @@ func (service *Service) CreateInTransaction(ctx context.Context, tx storage.Exec
 	if err := createInTransaction(ctx, tx, model, targets, record); err != nil {
 		return Record{}, err
 	}
-	if err := service.appendRecordEvent(ctx, tx, model, recordevents.Created, Record{}, record, occurredAt); err != nil {
+	if _, err := service.appendRecordEvent(ctx, tx, model, recordevents.Created, Record{}, record, occurredAt); err != nil {
 		return Record{}, err
 	}
 	return record, nil
@@ -301,6 +294,10 @@ func (service *Service) Update(ctx context.Context, collectionID, recordID strin
 }
 
 func (service *Service) update(ctx context.Context, collectionID, recordID string, values map[string]any, applicationWrite bool) (Record, error) {
+	return service.updateWithPrincipal(ctx, collectionID, recordID, values, applicationWrite, nil)
+}
+
+func (service *Service) updateWithPrincipal(ctx context.Context, collectionID, recordID string, values map[string]any, applicationWrite bool, principal *authorization.Principal) (Record, error) {
 	if values == nil {
 		return Record{}, fmt.Errorf("%w: values are required", ErrInvalidArgument)
 	}
@@ -315,33 +312,84 @@ func (service *Service) update(ctx context.Context, collectionID, recordID strin
 	if err != nil {
 		return Record{}, err
 	}
+	var previous Record
+	err = service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		if err := verifyModel(ctx, snapshot, model); err != nil {
+			return err
+		}
+		var readErr error
+		previous, readErr = getRecord(ctx, snapshot, model, recordID)
+		return readErr
+	})
+	if err != nil {
+		return Record{}, err
+	}
+	merged := make(map[string]any, len(previous.Values)+len(values))
+	for key, value := range previous.Values {
+		merged[key] = value
+	}
+	for key, value := range values {
+		merged[key] = value
+	}
+	validated, err := backendmodel.ValidateRecordValues(model.collection, merged)
+	if err != nil {
+		return Record{}, mapModelError(err)
+	}
+	fillOptionalValues(model.collection, validated)
+	if err := validateFileValues(model.collection, validated); err != nil {
+		return Record{}, err
+	}
+	previousSnapshot, err := recordSnapshot(previous)
+	if err != nil {
+		return Record{}, err
+	}
+	if service.lifecycle != nil {
+		validated, err = service.lifecycle.Before(ctx, recordlifecycle.BeforeChange{
+			CollectionID: collectionID,
+			RecordID:     previous.ID,
+			Operation:    recordlifecycle.Update,
+			ModelVersion: model.collection.SchemaVersion,
+			Values:       cloneValues(validated),
+			Previous:     previousSnapshot,
+		})
+		if err != nil {
+			return Record{}, err
+		}
+		validated, err = backendmodel.ValidateRecordValues(model.collection, validated)
+		if err != nil {
+			return Record{}, mapModelError(err)
+		}
+		fillOptionalValues(model.collection, validated)
+		if err := validateFileValues(model.collection, validated); err != nil {
+			return Record{}, err
+		}
+	}
+	if principal != nil && service.lifecycle != nil {
+		if err := service.authorize(ctx, collectionID, authorization.OperationUpdate, *principal, &authorization.Record{ID: previous.ID, Values: validated}); err != nil {
+			return Record{}, err
+		}
+	}
 	if service.files != nil {
 		service.files.mu.Lock()
 		defer service.files.mu.Unlock()
 	}
 	var updated Record
+	var event recordevents.Event
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		if err := verifyModel(ctx, tx, model); err != nil {
 			return err
 		}
-		previous, err := getRecord(ctx, tx, model, recordID)
+		current, err := getRecord(ctx, tx, model, recordID)
 		if err != nil {
 			return err
 		}
-		merged := make(map[string]any, len(previous.Values)+len(values))
-		for key, value := range previous.Values {
-			merged[key] = value
+		if !sameRecordState(previous, current) {
+			return fmt.Errorf("%w: Record changed while the lifecycle Hook was running; retry the operation", ErrConflict)
 		}
-		for key, value := range values {
-			merged[key] = value
-		}
-		validated, err := backendmodel.ValidateRecordValues(model.collection, merged)
-		if err != nil {
-			return mapModelError(err)
-		}
-		fillOptionalValues(model.collection, validated)
-		if err := validateFileValues(model.collection, validated); err != nil {
-			return err
+		if principal != nil {
+			if err := service.authorizeInTransaction(ctx, tx, collectionID, authorization.OperationUpdate, *principal, authorizedRecord(current)); err != nil {
+				return err
+			}
 		}
 		if err := service.prepareFileValuesLocked(model.collection, validated); err != nil {
 			return err
@@ -369,19 +417,23 @@ func (service *Service) update(ctx context.Context, collectionID, recordID strin
 		if count != 1 {
 			return fmt.Errorf("%w: Record does not exist", ErrNotFound)
 		}
-		return service.appendRecordEvent(ctx, tx, model, recordevents.Updated, previous, updated, occurredAt)
+		event, err = service.appendRecordEvent(ctx, tx, model, recordevents.Updated, previous, updated, occurredAt)
+		if err != nil {
+			return err
+		}
+		return service.appendAfterIntent(ctx, tx, event)
 	})
 	if err == nil {
-		service.PublishRecordEventsCommitted(collectionID)
+		service.completeCommittedMutation(ctx, event)
 	}
 	return updated, err
 }
 
 func (service *Service) Delete(ctx context.Context, collectionID, recordID string) error {
-	return service.delete(ctx, collectionID, recordID, false)
+	return service.delete(ctx, collectionID, recordID, false, nil)
 }
 
-func (service *Service) delete(ctx context.Context, collectionID, recordID string, applicationWrite bool) error {
+func (service *Service) delete(ctx context.Context, collectionID, recordID string, applicationWrite bool, principal *authorization.Principal) error {
 	model, err := service.loadModel(ctx, collectionID)
 	if err != nil {
 		return err
@@ -393,13 +445,49 @@ func (service *Service) delete(ctx context.Context, collectionID, recordID strin
 	if err != nil {
 		return err
 	}
+	var previous Record
+	err = service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		if err := verifyModel(ctx, snapshot, model); err != nil {
+			return err
+		}
+		var readErr error
+		previous, readErr = getRecord(ctx, snapshot, model, recordID)
+		return readErr
+	})
+	if err != nil {
+		return err
+	}
+	previousSnapshot, err := recordSnapshot(previous)
+	if err != nil {
+		return err
+	}
+	if service.lifecycle != nil {
+		if _, err := service.lifecycle.Before(ctx, recordlifecycle.BeforeChange{
+			CollectionID: collectionID,
+			RecordID:     previous.ID,
+			Operation:    recordlifecycle.Delete,
+			ModelVersion: model.collection.SchemaVersion,
+			Previous:     previousSnapshot,
+		}); err != nil {
+			return err
+		}
+	}
+	var event recordevents.Event
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		if err := verifyModel(ctx, tx, model); err != nil {
 			return err
 		}
-		previous, err := getRecord(ctx, tx, model, recordID)
+		current, err := getRecord(ctx, tx, model, recordID)
 		if err != nil {
 			return err
+		}
+		if !sameRecordState(previous, current) {
+			return fmt.Errorf("%w: Record changed while the lifecycle Hook was running; retry the operation", ErrConflict)
+		}
+		if principal != nil {
+			if err := service.authorizeInTransaction(ctx, tx, collectionID, authorization.OperationDelete, *principal, authorizedRecord(current)); err != nil {
+				return err
+			}
 		}
 		if err := ensureNoReferences(ctx, tx, collectionID, recordID, references); err != nil {
 			return err
@@ -419,37 +507,41 @@ func (service *Service) delete(ctx context.Context, collectionID, recordID strin
 		if count != 1 {
 			return fmt.Errorf("%w: Record does not exist", ErrNotFound)
 		}
-		return service.appendRecordEvent(ctx, tx, model, recordevents.Deleted, previous, Record{}, service.now().UTC())
+		event, err = service.appendRecordEvent(ctx, tx, model, recordevents.Deleted, previous, Record{}, service.now().UTC())
+		if err != nil {
+			return err
+		}
+		return service.appendAfterIntent(ctx, tx, event)
 	})
 	if err == nil {
-		service.PublishRecordEventsCommitted(collectionID)
+		service.completeCommittedMutation(ctx, event)
 	}
 	return err
 }
 
-func (service *Service) appendRecordEvent(ctx context.Context, tx storage.Executor, model appliedModel, eventType recordevents.Type, before, after Record, occurredAt time.Time) error {
+func (service *Service) appendRecordEvent(ctx context.Context, tx storage.Executor, model appliedModel, eventType recordevents.Type, before, after Record, occurredAt time.Time) (recordevents.Event, error) {
 	if service.events == nil {
-		return nil
+		return recordevents.Event{}, nil
 	}
 	var beforeSnapshot, afterSnapshot map[string]any
 	var err error
 	if before.ID != "" {
 		beforeSnapshot, err = recordSnapshot(before)
 		if err != nil {
-			return err
+			return recordevents.Event{}, err
 		}
 	}
 	if after.ID != "" {
 		afterSnapshot, err = recordSnapshot(after)
 		if err != nil {
-			return err
+			return recordevents.Event{}, err
 		}
 	}
 	recordID := after.ID
 	if recordID == "" {
 		recordID = before.ID
 	}
-	return service.events.AppendInTransaction(ctx, tx, recordevents.Mutation{
+	return service.events.AppendEventInTransaction(ctx, tx, recordevents.Mutation{
 		CollectionID:  model.collection.ID,
 		RecordID:      recordID,
 		Type:          eventType,

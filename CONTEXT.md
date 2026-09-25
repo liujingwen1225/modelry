@@ -129,6 +129,29 @@ _Avoid_：SQLite Row ID、Request ID
 **Event Cursor**：标识订阅者从一个 Collection 事件序列继续接收的位置。它通常取最近已接收 Event 的 Event ID；首次订阅时使用独立的 Collection-scoped cursor 表示建立订阅时的序列边界。不同 Collection 之间不承诺一个可观察的全序。
 _Avoid_：Page Cursor、Request ID
 
+## Extensions, Lifecycle Hooks, and Secrets
+
+**Extension**：Project 中由 Owner 管理的一份可版本化脚本资源，可为 Collection Record 生命周期绑定受控处理函数。Extension 不是普通 Record、Go Plugin 或可访问 Runtime 内部状态的通道。
+_Avoid_：Plugin（容易暗示任意进程能力）、Script File（未表达受控边界）
+
+**Lifecycle Hook**：Extension 在一个 Collection 的 Record Create、Update 或 Delete 流程中收到的明确调用。Pre-commit Hook 可以验证或修改本次待提交 Record；Post-commit Hook 在耐久提交后运行，可执行外部副作用，但其失败不撤销该变更。
+_Avoid_：SQLite Trigger、Database Hook（泄漏实现细节）、Transactional Hook（容易误示外部副作用可回滚）
+
+**Secret**：Project 中供获准 Extension 使用的敏感配置值。它与 Record、RequestRecord、AuditRecord 分开管理；Owner 写入后不能再次读取原值。
+_Avoid_：Secret Record、Credential（与身份认证凭证混淆）、Environment Variable（隐去归属与访问范围）
+
+### Extension Product Semantics
+
+Extension 是 Project 中的一份 JavaScript 或 TypeScript 程序。每次激活都会形成一个不可变 Revision；Collection 绑定指向明确的活动 Revision。Owner 可停用 Extension 或替换为新 Revision。V0.1.x 不支持从磁盘、npm 或网络导入代码。
+
+Lifecycle Hook 分为 `beforeCreate`、`beforeUpdate`、`beforeDelete` 与 `afterCommitCreate`、`afterCommitUpdate`、`afterCommitDelete`。每个 Collection 操作的每个阶段至多有一个启用的绑定，因此执行顺序明确。Before Hook 只接收本次待变更 Record 和 Applied Model 上下文，可以拒绝或返回 Record 修改；它不访问 Secret 或网络。验证与 Hook 均成功后，Runtime 才提交 Record 与 Record Event。Hook 拒绝、执行失败、超时或修改后验证失败时，Record 与 Event 均不改变。
+
+After-commit Hook 消费事务中记录的不可变提交事实，只运行一次；它不能修改或撤销已提交 Record，失败也不改变 Record mutation 的成功结果。意图与 Record Event 同事务耐久写入，并固定当时的 Extension Revision、Binding、Secret 别名映射、Origin 授权和 Event ID；重启后未完成项标记为中断，不自动重试。停用、撤销或删除依赖项会取消尚未开始的对应意图；运行中取消尽力而为。仅此阶段可读取明确绑定给该 Extension 的 Secret 别名，并可使用 Owner 明确授予的 HTTPS Origin；请求有时限、并发数和字节上限，不能访问本机或私有网络地址。
+
+Secret 的原值只在创建或替换时由 Owner 输入。管理列表、详情、Audit、RequestRecord、普通 Record、Hook Run 与运行时错误只显示元数据或配置状态。加密密钥缺失、无效或无法通过本机文件权限检查时，依赖 Secret 的 Hook 失败关闭；不得生成新密钥继续运行。
+
+Hook Run 记录阶段、Extension Revision、绑定、开始/结束时间和安全错误类别，不记录源异常、Guest 自定义消息、脚本 stdout、HTTP 请求/响应内容或 Secret。Extension 配置的绑定槽位冲突会在启用时原子拒绝，Extension 保持停用。
+
 **Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event Cursor 继续接收。
 _Avoid_：Record polling、Activity Timeline
 

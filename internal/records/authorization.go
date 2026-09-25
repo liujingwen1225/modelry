@@ -11,6 +11,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
 type PolicyDeniedError struct {
@@ -61,6 +62,26 @@ func (service *Service) authorize(ctx context.Context, collectionID string, oper
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPolicyEvaluation, err)
 	}
+	return checkAuthorizationDecision(decision)
+}
+
+type transactionalEvaluator interface {
+	EvaluateInTransaction(context.Context, storage.Executor, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error)
+}
+
+func (service *Service) authorizeInTransaction(ctx context.Context, tx storage.Executor, collectionID string, operation authorization.Operation, principal authorization.Principal, record *authorization.Record) error {
+	evaluator, ok := service.evaluator.(transactionalEvaluator)
+	if !ok {
+		return fmt.Errorf("%w: policy evaluator cannot use the mutation transaction", ErrPolicyEvaluation)
+	}
+	decision, err := evaluator.EvaluateInTransaction(ctx, tx, collectionID, operation, principal, record)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrPolicyEvaluation, err)
+	}
+	return checkAuthorizationDecision(decision)
+}
+
+func checkAuthorizationDecision(decision authorization.Decision) error {
 	if !decision.Allowed {
 		if decision.Code == "" {
 			decision.Code = "POLICY_DENIED"
@@ -183,18 +204,7 @@ func (service *Service) OpenFileApplication(ctx context.Context, collectionID, r
 }
 
 func (service *Service) CreateApplication(ctx context.Context, collectionID string, values map[string]any, principal authorization.Principal) (Record, error) {
-	model, err := service.loadModel(ctx, collectionID)
-	if err != nil {
-		return Record{}, err
-	}
-	validated, err := service.validateWriteValues(model, values)
-	if err != nil {
-		return Record{}, err
-	}
-	if err := service.authorize(ctx, collectionID, authorization.OperationCreate, principal, &authorization.Record{Values: validated}); err != nil {
-		return Record{}, err
-	}
-	return service.create(ctx, collectionID, values, true)
+	return service.createWithPrincipal(ctx, collectionID, values, true, &principal)
 }
 
 func (service *Service) UpdateApplication(ctx context.Context, collectionID, recordID string, values map[string]any, principal authorization.Principal) (Record, error) {
@@ -205,7 +215,7 @@ func (service *Service) UpdateApplication(ctx context.Context, collectionID, rec
 	if err := service.authorize(ctx, collectionID, authorization.OperationUpdate, principal, authorizedRecord(previous)); err != nil {
 		return Record{}, err
 	}
-	return service.update(ctx, collectionID, recordID, values, true)
+	return service.updateWithPrincipal(ctx, collectionID, recordID, values, true, &principal)
 }
 
 func (service *Service) DeleteApplication(ctx context.Context, collectionID, recordID string, principal authorization.Principal) error {
@@ -216,7 +226,7 @@ func (service *Service) DeleteApplication(ctx context.Context, collectionID, rec
 	if err := service.authorize(ctx, collectionID, authorization.OperationDelete, principal, authorizedRecord(record)); err != nil {
 		return err
 	}
-	return service.delete(ctx, collectionID, recordID, true)
+	return service.delete(ctx, collectionID, recordID, true, &principal)
 }
 
 func (service *Service) validateWriteValues(model appliedModel, values map[string]any) (map[string]any, error) {

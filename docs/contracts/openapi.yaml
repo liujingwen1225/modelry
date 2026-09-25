@@ -49,7 +49,327 @@ tags:
     description: Register and authenticate App Users and manage their Application Sessions.
   - name: Realtime
     description: Subscribe to authorized, committed Collection Record Events over Server-Sent Events.
+  - name: Extensions
+    description: Manage Owner-authored lifecycle Extensions and safe Hook Run history.
+  - name: Secrets
+    description: Manage write-only Project Secrets for explicitly authorized Extensions.
 paths:
+  '/admin/api/v1/extensions':
+    get:
+      tags: [Extensions]
+      operationId: listExtensions
+      summary: List Project Extensions
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension metadata; source is available only from the detail endpoint.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Extensions]
+      operationId: createExtension
+      summary: Create a disabled Extension
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionCreateRequest'
+      responses:
+        '201':
+          description: Created Extension and first active Revision. It is disabled by default.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+    get:
+      tags: [Extensions]
+      operationId: getExtension
+      summary: Read Extension configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension source and configuration without Secret values.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Extensions]
+      operationId: replaceExtension
+      summary: Replace and validate Extension configuration
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionReplaceRequest'
+      responses:
+        '200':
+          description: Validated configuration and newly activated immutable Revision.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionDetailResponse'
+        '409':
+          $ref: '#/components/responses/ExtensionBindingConflict'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+    post:
+      tags: [Extensions]
+      operationId: enableExtension
+      summary: Enable future Extension invocations
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension is enabled. No past events are replayed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionStatusResponse'
+        '409':
+          $ref: '#/components/responses/ExtensionBindingConflict'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+    post:
+      tags: [Extensions]
+      operationId: disableExtension
+      summary: Disable new Extension invocations
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension is disabled and unstarted matching intents are cancelled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/runs':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    get:
+      tags: [Extensions]
+      operationId: listExtensionRuns
+      summary: List safe Hook Run history
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Hook Run metadata without inputs, outputs, exceptions, HTTP content or Secrets.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionRunListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/runs/{runId}':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Extensions]
+      operationId: getExtensionRun
+      summary: Read safe Hook Run details
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Safe Hook Run metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionRunResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/secrets':
+    get:
+      tags: [Secrets]
+      operationId: listSecrets
+      summary: List Secret metadata
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Secret names and configured state only.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Secrets]
+      operationId: createSecret
+      summary: Create a write-only Secret
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretCreateRequest'
+      responses:
+        '201':
+          description: Secret metadata only. The value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/secrets/{secretId}':
+    parameters:
+      - $ref: '#/components/parameters/SecretId'
+    patch:
+      tags: [Secrets]
+      operationId: renameSecret
+      summary: Rename a Secret without reading or replacing its value
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretRenameRequest'
+      responses:
+        '200':
+          description: Updated Secret metadata only.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [Secrets]
+      operationId: deleteSecret
+      summary: Revoke and delete a Secret
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Secret deleted; value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/secrets/{secretId}/value':
+    parameters:
+      - $ref: '#/components/parameters/SecretId'
+    put:
+      tags: [Secrets]
+      operationId: replaceSecretValue
+      summary: Replace a write-only Secret value
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretWriteValueRequest'
+      responses:
+        '200':
+          description: Secret metadata only. The value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
   '/admin/api/v1/bootstrap/status':
     get:
       tags: [Bootstrap]
@@ -2206,6 +2526,24 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    ExtensionId:
+      name: extensionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    SecretId:
+      name: secretId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
     RequestId:
       name: requestId
       in: path
@@ -2277,6 +2615,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    ExtensionBindingConflict:
+      description: A configured binding is occupied. Details identify the Collection, operation, and phase. The Extension stays disabled or its prior configuration remains active.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     ApplicationError:
       description: Structured Application error response with the canonical request ID and RequestRecord persistence status.
       headers:
@@ -2314,6 +2661,10 @@ components:
       type: string
       pattern: '^req_[A-Za-z0-9_-]{8,}$'
       description: Canonical server-generated ID shared by response header, Error and RequestRecord.
+    ExtensionCorrelationId:
+      type: string
+      pattern: '^cor_[a-f0-9]{36}$'
+      description: Server-generated correlation identity shared by related Extension Hook Runs.
     RealtimeEventID:
       type: string
       pattern: '^evt_[A-Za-z0-9_-]+_(?!0{20}$)[0-9]{20}$'
@@ -2380,7 +2731,7 @@ components:
       properties:
         code:
           type: string
-          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, EVENT_CURSOR_INVALID, EVENT_CURSOR_EXPIRED, STREAM_CAPACITY_REACHED, STREAM_UNAVAILABLE, ACCESS_RULE_UNAVAILABLE, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, INTERNAL_ERROR]
+          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, EVENT_CURSOR_INVALID, EVENT_CURSOR_EXPIRED, STREAM_CAPACITY_REACHED, STREAM_UNAVAILABLE, ACCESS_RULE_UNAVAILABLE, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, EXTENSION_RUNTIME_UNAVAILABLE, CHANGE_REJECTED_BY_EXTENSION, EXTENSION_BUDGET_EXCEEDED, BINDING_CONFLICT, SECRET_KEY_UNAVAILABLE, SECRET_NOT_AVAILABLE, ORIGIN_NOT_ALLOWED, INTERNAL_ERROR]
         message:
           type: string
           description: Human-readable message without stack traces, SQL, credentials, sensitive body content, or anonymous diagnostic paths.
@@ -2396,6 +2747,16 @@ components:
       type: object
       description: Structured details; anonymous diagnostic error details must omit absolute Project Root paths and secrets.
       properties:
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        operation:
+          type: string
+          enum: [create, update, delete]
+          description: Occupied Extension Binding operation.
+        phase:
+          type: string
+          enum: [before, afterCommit]
+          description: Occupied Extension Binding phase.
         violations:
           type: array
           items:
@@ -3457,3 +3818,331 @@ components:
             $ref: '#/components/schemas/AuditRecord'
         nextCursor:
           type: string
+    ExtensionSummary:
+      type: object
+      required: [id, name, language, activeRevision, enabled, bindingCount, secretBindingCount, originGrantCount, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        language:
+          type: string
+          enum: [javascript, typescript]
+        activeRevision:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        bindingCount:
+          type: integer
+          minimum: 0
+        secretBindingCount:
+          type: integer
+          minimum: 0
+        originGrantCount:
+          type: integer
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    ExtensionBinding:
+      type: object
+      required: [collectionId, operation, phase]
+      properties:
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        operation:
+          type: string
+          enum: [create, update, delete]
+        phase:
+          type: string
+          enum: [before, afterCommit]
+      additionalProperties: false
+    ExtensionSecretBinding:
+      type: object
+      required: [alias, secretId, secretName, configured]
+      properties:
+        alias:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$'
+        secretId:
+          $ref: '#/components/schemas/Id'
+        secretName:
+          type: string
+        configured:
+          type: boolean
+      additionalProperties: false
+    ExtensionDetail:
+      type: object
+      required: [id, name, language, activeRevision, enabled, bindingCount, secretBindingCount, originGrantCount, source, bindings, secretBindings, allowedOrigins, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        language:
+          type: string
+          enum: [javascript, typescript]
+        activeRevision:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        bindingCount:
+          type: integer
+          minimum: 0
+        secretBindingCount:
+          type: integer
+          minimum: 0
+        originGrantCount:
+          type: integer
+          minimum: 0
+        source:
+          type: string
+          maxLength: 262144
+        bindings:
+          type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ExtensionBinding'
+        secretBindings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionSecretBinding'
+        allowedOrigins:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            format: uri
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    ExtensionCreateRequest:
+      type: object
+      required: [name, language, source]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        language:
+          type: string
+          enum: [javascript, typescript]
+        source:
+          type: string
+          minLength: 1
+          maxLength: 262144
+          x-max-utf8-bytes: 262144
+          description: Standalone source, limited by UTF-8 encoded byte length.
+      additionalProperties: false
+    ExtensionReplaceRequest:
+      type: object
+      required: [name, language, source, bindings, secretBindings, allowedOrigins]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        language:
+          type: string
+          enum: [javascript, typescript]
+        source:
+          type: string
+          minLength: 1
+          maxLength: 262144
+          x-max-utf8-bytes: 262144
+          description: Standalone source, limited by UTF-8 encoded byte length.
+        bindings:
+          type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ExtensionBinding'
+        secretBindings:
+          type: array
+          items:
+            type: object
+            required: [alias, secretId]
+            properties:
+              alias:
+                type: string
+                pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$'
+              secretId:
+                $ref: '#/components/schemas/Id'
+            additionalProperties: false
+        allowedOrigins:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            format: uri
+      additionalProperties: false
+    ExtensionDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ExtensionDetail'
+      additionalProperties: false
+    ExtensionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionSummary'
+      additionalProperties: false
+    ExtensionStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    ExtensionRun:
+      type: object
+      required: [runId, extensionId, revision, collectionId, operation, phase, status, startedAt, errorCode, correlationId]
+      properties:
+        runId:
+          $ref: '#/components/schemas/Id'
+        extensionId:
+          $ref: '#/components/schemas/Id'
+        revision:
+          type: integer
+          minimum: 1
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        recordId:
+          $ref: '#/components/schemas/Id'
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        operation:
+          type: string
+          enum: [create, update, delete]
+        phase:
+          type: string
+          enum: [before, afterCommit]
+        status:
+          type: string
+          enum: [pending, running, succeeded, rejected, failed, interrupted, cancelled]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: string
+          enum: [none, extensionDisabled, bindingOrGrantRevoked, secretRevoked, invocationCancelled, extensionRuntimeUnavailable, budgetExceeded, capacityExceeded, changeRejected, invalidOutput, secretNotAvailable, secretKeyUnavailable, originNotAllowed, externalRequestFailed, runtimeRestarted, hookFailed]
+        correlationId:
+          $ref: '#/components/schemas/ExtensionCorrelationId'
+      additionalProperties: false
+    ExtensionRunResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ExtensionRun'
+      additionalProperties: false
+    ExtensionRunListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ExtensionRun'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    SecretMetadata:
+      type: object
+      required: [id, name, configured, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        configured:
+          type: boolean
+          const: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    SecretCreateRequest:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        value:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          x-max-utf8-bytes: 16384
+          description: Write-only Secret value, limited by UTF-8 encoded byte length.
+          writeOnly: true
+      additionalProperties: false
+    SecretWriteValueRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          x-max-utf8-bytes: 16384
+          description: Write-only Secret value, limited by UTF-8 encoded byte length.
+          writeOnly: true
+      additionalProperties: false
+    SecretRenameRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+      additionalProperties: false
+    SecretResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/SecretMetadata'
+      additionalProperties: false
+    SecretListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecretMetadata'
+      additionalProperties: false
