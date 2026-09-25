@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
@@ -216,6 +217,48 @@ func TestPortabilityCLIRestoreIsAllOrNothing(t *testing.T) {
 	defer reopened.Close()
 	if count, err := reopened.ProjectedRecordCount(context.Background()); err != nil || count != 1 {
 		t.Fatalf("Records after a failed restore = %d (%v), want 1", count, err)
+	}
+}
+
+// TestPortabilityCLIRefusesToBackupOrGenerateDuringAnInterruptedRestore 证明一个半恢复
+// 的项目不会被 CLI 当成空项目打开：那会创建一个全新的空项目，并产出一份看起来合法、
+// 实际是空的备份。
+func TestPortabilityCLIRefusesToBackupOrGenerateDuringAnInterruptedRestore(t *testing.T) {
+	source := newCLIProject(t, []byte("attachment-bytes"))
+	journal := filepath.Join(source.managed, portability.RestoreJournalName)
+	if err := os.WriteFile(journal, []byte(`{"op":"absent","dest":"nowhere"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundlePath := filepath.Join(source.root, "bundle.tar")
+
+	var backupOut, backupErr bytes.Buffer
+	if code := run([]string{"backup", "--project-root", source.root, "--out", bundlePath}, &backupOut, &backupErr); code == 0 {
+		t.Fatal("backup succeeded during an interrupted restore")
+	}
+	if !strings.Contains(backupErr.String(), "interrupted restore") {
+		t.Fatalf("backup error = %s", backupErr.String())
+	}
+	if _, err := os.Stat(bundlePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a refused backup still wrote a bundle: %v", err)
+	}
+
+	var generateOut, generateErr bytes.Buffer
+	if code := run([]string{"generate", "--project-root", source.root, "--out", t.TempDir()}, &generateOut, &generateErr); code == 0 {
+		t.Fatal("generate succeeded during an interrupted restore")
+	}
+	if !strings.Contains(generateErr.String(), "interrupted restore") {
+		t.Fatalf("generate error = %s", generateErr.String())
+	}
+
+	// 收敛之后同一个项目必须恢复可用。
+	if err := os.Remove(journal); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"backup", "--project-root", source.root, "--out", bundlePath}, &backupOut, &backupErr); code != 0 {
+		t.Fatalf("backup after the journal was cleared exited %d: %s", code, backupErr.String())
+	}
+	if _, err := os.Stat(bundlePath); err != nil {
+		t.Fatalf("backup after the journal was cleared produced no bundle: %v", err)
 	}
 }
 
