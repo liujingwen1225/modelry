@@ -20,6 +20,7 @@ import { MailPage } from './mail/pages';
 import { ActivityPage } from './activity/pages';
 import { DriftPage } from './drift/pages';
 import { RuntimeSettingsPage } from './settings/pages';
+import { PortabilityPage } from './portability/pages';
 
 function NotFoundPage() {
   return (
@@ -95,6 +96,7 @@ function AuthenticatedWorkspace() {
         <Route element={<ActivityPage />} path="/activity" />
         <Route element={<DriftPage />} path="/settings/drift" />
         <Route element={<RuntimeSettingsPage />} path="/settings/runtime" />
+        <Route element={<PortabilityPage />} path="/settings/portability" />
         <Route element={<AdministratorsPage />} path="/administrators" />
         <Route element={<AuthenticatedRedirect />} path="/login" />
         <Route element={<NotFoundPage />} path="*" />

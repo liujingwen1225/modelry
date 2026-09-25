@@ -83,7 +83,7 @@ describe('Modelry Admin shell', () => {
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Activity', 'Automations', 'Extensions', 'Secrets', 'Settings', 'Drift', 'Runtime settings', 'Administrators', 'Mail',
+      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Activity', 'Automations', 'Extensions', 'Secrets', 'Settings', 'Drift', 'Runtime settings', 'Developer and portability', 'Administrators', 'Mail',
     ]);
     // #27 交付了 V0.1 曾延后的 Activity 面，因此这里断言入口存在。
     expect(navigation).toHaveTextContent(/Activity/);

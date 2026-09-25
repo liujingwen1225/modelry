@@ -23,7 +23,7 @@ describe('Owner session provider', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(Response.json({
         owner: { id: 'owner_42', email: 'dev@example.com' },
-        expiresAt: '2026-09-25T10:00:00Z',
+        expiresAt: '2030-01-01T00:00:00Z',
         role: 'owner',
         permission: { preset: 'fullAccess' },
       }))
