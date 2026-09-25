@@ -49,7 +49,7 @@ func (service *Service) ReplaceWebhook(ctx context.Context, webhookID string, in
 		if count == 0 {
 			return ErrNotFound
 		}
-		return nil
+		return service.appendAudit(ctx, tx, "webhook.updated", "webhook", webhookID)
 	})
 	if err != nil {
 		return Webhook{}, err
@@ -78,7 +78,7 @@ func (service *Service) EnableWebhook(ctx context.Context, webhookID string) (We
 			return err
 		}
 		result = WebhookStatus{ID: webhookID, Enabled: true}
-		return nil
+		return service.appendAudit(ctx, tx, "webhook.enabled", "webhook", webhookID)
 	})
 	return result, err
 }
@@ -101,7 +101,7 @@ func (service *Service) DisableWebhook(ctx context.Context, webhookID string) (W
 			return err
 		}
 		result = WebhookStatus{ID: webhookID, Enabled: false}
-		return nil
+		return service.appendAudit(ctx, tx, "webhook.disabled", "webhook", webhookID)
 	})
 	if err == nil {
 		service.cancelWebhook(webhookID, false)

@@ -93,6 +93,7 @@ When a new Event Hook, Job, or synthetic test intent exceeds a pending or payloa
 - The URL itself cannot carry credentials. URL query, response body, response headers, HTTP request body, Authorization values, signing value, and full target URL are excluded from delivery diagnostics and RequestRecord.
 - Only the active Owner may manage Webhooks, Event Hooks, Jobs, test and retry Deliveries. Application users, service accounts and API keys have no access to these Control Plane routes.
 - Successful configuration changes, enable/disable actions, test requests and retries use the existing redacted RequestRecord and Audit integration where available. RequestRecord stores route template, status, duration and request ID only, not JSON bodies or endpoint URL.
+- Audit action identifiers are `webhook.created|updated|enabled|disabled`, `eventHook.created|updated|enabled|disabled`, `job.created|updated|enabled|disabled`, `delivery.testRequested`, and `delivery.redriven`. Each AuditRecord contains the authenticated Owner and resource identity; it excludes target URLs, payloads, and Secret values. A mutation and its AuditRecord commit in the same SQLite transaction.
 - English and Simplified Chinese Admin routes use the #30 Shell, shared Command Registry, theme and i18n catalog. The Automation surface keeps its selected resource and history context across reload, theme and locale changes.
 
 ## 5. Failure and recovery

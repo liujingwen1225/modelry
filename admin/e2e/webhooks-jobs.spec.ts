@@ -615,6 +615,8 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   fixture!.respond('/record-hook', 204);
   const restarted = await startRuntime(projectRoot);
   expect(restarted.projectId).toBe(firstRuntime.projectId);
+  await page.goto(runtimeURL);
+  await expect(page).toHaveURL(`${runtimeURL}/`);
   const recovered = await waitForDeliveryStatus(page, interruptedDelivery.id, 'succeeded');
   expect(recovered.attemptCount).toBe(2);
   expect(recovered.attempts.map((attempt) => attempt.status)).toEqual(['interrupted', 'succeeded']);

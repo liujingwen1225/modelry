@@ -15,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/extensions/safehttp"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
@@ -24,9 +25,15 @@ type transactionalStore interface {
 	WithReadSnapshot(context.Context, func(storage.Executor) error) error
 }
 
+// AuditWriter appends control-plane facts inside the resource mutation transaction.
+type AuditWriter interface {
+	AppendInTransaction(context.Context, storage.Executor, audit.AppendInput) error
+}
+
 type Service struct {
 	store         transactionalStore
 	secrets       SecretProvider
+	audits        AuditWriter
 	webhookClient *safehttp.WebhookClient
 	now           func() time.Time
 	retryDelays   []time.Duration
@@ -52,8 +59,8 @@ func NewService(ctx context.Context, store transactionalStore, options ServiceOp
 }
 
 func newService(ctx context.Context, store transactionalStore, options ServiceOptions, webhookClient *safehttp.WebhookClient) (*Service, error) {
-	if store == nil || options.Secrets == nil || webhookClient == nil {
-		return nil, fmt.Errorf("automation storage and Secret provider are required")
+	if store == nil || options.Secrets == nil || options.Audits == nil || webhookClient == nil {
+		return nil, fmt.Errorf("automation storage, Secret provider, and Audit writer are required")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -62,7 +69,7 @@ func newService(ctx context.Context, store transactionalStore, options ServiceOp
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	service := &Service{store: store, secrets: options.Secrets, webhookClient: webhookClient, now: now, retryDelays: []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour}, active: make(map[string]activeDelivery), wake: make(chan struct{}, 1)}
+	service := &Service{store: store, secrets: options.Secrets, audits: options.Audits, webhookClient: webhookClient, now: now, retryDelays: []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour}, active: make(map[string]activeDelivery), wake: make(chan struct{}, 1)}
 	if err := store.WithTransaction(ctx, func(tx storage.Executor) error {
 		for _, statement := range automationSchema {
 			if _, err := tx.ExecContext(ctx, statement); err != nil {
@@ -268,7 +275,10 @@ func (service *Service) CreateWebhook(ctx context.Context, input WebhookInput) (
 			return invalidField("/signingSecretId", "invalidSecretReference", "Select a configured Project Secret.")
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO modelry_automation_webhooks(id,name,target_url,signing_secret_id,enabled,revision,created_at,updated_at) VALUES(?,?,?,?,0,1,?,?)`, id, input.Name, input.TargetURL, input.SigningSecretID, stamp, stamp)
-		return err
+		if err != nil {
+			return err
+		}
+		return service.appendAudit(ctx, tx, "webhook.created", "webhook", id)
 	}); err != nil {
 		return Webhook{}, err
 	}
@@ -276,6 +286,16 @@ func (service *Service) CreateWebhook(ctx context.Context, input WebhookInput) (
 		ID: id, Name: input.Name, TargetURL: input.TargetURL, SigningSecretID: input.SigningSecretID,
 		SigningSecretName: secretName, SigningConfigured: true, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}, nil
+}
+
+func (service *Service) appendAudit(ctx context.Context, tx storage.Executor, action, resourceKind, resourceID string) error {
+	actor, ok := audit.ActorFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	return service.audits.AppendInTransaction(ctx, tx, audit.AppendInput{
+		Actor: actor, Action: action, Resource: audit.Resource{Kind: resourceKind, ID: resourceID}, Result: "success",
+	})
 }
 
 func (service *Service) GetWebhook(ctx context.Context, webhookID string) (Webhook, error) {

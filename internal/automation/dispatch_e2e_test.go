@@ -80,11 +80,12 @@ func TestDispatcherSendsOneSignedRequestWithPinnedFixtureAddress(t *testing.T) {
 	}
 	ctx := context.Background()
 	service, store := newServiceFixture(t)
+	audits := service.audits
 	_ = service.Close(ctx)
 	service, err = NewServiceForE2E(ctx, store, ServiceOptions{Secrets: &testSecrets{
 		metadata: map[string]testSecretMetadata{"sec_test": {Name: "signer", Configured: true}},
 		values:   map[string][]byte{"sec_test": []byte("fixture-signing-key")},
-	}}, client, time.Millisecond)
+	}, Audits: audits}, client, time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,8 +199,8 @@ func TestUnavailableEncryptionKeyFailsBeforeDNSOrDial(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	_, store := newServiceFixture(t)
-	service, err := NewServiceForE2E(ctx, store, ServiceOptions{Secrets: unavailableKeySecrets{}}, client, 0)
+	service, store := newServiceFixture(t)
+	service, err = NewServiceForE2E(ctx, store, ServiceOptions{Secrets: unavailableKeySecrets{}, Audits: service.audits}, client, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

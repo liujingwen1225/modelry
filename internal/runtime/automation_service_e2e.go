@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/automation"
 	"github.com/liujingwen1225/modelry/internal/extensions"
 	"github.com/liujingwen1225/modelry/internal/extensions/safehttp"
@@ -22,11 +23,11 @@ import (
 
 const e2eWebhookAddress = "93.184.216.34:443"
 
-func newAutomationService(ctx context.Context, store *storage.Store, extensionService *extensions.Service) (*automation.Service, error) {
+func newAutomationService(ctx context.Context, store *storage.Store, extensionService *extensions.Service, auditService *audit.Service) (*automation.Service, error) {
 	fixtureAddress := os.Getenv("MODELRY_E2E_WEBHOOK_FIXTURE_ADDR")
 	caPath := os.Getenv("MODELRY_E2E_WEBHOOK_CA")
 	if fixtureAddress == "" && caPath == "" {
-		return automation.NewService(ctx, store, automation.ServiceOptions{Secrets: runtimeSecretProvider{service: extensionService}})
+		return automation.NewService(ctx, store, automation.ServiceOptions{Secrets: runtimeSecretProvider{service: extensionService}, Audits: auditService})
 	}
 	if fixtureAddress == "" || caPath == "" {
 		return nil, errors.New("E2E Webhook fixture requires both local address and CA certificate")
@@ -64,7 +65,7 @@ func newAutomationService(ctx context.Context, store *storage.Store, extensionSe
 			return nil, errors.New("E2E Webhook retry delay must be between 1 and 2000 milliseconds")
 		}
 	}
-	return automation.NewServiceForE2E(ctx, store, automation.ServiceOptions{Secrets: runtimeSecretProvider{service: extensionService}}, client, retryDelay)
+	return automation.NewServiceForE2E(ctx, store, automation.ServiceOptions{Secrets: runtimeSecretProvider{service: extensionService}, Audits: auditService}, client, retryDelay)
 }
 
 func parseE2EWebhookRetryDelay(raw string) (time.Duration, error) {

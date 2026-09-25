@@ -50,7 +50,10 @@ func (service *Service) CreateJob(ctx context.Context, input JobInput) (Job, err
 			return invalidField("/name", "tooManyJobs", "A Project can have at most 32 Jobs.")
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO modelry_automation_jobs(id,name,webhook_id,cron,enabled,next_run_at,last_run_at,created_at,updated_at) VALUES(?,?,?,?,0,?,NULL,?,?)`, id, input.Name, input.WebhookID, input.Cron, next.Format(time.RFC3339Nano), stamp, stamp)
-		return err
+		if err != nil {
+			return err
+		}
+		return service.appendAudit(ctx, tx, "job.created", "job", id)
 	})
 	if err != nil {
 		return Job{}, err
@@ -93,7 +96,7 @@ func (service *Service) ReplaceJob(ctx context.Context, jobID string, input JobI
 		if count == 0 {
 			return ErrNotFound
 		}
-		return nil
+		return service.appendAudit(ctx, tx, "job.updated", "job", jobID)
 	})
 	if err != nil {
 		return Job{}, err
@@ -132,7 +135,11 @@ func (service *Service) setJobEnabled(ctx context.Context, jobID string, enabled
 			return err
 		}
 		result.NextRunAt = parseTime(next)
-		return nil
+		action := "job.disabled"
+		if enabled {
+			action = "job.enabled"
+		}
+		return service.appendAudit(ctx, tx, action, "job", jobID)
 	})
 	return result, err
 }

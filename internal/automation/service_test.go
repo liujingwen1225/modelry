@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
@@ -56,8 +58,14 @@ func newServiceFixture(t *testing.T) (*Service, *storage.Store) {
 		_ = store.Close()
 		t.Fatal(err)
 	}
+	audits, err := audit.NewService(context.Background(), store)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	service, err := NewService(context.Background(), store, ServiceOptions{
 		Secrets: &testSecrets{metadata: map[string]testSecretMetadata{"sec_test": {Name: "signer", Configured: true}}, values: map[string][]byte{"sec_test": []byte("never-return-this")}},
+		Audits:  audits,
 		Now:     func() time.Time { return time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
@@ -73,6 +81,241 @@ func newServiceFixture(t *testing.T) (*Service, *storage.Store) {
 		}
 	})
 	return service, store
+}
+
+func TestFinishAttemptRetriesPersistenceWithoutChangingDeliveryIntent(t *testing.T) {
+	ctx := context.Background()
+	service, store := newServiceFixture(t)
+	webhook, err := service.CreateWebhook(ctx, WebhookInput{Name: "primary", TargetURL: "https://hooks.example.test/events", SigningSecretID: "sec_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EnableWebhook(ctx, webhook.ID); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := service.CreateTestDelivery(ctx, webhook.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim, found, err := service.claimDelivery(ctx)
+	if err != nil || !found || claim.id != delivery.ID {
+		t.Fatalf("claimDelivery() = %+v, found=%v, err=%v", claim, found, err)
+	}
+	flaky := &transactionFailureStore{base: store}
+	flaky.failures.Store(2)
+	service.store = flaky
+
+	service.finishAttempt(claim, attemptResult{status: "succeeded", httpStatus: 204}, time.Millisecond)
+
+	detail, err := service.GetDelivery(ctx, delivery.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Status != "succeeded" || len(detail.Attempts) != 1 || detail.Attempts[0].Status != "succeeded" {
+		t.Fatalf("finishAttempt did not persist outcome after transient storage errors: %+v", detail)
+	}
+	if got := flaky.calls.Load(); got != 3 {
+		t.Fatalf("finishAttempt made %d persistence attempts, want 3", got)
+	}
+}
+
+func TestExhaustedFinishRetriesRecoverOutcomeWithoutReclaimingDelivery(t *testing.T) {
+	ctx := context.Background()
+	service, store := newServiceFixture(t)
+	webhook, err := service.CreateWebhook(ctx, WebhookInput{Name: "primary", TargetURL: "https://hooks.example.test/events", SigningSecretID: "sec_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EnableWebhook(ctx, webhook.ID); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := service.CreateTestDelivery(ctx, webhook.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim, found, err := service.claimDelivery(ctx)
+	if err != nil || !found || claim.id != delivery.ID {
+		t.Fatalf("claimDelivery() = %+v, found=%v, err=%v", claim, found, err)
+	}
+	flaky := &transactionFailureStore{base: store}
+	service.store = flaky
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimDeadline := time.Now().Add(time.Second)
+	for flaky.calls.Load() < maximumWorkers && time.Now().Before(claimDeadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := flaky.calls.Load(); got < maximumWorkers {
+		t.Fatalf("workers made only %d claim transactions before the recovery scenario", got)
+	}
+	flaky.failures.Store(finishPersistenceTries)
+	service.persistAttemptOutcome(ctx, claim, attemptResult{status: "succeeded", httpStatus: 204}, time.Millisecond)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		detail, err := service.GetDelivery(ctx, delivery.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if detail.Status == "succeeded" {
+			if detail.AttemptCount != 1 || len(detail.Attempts) != 1 || detail.Attempts[0].Status != "succeeded" {
+				t.Fatalf("outcome recovery changed the Delivery attempt count or history: %+v", detail)
+			}
+			if got := flaky.calls.Load(); got <= maximumWorkers+finishPersistenceTries {
+				t.Fatalf("outcome recovery made %d writes, want a later persistence attempt", got)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("exhausted outcome writes were not recovered while the Runtime remained active")
+}
+
+func TestWebhookMutationRollsBackWhenAuditWriteFails(t *testing.T) {
+	service, _ := newServiceFixture(t)
+	service.audits = rejectedAuditWriter{}
+	ctx := audit.WithActor(context.Background(), audit.Actor{Kind: audit.ActorOwner, ID: "own_test"})
+	if _, err := service.CreateWebhook(ctx, WebhookInput{Name: "primary", TargetURL: "https://hooks.example.test/events", SigningSecretID: "sec_test"}); err == nil {
+		t.Fatal("CreateWebhook succeeded when the required AuditRecord could not be written")
+	}
+	items, err := service.ListWebhooks(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("Webhook mutation committed without its AuditRecord: %+v", items)
+	}
+}
+
+func TestAutomationConfigurationAndDeliveryActionsAppendSafeAuditRecords(t *testing.T) {
+	ctx := audit.WithActor(context.Background(), audit.Actor{Kind: audit.ActorOwner, ID: "own_test"})
+	service, store := newServiceFixture(t)
+	models, err := backendmodel.NewService(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{Name: "posts", Type: backendmodel.CollectionTypeNormal})
+	if err != nil {
+		t.Fatal(err)
+	}
+	webhook, err := service.CreateWebhook(ctx, WebhookInput{Name: "primary", TargetURL: "https://hooks.example.test/events", SigningSecretID: "sec_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReplaceWebhook(ctx, webhook.ID, WebhookInput{Name: "updated", TargetURL: "https://hooks.example.test/updated", SigningSecretID: "sec_test"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EnableWebhook(ctx, webhook.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	hook, err := service.CreateEventHook(ctx, EventHookInput{Name: "created posts", CollectionID: collection.ID, EventType: "record.created", WebhookID: webhook.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReplaceEventHook(ctx, hook.ID, EventHookInput{Name: "updated posts", CollectionID: collection.ID, EventType: "record.updated", WebhookID: webhook.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EnableEventHook(ctx, hook.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DisableEventHook(ctx, hook.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := service.CreateJob(ctx, JobInput{Name: "every minute", WebhookID: webhook.ID, Cron: "* * * * *"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReplaceJob(ctx, job.ID, JobInput{Name: "every two minutes", WebhookID: webhook.ID, Cron: "*/2 * * * *"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EnableJob(ctx, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DisableJob(ctx, job.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	delivery, err := service.CreateTestDelivery(ctx, webhook.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithTransaction(ctx, func(tx storage.Executor) error {
+		_, err := tx.ExecContext(ctx, `UPDATE modelry_automation_deliveries SET status='failed',completed_at=?,error_code='externalRequestFailed' WHERE id=?`, service.now().UTC().Format(time.RFC3339Nano), delivery.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RetryDelivery(ctx, delivery.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DisableWebhook(ctx, webhook.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	audits, err := audit.NewService(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := audits.List(context.Background(), audit.ListOptions{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{
+		"webhook.created": 1, "webhook.updated": 1, "webhook.enabled": 1, "webhook.disabled": 1,
+		"eventHook.created": 1, "eventHook.updated": 1, "eventHook.enabled": 1, "eventHook.disabled": 1,
+		"job.created": 1, "job.updated": 1, "job.enabled": 1, "job.disabled": 1,
+		"delivery.testRequested": 1, "delivery.redriven": 1,
+	}
+	for _, record := range page.Data {
+		want[record.Action]--
+		if record.Actor != (audit.Actor{Kind: audit.ActorOwner, ID: "own_test"}) || record.Result != "success" {
+			t.Errorf("Automation AuditRecord actor/result = %+v/%q", record.Actor, record.Result)
+		}
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), "hooks.example.test") || strings.Contains(string(encoded), "never-return-this") {
+			t.Errorf("Automation AuditRecord exposed target URL or Secret: %s", encoded)
+		}
+	}
+	for action, remaining := range want {
+		if remaining != 0 {
+			t.Errorf("AuditRecord count for %q = %d, want 1", action, 1-remaining)
+		}
+	}
+}
+
+type rejectedAuditWriter struct{}
+
+func (rejectedAuditWriter) AppendInTransaction(context.Context, storage.Executor, audit.AppendInput) error {
+	return errors.New("injected Audit storage failure")
+}
+
+type transactionFailureStore struct {
+	base     transactionalStore
+	failures atomic.Int32
+	calls    atomic.Int32
+}
+
+func (store *transactionFailureStore) WithTransaction(ctx context.Context, work func(storage.Executor) error) error {
+	store.calls.Add(1)
+	for {
+		remaining := store.failures.Load()
+		if remaining <= 0 {
+			return store.base.WithTransaction(ctx, work)
+		}
+		if store.failures.CompareAndSwap(remaining, remaining-1) {
+			return errors.New("injected temporary SQLite write failure")
+		}
+	}
+}
+
+func (store *transactionFailureStore) WithReadSnapshot(ctx context.Context, work func(storage.Executor) error) error {
+	return store.base.WithReadSnapshot(ctx, work)
 }
 
 func TestCreateWebhookReturnsSafeDisabledMetadata(t *testing.T) {

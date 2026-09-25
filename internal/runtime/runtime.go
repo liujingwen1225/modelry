@@ -124,7 +124,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Extension Runtime: %w", err)
 	}
-	automationService, err = newAutomationService(context.Background(), store, extensionService)
+	auditService, err := audit.NewService(context.Background(), store)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Audit History: %w", err)
+	}
+	automationService, err = newAutomationService(context.Background(), store, extensionService, auditService)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Webhooks and Jobs: %w", err)
 	}
@@ -140,10 +144,6 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	requestService, err := requests.NewService(context.Background(), store)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Request History: %w", err)
-	}
-	auditService, err := audit.NewService(context.Background(), store)
-	if err != nil {
-		return nil, fmt.Errorf("cannot initialize Modelry Audit History: %w", err)
 	}
 	serviceAccountService, err := serviceaccounts.NewService(context.Background(), store, auditService)
 	if err != nil {

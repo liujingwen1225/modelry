@@ -1,6 +1,7 @@
 package automation
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/liujingwen1225/modelry/internal/adminauth"
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 )
 
@@ -52,6 +54,41 @@ func TestAutomationHTTPRequiresOwnerAndReturnsSafeWebhookMetadata(t *testing.T) 
 	testDelivery := automationRequest(handler, http.MethodPost, "/admin/api/v1/webhooks/"+envelope.Data.ID+"/test", "", cookies[0], "http://localhost")
 	if testDelivery.Code != http.StatusAccepted || !strings.Contains(testDelivery.Body.String(), `"eventType":"webhook.test"`) {
 		t.Fatalf("disabled Webhook synthetic test = %d %s, want 202 webhook.test", testDelivery.Code, testDelivery.Body.String())
+	}
+	enabled := automationRequest(handler, http.MethodPost, "/admin/api/v1/webhooks/"+envelope.Data.ID+"/enable", "", cookies[0], "http://localhost")
+	if enabled.Code != http.StatusOK {
+		t.Fatalf("enable Webhook status = %d; body=%s", enabled.Code, enabled.Body.String())
+	}
+	disabled := automationRequest(handler, http.MethodPost, "/admin/api/v1/webhooks/"+envelope.Data.ID+"/disable", "", cookies[0], "http://localhost")
+	if disabled.Code != http.StatusOK {
+		t.Fatalf("disable Webhook status = %d; body=%s", disabled.Code, disabled.Body.String())
+	}
+	audits, err := audit.NewService(context.Background(), store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auditPage, err := audits.List(context.Background(), audit.ListOptions{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actions := make(map[string]bool)
+	for _, record := range auditPage.Data {
+		actions[record.Action] = true
+		if record.Actor.Kind != audit.ActorOwner || record.Actor.ID == "" || record.Result != "success" {
+			t.Errorf("Automation AuditRecord has incomplete actor/result: %+v", record)
+		}
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), "hooks.example.test") || strings.Contains(string(encoded), "never-return-this") {
+			t.Errorf("Automation AuditRecord exposed target URL or Secret: %s", encoded)
+		}
+	}
+	for _, action := range []string{"webhook.created", "webhook.enabled", "webhook.disabled", "delivery.testRequested"} {
+		if !actions[action] {
+			t.Errorf("successful Automation mutation %q was not audited: %v", action, actions)
+		}
 	}
 
 	listed := automationRequest(handler, http.MethodGet, "/admin/api/v1/webhooks", "", cookies[0], "")

@@ -23,6 +23,7 @@ type SecretProvider interface {
 
 type ServiceOptions struct {
 	Secrets SecretProvider
+	Audits  AuditWriter
 	Now     func() time.Time
 }
 

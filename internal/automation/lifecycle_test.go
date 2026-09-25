@@ -132,7 +132,7 @@ func TestRestartMarksRunningAttemptInterruptedAndQueuesSameDelivery(t *testing.T
 	if err := service.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := NewService(ctx, store, ServiceOptions{Secrets: service.secrets, Now: service.now})
+	restarted, err := NewService(ctx, store, ServiceOptions{Secrets: service.secrets, Audits: service.audits, Now: service.now})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -57,7 +57,7 @@ func (service *Service) CreateEventHook(ctx context.Context, input EventHookInpu
 		if err != nil {
 			return mapEventHookWriteError(err)
 		}
-		return nil
+		return service.appendAudit(ctx, tx, "eventHook.created", "eventHook", id)
 	})
 	if err != nil {
 		return EventHook{}, err
@@ -107,7 +107,7 @@ func (service *Service) ReplaceEventHook(ctx context.Context, eventHookID string
 		if count == 0 {
 			return ErrNotFound
 		}
-		return nil
+		return service.appendAudit(ctx, tx, "eventHook.updated", "eventHook", eventHookID)
 	})
 	if err != nil {
 		return EventHook{}, err
@@ -142,7 +142,11 @@ func (service *Service) setEventHookEnabled(ctx context.Context, eventHookID str
 			return ErrNotFound
 		}
 		result = EventHookStatus{ID: eventHookID, Enabled: enabled}
-		return nil
+		action := "eventHook.disabled"
+		if enabled {
+			action = "eventHook.enabled"
+		}
+		return service.appendAudit(ctx, tx, action, "eventHook", eventHookID)
 	})
 	return result, err
 }

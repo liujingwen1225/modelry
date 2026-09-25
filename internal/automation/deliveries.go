@@ -49,7 +49,10 @@ func (service *Service) CreateTestDelivery(ctx context.Context, webhookID string
 		item, err = service.createDeliveryInTransaction(ctx, tx, deliveryIntent{
 			id: id, sourceType: "test", sourceID: testID, webhookID: webhookID, eventType: "webhook.test", payload: payload, allowOff: true,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		return service.appendAudit(ctx, tx, "delivery.testRequested", "delivery", id)
 	})
 	if err == nil {
 		service.signal()
@@ -225,7 +228,7 @@ func (service *Service) RetryDelivery(ctx context.Context, deliveryID string) (D
 		if changed != 1 {
 			return ErrNotRetryable
 		}
-		return nil
+		return service.appendAudit(ctx, tx, "delivery.redriven", "delivery", deliveryID)
 	})
 	if err != nil {
 		return Delivery{}, err

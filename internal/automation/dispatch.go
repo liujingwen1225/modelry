@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,6 +20,10 @@ const (
 	maximumWorkers         = 4
 	workerPollInterval     = 250 * time.Millisecond
 	maximumAttemptDuration = 2 * time.Second
+	finishPersistenceTries = 3
+	finishPersistenceLimit = time.Second
+	finishPersistenceDelay = 25 * time.Millisecond
+	finishRecoveryMaxDelay = 5 * time.Second
 )
 
 type deliveryClaim struct {
@@ -169,7 +174,7 @@ func (service *Service) processAttempt(runCtx context.Context, claim deliveryCla
 	}
 	if code := service.currentDeliveryBlock(deadlineCtx, claim); code != "" {
 		if runCtx.Err() == nil {
-			service.finishAttempt(claim, attemptResult{status: "cancelled", errorCode: code}, time.Since(started))
+			service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "cancelled", errorCode: code}, time.Since(started))
 		}
 		return
 	}
@@ -211,11 +216,11 @@ func (service *Service) processAttempt(runCtx context.Context, claim deliveryCla
 		code := service.currentDeliveryBlock(blockCtx, claim)
 		cancel()
 		if code != "" {
-			service.finishAttempt(claim, attemptResult{status: "cancelled", errorCode: code}, time.Since(started))
+			service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "cancelled", errorCode: code}, time.Since(started))
 			return
 		}
 		if postErr != nil && errors.Is(postErr, safehttp.ErrExternalRequestFailed) {
-			service.finishAttempt(claim, attemptResult{status: "failed", errorCode: "externalRequestFailed", transient: true}, time.Since(started))
+			service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "failed", errorCode: "externalRequestFailed", transient: true}, time.Since(started))
 			return
 		}
 		if prepareErr != nil {
@@ -223,22 +228,22 @@ func (service *Service) processAttempt(runCtx context.Context, claim deliveryCla
 			if errors.Is(prepareErr, safehttp.ErrOriginNotAllowed) {
 				code = "originNotAllowed"
 			}
-			service.finishAttempt(claim, attemptResult{status: "failed", errorCode: code}, time.Since(started))
+			service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "failed", errorCode: code}, time.Since(started))
 			return
 		}
 		code = secretFailureCode(secretErr)
-		service.finishAttempt(claim, attemptResult{status: "failed", errorCode: code}, time.Since(started))
+		service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "failed", errorCode: code}, time.Since(started))
 		return
 	}
 	if httpStatus >= 200 && httpStatus < 300 {
-		service.finishAttempt(claim, attemptResult{status: "succeeded", httpStatus: httpStatus}, time.Since(started))
+		service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "succeeded", httpStatus: httpStatus}, time.Since(started))
 		return
 	}
 	if httpStatus == 408 || httpStatus == 429 || httpStatus >= 500 {
-		service.finishAttempt(claim, attemptResult{status: "failed", errorCode: "externalRequestFailed", httpStatus: httpStatus, transient: true}, time.Since(started))
+		service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "failed", errorCode: "externalRequestFailed", httpStatus: httpStatus, transient: true}, time.Since(started))
 		return
 	}
-	service.finishAttempt(claim, attemptResult{status: "rejected", errorCode: "deliveryRejected", httpStatus: httpStatus}, time.Since(started))
+	service.persistAttemptOutcome(runCtx, claim, attemptResult{status: "rejected", errorCode: "deliveryRejected", httpStatus: httpStatus}, time.Since(started))
 }
 
 func (service *Service) currentDeliveryBlock(ctx context.Context, claim deliveryClaim) string {
@@ -275,10 +280,52 @@ func secretFailureCode(err error) string {
 	}
 }
 
-func (service *Service) finishAttempt(claim deliveryClaim, outcome attemptResult, elapsed time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	now := service.now().UTC()
+func (service *Service) persistAttemptOutcome(runCtx context.Context, claim deliveryClaim, outcome attemptResult, elapsed time.Duration) {
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
+	completedAt := service.now().UTC()
+	delay := 100 * time.Millisecond
+	recovering := false
+	for {
+		if runCtx.Err() != nil {
+			return
+		}
+		if err := service.finishAttemptAt(claim, outcome, elapsed, completedAt); err == nil {
+			if recovering {
+				log.Printf("Modelry Automation recovered Delivery %s outcome persistence", claim.id)
+			}
+			return
+		} else {
+			log.Printf("Modelry Automation could not persist Delivery %s outcome after %d attempts: %v", claim.id, finishPersistenceTries, err)
+			recovering = true
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-runCtx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return
+		case <-timer.C:
+		}
+		if delay < finishRecoveryMaxDelay {
+			delay *= 2
+			if delay > finishRecoveryMaxDelay {
+				delay = finishRecoveryMaxDelay
+			}
+		}
+	}
+}
+
+func (service *Service) finishAttempt(claim deliveryClaim, outcome attemptResult, elapsed time.Duration) error {
+	return service.finishAttemptAt(claim, outcome, elapsed, service.now().UTC())
+}
+
+func (service *Service) finishAttemptAt(claim deliveryClaim, outcome attemptResult, elapsed time.Duration, now time.Time) error {
 	stamp := now.Format(time.RFC3339Nano)
 	duration := elapsed.Milliseconds()
 	if duration < 0 {
@@ -288,44 +335,62 @@ func (service *Service) finishAttempt(claim deliveryClaim, outcome attemptResult
 	if outcome.httpStatus >= 100 && outcome.httpStatus <= 599 {
 		httpValue = outcome.httpStatus
 	}
-	_ = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
-		var status, errorCode string
-		var nextValue, completedValue any
-		status, errorCode = "failed", outcome.errorCode
-		if outcome.status == "succeeded" {
-			status, errorCode, completedValue = "succeeded", "none", stamp
-		} else if outcome.status == "cancelled" {
-			status, completedValue = "cancelled", stamp
-		} else if outcome.transient && claim.roundAttempt <= len(service.retryDelays) && claim.attempt < 32 {
-			status = "pending"
-			nextValue = now.Add(service.retryDelays[claim.roundAttempt-1]).Format(time.RFC3339Nano)
-		}
-		if outcome.status == "rejected" {
-			status, completedValue = "failed", stamp
-		}
-		if outcome.status == "failed" && !outcome.transient {
-			completedValue = stamp
-		}
-		if outcome.transient && nextValue == nil {
-			completedValue = stamp
-		}
-		attemptStatus := outcome.status
-		if outcome.status == "failed" && outcome.transient && nextValue != nil {
-			attemptStatus = "retryScheduled"
-		}
-		if attemptStatus == "failed" {
-			attemptStatus = "failed"
-		}
-		if attemptStatus == "rejected" {
-			attemptStatus = "rejected"
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE modelry_automation_delivery_attempts SET status=?,completed_at=?,duration_ms=?,http_status=?,error_code=? WHERE delivery_id=? AND attempt=? AND status='running'`, attemptStatus, stamp, duration, httpValue, errorCode, claim.id, claim.attempt); err != nil {
+	persist := func(ctx context.Context) error {
+		return service.store.WithTransaction(ctx, func(tx storage.Executor) error {
+			var status, errorCode string
+			var nextValue, completedValue any
+			status, errorCode = "failed", outcome.errorCode
+			if outcome.status == "succeeded" {
+				status, errorCode, completedValue = "succeeded", "none", stamp
+			} else if outcome.status == "cancelled" {
+				status, completedValue = "cancelled", stamp
+			} else if outcome.transient && claim.roundAttempt <= len(service.retryDelays) && claim.attempt < 32 {
+				status = "pending"
+				nextValue = now.Add(service.retryDelays[claim.roundAttempt-1]).Format(time.RFC3339Nano)
+			}
+			if outcome.status == "rejected" {
+				status, completedValue = "failed", stamp
+			}
+			if outcome.status == "failed" && !outcome.transient {
+				completedValue = stamp
+			}
+			if outcome.transient && nextValue == nil {
+				completedValue = stamp
+			}
+			attemptStatus := outcome.status
+			if outcome.status == "failed" && outcome.transient && nextValue != nil {
+				attemptStatus = "retryScheduled"
+			}
+			if attemptStatus == "failed" {
+				attemptStatus = "failed"
+			}
+			if attemptStatus == "rejected" {
+				attemptStatus = "rejected"
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE modelry_automation_delivery_attempts SET status=?,completed_at=?,duration_ms=?,http_status=?,error_code=? WHERE delivery_id=? AND attempt=? AND status='running'`, attemptStatus, stamp, duration, httpValue, errorCode, claim.id, claim.attempt); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE modelry_automation_deliveries SET status=?,next_attempt_at=?,completed_at=?,last_http_status=?,error_code=? WHERE id=? AND status='running'`, status, nextValue, completedValue, httpValue, errorCode, claim.id)
 			return err
+		})
+	}
+	var persistenceErr error
+	for attempt := 1; attempt <= finishPersistenceTries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), finishPersistenceLimit)
+		persistenceErr = persist(ctx)
+		cancel()
+		if persistenceErr == nil {
+			break
 		}
-		_, err := tx.ExecContext(ctx, `UPDATE modelry_automation_deliveries SET status=?,next_attempt_at=?,completed_at=?,last_http_status=?,error_code=? WHERE id=? AND status='running'`, status, nextValue, completedValue, httpValue, errorCode, claim.id)
-		return err
-	})
+		if attempt < finishPersistenceTries {
+			time.Sleep(time.Duration(attempt) * finishPersistenceDelay)
+		}
+	}
+	if persistenceErr != nil {
+		return fmt.Errorf("persist Delivery outcome: %w", persistenceErr)
+	}
 	if outcome.transient && claim.roundAttempt <= len(service.retryDelays) && claim.attempt < 32 {
 		service.signal()
 	}
+	return nil
 }
