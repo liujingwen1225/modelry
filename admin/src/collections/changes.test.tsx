@@ -1,7 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { render as renderRTL, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type React from 'react';
+import { LocaleProvider } from '../i18n/i18n';
 import { ChangesPage } from './changes';
+// render 用 LocaleProvider 包裹页面，因为页面文案现在来自共享 i18n 层。
+async function render(ui: React.ReactNode) {
+  const result = renderRTL(<LocaleProvider>{ui}</LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return result;
+}
 
 describe('Changes page', () => {
   afterEach(() => vi.unstubAllGlobals());
