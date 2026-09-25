@@ -91,6 +91,9 @@ const (
 // RestoreJournalName 是 restore 原子激活日志的文件名，位于 managed directory。
 const RestoreJournalName = "restore-journal.jsonl"
 
+// RestoreCommitName 是与 journal 分离、原子安装的 durable commit marker。
+const RestoreCommitName = "restore-commit.json"
+
 // archiveEnvelope 返回一个 bundle 允许占用的最大字节数。
 // 它由 manifest 声明的载荷总量推导，因此合法的大对象不会被整体上限误伤，
 // 而声明越大、Runtime 允许读入的字节也越大——并且始终有绝对上限。
@@ -184,9 +187,9 @@ type Service struct {
 
 // Options 构造 Portability Service。
 type Options struct {
-	Store     *storage.Store
-	Objects   ObjectSource
-	Models    ModelSource
+	Store   *storage.Store
+	Objects ObjectSource
+	Models  ModelSource
 	// Snapshots 为一个已落盘的 SQLite 快照打开只读读取器。省略时使用内建实现。
 	Snapshots  SnapshotSource
 	ManagedDir string
@@ -228,6 +231,7 @@ func NewInspectionService(options InspectionOptions) (*Service, error) {
 	}
 	return &Service{managed: options.ManagedDir, models: options.Models, version: version, now: func() time.Time { return time.Now().UTC() }}, nil
 }
+
 // sqliteVersion 在没有 Store 的只读场景下安全返回空值。
 func (service *Service) sqliteVersion() string {
 	if service == nil || service.store == nil {
@@ -272,12 +276,12 @@ func (service *Service) appliedCollections(ctx context.Context) ([]backendmodel.
 
 // canonicalCollection 是参与哈希与契约投影的稳定结构。
 type canonicalCollection struct {
-	ID      string                 `json:"id"`
-	Name    string                 `json:"name"`
-	Type    string                 `json:"type"`
-	Version int                    `json:"schemaVersion"`
-	Fields  []canonicalField       `json:"fields"`
-	Indexes []canonicalIndex       `json:"indexes,omitempty"`
+	ID      string           `json:"id"`
+	Name    string           `json:"name"`
+	Type    string           `json:"type"`
+	Version int              `json:"schemaVersion"`
+	Fields  []canonicalField `json:"fields"`
+	Indexes []canonicalIndex `json:"indexes,omitempty"`
 }
 
 type canonicalField struct {
@@ -884,4 +888,3 @@ func validateSnapshotDatabase(ctx context.Context, databasePath, sqliteVersion s
 	_ = sqliteVersion
 	return nil
 }
-

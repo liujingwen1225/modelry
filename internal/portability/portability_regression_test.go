@@ -1002,12 +1002,22 @@ func TestRollbackAfterCommitOnlyCleansBackups(t *testing.T) {
 	if err := os.WriteFile(backup, []byte("the-old-database"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	transaction := "restore-test-committed"
 	writeJournal(t, fixture.managed,
+		journalRecord{Op: journalBegin, ID: transaction},
+		journalRecord{Op: journalTarget, ID: transaction, Dest: targetDatabase, Exists: true, Bytes: int64(len(committed)), SHA256: digestBytes(committed)},
 		journalRecord{Op: journalStage, Dest: targetDatabase, Path: targetDatabase + ".committed.new"},
 		journalRecord{Op: journalBackup, Dest: targetDatabase, Path: backup},
 		journalRecord{Op: journalActivate, Dest: targetDatabase, Path: targetDatabase + ".committed.new"},
-		journalRecord{Op: journalDone},
 	)
+	plan := activationPlan{
+		journalPath: filepath.Join(fixture.managed, RestoreJournalName),
+		commitPath:  filepath.Join(fixture.managed, RestoreCommitName), transaction: transaction,
+		entries: []activationEntry{{kind: activationReplace, destination: targetDatabase, expected: ObjectEntry{Bytes: int64(len(committed)), SHA256: digestBytes(committed)}}},
+	}
+	if err := plan.installCommitMarker(); err != nil {
+		t.Fatalf("install durable commit marker: %v", err)
+	}
 
 	if err := rollbackInterruptedRestore(fixture.managed); err != nil {
 		t.Fatalf("recovering a committed journal: %v", err)
@@ -1020,6 +1030,329 @@ func TestRollbackAfterCommitOnlyCleansBackups(t *testing.T) {
 		t.Fatalf("the committed journal left its backup behind: %v", err)
 	}
 	assertNoRestoreLeftovers(t, targetRoot, fixture.managed)
+}
+
+func TestRestoreDurabilityAndCommitFailuresRestorePreviousBytes(t *testing.T) {
+	ctx := context.Background()
+	source := newPortabilityFixtureWithFiles(t)
+	source.putObject(t, firstObjectKey, []byte("bundle-first-object"))
+	source.putObject(t, secondObjectKey, []byte("bundle-new-object"))
+	collection := createFileCollection(t, source.models, "posts")
+	for index, key := range []string{firstObjectKey, secondObjectKey} {
+		if _, err := source.records.Create(ctx, collection.ID, map[string]any{"title": fmt.Sprintf("source-%d", index), "attachment": key}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bundlePath := filepath.Join(source.managed, "durability-bundle.tar")
+	if _, err := source.service.CreateBackup(ctx, BackupOptions{Destination: bundlePath}); err != nil {
+		t.Fatal(err)
+	}
+	manifest := readBundleManifest(t, bundlePath)
+	newDatabaseDigest := manifest.Database.SHA256
+	newObjectDigest := manifest.Objects[0].SHA256
+	collectionID := collection.ID
+	tests := []struct {
+		name                string
+		phase               string
+		checkFullyActivated bool
+	}{
+		{name: "preserve rename directory sync", phase: restorePhasePreserveSync},
+		{name: "activation rename directory sync", phase: restorePhaseActivateSync},
+		{name: "commit marker write", phase: restorePhaseCommitWrite, checkFullyActivated: true},
+		{name: "commit marker flush", phase: restorePhaseCommitFlush, checkFullyActivated: true},
+		{name: "commit marker sync", phase: restorePhaseCommitSync, checkFullyActivated: true},
+		{name: "commit marker directory sync after full activation", phase: restorePhaseCommitDirectory, checkFullyActivated: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			target := newRestoreDurabilityTarget(t)
+			destination := target.database
+			if strings.HasPrefix(test.phase, "commit-") {
+				destination = filepath.Join(target.managed, RestoreCommitName)
+			}
+			trigger := test.phase + ":" + destination
+			observedFailure := false
+			restoreFault = func(step string) error {
+				if step != trigger {
+					return nil
+				}
+				if test.checkFullyActivated {
+					if got := hashFile(t, target.database); got != newDatabaseDigest {
+						t.Errorf("commit failure occurred before full database activation: got %s, want %s", got, newDatabaseDigest)
+					}
+					if got := hashFile(t, filepath.Join(target.objects, firstObjectKey)); got != newObjectDigest {
+						t.Errorf("commit failure occurred before full object activation: got %s, want %s", got, newObjectDigest)
+					}
+				}
+				observedFailure = true
+				return fmt.Errorf("injected %s failure", test.name)
+			}
+			inspection, err := NewInspectionService(InspectionOptions{ManagedDir: target.managed, Version: "test"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, applyErr := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: target.database, ObjectsDir: target.objects})
+			restoreFault = nil
+			if applyErr == nil || !observedFailure {
+				t.Fatalf("Apply error = %v, failure injected = %t", applyErr, observedFailure)
+			}
+			assertRestoreTargetUnchanged(t, target)
+			// The error path has already rolled back. Replaying recovery must remain safe.
+			if err := rollbackInterruptedRestore(target.managed); err != nil {
+				t.Fatalf("replay recovery after failed Apply: %v", err)
+			}
+			assertRestoreTargetUnchanged(t, target)
+			if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: target.database, ObjectsDir: target.objects}); err != nil {
+				t.Fatalf("retry restore after rollback: %v", err)
+			}
+			assertRestoredDurabilityTarget(t, target, newDatabaseDigest, collectionID)
+		})
+	}
+}
+
+type restoreDurabilityTarget struct {
+	root, managed, database, objects string
+	databaseDigest                   string
+	firstObject                      []byte
+	wal, shm                         []byte
+}
+
+func newRestoreDurabilityTarget(t *testing.T) restoreDurabilityTarget {
+	t.Helper()
+	root := t.TempDir()
+	managed := filepath.Join(root, ".modelry")
+	database := filepath.Join(managed, "project.sqlite")
+	objects := filepath.Join(managed, "files", "objects")
+	temporary := filepath.Join(managed, "files", "tmp")
+	for _, directory := range []string{objects, temporary} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldObject := []byte("the-original-referenced-object")
+	if err := os.WriteFile(filepath.Join(objects, firstObjectKey), oldObject, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.Open(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, err := backendmodel.NewService(context.Background(), store)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	recordService, err := records.NewWithLocalFiles(store, models, temporary, objects)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	collection := createFileCollection(t, models, "original")
+	if _, err := recordService.Create(context.Background(), collection.ID, map[string]any{"title": "old", "attachment": firstObjectKey}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	wal := []byte("previous-WAL-bytes")
+	shm := []byte("previous-SHM-bytes")
+	if err := os.WriteFile(database+"-wal", wal, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(database+"-shm", shm, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return restoreDurabilityTarget{
+		root: root, managed: managed, database: database, objects: objects,
+		databaseDigest: hashFile(t, database), firstObject: oldObject, wal: wal, shm: shm,
+	}
+}
+
+func assertRestoreTargetUnchanged(t *testing.T, target restoreDurabilityTarget) {
+	t.Helper()
+	if got := hashFile(t, target.database); got != target.databaseDigest {
+		t.Fatalf("failed restore changed original database bytes: %s -> %s", target.databaseDigest, got)
+	}
+	if got, err := os.ReadFile(filepath.Join(target.objects, firstObjectKey)); err != nil || !bytes.Equal(got, target.firstObject) {
+		t.Fatalf("failed restore changed the old referenced object: %q (%v)", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(target.objects, secondObjectKey)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed restore left a newly introduced object: %v", err)
+	}
+	for suffix, expected := range map[string][]byte{"-wal": target.wal, "-shm": target.shm} {
+		got, err := os.ReadFile(target.database + suffix)
+		if err != nil || !bytes.Equal(got, expected) {
+			t.Fatalf("failed restore changed original %s state: %q (%v)", suffix, got, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(target.managed, RestoreJournalName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed Apply left a journal that did not converge: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target.managed, RestoreCommitName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed Apply left a commit marker: %v", err)
+	}
+}
+
+func TestCommittedMarkerCrashOnlyCleansBackups(t *testing.T) {
+	managed := t.TempDir()
+	destination := filepath.Join(t.TempDir(), "project.sqlite")
+	newBytes := []byte("newly committed project state")
+	backup := destination + ".restore.old"
+	if err := os.WriteFile(destination, newBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(backup, []byte("previous project state"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transaction := "restore-test-committed"
+	writeJournal(t, managed,
+		journalRecord{Op: journalBegin, ID: transaction},
+		journalRecord{Op: journalTarget, ID: transaction, Dest: destination, Exists: true, Bytes: int64(len(newBytes)), SHA256: digestBytes(newBytes)},
+		journalRecord{Op: journalStage, Dest: destination, Path: destination + ".restore.new"},
+		journalRecord{Op: journalBackup, Dest: destination, Path: backup},
+		journalRecord{Op: journalActivate, Dest: destination, Path: destination + ".restore.new"},
+	)
+	plan := activationPlan{
+		journalPath: filepath.Join(managed, RestoreJournalName),
+		commitPath:  filepath.Join(managed, RestoreCommitName), transaction: transaction,
+		entries: []activationEntry{{kind: activationReplace, destination: destination, expected: ObjectEntry{Bytes: int64(len(newBytes)), SHA256: digestBytes(newBytes)}}},
+	}
+	if err := plan.installCommitMarker(); err != nil {
+		t.Fatalf("install durable commit marker: %v", err)
+	}
+	if err := CheckInterruptedRestore(managed); err != nil {
+		t.Fatalf("recover committed restore cleanup: %v", err)
+	}
+	if got, err := os.ReadFile(destination); err != nil || !bytes.Equal(got, newBytes) {
+		t.Fatalf("committed state was rolled back: %q (%v)", got, err)
+	}
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("committed backup remains after cleanup: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(managed, RestoreJournalName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("committed journal remains after cleanup: %v", err)
+	}
+}
+
+func TestLegacyDoneJournalWithoutDurableMarkerRequiresExplicitResolution(t *testing.T) {
+	managed := t.TempDir()
+	destination := filepath.Join(t.TempDir(), "project.sqlite")
+	newBytes := []byte("possibly committed legacy state")
+	oldBytes := []byte("legacy backup that must not be deleted")
+	backup := destination + ".restore.old"
+	if err := os.WriteFile(destination, newBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(backup, oldBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, managed,
+		journalRecord{Op: journalBegin, ID: "restore-legacy"},
+		journalRecord{Op: journalStage, Dest: destination, Path: destination + ".restore.new"},
+		journalRecord{Op: journalBackup, Dest: destination, Path: backup},
+		journalRecord{Op: journalActivate, Dest: destination, Path: destination + ".restore.new"},
+		journalRecord{Op: journalDone},
+	)
+
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := CheckInterruptedRestore(managed); !errors.Is(err, errLegacyCommitAmbiguous) {
+			t.Fatalf("recovery attempt %d error = %v, want ambiguous legacy commit", attempt+1, err)
+		}
+		if got, err := os.ReadFile(destination); err != nil || !bytes.Equal(got, newBytes) {
+			t.Fatalf("ambiguous legacy journal changed destination: %q (%v)", got, err)
+		}
+		if got, err := os.ReadFile(backup); err != nil || !bytes.Equal(got, oldBytes) {
+			t.Fatalf("ambiguous legacy journal deleted or changed backup: %q (%v)", got, err)
+		}
+		if _, err := os.Stat(filepath.Join(managed, RestoreJournalName)); err != nil {
+			t.Fatalf("ambiguous legacy journal was removed: %v", err)
+		}
+	}
+	if err := ResolveLegacyRestore(managed, LegacyRestoreAcceptCurrent); err != nil {
+		t.Fatalf("explicitly accept current legacy state: %v", err)
+	}
+	if got, err := os.ReadFile(destination); err != nil || !bytes.Equal(got, newBytes) {
+		t.Fatalf("accept-current changed the active destination: %q (%v)", got, err)
+	}
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("accept-current left its backup: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(managed, RestoreJournalName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("accept-current left its journal: %v", err)
+	}
+}
+
+func TestRollbackCrashMidwayCanBeReplayed(t *testing.T) {
+	managed := t.TempDir()
+	root := t.TempDir()
+	database := filepath.Join(root, "project.sqlite")
+	object := filepath.Join(root, "objects", firstObjectKey)
+	if err := os.MkdirAll(filepath.Dir(object), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	originalDatabase := []byte("previous database")
+	originalObject := []byte("previous referenced object")
+	if err := os.WriteFile(database, originalDatabase, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(object, originalObject, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	databaseBackup, objectBackup := database+".old", object+".old"
+	databaseNew, objectNew := database+".new", object+".new"
+	if err := os.Rename(database, databaseBackup); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(object, objectBackup); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(database, []byte("new database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(object, []byte("new object"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, managed,
+		journalRecord{Op: journalBegin, ID: "restore-mid-rollback"},
+		journalRecord{Op: journalStage, Dest: database, Path: databaseNew},
+		journalRecord{Op: journalStage, Dest: object, Path: objectNew},
+		journalRecord{Op: journalBackup, Dest: database, Path: databaseBackup},
+		journalRecord{Op: journalBackup, Dest: object, Path: objectBackup},
+		journalRecord{Op: journalActivate, Dest: database, Path: databaseNew},
+		journalRecord{Op: journalActivate, Dest: object, Path: objectNew},
+	)
+
+	crashed := false
+	restoreRollbackFault = func(step string) error {
+		if strings.HasPrefix(step, "rollback-after-target:") && !crashed {
+			crashed = true
+			return errors.New("simulated process crash")
+		}
+		return nil
+	}
+	if err := rollbackJournal(filepath.Join(managed, RestoreJournalName)); err == nil || !crashed {
+		restoreRollbackFault = nil
+		t.Fatalf("first rollback = %v, simulated crash = %t", err, crashed)
+	}
+	restoreRollbackFault = nil
+	if got, err := os.ReadFile(database); err != nil || !bytes.Equal(got, originalDatabase) {
+		t.Fatalf("first rollback did not restore its completed database: %q (%v)", got, err)
+	}
+	if got, err := os.ReadFile(object); err != nil || bytes.Equal(got, originalObject) {
+		t.Fatalf("simulated crash did not leave the second target pending: %q (%v)", got, err)
+	}
+	if err := rollbackInterruptedRestore(managed); err != nil {
+		t.Fatalf("replay rollback after simulated crash: %v", err)
+	}
+	if got, err := os.ReadFile(database); err != nil || !bytes.Equal(got, originalDatabase) {
+		t.Fatalf("replayed rollback changed the database: %q (%v)", got, err)
+	}
+	if got, err := os.ReadFile(object); err != nil || !bytes.Equal(got, originalObject) {
+		t.Fatalf("replayed rollback changed the object: %q (%v)", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(managed, RestoreJournalName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("replayed rollback left the journal: %v", err)
+	}
 }
 
 // TestRollbackRemovesNewContentWhoseOriginalNeverExisted 覆盖 absent + activate 这条
@@ -1106,6 +1439,47 @@ func openProject(databasePath string) (*storage.Store, *backendmodel.Service, *r
 		return nil, nil, nil, err
 	}
 	return store, models, recordService, nil
+}
+
+func assertRestoredDurabilityTarget(t *testing.T, target restoreDurabilityTarget, databaseDigest, collectionID string) {
+	t.Helper()
+	if got := hashFile(t, target.database); got != databaseDigest {
+		t.Fatalf("successful retry database digest = %s, want %s", got, databaseDigest)
+	}
+	for key, expected := range map[string][]byte{
+		firstObjectKey:  []byte("bundle-first-object"),
+		secondObjectKey: []byte("bundle-new-object"),
+	} {
+		if got, err := os.ReadFile(filepath.Join(target.objects, key)); err != nil || !bytes.Equal(got, expected) {
+			t.Fatalf("successful retry object %q = %q (%v)", key, got, err)
+		}
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(target.database + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("successful retry left old database %s state: %v", suffix, err)
+		}
+	}
+	store, _, restoredRecords, err := openProject(target.database)
+	if err != nil {
+		t.Fatalf("open database after successful retry: %v", err)
+	}
+	defer store.Close()
+	page, err := restoredRecords.List(context.Background(), collectionID, records.ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("read Records after successful retry: %v", err)
+	}
+	if len(page.Data) != 2 {
+		t.Fatalf("Records after successful retry = %d, want 2", len(page.Data))
+	}
+	keys := map[string]bool{}
+	for _, record := range page.Data {
+		if key, ok := record.Values["attachment"].(string); ok {
+			keys[key] = true
+		}
+	}
+	if !keys[firstObjectKey] || !keys[secondObjectKey] {
+		t.Fatalf("File references after successful retry = %#v", keys)
+	}
 }
 
 // ---------------------------------------------------------------- P1: Restore bounds

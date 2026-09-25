@@ -8,15 +8,25 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/extensions"
+	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/portability"
+	modelryproject "github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/records"
+	modelryruntime "github.com/liujingwen1225/modelry/internal/runtime"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -27,9 +37,10 @@ const cliObjectKey = "obj_44444444444444444444444444444444"
 
 // cliProject 是一个已经停止、可以被 CLI 备份的项目根目录。
 type cliProject struct {
-	root    string
-	managed string
-	objects string
+	root         string
+	managed      string
+	objects      string
+	collectionID string
 }
 
 // newCLIProject 建立一个带 file Field 的真实项目，并写入一个真实的 File object。
@@ -76,6 +87,7 @@ func newCLIProject(t *testing.T, objectBytes []byte) cliProject {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
+	project.collectionID = collection.ID
 	return project
 }
 
@@ -220,6 +232,61 @@ func TestPortabilityCLIRestoreIsAllOrNothing(t *testing.T) {
 	}
 }
 
+func TestPortabilityCLIAcceptsAmbiguousLegacyStateBeforeRetry(t *testing.T) {
+	source := newCLIProject(t, []byte("bundle-file-bytes"))
+	bundlePath := filepath.Join(source.root, "bundle.tar")
+	var backupOut, backupErr bytes.Buffer
+	if code := run([]string{"backup", "--project-root", source.root, "--out", bundlePath}, &backupOut, &backupErr); code != 0 {
+		t.Fatalf("backup exited %d: %s", code, backupErr.String())
+	}
+
+	target := newCLIProject(t, []byte("previous-project-file"))
+	originalDatabase, err := os.ReadFile(target.database())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyBackup := target.database() + ".legacy.old"
+	if err := os.Rename(target.database(), legacyBackup); err != nil {
+		t.Fatal(err)
+	}
+	possiblyActivated := []byte("legacy activated database")
+	if err := os.WriteFile(target.database(), possiblyActivated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	legacyJournal := fmt.Sprintf(
+		"{\"op\":\"stage\",\"dest\":%q,\"path\":%q}\n"+
+			"{\"op\":\"backup\",\"dest\":%q,\"path\":%q}\n"+
+			"{\"op\":\"activate\",\"dest\":%q,\"path\":%q}\n"+
+			"{\"op\":\"done\"}\n",
+		target.database(), target.database()+".legacy.new",
+		target.database(), legacyBackup,
+		target.database(), target.database()+".legacy.new",
+	)
+	if err := os.WriteFile(filepath.Join(target.managed, portability.RestoreJournalName), []byte(legacyJournal), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var refusedOut, refusedErr bytes.Buffer
+	if code := run([]string{"restore", "--project-root", target.root, "--from", bundlePath, "--force"}, &refusedOut, &refusedErr); code == 0 {
+		t.Fatal("restore guessed how to recover an ambiguous legacy journal")
+	}
+	if got, err := os.ReadFile(target.database()); err != nil || !bytes.Equal(got, possiblyActivated) {
+		t.Fatalf("refused restore changed the active legacy database: %q (%v)", got, err)
+	}
+	if got, err := os.ReadFile(legacyBackup); err != nil || !bytes.Equal(got, originalDatabase) {
+		t.Fatalf("refused restore changed the legacy backup: %q (%v)", got, err)
+	}
+
+	var restoreOut, restoreErr bytes.Buffer
+	if code := run([]string{"restore", "--project-root", target.root, "--from", bundlePath, "--force", "--resolve-legacy-restore=accept-current"}, &restoreOut, &restoreErr); code != 0 {
+		t.Fatalf("explicit legacy-state acceptance and restore exited %d: %s", code, restoreErr.String())
+	}
+	if got, err := os.ReadFile(filepath.Join(target.objects, cliObjectKey)); err != nil || !bytes.Equal(got, []byte("bundle-file-bytes")) {
+		t.Fatalf("restored File object = %q (%v)", got, err)
+	}
+	startStopCLIRuntime(t, target.root)
+}
+
 // TestPortabilityCLIRefusesToBackupOrGenerateDuringAnInterruptedRestore 证明一个半恢复
 // 的项目不会被 CLI 当成空项目打开：那会创建一个全新的空项目，并产出一份看起来合法、
 // 实际是空的备份。
@@ -259,6 +326,392 @@ func TestPortabilityCLIRefusesToBackupOrGenerateDuringAnInterruptedRestore(t *te
 	}
 	if _, err := os.Stat(bundlePath); err != nil {
 		t.Fatalf("backup after the journal was cleared produced no bundle: %v", err)
+	}
+}
+
+const (
+	cliS3AccessKey = "modelry-backup-test-access-marker"
+	cliS3SecretKey = "modelry-backup-test-secret-marker"
+	cliS3Bucket    = "modelry-backup-test"
+	cliS3Prefix    = "modelry"
+)
+
+type cliS3Fixture struct {
+	server    *httptest.Server
+	accessKey string
+	mu        sync.Mutex
+	objects   map[string][]byte
+}
+
+func newCLIS3Fixture(t *testing.T) *cliS3Fixture {
+	t.Helper()
+	fixture := &cliS3Fixture{accessKey: cliS3AccessKey, objects: make(map[string][]byte)}
+	fixture.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization := r.Header.Get("Authorization")
+		if !strings.Contains(authorization, "Credential="+fixture.accessKey+"/") || !strings.Contains(authorization, "Signature=") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		bucketPath := "/" + cliS3Bucket
+		if r.URL.Path == bucketPath && r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = io.WriteString(w, `<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>`)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, bucketPath+"/") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		key := strings.TrimPrefix(r.URL.Path, bucketPath+"/")
+		fixture.mu.Lock()
+		defer fixture.mu.Unlock()
+		switch r.Method {
+		case http.MethodPut:
+			payload, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			fixture.objects[key] = payload
+			w.WriteHeader(http.StatusOK)
+		case http.MethodHead:
+			payload, ok := fixture.objects[key]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Length", fmt.Sprint(len(payload)))
+			w.Header().Set("Content-Type", "application/octet-stream")
+		case http.MethodGet:
+			payload, ok := fixture.objects[key]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Length", fmt.Sprint(len(payload)))
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(payload)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	t.Cleanup(fixture.server.Close)
+	return fixture
+}
+
+func (fixture *cliS3Fixture) object(key string) ([]byte, bool) {
+	fixture.mu.Lock()
+	defer fixture.mu.Unlock()
+	payload, ok := fixture.objects[key]
+	return append([]byte(nil), payload...), ok
+}
+
+func prepareActiveS3CLIProject(t *testing.T, objectBytes []byte) (cliProject, *cliS3Fixture, string) {
+	t.Helper()
+	project := newCLIProject(t, objectBytes)
+	fixture := newCLIS3Fixture(t)
+	rootPath := project.root
+	root, err := modelryproject.ResolveRoot(modelryproject.RootConfig{FlagPath: &rootPath, WorkingDir: project.root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.Open(project.database())
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, err := backendmodel.NewService(context.Background(), store)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	secrets, err := extensions.NewService(context.Background(), store, models, extensions.ServiceOptions{ManagedDir: root.ManagedDir, ProjectID: store.ProjectID()})
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	accessSecret, err := secrets.CreateSecret(context.Background(), "S3 access key", cliS3AccessKey)
+	if err != nil {
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	secretSecret, err := secrets.CreateSecret(context.Background(), "S3 secret key", cliS3SecretKey)
+	if err != nil {
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	files, err := newCLIFileStorage(root, store, models, secrets)
+	if err != nil {
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	settings := filestore.S3Settings{
+		Endpoint: fixture.server.URL, Region: "us-east-1", Bucket: cliS3Bucket,
+		KeyPrefix: cliS3Prefix, PathStyle: true,
+		AccessKeySecretID: accessSecret.ID, SecretKeySecretID: secretSecret.ID,
+	}
+	migration, err := files.StartMigration(context.Background(), filestore.ProviderS3, &settings)
+	if err != nil {
+		_ = files.Close(context.Background())
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatalf("start Local to S3 migration: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for migration.Status == filestore.MigrationPending || migration.Status == filestore.MigrationRunning {
+		if time.Now().After(deadline) {
+			_ = files.Close(context.Background())
+			_ = secrets.Close(context.Background())
+			_ = store.Close()
+			t.Fatal("Local to S3 migration did not finish")
+		}
+		time.Sleep(10 * time.Millisecond)
+		migration, err = files.Migration(context.Background(), migration.ID)
+		if err != nil {
+			_ = files.Close(context.Background())
+			_ = secrets.Close(context.Background())
+			_ = store.Close()
+			t.Fatalf("read Local to S3 migration: %v", err)
+		}
+	}
+	if migration.Status != filestore.MigrationCompleted {
+		_ = files.Close(context.Background())
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatalf("Local to S3 migration status = %s (%s)", migration.Status, migration.Message)
+	}
+	provider, err := files.ActiveProvider(context.Background())
+	if err != nil || provider.Name() != string(filestore.ProviderS3) {
+		_ = files.Close(context.Background())
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatalf("active Provider = %v (%v), want S3", provider, err)
+	}
+	remote, ok := fixture.object(cliS3Prefix + "/" + cliObjectKey)
+	if !ok || !bytes.Equal(remote, objectBytes) {
+		_ = files.Close(context.Background())
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatalf("S3 migration stored %q (%t), want the referenced object bytes", remote, ok)
+	}
+	if err := os.Remove(filepath.Join(project.objects, cliObjectKey)); err != nil {
+		_ = files.Close(context.Background())
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatalf("remove the Local copy after completed migration: %v", err)
+	}
+	if err := files.Close(context.Background()); err != nil {
+		_ = secrets.Close(context.Background())
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := secrets.Close(context.Background()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return project, fixture, secretSecret.ID
+}
+
+func TestPortabilityCLIBackupReadsActiveS3AndRestoresTheFileObject(t *testing.T) {
+	objectBytes := []byte("referenced object that exists only in S3")
+	source, s3, _ := prepareActiveS3CLIProject(t, objectBytes)
+	if _, err := os.Stat(filepath.Join(source.objects, cliObjectKey)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Local object copy still exists before backup: %v", err)
+	}
+	// Start and stop the real Runtime around the active S3 configuration before invoking CLI backup.
+	startStopCLIRuntime(t, source.root)
+
+	bundlePath := filepath.Join(source.root, "active-s3-backup.tar")
+	var backupOut, backupErr bytes.Buffer
+	if code := run([]string{"backup", "--project-root", source.root, "--out", bundlePath}, &backupOut, &backupErr); code != 0 {
+		t.Fatalf("S3-backed CLI backup exited %d: %s", code, backupErr.String())
+	}
+	manifest := readCLIManifest(t, bundlePath)
+	objects, ok := manifest["objects"].([]any)
+	if !ok || len(objects) != 1 {
+		t.Fatalf("S3 backup manifest objects = %v", manifest["objects"])
+	}
+	entry, _ := objects[0].(map[string]any)
+	if entry["key"] != cliObjectKey || int64(entry["bytes"].(float64)) != int64(len(objectBytes)) {
+		t.Fatalf("S3 backup manifest entry = %#v", entry)
+	}
+	objectPath := "objects/" + cliObjectKey
+	archived, err := readCLIBundleEntry(t, bundlePath, objectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(objectBytes)
+	if !bytes.Equal(archived, objectBytes) || entry["sha256"] != hex.EncodeToString(digest[:]) {
+		t.Fatalf("bundle S3 object bytes/digest do not match the active Provider object")
+	}
+	if got, ok := s3.object(cliS3Prefix + "/" + cliObjectKey); !ok || !bytes.Equal(got, objectBytes) {
+		t.Fatal("the S3-compatible fixture no longer contains the source object")
+	}
+
+	targetRoot := t.TempDir()
+	var preflightOut, preflightErr bytes.Buffer
+	if code := run([]string{"restore", "--project-root", targetRoot, "--from", bundlePath, "--preflight"}, &preflightOut, &preflightErr); code != 0 {
+		t.Fatalf("S3 bundle preflight exited %d: %s", code, preflightErr.String())
+	}
+	if !strings.Contains(preflightOut.String(), `"compatible":true`) {
+		t.Fatalf("S3 bundle preflight = %s", preflightOut.String())
+	}
+	var restoreOut, restoreErr bytes.Buffer
+	if code := run([]string{"restore", "--project-root", targetRoot, "--from", bundlePath}, &restoreOut, &restoreErr); code != 0 {
+		t.Fatalf("S3 bundle restore exited %d: %s", code, restoreErr.String())
+	}
+	startStopCLIRuntime(t, targetRoot)
+
+	store, err := storage.Open(filepath.Join(targetRoot, ".modelry", "project.sqlite"))
+	if err != nil {
+		t.Fatalf("open project after Runtime restart: %v", err)
+	}
+	models, err := backendmodel.NewService(context.Background(), store)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	objectsDir := filepath.Join(targetRoot, ".modelry", "files", "objects")
+	recordsService, err := records.NewWithLocalFiles(store, models, filepath.Join(targetRoot, ".modelry", "files", "tmp"), objectsDir)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	page, err := recordsService.List(context.Background(), source.collectionID, records.ListOptions{Limit: 10})
+	if err != nil {
+		_ = store.Close()
+		t.Fatalf("read restored Records after Runtime restart: %v", err)
+	}
+	if len(page.Data) != 1 || page.Data[0].Values["attachment"] != cliObjectKey {
+		_ = store.Close()
+		t.Fatalf("restored File Record reference = %#v", page.Data)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restoredObject := filepath.Join(objectsDir, cliObjectKey)
+	if got, err := os.ReadFile(restoredObject); err != nil || !bytes.Equal(got, objectBytes) {
+		t.Fatalf("restored Local object = %q (%v), want the original S3 bytes", got, err)
+	}
+}
+
+func TestPortabilityCLIBackupFailsClosedForMissingS3CredentialAndUnavailableS3(t *testing.T) {
+	t.Run("missing credential does not fall back to Local", func(t *testing.T) {
+		project, _, secretID := prepareActiveS3CLIProject(t, []byte("only-in-S3"))
+		store, err := storage.Open(project.database())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.WithTransaction(context.Background(), func(tx storage.Executor) error {
+			_, err := tx.ExecContext(context.Background(), `DELETE FROM modelry_secrets WHERE id=?`, secretID)
+			return err
+		}); err != nil {
+			_ = store.Close()
+			t.Fatal(err)
+		}
+		if err := store.Close(); err != nil {
+			t.Fatal(err)
+		}
+		decoy := []byte("incorrect Local fallback decoy")
+		if err := os.WriteFile(filepath.Join(project.objects, cliObjectKey), decoy, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		bundlePath := filepath.Join(project.root, "missing-secret.tar")
+		var stdout, stderr bytes.Buffer
+		if code := run([]string{"backup", "--project-root", project.root, "--out", bundlePath}, &stdout, &stderr); code == 0 {
+			t.Fatal("backup succeeded after its active S3 Secret was removed")
+		}
+		assertCLIBackupFailureIsRedacted(t, bundlePath, stdout.String(), stderr.String())
+	})
+
+	t.Run("unavailable S3 does not fall back to Local", func(t *testing.T) {
+		project, fixture, _ := prepareActiveS3CLIProject(t, []byte("only-in-S3"))
+		fixture.server.Close()
+		decoy := []byte("incorrect Local fallback decoy")
+		if err := os.WriteFile(filepath.Join(project.objects, cliObjectKey), decoy, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		bundlePath := filepath.Join(project.root, "unavailable-s3.tar")
+		var stdout, stderr bytes.Buffer
+		if code := run([]string{"backup", "--project-root", project.root, "--out", bundlePath}, &stdout, &stderr); code == 0 {
+			t.Fatal("backup succeeded by using the Local decoy while active S3 was unavailable")
+		}
+		assertCLIBackupFailureIsRedacted(t, bundlePath, stdout.String(), stderr.String())
+	})
+}
+
+func assertCLIBackupFailureIsRedacted(t *testing.T, bundlePath, stdout, stderr string) {
+	t.Helper()
+	if _, err := os.Stat(bundlePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed S3 backup left a bundle: %v", err)
+	}
+	combined := stdout + stderr
+	for _, secret := range []string{cliS3AccessKey, cliS3SecretKey, "Authorization", "X-Amz-Signature", "X-Amz-Security-Token"} {
+		if strings.Contains(combined, secret) {
+			t.Fatalf("backup failure output leaked %q: %s", secret, combined)
+		}
+	}
+}
+
+func startStopCLIRuntime(t *testing.T, projectRoot string) {
+	t.Helper()
+	path := projectRoot
+	instance, err := modelryruntime.New(modelryruntime.Options{
+		ProjectRoot: modelryproject.RootConfig{FlagPath: &path, WorkingDir: projectRoot}, Version: "test",
+	})
+	if err != nil {
+		t.Fatalf("start Runtime for %s: %v", projectRoot, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	ready := make(chan net.Addr, 1)
+	go func() { done <- instance.Run(ctx, "127.0.0.1:0", func(address net.Addr) { ready <- address }) }()
+	select {
+	case <-ready:
+	case err := <-done:
+		cancel()
+		t.Fatalf("Runtime exited before ready: %v", err)
+	case <-time.After(10 * time.Second):
+		cancel()
+		_ = instance.Close()
+		t.Fatal("Runtime did not become ready")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("stop Runtime for %s: %v", projectRoot, err)
+		}
+	case <-time.After(10 * time.Second):
+		_ = instance.Close()
+		t.Fatal("Runtime did not stop")
+	}
+}
+
+func readCLIBundleEntry(t *testing.T, bundlePath, name string) ([]byte, error) {
+	t.Helper()
+	file, err := os.Open(bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	reader := tar.NewReader(file)
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			return nil, os.ErrNotExist
+		}
+		if err != nil {
+			return nil, err
+		}
+		if header.Name == name {
+			return io.ReadAll(reader)
+		}
 	}
 }
 
@@ -306,9 +759,9 @@ func TestPortabilityCLIBackupPreflightGenerateAndRestore(t *testing.T) {
 		t.Fatalf("backup bundle missing: %v", err)
 	}
 	var summary struct {
-		Bundle      string `json:"bundle"`
-		Digest      string `json:"digest"`
-		Collections int64  `json:"collections"`
+		Bundle         string `json:"bundle"`
+		Digest         string `json:"digest"`
+		Collections    int64  `json:"collections"`
 		RuntimeVersion string `json:"runtimeVersion"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(backupOut.Bytes()), &summary); err != nil {

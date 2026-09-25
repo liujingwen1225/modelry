@@ -24,10 +24,21 @@ import (
 // 都会完整回滚，而不是留下半恢复的项目。step 的形态是 "<phase>:<destination>"。
 var restoreFault func(step string) error
 
+// restoreRollbackFault simulates process death after one destination has been
+// rolled back. Production runs keep it nil; recovery tests replay the journal.
+var restoreRollbackFault func(step string) error
+
 const (
-	restorePhaseCopy     = "copy"
-	restorePhasePreserve = "preserve"
-	restorePhaseActivate = "activate"
+	restorePhaseCopy            = "copy"
+	restorePhasePreserve        = "preserve"
+	restorePhasePreserveSync    = "preserve-sync"
+	restorePhaseActivate        = "activate"
+	restorePhaseActivateSync    = "activate-sync"
+	restorePhaseCommitWrite     = "commit-write"
+	restorePhaseCommitFlush     = "commit-flush"
+	restorePhaseCommitSync      = "commit-sync"
+	restorePhaseCommitRename    = "commit-rename"
+	restorePhaseCommitDirectory = "commit-directory-sync"
 )
 
 // ApplyOptions 控制一次 restore apply。
@@ -159,9 +170,11 @@ func planBundle(manifest Manifest) (bundlePlan, []Finding, error) {
 
 // stagedBundle 是一次 restore 在 managed staging 目录里准备好的新项目状态。
 type stagedBundle struct {
-	databasePath string
-	objectsDir   string
-	objectKeys   []string
+	databasePath  string
+	objectsDir    string
+	databaseEntry ObjectEntry
+	objectKeys    []string
+	objectEntries []ObjectEntry
 }
 
 // stageBundle 解压一个 Backup Bundle 到 staging 目录，并对每个载荷重新校验
@@ -210,7 +223,11 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 	}
 	bounded.tighten(archiveEnvelope(plan.declaredPayloadBytes))
 
-	staged := stagedBundle{databasePath: filepath.Join(workDir, "project.sqlite"), objectsDir: filepath.Join(workDir, "objects")}
+	staged := stagedBundle{
+		databasePath:  filepath.Join(workDir, "project.sqlite"),
+		objectsDir:    filepath.Join(workDir, "objects"),
+		databaseEntry: ObjectEntry{Key: DatabaseArchivePath, Bytes: plan.manifest.Database.Bytes, SHA256: plan.manifest.Database.SHA256},
+	}
 	seen := map[string]struct{}{}
 	// manifest 自身也是一个归档条目，因此计数从 1 开始。
 	entries := 1
@@ -245,6 +262,7 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 		if name != DatabaseArchivePath {
 			key := strings.TrimPrefix(name, ObjectsArchivePrefix)
 			staged.objectKeys = append(staged.objectKeys, key)
+			staged.objectEntries = append(staged.objectEntries, declared)
 			destination = filepath.Join(staged.objectsDir, key)
 			if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 				return stagedBundle{}, fmt.Errorf("%w: stage bundle payload: %v", ErrStorage, err)
@@ -310,11 +328,14 @@ type activationEntry struct {
 	destination string
 	backup      string
 	tmp         string
+	expected    ObjectEntry
 }
 
 // activationPlan 是一次 restore 的三阶段激活计划。
 type activationPlan struct {
 	journalPath string
+	commitPath  string
+	transaction string
 	journal     *os.File
 	entries     []activationEntry
 }
@@ -327,7 +348,7 @@ func buildActivationPlan(managedDir, databasePath, objectsDir string, staged sta
 	entries := make([]activationEntry, 0, len(staged.objectKeys)+3)
 	entries = append(entries, activationEntry{
 		kind: activationReplace, staged: staged.databasePath, destination: databasePath,
-		backup: databasePath + "." + nonce + ".old", tmp: databasePath + "." + nonce + ".new",
+		backup: databasePath + "." + nonce + ".old", tmp: databasePath + "." + nonce + ".new", expected: staged.databaseEntry,
 	})
 	// 旧数据库的 WAL 边车必须随主文件一起消失：把新数据库留在旧 WAL 旁边会让下一次
 	// 启动把它当作本库的日志回放，从而得到新旧混合的数据。
@@ -336,14 +357,19 @@ func buildActivationPlan(managedDir, databasePath, objectsDir string, staged sta
 			kind: activationRemove, destination: sidecar, backup: sidecar + "." + nonce + ".old",
 		})
 	}
-	for _, key := range staged.objectKeys {
+	for index, key := range staged.objectKeys {
 		destination := filepath.Join(objectsDir, key)
 		entries = append(entries, activationEntry{
 			kind: activationReplace, staged: filepath.Join(staged.objectsDir, key), destination: destination,
-			backup: destination + "." + nonce + ".old", tmp: destination + "." + nonce + ".new",
+			backup: destination + "." + nonce + ".old", tmp: destination + "." + nonce + ".new", expected: staged.objectEntries[index],
 		})
 	}
-	return &activationPlan{journalPath: filepath.Join(managedDir, RestoreJournalName), entries: entries}, nil
+	return &activationPlan{
+		journalPath: filepath.Join(managedDir, RestoreJournalName),
+		commitPath:  filepath.Join(managedDir, RestoreCommitName),
+		transaction: nonce,
+		entries:     entries,
+	}, nil
 }
 
 func restoreNonce() (string, error) {
@@ -357,9 +383,13 @@ func restoreNonce() (string, error) {
 // journalRecord 是 restore journal 的一行。它采用 write-ahead 顺序：先记录意图，
 // 再执行动作，因此回滚可以精确区分「已经动过」与「还没动过」。
 type journalRecord struct {
-	Op   string `json:"op"`
-	Dest string `json:"dest,omitempty"`
-	Path string `json:"path,omitempty"`
+	Op     string `json:"op"`
+	ID     string `json:"id,omitempty"`
+	Dest   string `json:"dest,omitempty"`
+	Path   string `json:"path,omitempty"`
+	Exists bool   `json:"exists,omitempty"`
+	Bytes  int64  `json:"bytes,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 const (
@@ -368,18 +398,61 @@ const (
 	journalBackup   = "backup"
 	journalAbsent   = "absent"
 	journalActivate = "activate"
+	journalBegin    = "begin"
+	journalTarget   = "target"
 	journalDone     = "done"
 )
+
+var errLegacyCommitAmbiguous = errors.New("legacy restore journal has no durable commit marker")
+
+// LegacyRestoreResolution is an explicit operator choice for a pre-marker restore journal
+// whose visible journalDone line cannot prove whether the old file Sync succeeded.
+type LegacyRestoreResolution string
+
+const (
+	LegacyRestoreAcceptCurrent LegacyRestoreResolution = "accept-current"
+)
+
+type commitDestination struct {
+	Path   string `json:"path"`
+	Exists bool   `json:"exists"`
+	Bytes  int64  `json:"bytes,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+}
+
+type durableCommitMarker struct {
+	Version       int                 `json:"version"`
+	Transaction   string              `json:"transaction"`
+	JournalSHA256 string              `json:"journalSha256"`
+	Destinations  []commitDestination `json:"destinations"`
+}
 
 // run 执行三阶段激活：先准备全部新内容，再统一把原内容移开，最后统一激活。
 // 三个阶段严格分开，因此「原内容被移开」的窗口只包含 rename，不包含任何大块复制。
 func (plan *activationPlan) run() error {
-	journal, err := os.OpenFile(plan.journalPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	journal, err := os.OpenFile(plan.journalPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("%w: create the restore journal: %v", ErrStorage, err)
 	}
 	plan.journal = journal
 	writer := bufio.NewWriter(journal)
+	if err := plan.record(writer, journalRecord{Op: journalBegin, ID: plan.transaction}); err != nil {
+		return plan.fail(err)
+	}
+	if err := syncDirectory(filepath.Dir(plan.journalPath)); err != nil {
+		return plan.fail(fmt.Errorf("%w: persist the restore journal entry: %v", ErrStorage, err))
+	}
+	for index := range plan.entries {
+		entry := &plan.entries[index]
+		expected := entry.kind == activationReplace
+		record := journalRecord{Op: journalTarget, ID: plan.transaction, Dest: entry.destination, Exists: expected}
+		if expected {
+			record.Bytes, record.SHA256 = entry.expected.Bytes, entry.expected.SHA256
+		}
+		if err := plan.record(writer, record); err != nil {
+			return plan.fail(err)
+		}
+	}
 
 	// 阶段一：把新内容准备到目标目录旁边。此时原项目完全没有被触碰。
 	for index := range plan.entries {
@@ -400,10 +473,6 @@ func (plan *activationPlan) run() error {
 			return plan.fail(err)
 		}
 	}
-	if err := syncPath(filepath.Dir(plan.journalPath)); err != nil {
-		return plan.fail(err)
-	}
-
 	// 阶段二：把原内容移到同目录的备份位置。窗口只包含 rename。
 	for index := range plan.entries {
 		entry := &plan.entries[index]
@@ -426,9 +495,12 @@ func (plan *activationPlan) run() error {
 		if err := os.Rename(entry.destination, entry.backup); err != nil {
 			return plan.fail(fmt.Errorf("%w: preserve the existing project state: %v", ErrStorage, err))
 		}
-	}
-	if err := syncPath(filepath.Dir(plan.journalPath)); err != nil {
-		return plan.fail(err)
+		if err := plan.fault(restorePhasePreserveSync, entry); err != nil {
+			return plan.fail(err)
+		}
+		if err := syncDirectory(filepath.Dir(entry.destination)); err != nil {
+			return plan.fail(fmt.Errorf("%w: persist preserved project state: %v", ErrStorage, err))
+		}
 	}
 
 	// 阶段三：激活。每一步都有 write-ahead 记录，因此中途失败可以精确回滚。
@@ -446,29 +518,119 @@ func (plan *activationPlan) run() error {
 		if err := os.Rename(entry.tmp, entry.destination); err != nil {
 			return plan.fail(fmt.Errorf("%w: activate the restored payload: %v", ErrStorage, err))
 		}
-		if err := syncPath(filepath.Dir(entry.destination)); err != nil {
+		if err := plan.fault(restorePhaseActivateSync, entry); err != nil {
 			return plan.fail(err)
+		}
+		if err := syncDirectory(filepath.Dir(entry.destination)); err != nil {
+			return plan.fail(fmt.Errorf("%w: persist activated project state: %v", ErrStorage, err))
 		}
 	}
 
-	// 阶段四：提交。到这里 restore 已经完成，此后的清理失败不能再把成功报成失败。
-	if err := plan.record(writer, journalRecord{Op: journalDone}); err != nil {
+	// 阶段四：关闭并再次同步完整 journal，再原子安装独立 commit marker。
+	// marker 的 rename + managed directory fsync 是唯一 commit point。
+	if err := writer.Flush(); err != nil {
+		return plan.fail(fmt.Errorf("%w: flush the restore journal before commit: %v", ErrStorage, err))
+	}
+	if err := journal.Sync(); err != nil {
+		return plan.fail(fmt.Errorf("%w: sync the restore journal before commit: %v", ErrStorage, err))
+	}
+	if err := journal.Close(); err != nil {
+		plan.journal = nil
+		return plan.fail(fmt.Errorf("%w: close the restore journal before commit: %v", ErrStorage, err))
+	}
+	plan.journal = nil
+	if err := plan.installCommitMarker(); err != nil {
 		return plan.fail(err)
 	}
-	// 先删备份再删 journal：如果在两者之间崩溃，journal 里的 done 会让下一次恢复
-	// 继续清掉剩余的备份，而不是让旧数据的副本永久留在磁盘上。
-	for index := range plan.entries {
-		_ = os.Remove(plan.entries[index].backup)
-	}
-	plan.discardJournal()
+	// Durable commit point 已经越过。清理失败不改变成功结果；journal 和 marker 会留给
+	// 下次启动只做 cleanup，绝不会回滚已提交的新项目。
+	_ = cleanupCommittedRestore(plan.journalPath, plan.commitPath)
 	return nil
 }
 
 func (plan *activationPlan) fault(phase string, entry *activationEntry) error {
+	return injectRestoreFault(phase + ":" + entry.destination)
+}
+
+func injectRestoreFault(step string) error {
 	if restoreFault == nil {
 		return nil
 	}
-	return restoreFault(phase + ":" + entry.destination)
+	return restoreFault(step)
+}
+
+func (plan *activationPlan) installCommitMarker() error {
+	journalBytes, err := os.ReadFile(plan.journalPath)
+	if err != nil {
+		return fmt.Errorf("%w: read the complete restore journal before commit: %v", ErrStorage, err)
+	}
+	marker := durableCommitMarker{
+		Version: 1, Transaction: plan.transaction,
+		JournalSHA256: digestBytes(journalBytes),
+		Destinations:  make([]commitDestination, 0, len(plan.entries)),
+	}
+	for _, entry := range plan.entries {
+		state := commitDestination{Path: entry.destination, Exists: entry.kind == activationReplace}
+		if state.Exists {
+			state.Bytes, state.SHA256 = entry.expected.Bytes, entry.expected.SHA256
+		}
+		marker.Destinations = append(marker.Destinations, state)
+	}
+	encoded, err := json.Marshal(marker)
+	if err != nil {
+		return fmt.Errorf("%w: encode the restore commit marker: %v", ErrStorage, err)
+	}
+	temporary := plan.commitPath + ".tmp"
+	file, err := os.OpenFile(temporary, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("%w: create the restore commit marker: %v", ErrStorage, err)
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = file.Close()
+		}
+	}()
+	writer := bufio.NewWriter(file)
+	if err := injectRestoreFault(restorePhaseCommitWrite + ":" + plan.commitPath); err != nil {
+		return err
+	}
+	if n, err := writer.Write(encoded); err != nil || n != len(encoded) {
+		if err == nil {
+			err = io.ErrShortWrite
+		}
+		return fmt.Errorf("%w: write the restore commit marker: %v", ErrStorage, err)
+	}
+	if err := injectRestoreFault(restorePhaseCommitFlush + ":" + plan.commitPath); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("%w: flush the restore commit marker: %v", ErrStorage, err)
+	}
+	if err := injectRestoreFault(restorePhaseCommitSync + ":" + plan.commitPath); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("%w: sync the restore commit marker: %v", ErrStorage, err)
+	}
+	if err := file.Close(); err != nil {
+		closed = true
+		return fmt.Errorf("%w: close the restore commit marker: %v", ErrStorage, err)
+	}
+	closed = true
+	if err := injectRestoreFault(restorePhaseCommitRename + ":" + plan.commitPath); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, plan.commitPath); err != nil {
+		return fmt.Errorf("%w: install the restore commit marker: %v", ErrStorage, err)
+	}
+	if err := injectRestoreFault(restorePhaseCommitDirectory + ":" + plan.commitPath); err != nil {
+		return err
+	}
+	if err := syncDirectory(filepath.Dir(plan.commitPath)); err != nil {
+		return fmt.Errorf("%w: persist the restore commit marker: %v", ErrStorage, err)
+	}
+	return nil
 }
 
 // prepareDirectory 先把要创建的目录写进 journal，再真正创建它们。
@@ -481,9 +643,12 @@ func (plan *activationPlan) prepareDirectory(writer *bufio.Writer, directory str
 		if err := plan.record(writer, journalRecord{Op: journalMkdir, Path: path}); err != nil {
 			return err
 		}
-	}
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return fmt.Errorf("%w: prepare the restore destination: %v", ErrStorage, err)
+		if err := os.Mkdir(path, 0o700); err != nil {
+			return fmt.Errorf("%w: prepare the restore destination: %v", ErrStorage, err)
+		}
+		if err := syncDirectory(filepath.Dir(path)); err != nil {
+			return fmt.Errorf("%w: persist the restore destination directory: %v", ErrStorage, err)
+		}
 	}
 	return nil
 }
@@ -510,26 +675,38 @@ func (plan *activationPlan) record(writer *bufio.Writer, record journalRecord) e
 
 // fail 回滚已经发生的每一步，然后返回原始错误。
 func (plan *activationPlan) fail(cause error) error {
-	if rollbackErr := plan.rollback(); rollbackErr != nil {
-		return errors.Join(cause, rollbackErr)
+	if plan.journal != nil {
+		if err := plan.journal.Close(); err != nil {
+			cause = errors.Join(cause, fmt.Errorf("close restore journal: %w", err))
+		}
+		plan.journal = nil
+	}
+	if err := rollbackJournal(plan.journalPath); err != nil {
+		return errors.Join(cause, err)
+	}
+	if err := cleanupUncommittedRestore(plan.journalPath, plan.commitPath); err != nil {
+		return errors.Join(cause, err)
 	}
 	return cause
 }
 
-func (plan *activationPlan) rollback() error {
-	if err := rollbackJournal(plan.journalPath); err != nil {
-		return err
+func cleanupUncommittedRestore(journalPath, commitPath string) error {
+	if err := removePath(commitPath + ".tmp"); err != nil {
+		return fmt.Errorf("%w: remove an incomplete commit marker: %v", ErrStorage, err)
 	}
-	plan.discardJournal()
+	if err := removePath(commitPath); err != nil {
+		return fmt.Errorf("%w: remove an uncommitted marker: %v", ErrStorage, err)
+	}
+	if err := syncDirectory(filepath.Dir(journalPath)); err != nil {
+		return fmt.Errorf("%w: persist removal of an uncommitted marker: %v", ErrStorage, err)
+	}
+	if err := removePath(journalPath); err != nil {
+		return fmt.Errorf("%w: remove the rolled back restore journal: %v", ErrStorage, err)
+	}
+	if err := syncDirectory(filepath.Dir(journalPath)); err != nil {
+		return fmt.Errorf("%w: persist removal of the restore journal: %v", ErrStorage, err)
+	}
 	return nil
-}
-
-func (plan *activationPlan) discardJournal() {
-	if plan.journal != nil {
-		_ = plan.journal.Close()
-		plan.journal = nil
-	}
-	_ = os.Remove(plan.journalPath)
 }
 
 // CheckInterruptedRestore 在项目被打开之前收敛一次未完成的 restore。
@@ -540,7 +717,7 @@ func (plan *activationPlan) discardJournal() {
 func CheckInterruptedRestore(managedDir string) error {
 	journalPath := filepath.Join(managedDir, RestoreJournalName)
 	if _, err := os.Stat(journalPath); errors.Is(err, os.ErrNotExist) {
-		return nil
+		return cleanupOrphanCommitMarker(filepath.Join(managedDir, RestoreCommitName))
 	} else if err != nil {
 		return err
 	}
@@ -549,49 +726,253 @@ func CheckInterruptedRestore(managedDir string) error {
 		return err
 	}
 	if committed {
-		return rollbackInterruptedRestore(managedDir)
+		return cleanupCommittedRestore(journalPath, filepath.Join(managedDir, RestoreCommitName))
 	}
 	return fmt.Errorf("project %q is in the middle of an interrupted restore; run modelry restore --from <bundle> again to finish or roll it back before starting the Runtime", managedDir)
 }
 
-// journalCommitted 报告 journal 是否已经记录过提交。
+// journalCommitted 报告 durable commit marker 是否对应一个完整 journal 和当前新状态。
 func journalCommitted(journalPath string) (bool, error) {
-	file, err := os.Open(journalPath)
+	journalBytes, err := os.ReadFile(journalPath)
 	if err != nil {
 		return false, fmt.Errorf("%w: read the restore journal: %v", ErrStorage, err)
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+	records, complete := parseCompleteJournal(journalBytes)
+	if !complete {
+		return false, nil
+	}
+	commitPath := filepath.Join(filepath.Dir(journalPath), RestoreCommitName)
+	markerBytes, err := os.ReadFile(commitPath)
+	if errors.Is(err, os.ErrNotExist) {
+		if hasJournalDone(records) {
+			return false, fmt.Errorf("%w: refusing to infer a commit from a readable legacy done record", errLegacyCommitAmbiguous)
 		}
-		var record journalRecord
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			// 残缺的行只可能是最后一行，其动作用 write-ahead 语义保证还没有发生。
-			return false, nil
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("%w: read the restore commit marker: %v", ErrStorage, err)
+	}
+	var marker durableCommitMarker
+	if err := json.Unmarshal(markerBytes, &marker); err != nil || marker.Version != 1 || marker.Transaction == "" {
+		if hasJournalDone(records) {
+			return false, fmt.Errorf("%w: legacy done record is not backed by a valid commit marker", errLegacyCommitAmbiguous)
 		}
-		if record.Op == journalDone {
-			return true, nil
+		return false, nil
+	}
+	if marker.JournalSHA256 != digestBytes(journalBytes) {
+		if hasJournalDone(records) {
+			return false, fmt.Errorf("%w: legacy done record is not backed by a matching commit marker", errLegacyCommitAmbiguous)
+		}
+		return false, nil
+	}
+	targets := make(map[string]commitDestination)
+	transaction := ""
+	for _, record := range records {
+		switch record.Op {
+		case journalBegin:
+			if transaction != "" || record.ID == "" {
+				return false, nil
+			}
+			transaction = record.ID
+		case journalTarget:
+			if record.ID == "" || record.Dest == "" {
+				return false, nil
+			}
+			if _, duplicate := targets[record.Dest]; duplicate {
+				return false, nil
+			}
+			targets[record.Dest] = commitDestination{Path: record.Dest, Exists: record.Exists, Bytes: record.Bytes, SHA256: record.SHA256}
 		}
 	}
-	return false, nil
+	if transaction == "" || transaction != marker.Transaction || len(targets) == 0 || len(targets) != len(marker.Destinations) {
+		return false, nil
+	}
+	for _, destination := range marker.Destinations {
+		target, found := targets[destination.Path]
+		if !found || target != destination {
+			return false, nil
+		}
+		if err := verifyCommitDestination(destination); err != nil {
+			if errors.Is(err, os.ErrNotExist) || errors.Is(err, errCommitStateMismatch) {
+				return false, nil
+			}
+			return false, fmt.Errorf("%w: verify the restore commit state: %v", ErrStorage, err)
+		}
+	}
+	return true, nil
+}
+
+var errCommitStateMismatch = errors.New("restore destination differs from committed state")
+
+func digestBytes(value []byte) string {
+	digest := sha256.Sum256(value)
+	return hex.EncodeToString(digest[:])
+}
+
+func parseCompleteJournal(contents []byte) ([]journalRecord, bool) {
+	if len(contents) == 0 || contents[len(contents)-1] != '\n' {
+		return nil, false
+	}
+	lines := strings.Split(string(contents), "\n")
+	records := make([]journalRecord, 0, len(lines)-1)
+	for _, line := range lines[:len(lines)-1] {
+		if strings.TrimSpace(line) == "" {
+			return nil, false
+		}
+		var record journalRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil || record.Op == "" {
+			return nil, false
+		}
+		records = append(records, record)
+	}
+	return records, true
+}
+
+func hasJournalDone(records []journalRecord) bool {
+	for _, record := range records {
+		if record.Op == journalDone {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveLegacyRestore recovers a journal written before durable commit markers existed.
+// Those journals cannot be classified safely from their bytes alone, so callers must
+// explicitly choose to accept the currently activated destinations.
+func ResolveLegacyRestore(managedDir string, resolution LegacyRestoreResolution) error {
+	if resolution != LegacyRestoreAcceptCurrent {
+		return fmt.Errorf("%w: legacy restore resolution must be %q", ErrInvalidArgument, LegacyRestoreAcceptCurrent)
+	}
+	journalPath := filepath.Join(managedDir, RestoreJournalName)
+	committed, err := journalCommitted(journalPath)
+	if err == nil {
+		if committed {
+			return fmt.Errorf("%w: the restore journal already has a valid durable commit marker", ErrInvalidArgument)
+		}
+		return fmt.Errorf("%w: the restore journal is not an ambiguous legacy journal", ErrInvalidArgument)
+	}
+	if !errors.Is(err, errLegacyCommitAmbiguous) {
+		return err
+	}
+	// The old format has no old-state hashes or durable commit marker. An explicit operator
+	// choice can accept the currently active destinations; guessing rollback could produce a
+	// hybrid state if the old cleanup already removed only some backups.
+	return cleanupCommittedRestore(journalPath, filepath.Join(managedDir, RestoreCommitName))
+}
+
+func verifyCommitDestination(destination commitDestination) error {
+	info, err := os.Lstat(destination.Path)
+	if !destination.Exists {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return errCommitStateMismatch
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() != destination.Bytes || !validDigest(destination.SHA256) {
+		return errCommitStateMismatch
+	}
+	file, err := os.Open(destination.Path)
+	if err != nil {
+		return err
+	}
+	hasher := sha256.New()
+	_, copyErr := io.Copy(hasher, file)
+	closeErr := file.Close()
+	if err := errors.Join(copyErr, closeErr); err != nil {
+		return err
+	}
+	if hex.EncodeToString(hasher.Sum(nil)) != destination.SHA256 {
+		return errCommitStateMismatch
+	}
+	return nil
 }
 
 // rollbackInterruptedRestore 回滚上一次崩溃留下的激活。没有 journal 时它是空操作。
 func rollbackInterruptedRestore(managedDir string) error {
 	journalPath := filepath.Join(managedDir, RestoreJournalName)
 	if _, err := os.Stat(journalPath); errors.Is(err, os.ErrNotExist) {
-		return nil
+		return cleanupOrphanCommitMarker(filepath.Join(managedDir, RestoreCommitName))
 	} else if err != nil {
 		return err
+	}
+	commitPath := filepath.Join(managedDir, RestoreCommitName)
+	committed, err := journalCommitted(journalPath)
+	if err != nil {
+		return err
+	}
+	if committed {
+		return cleanupCommittedRestore(journalPath, commitPath)
 	}
 	if err := rollbackJournal(journalPath); err != nil {
 		return err
 	}
-	return os.Remove(journalPath)
+	return cleanupUncommittedRestore(journalPath, commitPath)
+}
+
+func cleanupOrphanCommitMarker(commitPath string) error {
+	temporaryRemoved, err := removeIfExists(commitPath + ".tmp")
+	if err != nil {
+		return err
+	}
+	markerRemoved, err := removeIfExists(commitPath)
+	if err != nil {
+		return err
+	}
+	if !temporaryRemoved && !markerRemoved {
+		return nil
+	}
+	return syncDirectory(filepath.Dir(commitPath))
+}
+
+func cleanupCommittedRestore(journalPath, commitPath string) error {
+	contents, err := os.ReadFile(journalPath)
+	if err != nil {
+		return fmt.Errorf("%w: read committed restore journal: %v", ErrStorage, err)
+	}
+	records, complete := parseCompleteJournal(contents)
+	if !complete {
+		return fmt.Errorf("%w: committed restore journal is incomplete", ErrStorage)
+	}
+	backups := make([]string, 0, 8)
+	staged := make([]string, 0, 8)
+	for _, record := range records {
+		switch record.Op {
+		case journalBackup:
+			backups = append(backups, record.Path)
+		case journalStage:
+			staged = append(staged, record.Path)
+		}
+	}
+	for _, name := range append(backups, staged...) {
+		removed, err := removeIfExists(name)
+		if err != nil {
+			return fmt.Errorf("%w: clean committed restore files: %v", ErrStorage, err)
+		}
+		if removed {
+			if err := syncDirectory(filepath.Dir(name)); err != nil {
+				return fmt.Errorf("%w: persist committed restore cleanup: %v", ErrStorage, err)
+			}
+		}
+	}
+	// 删除顺序确保 marker 仍在时 journal 要么仍在（可继续 cleanup），要么已 durable 删除。
+	if removed, err := removeIfExists(journalPath); err != nil {
+		return fmt.Errorf("%w: remove committed restore journal: %v", ErrStorage, err)
+	} else if removed {
+		if err := syncDirectory(filepath.Dir(journalPath)); err != nil {
+			return fmt.Errorf("%w: persist committed journal removal: %v", ErrStorage, err)
+		}
+	}
+	if err := cleanupOrphanCommitMarker(commitPath); err != nil {
+		return fmt.Errorf("%w: remove committed restore marker: %v", ErrStorage, err)
+	}
+	return nil
 }
 
 // destinationState 是 journal 重放出的单个目标的状态。
@@ -623,7 +1004,6 @@ func rollbackJournal(journalPath string) error {
 	order := make([]string, 0, 8)
 	backups := make([]string, 0, 8)
 	directories := make([]string, 0, 4)
-	done := false
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
 	for scanner.Scan() {
@@ -639,8 +1019,6 @@ func rollbackJournal(journalPath string) error {
 			break
 		}
 		switch record.Op {
-		case journalDone:
-			done = true
 		case journalStage:
 			states[record.Dest] = &destinationState{staged: record.Path}
 			order = append(order, record.Dest)
@@ -662,17 +1040,11 @@ func rollbackJournal(journalPath string) error {
 			if state := states[record.Dest]; state != nil {
 				state.activated = true
 			}
+		case journalBegin, journalTarget:
+			// Transaction metadata does not change rollback state.
 		}
 	}
 	// scanner.Err() 只可能来自超长行：同样当作 journal 在此处结束。
-	if done {
-		// 这次 restore 已经提交；备份文件只是清理未完成的残留。
-		for _, backup := range backups {
-			_ = os.Remove(backup)
-		}
-		return nil
-	}
-
 	var failures []error
 	for _, destination := range order {
 		state := states[destination]
@@ -683,10 +1055,16 @@ func rollbackJournal(journalPath string) error {
 		switch {
 		case state.hasBackup && preserved:
 			// 原件确实被移开了；目标位置此刻只可能是我们的新内容或不存在。
-			if err := removePath(destination); err != nil {
+			if removed, err := removeIfExists(destination); err != nil {
 				failures = append(failures, err)
+			} else if removed {
+				if err := syncDirectory(filepath.Dir(destination)); err != nil {
+					failures = append(failures, err)
+				}
 			}
 			if err := os.Rename(state.backup, destination); err != nil {
+				failures = append(failures, err)
+			} else if err := syncDirectory(filepath.Dir(destination)); err != nil {
 				failures = append(failures, err)
 			}
 		case state.hasBackup:
@@ -696,26 +1074,52 @@ func rollbackJournal(journalPath string) error {
 			// 无法被消费，项目将再也无法启动，也无法再次 restore。
 		case state.activated:
 			// 目标原本不存在；撤掉我们创建的内容即可。
-			if err := removePath(destination); err != nil {
+			if removed, err := removeIfExists(destination); err != nil {
 				failures = append(failures, err)
+			} else if removed {
+				if err := syncDirectory(filepath.Dir(destination)); err != nil {
+					failures = append(failures, err)
+				}
 			}
 		}
 		if state.staged != "" {
-			_ = os.Remove(state.staged)
+			if removed, err := removeIfExists(state.staged); err != nil {
+				failures = append(failures, err)
+			} else if removed {
+				if err := syncDirectory(filepath.Dir(state.staged)); err != nil {
+					failures = append(failures, err)
+				}
+			}
+		}
+		if restoreRollbackFault != nil {
+			if err := restoreRollbackFault("rollback-after-target:" + destination); err != nil {
+				return err
+			}
 		}
 	}
 	if len(failures) != 0 {
 		return fmt.Errorf("%w: roll back the interrupted restore: %v", ErrStorage, errors.Join(failures...))
 	}
-	removeEmptyDirectories(directories)
+	if err := removeEmptyDirectories(directories); err != nil {
+		return fmt.Errorf("%w: remove restored directories during rollback: %v", ErrStorage, err)
+	}
 	return nil
 }
 
 // removeEmptyDirectories 只删除 restore 自己创建、且回滚后仍然为空的目录。
-func removeEmptyDirectories(directories []string) {
+func removeEmptyDirectories(directories []string) error {
 	for index := len(directories) - 1; index >= 0; index-- {
-		_ = os.Remove(directories[index])
+		removed, err := removeIfExists(directories[index])
+		if err != nil {
+			return err
+		}
+		if removed {
+			if err := syncDirectory(filepath.Dir(directories[index])); err != nil {
+				return err
+			}
+		}
 	}
+	return nil
 }
 
 // restoreWorkPrefix 是 restore staging 目录的前缀。
@@ -780,6 +1184,9 @@ func copyFile(source, destination string) error {
 	if copyErr != nil {
 		return fmt.Errorf("%w: stage a restore payload: %v", ErrStorage, copyErr)
 	}
+	if err := syncDirectory(filepath.Dir(destination)); err != nil {
+		return fmt.Errorf("%w: persist staged restore payload: %v", ErrStorage, err)
+	}
 	return nil
 }
 
@@ -798,22 +1205,19 @@ func pathExists(value string) (bool, error) {
 }
 
 func removePath(value string) error {
-	if err := os.Remove(value); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
+	_, err := removeIfExists(value)
+	return err
 }
 
-// syncPath 让目录项变更耐久。不支持的平台返回 nil。
-func syncPath(directory string) error {
-	if directory == "" {
-		return nil
+func removeIfExists(value string) (bool, error) {
+	if err := os.Remove(value); errors.Is(err, os.ErrNotExist) || os.IsNotExist(err) {
+		return false, nil
+	} else if err != nil {
+		parent, parentErr := os.Stat(filepath.Dir(value))
+		if os.IsNotExist(parentErr) || (parentErr == nil && !parent.IsDir()) {
+			return false, nil
+		}
+		return false, err
 	}
-	handle, err := os.Open(directory)
-	if err != nil {
-		return nil
-	}
-	defer handle.Close()
-	_ = handle.Sync()
-	return nil
+	return true, nil
 }

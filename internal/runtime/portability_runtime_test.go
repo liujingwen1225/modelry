@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -538,11 +540,26 @@ func TestRuntimeStartsAfterACommittedRestoreIsCleanedUp(t *testing.T) {
 	if err := os.WriteFile(backup, []byte("the-old-database"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	body := `{"op":"stage","dest":"x","path":"y"}` + "\n" +
-		`{"op":"backup","dest":"x","path":` + strconv.Quote(backup) + `}` + "\n" +
-		`{"op":"activate","dest":"x","path":"y"}` + "\n" +
-		`{"op":"done"}` + "\n"
+	destination := filepath.Join(managed, "committed-project.sqlite")
+	transaction := "restore-runtime-committed"
+	body := `{"op":"begin","id":"` + transaction + `"}` + "\n" +
+		`{"op":"target","id":"` + transaction + `","dest":` + strconv.Quote(destination) + `,"exists":false}` + "\n" +
+		`{"op":"stage","dest":` + strconv.Quote(destination) + `,"path":"y"}` + "\n" +
+		`{"op":"backup","dest":` + strconv.Quote(destination) + `,"path":` + strconv.Quote(backup) + `}` + "\n" +
+		`{"op":"absent","dest":` + strconv.Quote(destination) + `}` + "\n" +
+		`{"op":"activate","dest":` + strconv.Quote(destination) + `,"path":"y"}` + "\n"
 	if err := os.WriteFile(journal, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	journalDigest := sha256.Sum256([]byte(body))
+	marker, err := json.Marshal(map[string]any{
+		"version": 1, "transaction": transaction, "journalSha256": hex.EncodeToString(journalDigest[:]),
+		"destinations": []map[string]any{{"path": destination, "exists": false}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(managed, portability.RestoreCommitName), marker, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -10,29 +10,37 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/extensions"
+	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/project"
+	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
-// cliObjects 让 CLI 直接从本地对象目录读取文件对象字节。
-// CLI 只在项目已停止时运行，因此不需要运行中的 Provider；
-// 需要哪些 key 由 SQLite 快照决定，CLI 不预先从 live 数据库读取。
-type cliObjects struct{ root string }
+// cliObjects 按 key 从项目当前启用的 Provider 读取对象。被引用的 key 集合来自
+// Portability 对同一 SQLite snapshot 的读取；这里不再假设对象一定在 Local。
+type cliObjects struct{ files *filestore.Service }
 
-func (source cliObjects) OpenObject(_ context.Context, key string) (io.ReadCloser, error) {
-	return os.Open(filepath.Join(source.root, key))
+func (source cliObjects) OpenObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	provider, err := source.files.ActiveProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reader, _, err := provider.Open(ctx, key)
+	return reader, err
 }
 
 type cliManifestSummary struct {
-	Bundle        string `json:"bundle"`
-	Bytes         int64  `json:"bytes"`
-	Digest        string `json:"digest"`
-	ProjectID     string `json:"projectId"`
-	Collections   int64  `json:"collections"`
-	Records       int64  `json:"records"`
-	Objects       int64  `json:"objects"`
+	Bundle         string `json:"bundle"`
+	Bytes          int64  `json:"bytes"`
+	Digest         string `json:"digest"`
+	ProjectID      string `json:"projectId"`
+	Collections    int64  `json:"collections"`
+	Records        int64  `json:"records"`
+	Objects        int64  `json:"objects"`
 	RuntimeVersion string `json:"runtimeVersion"`
 }
 
@@ -74,8 +82,21 @@ func runBackup(args []string, stdout, stderr io.Writer, workingDirectory string)
 		_, _ = fmt.Fprintf(stderr, "cannot open the Backend Model: %v\n", err)
 		return 1
 	}
+	secrets, err := extensions.NewService(context.Background(), store, models, extensions.ServiceOptions{
+		ManagedDir: root.ManagedDir, ProjectID: store.ProjectID(),
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "cannot open Project Secrets for backup: %v\n", err)
+		return 1
+	}
+	defer secrets.Close(context.Background())
+	files, err := newCLIFileStorage(root, store, models, secrets)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "cannot prepare File Storage for backup: %v\n", err)
+		return 1
+	}
 	service, err := portability.NewService(portability.Options{
-		Store: store, Objects: cliObjects{root: root.Objects}, Models: models,
+		Store: store, Objects: cliObjects{files: files}, Models: models,
 		ManagedDir: root.ManagedDir, Version: version,
 	})
 	if err != nil {
@@ -105,6 +126,37 @@ func runBackup(args []string, stdout, stderr io.Writer, workingDirectory string)
 	return 0
 }
 
+// newCLIFileStorage constructs the same persisted Provider and Secret boundary as Runtime,
+// without starting the Runtime. In particular, an unavailable S3 provider remains an error;
+// backup never falls back to the Local directory.
+func newCLIFileStorage(root project.Root, store *storage.Store, models *backendmodel.Service, secrets filestore.SecretProvider) (*filestore.Service, error) {
+	for _, directory := range []string{root.TempFiles, root.Objects} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			return nil, fmt.Errorf("prepare project File Storage directories: %w", err)
+		}
+	}
+	ctx := context.Background()
+	if secrets == nil {
+		return nil, fmt.Errorf("Project Secret provider is required")
+	}
+	audits, err := audit.NewService(ctx, store)
+	if err != nil {
+		return nil, fmt.Errorf("open Audit storage: %w", err)
+	}
+	recordService, err := records.NewWithLocalFiles(store, models, root.TempFiles, root.Objects)
+	if err != nil {
+		return nil, fmt.Errorf("open Record File references: %w", err)
+	}
+	files, err := filestore.NewService(ctx, filestore.ServiceOptions{
+		Store: store, Secrets: secrets, Audits: audits,
+		References: recordService, Staging: recordService, ObjectsDir: root.Objects,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open File Storage configuration: %w", err)
+	}
+	return files, nil
+}
+
 func runRestore(args []string, stdout, stderr io.Writer, workingDirectory string) int {
 	flags := flag.NewFlagSet("restore", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -112,7 +164,12 @@ func runRestore(args []string, stdout, stderr io.Writer, workingDirectory string
 	from := flags.String("from", "", "Backup bundle path")
 	preflightOnly := flags.Bool("preflight", false, "Validate the bundle without writing anything")
 	force := flags.Bool("force", false, "Replace an existing project")
+	legacyResolution := flags.String("resolve-legacy-restore", "", "Explicitly accept current state in a pre-marker journal: accept-current")
 	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if *legacyResolution != "" && (!*force || *preflightOnly) {
+		_, _ = fmt.Fprintln(stderr, "--resolve-legacy-restore requires an apply with --force")
 		return 2
 	}
 	if *from == "" {
@@ -159,6 +216,12 @@ func runRestore(args []string, stdout, stderr io.Writer, workingDirectory string
 		return 1
 	}
 	defer lock.Release()
+	if *legacyResolution != "" {
+		if err := portability.ResolveLegacyRestore(root.ManagedDir, portability.LegacyRestoreResolution(*legacyResolution)); err != nil {
+			_, _ = fmt.Fprintf(stderr, "cannot resolve the legacy restore journal: %v\n", err)
+			return 1
+		}
+	}
 	// 「项目是否已有状态」由 Apply 在回滚掉任何残留的中间态之后判断，CLI 不重复判断：
 	// 一个残留的 journal 可能短暂地让 project.sqlite 不存在，从而让 --force 这道门被绕过。
 	if _, err := service.Apply(context.Background(), *from, portability.ApplyOptions{

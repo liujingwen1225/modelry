@@ -43,16 +43,21 @@
   - 归档中不存在未列出的条目，也不存在重复条目；
   - 数据库载荷可打开并包含 Modelry 内部 migration 表；
   - 数据库格式版本不高于当前 Runtime。
+- Bundle 的 manifest 是权威元数据；Preflight 验证 manifest 所描述的 payload 完整性与结构一致性。当前格式没有外层可信 digest 或签名，因此不承诺识别对 `counts`、`createdAt`、`runtimeVersion` 等 manifest 元数据的恶意重写，也不提供 Bundle 来源真实性证明。
 - Preflight 输出结构化 finding：`code`、`severity`（`info`/`warning`/`error`）、`message`，以及 `compatible` 布尔值、`projectId`、`runtimeVersion`、`createdAt`、`counts`。
 - Apply：
   - 若项目 Runtime lock 被其它进程持有，直接拒绝；
   - 若项目目录已有项目且未提供 `--force`，拒绝并报告将替换的内容；
   - 先解压到 managed directory 内的 staging 目录，重新校验 staged 数据库，然后才替换数据库与 object store；
-  - 替换分三个阶段：先把全部新内容准备到目标所在目录，再统一把原内容移到备份位置，最后统一激活；每一步都先写入 managed directory 内的 journal，因此中途失败或进程被杀都会完整回滚；
+  - 替换分三个阶段：先把全部新内容准备到目标所在目录，再统一把原内容移到备份位置，最后统一激活；每个状态变更前先将 journal intent 写入并同步；
+  - POSIX 平台对每个受影响的 parent directory 执行真实目录 `fsync` 并传播错误。独立 commit marker 先写入、flush、同步，再原子 rename 并同步 managed directory；marker rename 后的 managed-directory `fsync` 成功是唯一 commit point。此前的失败回滚原状态，此后的崩溃恢复只清理备份，不回滚新状态；
+  - Windows 当前无法通过 Go 标准库提供 POSIX directory `fsync`；使用文件 `Sync` 与同卷原子 rename，并明确依赖 Windows 文件系统的目录项耐久性保证，不宣称 POSIX 等价保证；
   - 只有「移开原件」这一步真正发生（备份文件存在）时，回滚才会删除目标位置的内容；否则目标是原件，必须原样保留；
   - 替换数据库时同时移除旧的 `project.sqlite-wal` / `-shm`，避免旧日志被回放到新数据库上；
   - 失败时不改变原项目状态：原数据库与原 object store 保持字节级不变；
   - 项目存在未完成的 journal 时，Runtime 拒绝启动，直到操作者用 CLI 再次执行 restore 把它收敛。
+- 旧版仅以 `journalDone` 表示提交的 journal 无法证明当时的 `Sync` 是否成功；新 Runtime 与普通 restore 都 fail closed，不从该行推断提交。操作者检查并保留项目目录副本后，可在下一次显式 restore 时传入 `--force --resolve-legacy-restore=accept-current`，明确接受当前激活的目标并清理旧备份，再应用指定 Bundle；若要恢复旧状态，必须从保留的目录副本中手动恢复。新格式的 journal 不使用此兼容路径。
+- Restore 恢复 bundle 描述的逻辑项目状态及其引用的 File object，不保证将目标 Provider 物理存储镜像成 bundle。目标中 bundle 未引用的旧对象可能暂时保留；它们仍按既有 File Storage orphan reconcile 与 grace period 策略回收，不扩大本次 Restore 的替换集合。
 - Admin Surface 只提供 preflight；in-place apply 只能通过 CLI 在已停止的项目上执行。
 - Runtime 内执行的 preflight 写入 Audit fact `restore.preflight`。
 
@@ -115,7 +120,7 @@
 ## 7. Acceptance
 
 - 运行中的项目可以产生一致 backup，manifest 记录版本、身份与每个载荷的 digest。
-- 篡改任一载荷或 manifest 后 preflight 必须失败，并且不写任何文件。
+- 篡改 payload、或使 manifest 与 payload 的长度/digest/归档结构不一致后，preflight 必须失败且不写任何文件；对仍然结构有效的 manifest 元数据重写不作防篡改承诺。
 - restore 在项目被占用或未提供 `--force` 时拒绝；成功路径后项目可再次启动并保留 Record。
 - Export → Import 往返后 Record 数量与值保持一致；违反 Validation/Relation/File 的 Record 在 Import 中逐条失败并给出稳定错误码。
 - `modelry generate` 在同一 Applied Model 上重复执行产生字节一致的产物。
