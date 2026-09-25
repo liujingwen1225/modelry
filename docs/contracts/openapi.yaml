@@ -54,7 +54,7 @@ tags:
   - name: Secrets
     description: Manage write-only Project Secrets for explicitly authorized Extensions.
   - name: Automation
-    description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history.
+    description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history. Record Event requests repeat the body Event ID in X-Modelry-Event-Id; all requests use the stable Delivery ID as Idempotency-Key.
 paths:
   '/admin/api/v1/extensions':
     get:

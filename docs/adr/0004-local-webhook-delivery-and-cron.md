@@ -31,7 +31,7 @@ Record Events are already committed durably with their Record mutation. A Webhoo
 
 ### Signing and egress
 
-- Every Webhook requires an existing Project Secret as its HMAC-SHA256 signing key. The destination receives `Idempotency-Key`, `X-Modelry-Delivery-Id`, and `X-Modelry-Signature: t=<Unix seconds>,v1=<lowercase hex>`. The signature is HMAC-SHA256 over `timestamp + "." + exact UTF-8 request body`.
+- Every Webhook requires an existing Project Secret as its HMAC-SHA256 signing key. The destination receives `Idempotency-Key`, `X-Modelry-Delivery-Id`, and `X-Modelry-Signature: t=<Unix seconds>,v1=<lowercase hex>`. Record Event deliveries also send `X-Modelry-Event-Id`, matching the Event ID in the body. The signature is HMAC-SHA256 over `timestamp + "." + exact UTF-8 request body`.
 - Destination URLs must be HTTPS and contain no user information, query or fragment. Use the shared safe HTTP transport: no redirects or proxies, verify every DNS answer, reject non-global destinations, and pin the selected public address for each request.
 - Persist only safe attempt metadata and HTTP status. Do not persist response bodies, response headers, the signing value, request authorization data, or a transport error string.
 
