@@ -87,8 +87,8 @@ function operationName(operation: PendingOperation, t: Translate) {
   const name = typeof definition.name === 'string' ? definition.name : operation.targetId ?? t('schema.itemFallback');
   const kind = operation.kind === 'relation' ? 'relation' : operation.kind;
   return t('schema.operation', {
-    action: t(`schema.actions.${operation.action as 'add' | 'update' | 'remove'}`),
-    kind: t(`schema.kinds.${kind as 'field' | 'relation' | 'index'}`),
+    action: t(`schema.actions.${operation.action}`),
+    kind: t(`schema.kinds.${kind}`),
     name,
   });
 }

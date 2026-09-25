@@ -500,7 +500,8 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   const [profileError, setProfileError] = useState<unknown>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState<TranslationKey | ''>('');
+  // 这里既可能显示本地的校验文案，也可能显示 Runtime 返回的校验信息，因此保存已解析的字符串。
+  const [passwordError, setPasswordError] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<TranslationKey | ''>('');
 
@@ -577,8 +578,8 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   async function changePassword(event: FormEvent) {
     event.preventDefault();
     if (!selectedUserId) return;
-    if (!password) { setPasswordError('security.passwordEmpty'); return; }
-    if (password !== confirmPassword) { setPasswordError('security.passwordMismatch'); return; }
+    if (!password) { setPasswordError(t('security.passwordEmpty')); return; }
+    if (password !== confirmPassword) { setPasswordError(t('security.passwordMismatch')); return; }
     setBusy(true);
     setPasswordError('');
     setMessage('');
@@ -587,7 +588,7 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
       setPassword('');
       setConfirmPassword('');
       setMessage('security.passwordChanged');
-    } catch (reason) { setPasswordError(errorCopy(reason, t('security.passwordFailed'), t).title as TranslationKey); }
+    } catch (reason) { setPasswordError(errorCopy(reason, t('security.passwordFailed'), t).title); }
     finally { setBusy(false); }
   }
 
@@ -607,7 +608,7 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
       {profileState === 'loading' && <LoadingState label={t('security.profileLoading')} />}
       {profileState === 'error' && (() => { const copy = errorCopy(profileError, t('security.profileLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => selectUser(selectedUserId)} size="small">{t('common.retry')}</Button></ErrorState>; })()}
       {profileState === 'ready' && profile && <dl className="security-profile-values">{Object.entries(profile).filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key)).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{formatSecurityValue(value)}</dd></div>)}</dl>}
-      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>{t('security.changePassword')}</strong><span>{t('security.changePasswordHint')}</span></div><FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{t(passwordError)}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div></form>
+      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>{t('security.changePassword')}</strong><span>{t('security.changePasswordHint')}</span></div><FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{passwordError}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div></form>
       <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', selectedUserId); setSearchParams(next); }} size="small" variant="quiet">{t('security.viewSessions')}</Button>
     </Surface>}
   </div>;

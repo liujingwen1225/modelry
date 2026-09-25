@@ -267,6 +267,38 @@ describe('Collection Records and Security pages', () => {
     expect(screen.getByTestId('current-location').textContent).not.toContain('usersCursorStack=');
   });
 
+  it('shows local password validation in the active locale but renders a Runtime rejection verbatim', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const workspace = path === '/admin/api/v1/collections/col_members' ? response(authCollection) : path.endsWith('/schema/pending-change') ? response(null) : undefined;
+      if (workspace) return Promise.resolve(workspace);
+      if (path === '/admin/api/v1/collections?limit=100') return Promise.resolve(response([authCollection]));
+      if (path.endsWith('/users?limit=50')) return Promise.resolve(response([{ recordId: 'rec_user_1', email: 'alice@example.test' }]));
+      if (path.endsWith('/records/rec_user_1')) return Promise.resolve(response({ id: 'rec_user_1', email: 'alice@example.test' }));
+      if (path.endsWith('/users/rec_user_1/password') && init?.method === 'PUT') {
+        return Promise.resolve(Response.json({ error: { code: 'VALIDATION_FAILED', message: 'Password must contain a symbol.', requestId: 'req_pw' } }, { status: 400 }));
+      }
+      return Promise.resolve(response({ applied: [], pending: [], version: 1 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_members/security?panel=users&user=rec_user_1');
+
+    await user.type(await screen.findByLabelText('新密码'), 'first-password');
+    await user.type(screen.getByLabelText('确认密码'), 'second-password');
+    await user.click(screen.getByRole('button', { name: '修改密码' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('两次输入的密码不一致。');
+
+    await user.clear(screen.getByLabelText('确认密码'));
+    await user.type(screen.getByLabelText('确认密码'), 'first-password');
+    await user.click(screen.getByRole('button', { name: '修改密码' }));
+
+    // Runtime 返回的校验信息是服务端数据，必须原样展示，不能被当成翻译键查找。
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password must contain a symbol.');
+    expect(document.body.textContent).not.toContain('⟪');
+  });
+
   it('renders Collection Security, Access Rules, App Users and Sessions in Simplified Chinese', async () => {
     const user = userEvent.setup();
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
