@@ -63,6 +63,11 @@ const (
 	OperationPolicySimulate Operation = "policy.simulate"
 	OperationSettingsRead Operation = "settings.read"
 	OperationSettingsWrite Operation = "settings.write"
+	OperationBackupCreate Operation = "backup.create"
+	OperationRestorePreflight Operation = "restore.preflight"
+	OperationRecordsExport Operation = "records.export"
+	OperationRecordsImport Operation = "records.import"
+	OperationDeveloperRead Operation = "developer.read"
 )
 
 // Grant 是 Owner 之外的 Control Plane 主体持有的许可。
@@ -123,6 +128,11 @@ var allOperationsV1 = []Operation{
 	Operation("policy.simulate"),
 	Operation("settings.read"),
 	Operation("settings.write"),
+	Operation("backup.create"),
+	Operation("restore.preflight"),
+	Operation("records.export"),
+	Operation("records.import"),
+	Operation("developer.read"),
 }
 
 var readOnlyOperations = map[Operation]struct{}{
@@ -146,6 +156,7 @@ var readOnlyOperations = map[Operation]struct{}{
 	Operation("drift.read"): {},
 	Operation("policy.simulate"): {},
 	Operation("settings.read"): {},
+	Operation("records.export"): {},
 }
 
 // AllOperations 返回当前受支持的 Control Plane 操作枚举副本。

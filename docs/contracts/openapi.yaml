@@ -67,6 +67,8 @@ tags:
     description: Compare the applied model, its physical SQLite projection, and runtime-managed state, and reconcile a Collection's projection.
   - name: RuntimeSettings
     description: Read and save durable Project Runtime Settings with explicit value sources and restart requirements.
+  - name: Portability
+    description: Produce and validate Backup bundles, export and import Collection Records, and read the typed Application API contract.
 paths:
   '/admin/api/v1/extensions':
     get:
@@ -3978,6 +3980,160 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/backup':
+    post:
+      tags: [Portability]
+      operationId: createProjectBackup
+      summary: Create a consistent Backup bundle of this project
+      description: >-
+        Owner-only. The Runtime snapshots the live database with SQLite VACUUM INTO, collects every referenced file
+        object, and streams a tar archive whose manifest records the format version, project identity, Runtime
+        version, and a SHA-256 for every payload. The project keeps serving requests while the backup is produced.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Backup bundle streamed as a tar archive.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Suggested bundle file name.
+              schema:
+                type: string
+          content:
+            application/x-tar:
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/restore/preflight':
+    post:
+      tags: [Portability]
+      operationId: preflightProjectRestore
+      summary: Validate a Backup bundle without writing anything
+      description: >-
+        Owner-only and read-only. Validates format version, payload digests, archive entries, and database
+        compatibility, then reports structured findings. Applying a restore in place stays a CLI operation on a
+        stopped project so a live Runtime is never overwritten.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Structured preflight findings; nothing was written.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupPreflightResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/export':
+    get:
+      tags: [Portability]
+      operationId: exportCollectionRecords
+      summary: Export one Collection as NDJSON
+      description: >-
+        Streams a Collection header line followed by one line per committed Record. File values are exported as
+        object keys, never bytes. Credentials, sessions, and Secret values are never exported.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: NDJSON stream of one Collection header and its Records.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/import':
+    post:
+      tags: [Portability]
+      operationId: importCollectionRecords
+      summary: Import NDJSON Records into one Collection
+      description: >-
+        Owner-only. Every Record is created through the same Record creation path the Application API uses, so
+        Validation, Required, Unique, Relation, and File rules behave identically. The request is rejected when the
+        header model hash does not match the applied model.
+      security:
+        - OwnerSession: []
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/x-ndjson:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Per-record import results.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordImportResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/developer/contract':
+    get:
+      tags: [Portability]
+      operationId: getApplicationAPIContract
+      summary: Read the typed Application API contract for this project
+      description: >-
+        Owner-only. The contract is a projection of the applied Backend Model with the Runtime version and a content
+        hash. Generated clients call the existing Application API routes, so Access Rules, Sessions, Secrets, and
+        Audit semantics are unchanged.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Canonical Application API contract with its content hash.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationAPIContractResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
 components:
   securitySchemes:
     OwnerSession:
@@ -5875,7 +6031,7 @@ components:
     ServiceAccountOperation:
       type: string
       description: Version 1 fixed Control Plane allowlist; application data-plane operations use their corresponding explicit grants.
-      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read, administrators.read, administrators.manage, mail.read, mail.manage, activity.read, drift.read, drift.reconcile, policy.simulate, settings.read, settings.write]
+      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read, administrators.read, administrators.manage, mail.read, mail.manage, activity.read, drift.read, drift.reconcile, policy.simulate, settings.read, settings.write, backup.create, restore.preflight, records.export, records.import, developer.read]
     ServiceAccountResponse:
       type: object
       required: [data]
@@ -7037,4 +7193,162 @@ components:
           type: integer
           minimum: 1
           maximum: 3650
+      additionalProperties: false
+    BackupDatabaseEntry:
+      type: object
+      required: [path, bytes, sha256, sqliteVersion]
+      properties:
+        path: { type: string }
+        bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sqliteVersion: { type: string }
+      additionalProperties: false
+    BackupObjectEntry:
+      type: object
+      required: [key, bytes, sha256]
+      properties:
+        key: { type: string }
+        bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      additionalProperties: false
+    BackupCounts:
+      type: object
+      required: [collections, records, objects]
+      properties:
+        collections: { type: integer, minimum: 0 }
+        records: { type: integer, minimum: 0 }
+        objects: { type: integer, minimum: 0 }
+      additionalProperties: false
+    BackupManifest:
+      type: object
+      required: [format, formatVersion, projectId, runtimeVersion, createdAt, appliedModelHash, database, objects, counts]
+      properties:
+        format: { type: string, enum: [modelry.community.backup] }
+        formatVersion: { type: integer, enum: [1] }
+        projectId: { type: string }
+        runtimeVersion: { type: string }
+        createdAt: { type: string, format: date-time }
+        appliedModelHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        database: { $ref: '#/components/schemas/BackupDatabaseEntry' }
+        objects:
+          type: array
+          maxItems: 100000
+          items: { $ref: '#/components/schemas/BackupObjectEntry' }
+        counts: { $ref: '#/components/schemas/BackupCounts' }
+      additionalProperties: false
+    BackupFinding:
+      type: object
+      required: [code, severity, message]
+      properties:
+        code: { type: string, maxLength: 64 }
+        severity: { type: string, enum: [info, warning, error] }
+        message: { type: string, maxLength: 512 }
+      additionalProperties: false
+    BackupPreflight:
+      type: object
+      required: [compatible, findings]
+      properties:
+        compatible: { type: boolean }
+        projectId: { type: string }
+        runtimeVersion: { type: string }
+        formatVersion: { type: integer }
+        createdAt: { type: string, format: date-time }
+        appliedModelHash: { type: string }
+        counts: { $ref: '#/components/schemas/BackupCounts' }
+        findings:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/BackupFinding' }
+      additionalProperties: false
+    BackupPreflightResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/BackupPreflight' }
+      additionalProperties: false
+    RecordImportResult:
+      type: object
+      required: [index, status]
+      properties:
+        index: { type: integer, minimum: 0 }
+        status: { type: string, enum: [created, failed] }
+        recordId: { type: string }
+        code: { type: string, maxLength: 64 }
+      additionalProperties: false
+    RecordImportSummary:
+      type: object
+      required: [created, failed, results]
+      properties:
+        created: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        results:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/RecordImportResult' }
+      additionalProperties: false
+    RecordImportResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/RecordImportSummary' }
+      additionalProperties: false
+    ApplicationAPIField:
+      type: object
+      required: [id, name, type, required, unique]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        required: { type: boolean }
+        unique: { type: boolean }
+        relationTargetCollectionId: { type: string }
+        relationCardinality: { type: string }
+        fileMaxBytes: { type: integer, minimum: 0 }
+        fileAllowedTypes:
+          type: array
+          items: { type: string }
+        fileMaxFiles: { type: integer, minimum: 0 }
+      additionalProperties: false
+    ApplicationAPICollection:
+      type: object
+      required: [id, name, type, schemaVersion, fields, endpoints, accessRules]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [Normal, Auth] }
+        schemaVersion: { type: integer, minimum: 1 }
+        fields:
+          type: array
+          maxItems: 4096
+          items: { $ref: '#/components/schemas/ApplicationAPIField' }
+        endpoints:
+          type: array
+          items: { type: string }
+        accessRules:
+          type: array
+          items:
+            type: object
+            required: [operation, mode]
+            properties:
+              operation: { type: string }
+              mode: { type: string }
+            additionalProperties: false
+      additionalProperties: false
+    ApplicationAPIContract:
+      type: object
+      required: [version, contentHash, apiBasePath, collections]
+      properties:
+        version: { type: string }
+        contentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        apiBasePath: { type: string, enum: [/api/v1] }
+        collections:
+          type: array
+          maxItems: 512
+          items: { $ref: '#/components/schemas/ApplicationAPICollection' }
+      additionalProperties: false
+    ApplicationAPIContractResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/ApplicationAPIContract' }
       additionalProperties: false

@@ -28,6 +28,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/mail"
+	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
@@ -68,6 +69,7 @@ type Runtime struct {
 	activity       *activity.Service
 	drift          *drift.Service
 	settings       *runtimesettings.Service
+	portability    *portability.Service
 	requests       *requests.Service
 	version        string
 	databaseHealth string
@@ -233,6 +235,13 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if version == "" {
 		version = "dev"
 	}
+	portabilityService, portabilityModule, err := newPortabilityService(portabilityOptions{
+		store: store, models: backendModel, records: recordService, files: fileService,
+		accessRules: accessRules, audits: auditService, managedDir: root.ManagedDir, version: version,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Portability: %w", err)
+	}
 	instance := &Runtime{
 		root:           root,
 		lock:           lock,
@@ -246,6 +255,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		drift:          driftService,
 		settings:       settingsService,
 		requests:       requestService,
+		portability:    portabilityService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -290,6 +300,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		activity.NewModule(activityService),
 		drift.NewModule(driftService),
 		runtimesettings.NewModule(settingsService),
+		portabilityModule,
 		serviceaccounts.NewModule(serviceAccountService),
 		audit.NewModule(auditService),
 	)

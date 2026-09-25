@@ -47,6 +47,16 @@ func ControlPlaneOperation(method, path string) (Operation, bool) {
 		return OperationSessionsRead, true
 	case len(parts) == 7 && parts[3] == "administrators" && parts[5] == "sessions" && parts[6] == "revoke-all" && methodIs(http.MethodPost):
 		return OperationSessionsRevoke, true
+	case len(parts) == 4 && parts[3] == "backup" && methodIs(http.MethodPost):
+		return OperationBackupCreate, true
+	case len(parts) == 5 && parts[3] == "restore" && parts[4] == "preflight" && methodIs(http.MethodPost):
+		return OperationRestorePreflight, true
+	case len(parts) == 5 && parts[3] == "developer" && parts[4] == "contract" && methodIs(http.MethodGet):
+		return OperationDeveloperRead, true
+	case len(parts) == 6 && parts[3] == "collections" && parts[5] == "export" && methodIs(http.MethodGet):
+		return OperationRecordsExport, true
+	case len(parts) == 6 && parts[3] == "collections" && parts[5] == "import" && methodIs(http.MethodPost):
+		return OperationRecordsImport, true
 	case len(parts) == 4 && parts[3] == "activity" && methodIs(http.MethodGet):
 		return OperationActivityRead, true
 	case len(parts) == 4 && parts[3] == "drift" && methodIs(http.MethodGet):

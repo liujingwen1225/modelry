@@ -72,6 +72,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runStart(args[1:], stdout, stderr, workingDirectory)
 	case "status":
 		return runStatus(args[1:], stdout, stderr, workingDirectory)
+	case "backup":
+		return runBackup(args[1:], stdout, stderr, workingDirectory)
+	case "restore":
+		return runRestore(args[1:], stdout, stderr, workingDirectory)
+	case "generate":
+		return runGenerate(args[1:], stdout, stderr, workingDirectory)
 	default:
 		_, _ = fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		printUsage(stderr)
@@ -198,8 +204,11 @@ func directoryExists(name string) bool {
 }
 
 func printUsage(writer io.Writer) {
-	_, _ = fmt.Fprintln(writer, "Usage: modelry <start|status|admin|mcp|version>")
+	_, _ = fmt.Fprintln(writer, "Usage: modelry <start|status|backup|restore|generate|admin|mcp|version>")
 	_, _ = fmt.Fprintln(writer, "  start [--project-root PATH] [--listen ADDRESS]")
+	_, _ = fmt.Fprintln(writer, "  backup [--project-root PATH] [--out PATH]")
+	_, _ = fmt.Fprintln(writer, "  restore [--project-root PATH] --from PATH [--preflight] [--force]")
+	_, _ = fmt.Fprintln(writer, "  generate [--project-root PATH] --out DIR")
 	_, _ = fmt.Fprintln(writer, "  status [--project-root PATH] [--json]")
 	_, _ = fmt.Fprintln(writer, "  admin [--api-url URL] [--api-key KEY] <collections|records|schema|access|requests|audit> <operation>")
 	_, _ = fmt.Fprintln(writer, "  mcp [--api-url URL] [--api-key KEY]")
