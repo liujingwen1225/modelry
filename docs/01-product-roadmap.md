@@ -68,11 +68,13 @@ V0.1 必须保留：
 
 V0.1 不以 Realtime、Hooks 或完整 Extension Runtime 证明产品成立。
 
-## Phase C — Community V0.1.x / Mature
+## Phase C — Community V0.1.x / Mature（已交付）
 
 目标：在核心闭环稳定之后扩展长期 Community 能力。
 
-优先方向：
+状态：以下方向已全部交付并通过真实 Runtime / SQLite / HTTP / Chromium 验收（详见 ADR-0002 ~ ADR-0008 与 Spec 0004 ~ 0010）：
+
+已交付方向：
 
 - SSE Realtime
 - Lifecycle Hooks

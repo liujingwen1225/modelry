@@ -79,6 +79,8 @@ const readOnlyControlPlaneOperations = new Set([
   'runtime.read', 'storage.read', 'collections.read', 'records.read', 'files.read', 'schema.read',
   'accessRules.read', 'authentication.read', 'users.read', 'sessions.read', 'serviceAccounts.read',
   'apiKeys.read', 'requests.read', 'audit.read', 'administrators.read', 'mail.read',
+  // #27/#28 新增的只读操作必须与后端 readOnly preset 保持一致。
+  'activity.read', 'drift.read', 'policy.simulate', 'settings.read', 'records.export',
 ]);
 
 // allowsOperation 在 Admin Shell 中复现 Control Plane 的 fail closed 语义。
@@ -255,6 +257,10 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
       go('navigate.extensions', 'commands.extensions', '/extensions', ['hooks', 'lifecycle', 'runtime']),
       go('navigate.secrets', 'commands.secrets', '/secrets', ['write-only', 'secret']),
       go('navigate.settings', 'commands.settings', '/settings'),
+      ...(allowsOperation(role, permission, 'activity.read') ? [go('navigate.activity', 'commands.activity', '/activity', ['timeline', 'operations'])] : []),
+      ...(allowsOperation(role, permission, 'drift.read') ? [go('navigate.drift', 'commands.drift', '/settings/drift', ['consistency', 'projection', 'reconcile'])] : []),
+      ...(allowsOperation(role, permission, 'settings.read') ? [go('navigate.runtimeSettings', 'commands.runtimeSettings', '/settings/runtime', ['runtime', 'configuration', 'restart'])] : []),
+      ...(role === undefined || role === 'owner' ? [go('navigate.portability', 'commands.portability', '/settings/portability', ['backup', 'restore', 'import', 'export', 'sdk'])] : []),
       ...(role === undefined || role === 'owner' ? [
         {
           id: 'navigate.administrators',

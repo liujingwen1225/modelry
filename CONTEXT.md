@@ -92,7 +92,7 @@ V0.1 保留：
 - Minimal CLI
 - Core MCP
 
-V0.1.x 再进入：
+Community V0.1.x 已交付（当前权威语义）：
 
 - Realtime
 - Lifecycle Hooks
