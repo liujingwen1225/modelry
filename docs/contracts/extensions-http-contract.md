@@ -94,7 +94,7 @@ Replaces the value using `{ "value": "..." }`. Value is non-empty UTF-8 and at m
 
 ### `DELETE /secrets/{secretId}`
 
-Revokes and deletes a Secret. Future Hook calls cannot resolve it and fail safely. Matching pending intents that have not started become `cancelled`; in-flight guest execution is cancelled where possible. Returns `204`.
+Revokes and deletes a Secret. Future Hook calls cannot resolve it and fail safely. Matching pending intents that have not started become `cancelled`; in-flight guest execution is cancelled where possible. If a Webhook uses the Secret, that Webhook is disabled, pending Deliveries become `cancelled` with `secretRevoked`, and in-flight requests are cancelled where possible. A request already accepted remotely cannot be undone. Returns `204`.
 
 ## 3. Shared errors
 

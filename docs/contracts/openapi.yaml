@@ -53,6 +53,8 @@ tags:
     description: Manage Owner-authored lifecycle Extensions and safe Hook Run history.
   - name: Secrets
     description: Manage write-only Project Secrets for explicitly authorized Extensions.
+  - name: Automation
+    description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history.
 paths:
   '/admin/api/v1/extensions':
     get:
@@ -333,7 +335,7 @@ paths:
         - OwnerSession: []
       responses:
         '204':
-          description: Secret deleted; value is never returned.
+          description: Secret deleted; referencing Webhooks retain its unavailable ID but become disabled, pending Deliveries are cancelled with secretRevoked, and active request cancellation is best effort. Value is never returned.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/RequestId'
@@ -2441,6 +2443,553 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks':
+    get:
+      tags: [Automation]
+      operationId: listWebhooks
+      summary: List Project Webhooks
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook endpoint metadata without Secret values.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Automation]
+      operationId: createWebhook
+      summary: Create a disabled signed Webhook
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+      responses:
+        '201':
+          description: Disabled Webhook metadata; the signing Secret value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    get:
+      tags: [Automation]
+      operationId: getWebhook
+      summary: Read Webhook configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook URL and Secret metadata without Secret values.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Automation]
+      operationId: replaceWebhook
+      summary: Replace Webhook destination and signing Secret reference
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+      responses:
+        '200':
+          description: Updated Webhook configuration. Existing automatic retry rounds retain their captured URL; a manual redrive snapshots this current enabled configuration.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    post:
+      tags: [Automation]
+      operationId: enableWebhook
+      summary: Enable future Webhook Deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook is enabled for future triggers. Its signing Secret must exist and be configured; missed triggers are not replayed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    post:
+      tags: [Automation]
+      operationId: disableWebhook
+      summary: Disable a Webhook and cancel unstarted Deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook is disabled; pending Event Hook and Job Deliveries are cancelled, request cancellation is best effort, future Event Hook triggers are skipped, and due slots consumed by enabled Jobs are skipped. A disabled Job retains its due slot and consumes it after it is enabled according to the Webhook state at that time.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}/test':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    post:
+      tags: [Automation]
+      operationId: testWebhook
+      summary: Send a signed synthetic test Delivery
+      security:
+        - OwnerSession: []
+      responses:
+        '202':
+          description: Test Delivery was persisted for bounded asynchronous processing. If capacity is exhausted, this returns a terminal capacityExceeded Delivery without a payload or network request. It may send while the Webhook is disabled if the signing Secret is available; Secret revocation cancels it.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks':
+    get:
+      tags: [Automation]
+      operationId: listEventHooks
+      summary: List Project Event Hooks
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Automation]
+      operationId: createEventHook
+      summary: Create a disabled Event Hook
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHookRequest'
+      responses:
+        '201':
+          description: Event Hook was created disabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks/{eventHookId}':
+    parameters:
+      - $ref: '#/components/parameters/EventHookId'
+    get:
+      tags: [Automation]
+      operationId: getEventHook
+      summary: Read Event Hook configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook configuration metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Automation]
+      operationId: replaceEventHook
+      summary: Replace Event Hook configuration
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHookRequest'
+      responses:
+        '200':
+          description: Updated Event Hook configuration. Existing Deliveries are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks/{eventHookId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/EventHookId'
+    post:
+      tags: [Automation]
+      operationId: enableEventHook
+      summary: Enable future Record Event deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook is enabled. Deliveries are created only while its Webhook is also enabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks/{eventHookId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/EventHookId'
+    post:
+      tags: [Automation]
+      operationId: disableEventHook
+      summary: Stop future Record Event deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook is disabled; accepted Deliveries are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs':
+    get:
+      tags: [Automation]
+      operationId: listJobs
+      summary: List UTC Cron Jobs
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job schedule and persisted next-run metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Automation]
+      operationId: createJob
+      summary: Create a disabled UTC Cron Job
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '201':
+          description: Job was created disabled with a persisted next-run time.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Automation]
+      operationId: getJob
+      summary: Read Job configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job schedule and next-run metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Automation]
+      operationId: replaceJob
+      summary: Replace Job schedule and Webhook
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '200':
+          description: Updated UTC schedule and recalculated next-run time.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Automation]
+      operationId: enableJob
+      summary: Enable future Job schedule slots
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job is enabled with a persisted next-run time. A due slot preserved while the Job was disabled creates one catch-up only if the Webhook is enabled when the scheduler consumes it; otherwise it is skipped and advanced.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Automation]
+      operationId: disableJob
+      summary: Stop future Job schedule slots
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job is disabled; an overdue slot is preserved for at most one catch-up after re-enable. Accepted Deliveries are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/deliveries':
+    get:
+      tags: [Automation]
+      operationId: listDeliveries
+      summary: List safe Webhook Delivery history
+      security:
+        - OwnerSession: []
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: sourceType
+          in: query
+          schema:
+            type: string
+            enum: [eventHook, job, test]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, succeeded, failed, cancelled]
+      responses:
+        '200':
+          description: Bounded Delivery metadata without payload or HTTP content.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/deliveries/{deliveryId}':
+    parameters:
+      - $ref: '#/components/parameters/DeliveryId'
+    get:
+      tags: [Automation]
+      operationId: getDelivery
+      summary: Read safe Delivery and Attempt history
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Safe Delivery metadata and bounded Attempt history without payload.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/deliveries/{deliveryId}/retry':
+    parameters:
+      - $ref: '#/components/parameters/DeliveryId'
+    post:
+      tags: [Automation]
+      operationId: retryDelivery
+      summary: Start a bounded manual Delivery retry round
+      security:
+        - OwnerSession: []
+      responses:
+        '202':
+          description: The same Delivery and idempotency key were queued for a new attempt round.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '409':
+          description: Delivery is not failed, has no payload to redrive, its retry budget is exhausted, or its Webhook is disabled or has no configured signing Secret.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: The pending Delivery limit is full. The Delivery and manual redrive count are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
 components:
   securitySchemes:
     OwnerSession:
@@ -2538,6 +3087,31 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    WebhookId:
+      name: webhookId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    EventHookId:
+      name: eventHookId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    DeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^dlv_[a-f0-9]{36}$'
     RunId:
       name: runId
       in: path
@@ -4145,4 +4719,419 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SecretMetadata'
+      additionalProperties: false
+    WebhookRequest:
+      type: object
+      required: [name, targetUrl, signingSecretId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        targetUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: HTTPS URL with DNS host and path only; user info, query, fragment and IP literals are rejected.
+        signingSecretId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    WebhookSummary:
+      type: object
+      required: [id, name, targetUrl, signingSecretId, signingSecretName, signingConfigured, enabled, revision, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        targetUrl:
+          type: string
+          format: uri
+        signingSecretId:
+          $ref: '#/components/schemas/Id'
+          description: Selected Secret ID. It remains visible if the Secret is later deleted.
+        signingSecretName:
+          type: string
+          description: Empty when the selected Secret has been deleted.
+        signingConfigured:
+          type: boolean
+          description: False when the selected Secret has been deleted or has no configured value.
+        enabled:
+          type: boolean
+        revision:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    WebhookResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookSummary'
+      additionalProperties: false
+    WebhookListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/WebhookSummary'
+      additionalProperties: false
+    WebhookStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    EventHookRequest:
+      type: object
+      required: [name, collectionId, eventType, webhookId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted]
+        webhookId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    EventHookSummary:
+      type: object
+      required: [id, name, collectionId, collectionName, eventType, webhookId, webhookName, enabled, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        collectionName:
+          type: string
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted]
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    EventHookResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/EventHookSummary'
+      additionalProperties: false
+    EventHookListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/EventHookSummary'
+      additionalProperties: false
+    EventHookStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    JobRequest:
+      type: object
+      required: [name, webhookId, cron]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        cron:
+          type: string
+          minLength: 9
+          maxLength: 128
+          description: Five-field standard Cron expression, evaluated in UTC with minute precision.
+      additionalProperties: false
+    JobSummary:
+      type: object
+      required: [id, name, webhookId, webhookName, cron, enabled, nextRunAt, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        cron:
+          type: string
+          minLength: 9
+          maxLength: 128
+        enabled:
+          type: boolean
+        nextRunAt:
+          type: string
+          format: date-time
+        lastRunAt:
+          type: string
+          format: date-time
+        lastStatus:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled]
+        lastErrorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    JobResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/JobSummary'
+      additionalProperties: false
+    JobListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/JobSummary'
+      additionalProperties: false
+    JobStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled, nextRunAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+            nextRunAt:
+              type: string
+              format: date-time
+          additionalProperties: false
+      additionalProperties: false
+    DeliveryAttempt:
+      type: object
+      required: [round, attempt, webhookRevision, status, startedAt, durationMs, errorCode]
+      properties:
+        round:
+          type: integer
+          minimum: 1
+          maximum: 4
+        attempt:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: Bounded worker-processing attempt number within the round. One attempt issues zero or one HTTP request; preflight may fail before a request.
+        webhookRevision:
+          type: integer
+          minimum: 1
+          description: Webhook configuration revision pinned for this attempt round.
+        status:
+          type: string
+          enum: [running, succeeded, retryScheduled, rejected, failed, interrupted, cancelled]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+          minimum: 0
+        httpStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+          description: Present only when an HTTP response was received. A preflight failure issues no HTTP request.
+        errorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+      additionalProperties: false
+    DeliverySummary:
+      type: object
+      required: [id, sourceType, sourceId, webhookId, webhookName, webhookRevision, eventType, status, createdAt, attemptCount, manualRedriveCount, errorCode]
+      properties:
+        id:
+          type: string
+          pattern: '^dlv_[a-f0-9]{36}$'
+        sourceType:
+          type: string
+          enum: [eventHook, job, test]
+        sourceId:
+          $ref: '#/components/schemas/Id'
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        webhookRevision:
+          type: integer
+          minimum: 1
+          description: Webhook configuration revision used when the Delivery intent was first created.
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted, job.scheduled, webhook.test]
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        attemptCount:
+          type: integer
+          minimum: 0
+          maximum: 32
+        manualRedriveCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        lastHttpStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        errorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+      additionalProperties: false
+    DeliveryDetail:
+      type: object
+      required: [id, sourceType, sourceId, webhookId, webhookName, webhookRevision, eventType, status, createdAt, attemptCount, manualRedriveCount, errorCode, attempts]
+      properties:
+        id:
+          type: string
+          pattern: '^dlv_[a-f0-9]{36}$'
+        sourceType:
+          type: string
+          enum: [eventHook, job, test]
+        sourceId:
+          $ref: '#/components/schemas/Id'
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        webhookRevision:
+          type: integer
+          minimum: 1
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted, job.scheduled, webhook.test]
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        attemptCount:
+          type: integer
+          minimum: 0
+          maximum: 32
+        manualRedriveCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        lastHttpStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        errorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+        attempts:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/DeliveryAttempt'
+      additionalProperties: false
+    DeliveryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DeliverySummary'
+      additionalProperties: false
+    DeliveryDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DeliveryDetail'
+      additionalProperties: false
+    DeliveryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/DeliverySummary'
+        nextCursor:
+          type: string
       additionalProperties: false
