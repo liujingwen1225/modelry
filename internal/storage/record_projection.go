@@ -259,7 +259,7 @@ func sqliteAffinity(fieldType string) string {
 		return "NUMERIC"
 	case "boolean":
 		return "INTEGER"
-	case "text", "dateTime", "json", "relation", "file":
+	case "text", "dateTime", "json", "relation", "file", "files":
 		return "TEXT"
 	default:
 		return "BLOB"

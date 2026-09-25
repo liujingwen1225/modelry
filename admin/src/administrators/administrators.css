@@ -1,0 +1,17 @@
+.administrators-page { gap: 18px; }
+.administrators-page__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.administrators-list__heading { display: flex; align-items: center; gap: 12px; }
+.administrators-list__heading h2 { margin: 0; }
+.administrators-table { width: 100%; }
+.administrator-email { overflow-wrap: anywhere; font-weight: 600; }
+.administrator-operations-summary { display: block; margin-top: 4px; color: var(--color-ink-muted); font-size: 11px; }
+.administrator-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.administrators-form { display: grid; gap: 12px; }
+.administrators-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.administrators-operations { display: grid; gap: 6px; max-height: 240px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-soft); padding: 10px 12px; }
+.administrators-operations legend { padding: 0 4px; font-size: 12px; font-weight: 600; }
+.administrators-operations label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.administrators-operations code, .administrators-operations span { overflow-wrap: anywhere; }
+.administrators-sessions { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 11px; }
+.administrators-sessions li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-bottom: 1px solid var(--color-border); padding: 6px 0; }
+.administrators-sessions li .status-chip { margin-left: auto; }

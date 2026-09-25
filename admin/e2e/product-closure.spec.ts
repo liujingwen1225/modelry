@@ -377,6 +377,27 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const collections = await requestJSON(activePage, 'GET', '/admin/api/v1/collections');
     expect(JSON.stringify(collections.body)).toContain('authors');
 
+    await activePage.goto(`${runtimeURL}/collections`);
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    let palette = activePage.getByRole('dialog', { name: 'Command palette' });
+    let paletteInput = palette.getByRole('combobox', { name: 'Search commands' });
+    await paletteInput.fill('Open authors');
+    await expect(palette.getByRole('option', { name: 'Open authors' })).toBeVisible();
+    await activePage.keyboard.press('Enter');
+    await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
+
+    await activePage.goto(`${runtimeURL}/collections`);
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    palette = activePage.getByRole('dialog', { name: 'Command palette' });
+    paletteInput = palette.getByRole('combobox', { name: 'Search commands' });
+    await paletteInput.fill('Create record');
+    await expect(palette.getByRole('option')).toHaveCount(0);
+    await expect(palette.getByRole('status')).toContainText('No commands match');
+    await activePage.keyboard.press('Escape');
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
+
     const ownerCookie = (await browserContext.cookies(`${runtimeURL}/admin/api/v1`)).find((cookie) => cookie.name === 'modelry_admin_session');
     expect(ownerCookie?.value).toBeTruthy();
     const sessionClient = await request.newContext();
@@ -392,6 +413,8 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.getByRole('button', { name: 'Sign out', exact: true }).click();
       expect((await logoutResponsePromise).status()).toBe(204);
       await expect(activePage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+      await expect(activePage.locator('.topbar')).toHaveCount(0);
+      await expect(activePage.locator('.command-palette-trigger')).toHaveCount(0);
 
       const revokedSession = await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } });
       expect(revokedSession.status()).toBe(401);
@@ -402,14 +425,63 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(authorsId)}`);
       await expect(activePage.getByRole('row').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
 
-      await activePage.locator('.owner-menu summary').click();
-      await activePage.getByRole('button', { name: 'Switch to dark theme' }).click();
+      const shellDeepLink = `${runtimeURL}/collections/${encodeURIComponent(authorsId)}?tab=records#selected`;
+      await activePage.goto(shellDeepLink);
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+
+      const ownerMenu = activePage.locator('.owner-menu');
+      await ownerMenu.locator('summary').click();
+      await expect(ownerMenu.getByRole('button', { name: /theme|主题/i })).toHaveCount(0);
+      await ownerMenu.locator('summary').click();
+
+      const darkThemeButton = activePage.locator('.topbar').getByRole('button', { name: 'Switch to dark theme' });
+      await expect(darkThemeButton).toBeVisible();
+      await darkThemeButton.click();
+      await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await activePage.reload();
+      await expect(activePage).toHaveURL(shellDeepLink);
       await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
       const contrast = await actionButtonContrast(activePage);
       expect(contrast.primary).toBeGreaterThanOrEqual(4.5);
       expect(contrast.danger).toBeGreaterThanOrEqual(4.5);
-      await activePage.getByRole('button', { name: 'Switch to light theme' }).click();
-      await activePage.locator('.owner-menu summary').click();
+
+      await activePage.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN');
+      const chineseNavigation = activePage.getByRole('navigation', { name: '项目导航' });
+      await expect(chineseNavigation).toBeVisible();
+      await expect(chineseNavigation.getByRole('link', { name: '集合' })).toBeVisible();
+      await expect(activePage).toHaveURL(shellDeepLink);
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+      await activePage.reload();
+      await expect(activePage).toHaveURL(shellDeepLink);
+      await expect(activePage.getByRole('navigation', { name: '项目导航' })).toBeVisible();
+      await expect(activePage.getByRole('combobox', { name: '语言' })).toHaveValue('zh-CN');
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+
+      await activePage.getByRole('button', { name: '搜索命令' }).focus();
+      await activePage.keyboard.press('Control+k');
+      palette = activePage.getByRole('dialog', { name: '命令面板' });
+      await expect(palette).toBeVisible();
+      paletteInput = palette.getByRole('combobox', { name: '搜索命令' });
+      await paletteInput.fill('创建记录');
+      await expect(palette.getByRole('option', { name: '在 authors 中创建记录' })).toBeVisible();
+      await activePage.keyboard.press('Escape');
+      await expect(activePage.getByRole('button', { name: '搜索命令' })).toBeFocused();
+
+      await activePage.keyboard.press('Control+k');
+      palette = activePage.getByRole('dialog', { name: '命令面板' });
+      await expect(palette).toBeVisible();
+      await palette.getByRole('combobox', { name: '搜索命令' }).fill('');
+      await activePage.keyboard.press('ArrowDown');
+      await expect(palette.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+      await activePage.keyboard.press('Enter');
+      await expect(activePage).toHaveURL(`${runtimeURL}/collections`);
+      await activePage.goto(shellDeepLink);
+      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+
+      await activePage.getByRole('combobox', { name: '语言' }).selectOption('en');
+      await expect(activePage.getByRole('navigation', { name: 'Project navigation' })).toBeVisible();
+      await activePage.locator('.topbar').getByRole('button', { name: 'Switch to light theme' }).click();
+      await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'light');
     } finally {
       await sessionClient.dispose();
     }
@@ -577,6 +649,14 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(pending).toMatchObject({ status: 'ready' });
     changeSetId = findString(pending, 'changeSetId') ?? '';
     expect(changeSetId).toBeTruthy();
+    await activePage.getByRole('link', { name: 'Records', exact: true }).click();
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    let palette = activePage.getByRole('dialog', { name: 'Command palette' });
+    await palette.getByRole('combobox', { name: 'Search commands' }).fill('Open pending change: posts');
+    await expect(palette.getByRole('option', { name: 'Open pending change: posts' })).toBeVisible();
+    await activePage.keyboard.press('Enter');
+    await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
     await activePage.getByRole('button', { name: 'Fields', exact: true }).click();
     await activePage.reload();
     await expect(activePage.getByRole('row').filter({ hasText: 'summary' })).toBeVisible();
@@ -971,6 +1051,14 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const failedChange = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/changes/${changeSetId}`)).body) as Record<string, unknown>;
     expect(failedChange.status).toBe('failed');
     expect(failedChange.applyAttempts).toHaveLength(1);
+    await activePage.getByRole('button', { name: /Search commands/ }).focus();
+    await activePage.keyboard.press('Control+k');
+    const failedChangePalette = activePage.getByRole('dialog', { name: 'Command palette' });
+    await failedChangePalette.getByRole('combobox', { name: 'Search commands' }).fill('Open failed change: posts');
+    await expect(failedChangePalette.getByRole('option', { name: 'Open failed change: posts' })).toBeVisible();
+    await activePage.keyboard.press('Enter');
+    await expect(activePage).toHaveURL(`${runtimeURL}/changes?changeSet=${encodeURIComponent(changeSetId)}`);
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
     const unchanged = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}`)).body);
     const categoryField = (unchanged as { fields: Array<{ name: string; unique?: boolean }> }).fields.find((field) => field.name === 'category');
     expect(categoryField).toBeDefined();

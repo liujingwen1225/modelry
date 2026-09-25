@@ -6,10 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
+	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
 type testEvaluator struct{}
@@ -20,6 +24,56 @@ func (testEvaluator) Evaluate(_ context.Context, _ string, _ authorization.Opera
 	}
 	return authorization.Decision{Code: "POLICY_DENIED", Message: "hidden"}, nil
 }
+
+func (evaluator testEvaluator) EvaluateInTransaction(ctx context.Context, _ storage.Executor, collectionID string, operation authorization.Operation, principal authorization.Principal, record *authorization.Record) (authorization.Decision, error) {
+	return evaluator.Evaluate(ctx, collectionID, operation, principal, record)
+}
+
+type denySecondEvaluation struct{ calls atomic.Int32 }
+
+func (evaluator *denySecondEvaluation) decision() authorization.Decision {
+	if evaluator.calls.Add(1) == 1 {
+		return authorization.Decision{Allowed: true}
+	}
+	return authorization.Decision{Code: "POLICY_DENIED", Message: "rule changed"}
+}
+
+func (evaluator *denySecondEvaluation) Evaluate(context.Context, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
+	return evaluator.decision(), nil
+}
+
+func (evaluator *denySecondEvaluation) EvaluateInTransaction(context.Context, storage.Executor, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
+	return evaluator.decision(), nil
+}
+
+type denyAfterTwoEvaluations struct{ calls atomic.Int32 }
+
+func (evaluator *denyAfterTwoEvaluations) decision() authorization.Decision {
+	if evaluator.calls.Add(1) <= 2 {
+		return authorization.Decision{Allowed: true}
+	}
+	return authorization.Decision{Code: "POLICY_DENIED", Message: "rule changed"}
+}
+
+func (evaluator *denyAfterTwoEvaluations) Evaluate(context.Context, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
+	return evaluator.decision(), nil
+}
+
+func (evaluator *denyAfterTwoEvaluations) EvaluateInTransaction(context.Context, storage.Executor, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
+	return evaluator.decision(), nil
+}
+
+type passThroughLifecycle struct{}
+
+func (passThroughLifecycle) Before(_ context.Context, change recordlifecycle.BeforeChange) (map[string]any, error) {
+	return change.Values, nil
+}
+
+func (passThroughLifecycle) AppendIntent(context.Context, storage.Executor, recordevents.Event) error {
+	return nil
+}
+
+func (passThroughLifecycle) AfterCommit(context.Context, recordevents.Event) {}
 
 type testSessionAuthenticator struct{}
 
@@ -82,6 +136,77 @@ func TestApplicationBearerCredentialNeverFallsBackToAnonymous(t *testing.T) {
 	principal, err = service.AuthenticateApplicationRequest(context.Background(), request)
 	if err != nil || principal.Type != authorization.PrincipalApplication || principal.ID != "usr_1" {
 		t.Fatalf("valid credential principal=%+v error=%v", principal, err)
+	}
+}
+
+func TestApplicationDeleteReauthorizesInsideMutationTransaction(t *testing.T) {
+	ctx := context.Background()
+	store, models, adminRecords := newTestServices(t)
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "protected", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := adminRecords.Create(ctx, collection.ID, map[string]any{"title": "keep"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evaluator := &denySecondEvaluation{}
+	applicationRecords, err := New(store, models, WithAuthorization(evaluator, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = applicationRecords.DeleteApplication(ctx, collection.ID, created.ID, authorization.Principal{Type: authorization.PrincipalAnonymous})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("DeleteApplication error = %v, want denied after in-transaction rule recheck", err)
+	}
+	if evaluator.calls.Load() != 2 {
+		t.Fatalf("authorization evaluations = %d, want preflight and transaction checks", evaluator.calls.Load())
+	}
+	if _, err := adminRecords.Get(ctx, collection.ID, created.ID); err != nil {
+		t.Fatalf("denied DeleteApplication removed the Record: %v", err)
+	}
+}
+
+func TestApplicationCreateReauthorizesInsideMutationTransactionWithLifecycle(t *testing.T) {
+	ctx := context.Background()
+	store, models, adminRecords := newTestServices(t)
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "protectedCreates", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText, Required: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := recordevents.NewService(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evaluator := &denyAfterTwoEvaluations{}
+	applicationRecords, err := New(store, models,
+		WithAuthorization(evaluator, nil),
+		WithRecordEvents(events),
+		WithLifecycleHooks(passThroughLifecycle{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = applicationRecords.CreateApplication(ctx, collection.ID, map[string]any{"title": "must-not-persist"}, authorization.Principal{Type: authorization.PrincipalAnonymous})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("CreateApplication error = %v, want denied after in-transaction rule recheck", err)
+	}
+	if evaluator.calls.Load() != 3 {
+		t.Fatalf("authorization evaluations = %d, want preflight, post-Hook, and transaction checks", evaluator.calls.Load())
+	}
+	page, err := adminRecords.List(ctx, collection.ID, ListOptions{Limit: 10})
+	if err != nil || len(page.Data) != 0 {
+		t.Fatalf("denied CreateApplication persisted a Record: page=%+v err=%v", page, err)
+	}
+	position, err := events.State(ctx, collection.ID)
+	if err != nil || position.Head != 0 {
+		t.Fatalf("denied CreateApplication persisted an Event: position=%+v err=%v", position, err)
 	}
 }
 

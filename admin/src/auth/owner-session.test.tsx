@@ -23,7 +23,9 @@ describe('Owner session provider', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(Response.json({
         owner: { id: 'owner_42', email: 'dev@example.com' },
-        expiresAt: '2026-09-25T10:00:00Z',
+        expiresAt: '2030-01-01T00:00:00Z',
+        role: 'owner',
+        permission: { preset: 'fullAccess' },
       }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -61,5 +63,27 @@ describe('Owner session provider', () => {
     render(<OwnerSessionProvider><SessionProbe /></OwnerSessionProvider>);
 
     expect(await screen.findByLabelText('Session expired')).toHaveTextContent('true');
+    });
+
+  it('waits out a long-lived session instead of refreshing it in a loop', async () => {
+    vi.useFakeTimers();
+    try {
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const fetchMock = vi.fn(() => Promise.resolve(Response.json({
+        owner: { id: 'adm_1', email: 'colleague@example.test' },
+        expiresAt,
+        role: 'administrator',
+        permission: { preset: 'readOnly' },
+      })));
+      vi.stubGlobal('fetch', fetchMock);
+      render(<OwnerSessionProvider><SessionProbe /></OwnerSessionProvider>);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

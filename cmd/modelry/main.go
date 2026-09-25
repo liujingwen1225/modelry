@@ -72,6 +72,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runStart(args[1:], stdout, stderr, workingDirectory)
 	case "status":
 		return runStatus(args[1:], stdout, stderr, workingDirectory)
+	case "backup":
+		return runBackup(args[1:], stdout, stderr, workingDirectory)
+	case "restore":
+		return runRestore(args[1:], stdout, stderr, workingDirectory)
+	case "generate":
+		return runGenerate(args[1:], stdout, stderr, workingDirectory)
 	default:
 		_, _ = fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		printUsage(stderr)
@@ -98,13 +104,16 @@ func runStartContext(ctx context.Context, args []string, stdout, stderr io.Write
 		return 2
 	}
 	rootConfig := makeRootConfig(flags, rootPath, workingDirectory)
-	instance, err := runtimeapp.New(runtimeapp.Options{ProjectRoot: rootConfig, Version: version})
+	// 只有显式提供 --listen 时才让 flag 覆盖 Project Runtime Settings。
+	listenFlag := ""
+	flags.Visit(func(visited *flag.Flag) { if visited.Name == "listen" { listenFlag = *listenAddress } })
+	instance, err := runtimeapp.New(runtimeapp.Options{ProjectRoot: rootConfig, Version: version, ListenFlag: listenFlag, ListenDefault: *listenAddress})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "cannot start Modelry: %v\n", err)
 		return 1
 	}
 	defer instance.Close()
-	err = instance.Run(ctx, *listenAddress, func(address net.Addr) {
+	err = instance.Run(ctx, instance.ListenAddress(ctx), func(address net.Addr) {
 		record := readyRecord{
 			State:         "ready",
 			URL:           "http://" + address.String(),
@@ -195,8 +204,11 @@ func directoryExists(name string) bool {
 }
 
 func printUsage(writer io.Writer) {
-	_, _ = fmt.Fprintln(writer, "Usage: modelry <start|status|admin|mcp|version>")
+	_, _ = fmt.Fprintln(writer, "Usage: modelry <start|status|backup|restore|generate|admin|mcp|version>")
 	_, _ = fmt.Fprintln(writer, "  start [--project-root PATH] [--listen ADDRESS]")
+	_, _ = fmt.Fprintln(writer, "  backup [--project-root PATH] [--out PATH]")
+	_, _ = fmt.Fprintln(writer, "  restore [--project-root PATH] --from PATH [--preflight] [--force]")
+	_, _ = fmt.Fprintln(writer, "  generate [--project-root PATH] --out DIR")
 	_, _ = fmt.Fprintln(writer, "  status [--project-root PATH] [--json]")
 	_, _ = fmt.Fprintln(writer, "  admin [--api-url URL] [--api-key KEY] <collections|records|schema|access|requests|audit> <operation>")
 	_, _ = fmt.Fprintln(writer, "  mcp [--api-url URL] [--api-key KEY]")

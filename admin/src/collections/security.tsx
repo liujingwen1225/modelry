@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Check, KeyRound, RefreshCw, Search, Shield, ShieldCheck, UserRound } from 'lucide-react';
 import { ApiClientError } from '../api/client';
 import { Button, EmptyState, ErrorState, FormField, LoadingState, Surface } from '../components/ui';
+import { useI18n, type TranslationKey } from '../i18n/i18n';
 import {
   applyAccessRules,
   applyAuthenticationConfiguration,
@@ -30,26 +31,23 @@ import {
   type AuthenticationConfiguration,
   type AuthenticationConfigurationState,
   type Collection,
+  type EmailVerificationMode,
   type FieldDefinition,
 } from './client';
+import { AccessRuleSimulation } from './simulate';
 import { useCollectionWorkspace } from './workspace-context';
 
 const OPERATIONS: AccessOperation[] = ['list', 'view', 'create', 'update', 'delete'];
-const MODES: Array<{ value: AccessRuleMode; label: string; description: string }> = [
-  { value: 'noAccess', label: 'No access', description: 'No Application request can perform this operation.' },
-  { value: 'anyone', label: 'Anyone', description: 'Requests do not need an Application User session.' },
-  { value: 'signedInUsers', label: 'Signed-in users', description: 'A valid Application User session is required.' },
-  { value: 'recordOwner', label: 'Record owner', description: 'The related signed-in User must own the record.' },
-  { value: 'custom', label: 'Custom rule', description: 'Every typed field condition must match.' },
-];
+const MODES: AccessRuleMode[] = ['noAccess', 'anyone', 'signedInUsers', 'recordOwner', 'custom'];
+type Translate = ReturnType<typeof useI18n>['t'];
 
 type ConditionDraft = { fieldId: string; operator: 'eq' | 'neq' | 'in'; value: string };
 
-function errorCopy(error: unknown, fallback: string) {
-  if (!(error instanceof ApiClientError)) return { title: fallback, message: error instanceof Error ? error.message : 'Try again when the project is available.' };
+function errorCopy(error: unknown, fallback: string, t: Translate) {
+  if (!(error instanceof ApiClientError)) return { title: fallback, message: error instanceof Error ? error.message : t('common.tryAgainWhenAvailable') };
   return {
     title: error.apiError.message,
-    message: [error.apiError.code, error.apiError.hint, `Request ID: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+    message: [error.apiError.code, error.apiError.hint, `${t('common.requestId')}: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
   };
 }
 
@@ -67,14 +65,6 @@ function expressionConditions(expression?: AccessExpression): AccessPredicate[] 
 
 function valueForControl(value: unknown, operator: string) {
   return operator === 'in' ? JSON.stringify(value, null, 2) : value === undefined || value === null ? '' : typeof value === 'string' ? value : String(value);
-}
-
-function operationLabel(operation: AccessOperation) {
-  return operation.charAt(0).toUpperCase() + operation.slice(1);
-}
-
-function modeLabel(mode: AccessRuleMode) {
-  return MODES.find((item) => item.value === mode)?.label ?? 'No access';
 }
 
 function countChanged(applied: AccessRule[], pending: AccessRule[]) {
@@ -119,17 +109,18 @@ function parsePrimitive(value: unknown, field: FieldDefinition): { valid: boolea
   return { valid: false };
 }
 
-function predicateValueControl(field: FieldDefinition, operator: string, value: string, onChange: (value: string) => void) {
+function predicateValueControl(field: FieldDefinition, operator: string, value: string, onChange: (value: string) => void, t: Translate) {
   if (operator === 'in' || field.type === 'json') {
-    return <textarea aria-label="Condition value" onChange={(event) => onChange(event.target.value)} placeholder={operator === 'in' ? '["one", "two"]' : '{"status":"active"}'} rows={2} value={value} />;
+    return <textarea aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} placeholder={operator === 'in' ? '["one", "two"]' : '{"status":"active"}'} rows={2} value={value} />;
   }
-  if (field.type === 'boolean') return <select aria-label="Condition value" onChange={(event) => onChange(event.target.value)} value={value || 'true'}><option value="true">Yes</option><option value="false">No</option><option value="">Null</option></select>;
-  if (field.type === 'number') return <input aria-label="Condition value" onChange={(event) => onChange(event.target.value)} type="number" value={value} />;
-  if (field.type === 'dateTime') return <input aria-label="Condition value" onChange={(event) => onChange(event.target.value)} placeholder="2026-09-24T10:00:00Z" type="text" value={value} />;
-  return <input aria-label="Condition value" onChange={(event) => onChange(event.target.value)} type="text" value={value} />;
+  if (field.type === 'boolean') return <select aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} value={value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option><option value="">{t('security.nullOption')}</option></select>;
+  if (field.type === 'number') return <input aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} type="number" value={value} />;
+  if (field.type === 'dateTime') return <input aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} placeholder="2026-09-24T10:00:00Z" type="text" value={value} />;
+  return <input aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} type="text" value={value} />;
 }
 
 export function CollectionSecurityPage() {
+  const { t } = useI18n();
   const { collection } = useCollectionWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const authTabs = collection.type === 'Auth';
@@ -144,7 +135,7 @@ export function CollectionSecurityPage() {
   const [editing, setEditing] = useState<AccessOperation>();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<unknown>();
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<TranslationKey | ''>('');
   const [confirmApply, setConfirmApply] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const pending = orderedRules(state?.pending ?? []);
@@ -188,7 +179,7 @@ export function CollectionSecurityPage() {
       const next = await saveAccessRules(collection.id, state.version, rules);
       setState({ ...next, applied: orderedRules(next.applied), pending: orderedRules(next.pending) });
       setEditing(undefined);
-      setMessage('Access rule saved as a pending change.');
+      setMessage('security.savedPending');
     } catch (reason) { setActionError(reason); }
     finally { setBusy(false); }
   }
@@ -203,7 +194,7 @@ export function CollectionSecurityPage() {
       const current = await getAccessRules(collection.id);
       setState({ ...current, applied: orderedRules(current.applied), pending: orderedRules(current.pending) });
       setConfirmApply(false);
-      setMessage('Access rules applied. The Runtime confirmed the durable state.');
+      setMessage('security.applied');
     } catch (reason) { setActionError(reason); }
     finally { setBusy(false); }
   }
@@ -217,7 +208,7 @@ export function CollectionSecurityPage() {
       const current = await discardAccessRules(collection.id, state.version);
       setState({ ...current, applied: orderedRules(current.applied), pending: orderedRules(current.pending) });
       setConfirmDiscard(false);
-      setMessage('Pending access rule changes were discarded.');
+      setMessage('security.discarded');
       setEditing(undefined);
     } catch (reason) { setActionError(reason); }
     finally { setBusy(false); }
@@ -232,33 +223,34 @@ export function CollectionSecurityPage() {
 
   return (
     <div className="page-stack collection-page security-page">
-      <header className="page-heading collection-heading"><div><p className="eyebrow">{collection.name} · SECURITY</p><h1>Security</h1><p className="page-description">Manage Application access and authentication for this Collection.</p></div><span className="security-heading-icon"><Shield aria-hidden="true" size={19} /></span></header>
-      <nav aria-label="Collection security" className="security-tabs" role="tablist">
-        <button aria-controls="security-panel-rules" aria-selected={activePanel === 'rules'} id="security-tab-rules" onClick={() => selectPanel('rules')} role="tab" type="button">Access Rules</button>
+      <header className="page-heading collection-heading"><div><p className="eyebrow">{collection.name} · {t('security.eyebrow')}</p><h1>{t('security.title')}</h1><p className="page-description">{t('security.description')}</p></div><span className="security-heading-icon"><Shield aria-hidden="true" size={19} /></span></header>
+      <nav aria-label={t('security.sectionsLabel')} className="security-tabs" role="tablist">
+        <button aria-controls="security-panel-rules" aria-selected={activePanel === 'rules'} id="security-tab-rules" onClick={() => selectPanel('rules')} role="tab" type="button">{t('security.tabs.rules')}</button>
         {authTabs && <>
-          <button aria-controls="security-panel-authentication" aria-selected={activePanel === 'authentication'} id="security-tab-authentication" onClick={() => selectPanel('authentication')} role="tab" type="button">Authentication</button>
-          <button aria-controls="security-panel-users" aria-selected={activePanel === 'users'} id="security-tab-users" onClick={() => selectPanel('users')} role="tab" type="button">App Users</button>
-          <button aria-controls="security-panel-sessions" aria-selected={activePanel === 'sessions'} id="security-tab-sessions" onClick={() => selectPanel('sessions')} role="tab" type="button">Sessions</button>
+          <button aria-controls="security-panel-authentication" aria-selected={activePanel === 'authentication'} id="security-tab-authentication" onClick={() => selectPanel('authentication')} role="tab" type="button">{t('security.tabs.authentication')}</button>
+          <button aria-controls="security-panel-users" aria-selected={activePanel === 'users'} id="security-tab-users" onClick={() => selectPanel('users')} role="tab" type="button">{t('security.tabs.users')}</button>
+          <button aria-controls="security-panel-sessions" aria-selected={activePanel === 'sessions'} id="security-tab-sessions" onClick={() => selectPanel('sessions')} role="tab" type="button">{t('security.tabs.sessions')}</button>
         </>}
       </nav>
       {activePanel === 'rules' && <div aria-labelledby="security-tab-rules" className="page-stack security-panel" id="security-panel-rules" role="tabpanel">
-      {loadState === 'loading' && <LoadingState label="Loading access rules" />}
-      {loadState === 'error' && (() => { const copy = errorCopy(error, 'Access rules could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
+      {loadState === 'ready' && <AccessRuleSimulation collectionId={collection.id} />}
+      {loadState === 'loading' && <LoadingState label={t('security.loadingRules')} />}
+      {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.loadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {loadState === 'ready' && state && <>
-        {referenceError && <div className="security-dependency-error" role="status">Related Collections could not be loaded. Record owner rules are unavailable until references can be checked. <Button onClick={() => setReloadKey((value) => value + 1)} size="small">Retry</Button></div>}
-        {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{message}</div>}
-        {actionError && (() => { const copy = errorCopy(actionError, 'The access rule change could not be completed.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Reload rules</Button></ErrorState>; })()}
+        {referenceError && <div className="security-dependency-error" role="status">{t('security.referencesUnavailable')} <Button onClick={() => setReloadKey((value) => value + 1)} size="small">{t('common.retry')}</Button></div>}
+        {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
+        {actionError && (() => { const copy = errorCopy(actionError, t('security.changeFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.reloadRules')}</Button></ErrorState>; })()}
         <Surface className="security-rules-card" variant="standard">
-          <div className="security-rules-heading"><div><h2>Applied access</h2><p>Application requests are evaluated against these rules.</p></div><span className="security-version">Version {state.version}</span></div>
+          <div className="security-rules-heading"><div><h2>{t('security.appliedTitle')}</h2><p>{t('security.appliedDescription')}</p></div><span className="security-version">{t('security.version', { version: state.version })}</span></div>
           <div className="security-rule-list" role="list">{OPERATIONS.map((operation) => {
             const current = pending.find((rule) => rule.operation === operation)!;
             const previous = applied.find((rule) => rule.operation === operation)!;
             const isChanged = JSON.stringify(current) !== JSON.stringify(previous);
             const ownerField = collection.fields.find((field) => field.id === current.ownerFieldId);
             return <article className="security-rule-row" key={operation} role="listitem">
-              <div className="security-rule-operation"><span>{operationLabel(operation)}</span>{isChanged && <span className="security-pending-mark">Pending</span>}</div>
-              <div className="security-rule-summary"><strong>{modeLabel(current.mode)}</strong>{current.mode === 'recordOwner' && <span>{ownerField?.name ?? 'Relation field'}</span>}{current.mode === 'custom' && <span>{expressionConditions(current.expression).length} field conditions</span>}</div>
-              <Button aria-label={`Edit ${operationLabel(operation)} access`} disabled={busy || editing === operation} onClick={() => { setActionError(undefined); setEditing(operation); }} size="small">Edit</Button>
+              <div className="security-rule-operation"><span>{t(`security.operations.${operation}`)}</span>{isChanged && <span className="security-pending-mark">{t('security.pendingMark')}</span>}</div>
+              <div className="security-rule-summary"><strong>{t(`accessModes.${current.mode}.label`)}</strong>{current.mode === 'recordOwner' && <span>{ownerField?.name ?? t('security.relationField')}</span>}{current.mode === 'custom' && <span>{t('security.conditionCount', { count: expressionConditions(current.expression).length })}</span>}</div>
+              <Button aria-label={t('security.editAccess', { operation: t(`security.operations.${operation}`) })} disabled={busy || editing === operation} onClick={() => { setActionError(undefined); setEditing(operation); }} size="small">{t('security.edit')}</Button>
             </article>;
           })}</div>
           {editing && <AccessRuleEditor
@@ -269,14 +261,14 @@ export function CollectionSecurityPage() {
             ownerFields={ownerFields}
             rule={cloneRule(pending.find((item) => item.operation === editing)!)}
           />}
-          {changedCount > 0 ? <div aria-label="Pending access changes" className="security-pending-panel" role="region">
-            <div><strong>{changedCount} pending {changedCount === 1 ? 'access rule change' : 'access rule changes'}</strong><span>Saved changes remain pending until you apply them.</span></div>
-            <div className="security-pending-actions"><Button disabled={busy} onClick={() => setConfirmDiscard(true)} size="small">Discard</Button><Button disabled={busy} onClick={() => setConfirmApply(true)} variant="primary">Apply {changedCount} {changedCount === 1 ? 'change' : 'changes'}</Button></div>
-          </div> : <div className="security-applied-state"><ShieldCheck aria-hidden="true" size={15} />All access rule changes are applied.</div>}
-          {confirmApply && <div className="security-confirm-panel" role="alert"><strong>Apply these access rule changes?</strong><span>Application requests will use the new rules as soon as the Runtime applies them. No access simulation is available here.</span><div><Button disabled={busy} onClick={() => setConfirmApply(false)} size="small">Cancel</Button><Button disabled={busy} onClick={() => void apply()} size="small" variant="primary">{busy ? 'Applying…' : 'Confirm & apply'}</Button></div></div>}
-          {confirmDiscard && <div className="security-confirm-panel" role="alert"><strong>Discard pending access rules?</strong><span>The applied rules will remain in effect.</span><div><Button disabled={busy} onClick={() => setConfirmDiscard(false)} size="small">Cancel</Button><Button disabled={busy} onClick={() => void discard()} size="small" variant="danger">{busy ? 'Discarding…' : 'Discard pending rules'}</Button></div></div>}
+          {changedCount > 0 ? <div aria-label={t('security.pendingPanelLabel')} className="security-pending-panel" role="region">
+            <div><strong>{t(changedCount === 1 ? 'security.pendingOne' : 'security.pendingMany', { count: changedCount })}</strong><span>{t('security.pendingHint')}</span></div>
+            <div className="security-pending-actions"><Button disabled={busy} onClick={() => setConfirmDiscard(true)} size="small">{t('security.discard')}</Button><Button disabled={busy} onClick={() => setConfirmApply(true)} variant="primary">{t(changedCount === 1 ? 'security.applyOne' : 'security.applyMany', { count: changedCount })}</Button></div>
+          </div> : <div className="security-applied-state"><ShieldCheck aria-hidden="true" size={15} />{t('security.allApplied')}</div>}
+          {confirmApply && <div className="security-confirm-panel" role="alert"><strong>{t('security.confirmApplyTitle')}</strong><span>{t('security.confirmApplyBody')}</span><div><Button disabled={busy} onClick={() => setConfirmApply(false)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void apply()} size="small" variant="primary">{busy ? t('security.applying') : t('security.confirmAndApply')}</Button></div></div>}
+          {confirmDiscard && <div className="security-confirm-panel" role="alert"><strong>{t('security.discardConfirmTitle')}</strong><span>{t('security.discardConfirmBody')}</span><div><Button disabled={busy} onClick={() => setConfirmDiscard(false)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void discard()} size="small" variant="danger">{busy ? t('security.discarding') : t('security.discardPending')}</Button></div></div>}
         </Surface>
-        {customFields.length === 0 && <EmptyState description="Apply one or more non-system fields before creating custom field conditions." title="Custom rules need an Applied Field" />}
+        {customFields.length === 0 && <EmptyState description={t('security.customNeedsFieldDescription')} title={t('security.customNeedsFieldTitle')} />}
       </>}
       </div>}
       {activePanel === 'authentication' && <AuthenticationPanel collectionId={collection.id} />}
@@ -294,10 +286,12 @@ function AccessRuleEditor({ rule, ownerFields, customFields, busy, onSave, onCan
   onSave: (rule: AccessRule) => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<AccessRuleMode>(rule.mode);
   const [ownerFieldId, setOwnerFieldId] = useState(rule.ownerFieldId ?? '');
   const [conditions, setConditions] = useState<ConditionDraft[]>(() => expressionConditions(rule.expression).map((item) => ({ fieldId: item.fieldId, operator: item.operator, value: valueForControl(item.value, item.operator) })));
-  const [validationError, setValidationError] = useState('');
+  const [validationError, setValidationError] = useState<TranslationKey | ''>('');
+  const [validationValues, setValidationValues] = useState<{ index?: number; name?: string }>({});
   const canUseRecordOwner = ownerFields.length > 0;
   const conditionField = (id: string) => customFields.find((field) => field.id === id);
 
@@ -316,17 +310,21 @@ function AccessRuleEditor({ rule, ownerFields, customFields, busy, onSave, onCan
     setValidationError('');
     const next: AccessRule = { operation: rule.operation, mode };
     if (mode === 'recordOwner') {
-      if (!ownerFields.some((field) => field.id === ownerFieldId)) { setValidationError('Choose an Applied Relation field that points to an Auth Collection.'); return; }
+      if (!ownerFields.some((field) => field.id === ownerFieldId)) { setValidationError('security.errorOwnerField'); return; }
       next.ownerFieldId = ownerFieldId;
     }
     if (mode === 'custom') {
-      if (!conditions.length || conditions.length > 16) { setValidationError('Add between 1 and 16 field conditions.'); return; }
+      if (!conditions.length || conditions.length > 16) { setValidationError('security.errorConditionCount'); return; }
       const predicates: AccessPredicate[] = [];
       for (const [index, condition] of conditions.entries()) {
         const field = conditionField(condition.fieldId);
-        if (!field?.id) { setValidationError(`Choose an Applied Field for condition ${index + 1}.`); return; }
+        if (!field?.id) { setValidationError('security.errorConditionField'); setValidationValues({ index: index + 1 }); return; }
         const parsed = parseTypedValue(condition.value, field, condition.operator);
-        if (!parsed.valid) { setValidationError(`Enter a value that matches ${field.name}${condition.operator === 'in' ? ' and use a JSON array with 1–32 values' : ''}.`); return; }
+        if (!parsed.valid) {
+          setValidationError(condition.operator === 'in' ? 'security.errorConditionValueArray' : 'security.errorConditionValue');
+          setValidationValues({ name: field.name });
+          return;
+        }
         predicates.push({ fieldId: field.id, operator: condition.operator, value: parsed.value });
       }
       next.expression = { version: 1, all: predicates };
@@ -335,35 +333,51 @@ function AccessRuleEditor({ rule, ownerFields, customFields, busy, onSave, onCan
   }
 
   return <form className="security-rule-editor" onSubmit={submit}>
-    <div className="security-rule-editor-heading"><div><p className="eyebrow">EDIT ACCESS</p><h3>{operationLabel(rule.operation)} access</h3></div><span>Changes are saved separately from Schema.</span></div>
-    <fieldset className="security-mode-options"><legend>Who can {rule.operation === 'list' ? 'list' : rule.operation} records?</legend>
-      {MODES.map((option) => <label className="security-mode-option" key={option.value}>
-        <input checked={mode === option.value} disabled={option.value === 'recordOwner' && !canUseRecordOwner} name={`access-${rule.operation}`} onChange={() => setMode(option.value)} type="radio" value={option.value} />
-        <span><strong>{option.label}</strong><small>{option.description}</small></span>
+    <div className="security-rule-editor-heading"><div><p className="eyebrow">{t('security.editorEyebrow')}</p><h3>{t('security.editAccess', { operation: t(`security.operations.${rule.operation}`) })}</h3></div><span>{t('security.editorDescription')}</span></div>
+    <fieldset className="security-mode-options"><legend>{t('security.whoCan', { operation: t(`security.operationVerbs.${rule.operation}`) })}</legend>
+      {MODES.map((value) => <label className="security-mode-option" key={value}>
+        <input checked={mode === value} disabled={value === 'recordOwner' && !canUseRecordOwner} name={`access-${rule.operation}`} onChange={() => setMode(value)} type="radio" value={value} />
+        <span><strong>{t(`accessModes.${value}.label`)}</strong><small>{t(`accessModes.${value}.description`)}</small></span>
       </label>)}
-      {!canUseRecordOwner && <p className="security-form-hint">Record owner needs an Applied Relation field to an Auth Collection.</p>}
+      {!canUseRecordOwner && <p className="security-form-hint">{t('security.recordOwnerNeedsField')}</p>}
     </fieldset>
-    {mode === 'recordOwner' && <FormField htmlFor="access-owner-field" label="Owner field" hint="Choose a Relation field that points to an Auth Collection.">
-      <select id="access-owner-field" onChange={(event) => setOwnerFieldId(event.target.value)} value={ownerFieldId}><option value="">Choose a field</option>{ownerFields.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}</select>
+    {mode === 'recordOwner' && <FormField htmlFor="access-owner-field" label={t('security.ownerField')} hint={t('security.ownerFieldHint')}>
+      <select id="access-owner-field" onChange={(event) => setOwnerFieldId(event.target.value)} value={ownerFieldId}><option value="">{t('security.chooseField')}</option>{ownerFields.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}</select>
     </FormField>}
-    {mode === 'custom' && <section aria-label="Custom field conditions" className="security-custom-editor">
-      <div className="security-custom-heading"><div><h4>All conditions must match</h4><p>Only Applied fields are available. Expressions use the supported typed rule format.</p></div><Button disabled={conditions.length >= 16 || customFields.length === 0} onClick={addCondition} size="small" type="button">Add condition</Button></div>
+    {mode === 'custom' && <section aria-label={t('security.conditionsLabel')} className="security-custom-editor">
+      <div className="security-custom-heading"><div><h4>{t('security.conditionsTitle')}</h4><p>{t('security.conditionsDescription')}</p></div><Button disabled={conditions.length >= 16 || customFields.length === 0} onClick={addCondition} size="small" type="button">{t('security.addCondition')}</Button></div>
       {conditions.map((condition, index) => {
         const field = conditionField(condition.fieldId);
         return <div className="security-condition" key={`${index}-${condition.fieldId}`}>
-          <label><span>Field</span><select aria-label={`Condition ${index + 1} field`} onChange={(event) => updateCondition(index, { fieldId: event.target.value, value: '' })} value={condition.fieldId}>{customFields.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
-          <label><span>Operator</span><select aria-label={`Condition ${index + 1} operator`} onChange={(event) => updateCondition(index, { operator: event.target.value as ConditionDraft['operator'], value: '' })} value={condition.operator}><option value="eq">Equals</option><option value="neq">Does not equal</option><option value="in">Is one of</option></select></label>
-          <label className="security-condition-value"><span>Value{condition.operator === 'in' ? ' · JSON array' : ''}</span>{field ? predicateValueControl(field, condition.operator, condition.value, (value) => updateCondition(index, { value })) : <input aria-label="Condition value" disabled value="" />}</label>
-          <Button aria-label={`Remove condition ${index + 1}`} disabled={conditions.length === 1} onClick={() => setConditions((current) => current.filter((_, itemIndex) => itemIndex !== index))} size="small" type="button" variant="quiet">Remove</Button>
+          <label><span>{t('security.field')}</span><select aria-label={t('security.conditionField', { index: index + 1 })} onChange={(event) => updateCondition(index, { fieldId: event.target.value, value: '' })} value={condition.fieldId}>{customFields.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+          <label><span>{t('security.operator')}</span><select aria-label={t('security.conditionOperator', { index: index + 1 })} onChange={(event) => updateCondition(index, { operator: event.target.value as ConditionDraft['operator'], value: '' })} value={condition.operator}><option value="eq">{t('security.operators.eq')}</option><option value="neq">{t('security.operators.neq')}</option><option value="in">{t('security.operators.in')}</option></select></label>
+          <label className="security-condition-value"><span>{condition.operator === 'in' ? t('security.valueJsonArray') : t('security.value')}</span>{field ? predicateValueControl(field, condition.operator, condition.value, (value) => updateCondition(index, { value }), t) : <input aria-label={t('security.conditionValue')} disabled value="" />}</label>
+          <Button aria-label={t('security.removeCondition', { index: index + 1 })} disabled={conditions.length === 1} onClick={() => setConditions((current) => current.filter((_, itemIndex) => itemIndex !== index))} size="small" type="button" variant="quiet">{t('security.remove')}</Button>
         </div>;
       })}
     </section>}
-    {validationError && <div className="record-field-error" role="alert">{validationError}</div>}
-    <div className="security-rule-editor-actions"><Button disabled={busy} onClick={onCancel} type="button" variant="quiet">Cancel</Button><Button disabled={busy || (mode === 'custom' && customFields.length === 0)} type="submit" variant="primary">{busy ? 'Saving…' : 'Save pending rule'}</Button></div>
+    {validationError && <div className="record-field-error" role="alert">{t(validationError, validationValues)}</div>}
+    <div className="security-rule-editor-actions"><Button disabled={busy} onClick={onCancel} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={busy || (mode === 'custom' && customFields.length === 0)} type="submit" variant="primary">{busy ? t('security.saving') : t('security.save')}</Button></div>
   </form>;
 }
 
+function emailVerificationLabel(mode: EmailVerificationMode | undefined, t: Translate): string {
+  switch (mode) {
+    case 'required': return t('security.emailVerificationLabels.required');
+    case 'optional': return t('security.emailVerificationLabels.optional');
+    default: return t('security.emailVerificationLabels.off');
+  }
+}
+
+function emailVerificationHint(mode: EmailVerificationMode | undefined, t: Translate): string {
+  switch (mode) {
+    case 'required': return t('security.emailVerificationHints.required');
+    case 'optional': return t('security.emailVerificationHints.optional');
+    default: return t('security.emailVerificationHints.off');
+  }
+}
 function AuthenticationPanel({ collectionId }: { collectionId: string }) {
+  const { t } = useI18n();
   const [state, setState] = useState<AuthenticationConfigurationState>();
   const [draft, setDraft] = useState<AuthenticationConfiguration>();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -374,7 +388,7 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
   const [editing, setEditing] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<TranslationKey | ''>('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -405,7 +419,7 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
       setState(next);
       setDraft(next.pending);
       setEditing(false);
-      setMessage('Authentication settings saved as a pending change.');
+      setMessage('security.authSaved');
     } catch (reason) { setActionError(reason); }
     finally { setSaving(false); }
   }
@@ -420,7 +434,7 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
       setState(next);
       setDraft(next.pending);
       setConfirmApply(false);
-      setMessage('Authentication settings applied. The Runtime confirmed the durable state.');
+      setMessage('security.authApplied');
     } catch (reason) { setActionError(reason); }
     finally { setSaving(false); }
   }
@@ -435,39 +449,42 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
       setDraft(next.pending);
       setEditing(false);
       setConfirmDiscard(false);
-      setMessage('Pending authentication settings were discarded.');
+      setMessage('security.authDiscarded');
     } catch (reason) { setActionError(reason); }
     finally { setSaving(false); }
   }
 
   return <div aria-labelledby="security-tab-authentication" className="page-stack security-panel" id="security-panel-authentication" role="tabpanel">
-    {loadState === 'loading' && <LoadingState label="Loading authentication settings" />}
-    {loadState === 'error' && (() => { const copy = errorCopy(error, 'Authentication settings could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
+    {loadState === 'loading' && <LoadingState label={t('security.authenticationLoading')} />}
+    {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.authenticationLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
     {loadState === 'ready' && state && draft && <>
-      {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{message}</div>}
-      {actionError && (() => { const copy = errorCopy(actionError, 'Authentication settings could not be changed.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Reload settings</Button></ErrorState>; })()}
+      {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
+      {actionError && (() => { const copy = errorCopy(actionError, t('security.authenticationChangeFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.authenticationReload')}</Button></ErrorState>; })()}
       <Surface className="security-auth-card" variant="standard">
-        <div className="security-rules-heading"><div><h2>Authentication</h2><p>Email is the Auth identifier. The password is stored securely and is never shown again.</p></div><span className="security-version">Version {state.version}</span></div>
+        <div className="security-rules-heading"><div><h2>{t('security.authenticationTitle')}</h2><p>{t('security.authenticationDescription')}</p></div><span className="security-version">{t('security.version', { version: state.version })}</span></div>
         {!editing ? <dl className="security-auth-values">
-          <div><dt>Email + password</dt><dd><strong>{state.pending.emailPasswordEnabled ? 'Enabled' : 'Disabled'}</strong><span>{state.pending.emailPasswordEnabled ? 'Application users can authenticate with their email and password.' : 'Email and password login is unavailable.'}</span></dd></div>
-          <div><dt>Self registration</dt><dd><strong>{state.pending.selfRegistration ? 'Enabled' : 'Disabled'}</strong><span>{state.pending.selfRegistration ? 'Users can create their own accounts.' : 'Only an Administrator can create users.'}</span></dd></div>
-          <div><dt>Session duration</dt><dd><strong>{state.pending.sessionDurationDays} days</strong><span>New Application sessions expire after this period.</span></dd></div>
+          <div><dt>{t('security.emailPassword')}</dt><dd><strong>{t(state.pending.emailPasswordEnabled ? 'security.enabled' : 'security.disabled')}</strong><span>{t(state.pending.emailPasswordEnabled ? 'security.emailPasswordEnabled' : 'security.emailPasswordDisabled')}</span></dd></div>
+          <div><dt>{t('security.selfRegistration')}</dt><dd><strong>{t(state.pending.selfRegistration ? 'security.enabled' : 'security.disabled')}</strong><span>{t(state.pending.selfRegistration ? 'security.selfRegistrationEnabled' : 'security.selfRegistrationDisabled')}</span></dd></div>
+          <div><dt>{t('security.sessionDuration')}</dt><dd><strong>{t('security.sessionDurationValue', { count: state.pending.sessionDurationDays })}</strong><span>{t('security.sessionDurationExpiry')}</span></dd></div>
+          <div><dt>{t('security.emailVerification')}</dt><dd><strong>{emailVerificationLabel(state.pending.emailVerification, t)}</strong><span>{emailVerificationHint(state.pending.emailVerification, t)}</span></dd></div>
         </dl> : <form className="security-auth-editor" onSubmit={(event) => void save(event)}>
-          <FormField htmlFor="auth-email-password" hint="Email remains the Auth identifier field." label="Email + password"><select id="auth-email-password" onChange={(event) => setDraft({ ...draft, emailPasswordEnabled: event.target.value === 'enabled' })} value={draft.emailPasswordEnabled ? 'enabled' : 'disabled'}><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></FormField>
-          <FormField htmlFor="auth-self-registration" label="Self registration"><select id="auth-self-registration" onChange={(event) => setDraft({ ...draft, selfRegistration: event.target.value === 'enabled' })} value={draft.selfRegistration ? 'enabled' : 'disabled'}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></FormField>
-          <FormField htmlFor="auth-session-days" hint="At least 1 day." label="Session duration (days)"><input id="auth-session-days" min="1" onChange={(event) => setDraft({ ...draft, sessionDurationDays: Number(event.target.value) })} type="number" value={draft.sessionDurationDays} /></FormField>
-          <div className="security-rule-editor-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(false); }} type="button" variant="quiet">Cancel</Button><Button disabled={saving || draft.sessionDurationDays < 1 || !Number.isInteger(draft.sessionDurationDays)} type="submit" variant="primary">{saving ? 'Saving…' : 'Save pending settings'}</Button></div>
+          <FormField htmlFor="auth-email-password" hint={t('security.authEmailPasswordHint')} label={t('security.emailPassword')}><select id="auth-email-password" onChange={(event) => setDraft({ ...draft, emailPasswordEnabled: event.target.value === 'enabled' })} value={draft.emailPasswordEnabled ? 'enabled' : 'disabled'}><option value="enabled">{t('security.enabled')}</option><option value="disabled">{t('security.disabled')}</option></select></FormField>
+          <FormField htmlFor="auth-self-registration" label={t('security.selfRegistration')}><select id="auth-self-registration" onChange={(event) => setDraft({ ...draft, selfRegistration: event.target.value === 'enabled' })} value={draft.selfRegistration ? 'enabled' : 'disabled'}><option value="disabled">{t('security.disabled')}</option><option value="enabled">{t('security.enabled')}</option></select></FormField>
+          <FormField htmlFor="auth-session-days" hint={t('security.authSessionDaysHint')} label={t('security.authSessionDays')}><input id="auth-session-days" min="1" onChange={(event) => setDraft({ ...draft, sessionDurationDays: Number(event.target.value) })} type="number" value={draft.sessionDurationDays} /></FormField>
+          <FormField htmlFor="auth-email-verification" hint={t('security.authEmailVerificationHint')} label={t('security.emailVerification')}><select id="auth-email-verification" onChange={(event) => setDraft({ ...draft, emailVerification: event.target.value as EmailVerificationMode })} value={draft.emailVerification ?? 'off'}><option value="off">{t('security.emailVerificationLabels.off')}</option><option value="optional">{t('security.emailVerificationLabels.optional')}</option><option value="required">{t('security.emailVerificationLabels.required')}</option></select></FormField>
+          <div className="security-rule-editor-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(false); }} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={saving || draft.sessionDurationDays < 1 || !Number.isInteger(draft.sessionDurationDays)} type="submit" variant="primary">{saving ? t('security.saving') : t('security.authSave')}</Button></div>
         </form>}
-        {!editing && <div className="security-auth-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(true); }} size="small">Edit</Button></div>}
-        {hasPending ? <div aria-label="Pending authentication settings" className="security-pending-panel" role="region"><div><strong>Pending authentication settings</strong><span>These settings are durable but not active until applied.</span></div><div className="security-pending-actions"><Button disabled={saving} onClick={() => setConfirmDiscard(true)} size="small">Discard</Button><Button disabled={saving} onClick={() => setConfirmApply(true)} size="small" variant="primary">Apply settings</Button></div></div> : <div className="security-applied-state"><ShieldCheck aria-hidden="true" size={15} />Authentication settings are applied.</div>}
-        {confirmApply && <div className="security-confirm-panel" role="alert"><strong>Apply these authentication settings?</strong><span>New Application sign-ins will use these settings after the Runtime applies them.</span><div><Button disabled={saving} onClick={() => setConfirmApply(false)} size="small">Cancel</Button><Button disabled={saving} onClick={() => void apply()} size="small" variant="primary">{saving ? 'Applying…' : 'Confirm & apply'}</Button></div></div>}
-        {confirmDiscard && <div className="security-confirm-panel" role="alert"><strong>Discard pending authentication settings?</strong><span>The applied settings will remain in effect.</span><div><Button disabled={saving} onClick={() => setConfirmDiscard(false)} size="small">Cancel</Button><Button disabled={saving} onClick={() => void discard()} size="small" variant="danger">{saving ? 'Discarding…' : 'Discard pending settings'}</Button></div></div>}
+        {!editing && <div className="security-auth-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(true); }} size="small">{t('security.edit')}</Button></div>}
+        {hasPending ? <div aria-label={t('security.authPendingPanelLabel')} className="security-pending-panel" role="region"><div><strong>{t('security.authPendingTitle')}</strong><span>{t('security.authPendingHint')}</span></div><div className="security-pending-actions"><Button disabled={saving} onClick={() => setConfirmDiscard(true)} size="small">{t('security.discard')}</Button><Button disabled={saving} onClick={() => setConfirmApply(true)} size="small" variant="primary">{t('security.authApply')}</Button></div></div> : <div className="security-applied-state"><ShieldCheck aria-hidden="true" size={15} />{t('security.authAllApplied')}</div>}
+        {confirmApply && <div className="security-confirm-panel" role="alert"><strong>{t('security.authApplyConfirmTitle')}</strong><span>{t('security.authApplyConfirmBody')}</span><div><Button disabled={saving} onClick={() => setConfirmApply(false)} size="small">{t('common.cancel')}</Button><Button disabled={saving} onClick={() => void apply()} size="small" variant="primary">{saving ? t('security.applying') : t('security.confirmAndApply')}</Button></div></div>}
+        {confirmDiscard && <div className="security-confirm-panel" role="alert"><strong>{t('security.authDiscardConfirmTitle')}</strong><span>{t('security.authDiscardConfirmBody')}</span><div><Button disabled={saving} onClick={() => setConfirmDiscard(false)} size="small">{t('common.cancel')}</Button><Button disabled={saving} onClick={() => void discard()} size="small" variant="danger">{saving ? t('security.discarding') : t('security.authDiscardPending')}</Button></div></div>}
       </Surface>
     </>}
   </div>;
 }
 
 function ApplicationUsersPanel({ collection }: { collection: Collection }) {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const cursor = searchParams.get('usersCursor') ?? '';
   const cursorStack = parseCursorStack(searchParams.get('usersCursorStack'));
@@ -483,9 +500,10 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   const [profileError, setProfileError] = useState<unknown>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // 这里既可能显示本地的校验文案，也可能显示 Runtime 返回的校验信息，因此保存已解析的字符串。
   const [passwordError, setPasswordError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<TranslationKey | ''>('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -560,8 +578,8 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   async function changePassword(event: FormEvent) {
     event.preventDefault();
     if (!selectedUserId) return;
-    if (!password) { setPasswordError('Enter a new password.'); return; }
-    if (password !== confirmPassword) { setPasswordError('Passwords do not match.'); return; }
+    if (!password) { setPasswordError(t('security.passwordEmpty')); return; }
+    if (password !== confirmPassword) { setPasswordError(t('security.passwordMismatch')); return; }
     setBusy(true);
     setPasswordError('');
     setMessage('');
@@ -569,34 +587,35 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
       await setApplicationUserPassword(collection.id, selectedUserId, password);
       setPassword('');
       setConfirmPassword('');
-      setMessage('Password changed. All existing sessions for this user were revoked.');
-    } catch (reason) { setPasswordError(errorCopy(reason, 'The password could not be changed.').title); }
+      setMessage('security.passwordChanged');
+    } catch (reason) { setPasswordError(errorCopy(reason, t('security.passwordFailed'), t).title); }
     finally { setBusy(false); }
   }
 
   const filtered = users.filter((user) => `${user.email} ${user.recordId}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const selectedEmail = users.find((user) => user.recordId === selectedUserId)?.email ?? (typeof profile?.email === 'string' ? profile.email : 'App User');
+  const selectedEmail = users.find((user) => user.recordId === selectedUserId)?.email ?? (typeof profile?.email === 'string' ? profile.email : t('security.profileFallback'));
 
   return <div aria-labelledby="security-tab-users" className="page-stack security-panel" id="security-panel-users" role="tabpanel">
-    <Surface className="security-users-toolbar" variant="standard"><div><h2>App Users</h2><p>Profiles and passwords are managed through the Auth Collection workflow.</p></div><Link className="button button--primary button--small" to={`/collections/${encodeURIComponent(collection.id)}?new=1`}><UserRound aria-hidden="true" size={14} />Create user</Link></Surface>
-    <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">Search users</span><input aria-label="Search users" onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder="Search users…" type="search" value={search} /></label>
-    {loadState === 'loading' && <LoadingState label="Loading App Users" />}
-    {loadState === 'error' && (() => { const copy = errorCopy(error, 'App Users could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
-    {loadState === 'ready' && filtered.length === 0 && <EmptyState description={users.length ? 'Try another email or User ID.' : 'Create the first App User to allow Application sign-in.'} title={users.length ? 'No users match this search' : 'No App Users yet'}>{!users.length && <Link className="button button--primary" to={`/collections/${encodeURIComponent(collection.id)}?new=1`}>Create user</Link>}</EmptyState>}
-    {loadState === 'ready' && filtered.length > 0 && <Surface className="security-users-list" variant="standard"><div className="security-users-list-heading"><span>{filtered.length} users on this page</span><span>Search covers this page</span></div><div role="list">{filtered.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => selectUser(user.recordId)} size="small">{selectedUserId === user.recordId ? 'Selected' : 'View user'}</Button><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', user.recordId); setSearchParams(next); }} size="small" variant="quiet">Sessions</Button></article>)}</div><div className="records-pagination"><span>Page {cursorStack.length + 1}</span><div><Button disabled={!cursorStack.length} onClick={previousUsersPage} size="small">Previous</Button><Button disabled={!nextCursor} onClick={nextUsersPage} size="small">Next</Button></div></div></Surface>}
-    {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{message}</div>}
+    <Surface className="security-users-toolbar" variant="standard"><div><h2>{t('security.usersTitle')}</h2><p>{t('security.usersDescription')}</p></div><Link className="button button--primary button--small" to={`/collections/${encodeURIComponent(collection.id)}?new=1`}><UserRound aria-hidden="true" size={14} />{t('security.createUser')}</Link></Surface>
+    <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">{t('security.searchUsers')}</span><input aria-label={t('security.searchUsers')} onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUsersPlaceholder')} type="search" value={search} /></label>
+    {loadState === 'loading' && <LoadingState label={t('security.usersLoading')} />}
+    {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.usersLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+    {loadState === 'ready' && filtered.length === 0 && <EmptyState description={users.length ? t('security.usersNoMatchDescription') : t('security.usersEmptyDescription')} title={users.length ? t('security.usersNoMatchTitle') : t('security.usersEmptyTitle')}>{!users.length && <Link className="button button--primary" to={`/collections/${encodeURIComponent(collection.id)}?new=1`}>{t('security.createUser')}</Link>}</EmptyState>}
+    {loadState === 'ready' && filtered.length > 0 && <Surface className="security-users-list" variant="standard"><div className="security-users-list-heading"><span>{t('security.usersPageSummary', { count: filtered.length })}</span><span>{t('security.usersSearchHint')}</span></div><div role="list">{filtered.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => selectUser(user.recordId)} size="small">{selectedUserId === user.recordId ? t('security.selected') : t('security.viewUser')}</Button><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', user.recordId); setSearchParams(next); }} size="small" variant="quiet">{t('security.sessions')}</Button></article>)}</div><div className="records-pagination"><span>{t('security.page', { page: cursorStack.length + 1 })}</span><div><Button disabled={!cursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!nextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div></Surface>}
+    {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
     {selectedUserId && <Surface className="security-user-detail" variant="standard">
-      <div className="security-rules-heading"><div><h2>{selectedEmail}</h2><p>{selectedUserId}</p></div><Button onClick={() => updateQuery({ user: undefined })} size="small" variant="quiet">Close</Button></div>
-      {profileState === 'loading' && <LoadingState label="Loading user profile" />}
-      {profileState === 'error' && (() => { const copy = errorCopy(profileError, 'The user profile could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => selectUser(selectedUserId)} size="small">Retry</Button></ErrorState>; })()}
+      <div className="security-rules-heading"><div><h2>{selectedEmail}</h2><p>{selectedUserId}</p></div><Button onClick={() => updateQuery({ user: undefined })} size="small" variant="quiet">{t('security.close')}</Button></div>
+      {profileState === 'loading' && <LoadingState label={t('security.profileLoading')} />}
+      {profileState === 'error' && (() => { const copy = errorCopy(profileError, t('security.profileLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => selectUser(selectedUserId)} size="small">{t('common.retry')}</Button></ErrorState>; })()}
       {profileState === 'ready' && profile && <dl className="security-profile-values">{Object.entries(profile).filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key)).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{formatSecurityValue(value)}</dd></div>)}</dl>}
-      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>Change password</strong><span>Password values are write-only. Changing a password revokes the user’s existing sessions.</span></div><FormField htmlFor="app-user-new-password" label="New password"><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label="Confirm password"><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{passwordError}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? 'Changing…' : 'Change password'}</Button></div></form>
-      <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', selectedUserId); setSearchParams(next); }} size="small" variant="quiet">View sessions</Button>
+      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>{t('security.changePassword')}</strong><span>{t('security.changePasswordHint')}</span></div><FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{passwordError}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div></form>
+      <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', selectedUserId); setSearchParams(next); }} size="small" variant="quiet">{t('security.viewSessions')}</Button>
     </Surface>}
   </div>;
 }
 
 function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
+  const { t, formatDate } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedUserId = searchParams.get('user') ?? '';
   const search = searchParams.get('userSearch') ?? '';
@@ -613,7 +632,7 @@ function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [confirm, setConfirm] = useState<'all' | string>();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<TranslationKey | ''>('');
   const [identity, setIdentity] = useState('');
   const filteredUsers = users.filter((user) => `${user.email} ${user.recordId}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
 
@@ -698,7 +717,7 @@ function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
       if (sessionId) await revokeApplicationUserSession(collection.id, sessionId);
       else await revokeAllApplicationUserSessions(collection.id, selectedUserId);
       setConfirm(undefined);
-      setMessage(sessionId ? 'Session revoked.' : 'All sessions for this user were revoked.');
+      setMessage(sessionId ? 'security.sessionRevoked' : 'security.sessionRevokedAll');
       setReloadKey((value) => value + 1);
     } catch (reason) { setError(reason); }
     finally { setBusy(false); }
@@ -706,25 +725,25 @@ function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
 
   return <div aria-labelledby="security-tab-sessions" className="page-stack security-panel" id="security-panel-sessions" role="tabpanel">
     {!selectedUserId ? <>
-      <Surface className="security-users-toolbar" variant="standard"><div><h2>Sessions</h2><p>Choose an App User to review and revoke their sessions.</p></div><button className="button button--quiet button--small" onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} type="button">Manage users</button></Surface>
-      <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">Search user</span><input aria-label="Search user" onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder="Search user email…" type="search" value={search} /></label>
-      {usersLoadState === 'loading' && <LoadingState label="Loading App Users" />}
-      {usersLoadState === 'error' && (() => { const copy = errorCopy(usersError, 'App Users could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setUsersReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
+      <Surface className="security-users-toolbar" variant="standard"><div><h2>{t('security.sessions')}</h2><p>{t('security.sessionsDescription')}</p></div><button className="button button--quiet button--small" onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} type="button">{t('security.manageUsers')}</button></Surface>
+      <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">{t('security.searchUser')}</span><input aria-label={t('security.searchUser')} onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUserPlaceholder')} type="search" value={search} /></label>
+      {usersLoadState === 'loading' && <LoadingState label={t('security.usersLoading')} />}
+      {usersLoadState === 'error' && (() => { const copy = errorCopy(usersError, t('security.usersLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setUsersReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {usersLoadState === 'ready' && <Surface className="security-users-list" variant="standard">
-        {filteredUsers.length === 0 ? <EmptyState description={users.length ? 'Try another email or User ID on this page.' : 'Create an App User to manage its sessions.'} title={users.length ? 'No users match this search' : 'No App Users yet'} /> : <>
-          <div className="security-users-list-heading"><span>{filteredUsers.length} users on this page</span><span>Search covers users on this page</span></div>
-          <div role="list">{filteredUsers.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => updateQuery({ user: user.recordId })} size="small">View sessions</Button></article>)}</div>
+        {filteredUsers.length === 0 ? <EmptyState description={users.length ? t('security.sessionsNoUsersMatchDescription') : t('security.sessionsNoUsersDescription')} title={users.length ? t('security.sessionsNoUsersMatchTitle') : t('security.sessionsNoUsersTitle')} /> : <>
+          <div className="security-users-list-heading"><span>{t('security.usersPageSummary', { count: filteredUsers.length })}</span><span>{t('security.sessionsSearchHint')}</span></div>
+          <div role="list">{filteredUsers.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => updateQuery({ user: user.recordId })} size="small">{t('security.viewSessions')}</Button></article>)}</div>
         </>}
-        {(filteredUsers.length > 0 || usersCursorStack.length > 0 || usersNextCursor) && <div className="records-pagination"><span>Page {usersCursorStack.length + 1}</span><div><Button disabled={!usersCursorStack.length} onClick={previousUsersPage} size="small">Previous</Button><Button disabled={!usersNextCursor} onClick={nextUsersPage} size="small">Next</Button></div></div>}
+        {(filteredUsers.length > 0 || usersCursorStack.length > 0 || usersNextCursor) && <div className="records-pagination"><span>{t('security.page', { page: usersCursorStack.length + 1 })}</span><div><Button disabled={!usersCursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!usersNextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div>}
       </Surface>}
     </> : <>
-      <Surface className="security-session-toolbar" variant="standard"><div><h2>Sessions</h2><p>{identity || selectedUserId}</p></div><div><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" variant="quiet">Change user</Button><Button disabled={busy} onClick={() => setConfirm('all')} size="small" variant="danger">Revoke all</Button></div></Surface>
-      {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{message}</div>}
-      {loadState === 'loading' && <LoadingState label="Loading sessions" />}
-      {loadState === 'error' && (() => { const copy = errorCopy(error, 'Sessions could not be loaded.'); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />Retry</Button></ErrorState>; })()}
-      {loadState === 'ready' && sessions.length === 0 && <EmptyState description="This user has no Application sessions." title="No sessions" />}
-      {loadState === 'ready' && sessions.length > 0 && <Surface className="security-session-list" variant="standard"><div className="security-session-list-heading"><span>{sessions.filter((session) => session.status === 'active').length} active</span><span>{sessions.length} total</span></div><div role="list">{sessions.map((session) => <article className="security-session-row" key={session.id} role="listitem"><div className={`security-session-status security-session-status--${session.status}`}><span aria-hidden="true" />{session.status}</div><dl><div><dt>Created</dt><dd>{displaySecurityDate(session.createdAt)}</dd></div><div><dt>Last used</dt><dd>{displaySecurityDate(session.lastUsedAt)}</dd></div><div><dt>Expires</dt><dd>{displaySecurityDate(session.expiresAt)}</dd></div></dl>{session.status === 'active' && <Button disabled={busy} onClick={() => setConfirm(session.id)} size="small" variant="danger">Revoke</Button>}</article>)}</div></Surface>}
-      {confirm && <div className="security-confirm-panel" role="alert"><strong>{confirm === 'all' ? 'Revoke all sessions for this user?' : 'Revoke this session?'}</strong><span>The selected session will no longer be accepted by the Application.</span><div><Button disabled={busy} onClick={() => setConfirm(undefined)} size="small">Cancel</Button><Button disabled={busy} onClick={() => void revoke(confirm === 'all' ? undefined : confirm)} size="small" variant="danger">{busy ? 'Revoking…' : 'Confirm revoke'}</Button></div></div>}
+      <Surface className="security-session-toolbar" variant="standard"><div><h2>{t('security.sessions')}</h2><p>{identity || selectedUserId}</p></div><div><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" variant="quiet">{t('security.changeUser')}</Button><Button disabled={busy} onClick={() => setConfirm('all')} size="small" variant="danger">{t('security.sessionRevokeAll')}</Button></div></Surface>
+      {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
+      {loadState === 'loading' && <LoadingState label={t('security.sessionsLoading')} />}
+      {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.sessionsLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+      {loadState === 'ready' && sessions.length === 0 && <EmptyState description={t('security.sessionsEmptyDescription')} title={t('security.sessionsEmptyTitle')} />}
+      {loadState === 'ready' && sessions.length > 0 && <Surface className="security-session-list" variant="standard"><div className="security-session-list-heading"><span>{t('security.sessionsActive', { count: sessions.filter((session) => session.status === 'active').length })}</span><span>{t('security.sessionsTotal', { count: sessions.length })}</span></div><div role="list">{sessions.map((session) => <article className="security-session-row" key={session.id} role="listitem"><div className={`security-session-status security-session-status--${session.status}`}><span aria-hidden="true" />{session.status}</div><dl><div><dt>{t('security.sessionCreated')}</dt><dd>{displaySecurityDate(session.createdAt, formatDate)}</dd></div><div><dt>{t('security.sessionLastUsed')}</dt><dd>{displaySecurityDate(session.lastUsedAt, formatDate)}</dd></div><div><dt>{t('security.sessionExpires')}</dt><dd>{displaySecurityDate(session.expiresAt, formatDate)}</dd></div></dl>{session.status === 'active' && <Button disabled={busy} onClick={() => setConfirm(session.id)} size="small" variant="danger">{t('security.sessionRevoke')}</Button>}</article>)}</div></Surface>}
+      {confirm && <div className="security-confirm-panel" role="alert"><strong>{confirm === 'all' ? t('security.sessionConfirmAllTitle') : t('security.sessionConfirmOneTitle')}</strong><span>{t('security.sessionConfirmBody')}</span><div><Button disabled={busy} onClick={() => setConfirm(undefined)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void revoke(confirm === 'all' ? undefined : confirm)} size="small" variant="danger">{busy ? t('security.sessionRevoking') : t('security.sessionConfirm')}</Button></div></div>}
     </>}
   </div>;
 }
@@ -742,8 +761,8 @@ function formatSecurityValue(value: unknown) {
   return String(value);
 }
 
-function displaySecurityDate(value: string | undefined) {
+function displaySecurityDate(value: string | undefined, formatDate: ReturnType<typeof useI18n>['formatDate']) {
   if (!value) return '—';
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
+  return Number.isNaN(date.valueOf()) ? value : formatDate(date);
 }

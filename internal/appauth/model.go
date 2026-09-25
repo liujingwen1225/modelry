@@ -7,11 +7,24 @@ import (
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
+// EmailVerificationMode 决定 Auth Collection 是否要求 App User 验证邮箱。
+type EmailVerificationMode string
+
+const (
+	// EmailVerificationOff 保持 V0.1 行为：注册即可登录，不做验证。
+	EmailVerificationOff EmailVerificationMode = "off"
+	// EmailVerificationOptional 允许验证但不阻塞登录。
+	EmailVerificationOptional EmailVerificationMode = "optional"
+	// EmailVerificationRequired 在验证前拒绝登录。
+	EmailVerificationRequired EmailVerificationMode = "required"
+)
+
 // AuthConfig 是一个 Auth Collection 已应用或待应用的认证配置。
 type AuthConfig struct {
-	EmailPasswordEnabled bool `json:"emailPasswordEnabled"`
-	SelfRegistration     bool `json:"selfRegistration"`
-	SessionDurationDays  int  `json:"sessionDurationDays"`
+	EmailPasswordEnabled bool                  `json:"emailPasswordEnabled"`
+	SelfRegistration     bool                  `json:"selfRegistration"`
+	SessionDurationDays  int                   `json:"sessionDurationDays"`
+	EmailVerification    EmailVerificationMode `json:"emailVerification,omitempty"`
 }
 
 type AuthConfigSaveInput struct {

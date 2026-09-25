@@ -1,8 +1,12 @@
 import type { AccessRuleMode, Collection } from '../collections/client';
+import type { TranslationKey } from '../i18n/i18n';
 
 export type EndpointDefinition = {
   operationId: string;
+  /** Canonical English contract summary. It stays untranslated because it is emitted into the OpenAPI snippet. */
   title: string;
+  /** Localized product label for the Admin endpoint browser. */
+  titleKey: TranslationKey;
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   template: string;
   path: string;
@@ -18,22 +22,23 @@ export type EndpointDefinition = {
 type ContractOperation = Omit<EndpointDefinition, 'collectionId' | 'collectionName' | 'path'>;
 
 const genericOperations: ContractOperation[] = [
-  { operationId: 'listApplicationRecords', title: 'List records', method: 'GET', template: '/api/v1/{collectionName}', authOnly: false, requiresSession: false },
-  { operationId: 'createApplicationRecord', title: 'Create a record', method: 'POST', template: '/api/v1/{collectionName}', authOnly: false, requiresSession: false, bodySchema: 'RecordWriteRequest' },
-  { operationId: 'getApplicationRecord', title: 'Read a record', method: 'GET', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false },
-  { operationId: 'readApplicationRecordFile', title: 'Read a file attachment', method: 'GET', template: '/api/v1/{collectionName}/{recordId}/files/{fieldName}', authOnly: false, requiresSession: false, accept: '*/*' },
-  { operationId: 'updateApplicationRecord', title: 'Update a record', method: 'PATCH', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false, bodySchema: 'RecordWriteRequest' },
-  { operationId: 'deleteApplicationRecord', title: 'Delete a record', method: 'DELETE', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false },
+  { operationId: 'listApplicationRecords', title: 'List records', titleKey: 'api.endpointTitles.listApplicationRecords', method: 'GET', template: '/api/v1/{collectionName}', authOnly: false, requiresSession: false },
+  { operationId: 'createApplicationRecord', title: 'Create a record', titleKey: 'api.endpointTitles.createApplicationRecord', method: 'POST', template: '/api/v1/{collectionName}', authOnly: false, requiresSession: false, bodySchema: 'RecordWriteRequest' },
+  { operationId: 'getApplicationRecord', title: 'Read a record', titleKey: 'api.endpointTitles.getApplicationRecord', method: 'GET', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false },
+  { operationId: 'readApplicationRecordFile', title: 'Read a file attachment', titleKey: 'api.endpointTitles.readApplicationRecordFile', method: 'GET', template: '/api/v1/{collectionName}/{recordId}/files/{fieldName}', authOnly: false, requiresSession: false, accept: '*/*' },
+  { operationId: 'readApplicationRecordFileByIndex', title: 'Read one file of a files field', titleKey: 'api.endpointTitles.readApplicationRecordFileByIndex', method: 'GET', template: '/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}', authOnly: false, requiresSession: false, accept: '*/*' },
+  { operationId: 'updateApplicationRecord', title: 'Update a record', titleKey: 'api.endpointTitles.updateApplicationRecord', method: 'PATCH', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false, bodySchema: 'RecordWriteRequest' },
+  { operationId: 'deleteApplicationRecord', title: 'Delete a record', titleKey: 'api.endpointTitles.deleteApplicationRecord', method: 'DELETE', template: '/api/v1/{collectionName}/{recordId}', authOnly: false, requiresSession: false },
 ];
 
 const authOperations: ContractOperation[] = [
-  { operationId: 'registerApplicationUser', title: 'Register an App User', method: 'POST', template: '/api/v1/auth/{collectionName}/register', authOnly: true, requiresSession: false, bodySchema: 'ApplicationRegistrationRequest' },
-  { operationId: 'loginApplicationUser', title: 'Log in an App User', method: 'POST', template: '/api/v1/auth/{collectionName}/login', authOnly: true, requiresSession: false, bodySchema: 'ApplicationLoginRequest' },
-  { operationId: 'getApplicationSession', title: 'Read the current session', method: 'GET', template: '/api/v1/auth/{collectionName}/session', authOnly: true, requiresSession: true },
-  { operationId: 'logoutApplicationUser', title: 'Log out the current App User', method: 'POST', template: '/api/v1/auth/{collectionName}/logout', authOnly: true, requiresSession: true },
-  { operationId: 'changeApplicationPassword', title: 'Change the current password', method: 'PUT', template: '/api/v1/auth/{collectionName}/password', authOnly: true, requiresSession: true, bodySchema: 'ChangePasswordRequest' },
-  { operationId: 'listOwnApplicationSessions', title: 'List the current user sessions', method: 'GET', template: '/api/v1/auth/{collectionName}/sessions', authOnly: true, requiresSession: true },
-  { operationId: 'revokeOwnApplicationSession', title: 'Revoke an owned session', method: 'POST', template: '/api/v1/auth/{collectionName}/sessions/{sessionId}/revoke', authOnly: true, requiresSession: true },
+  { operationId: 'registerApplicationUser', title: 'Register an App User', titleKey: 'api.endpointTitles.registerApplicationUser', method: 'POST', template: '/api/v1/auth/{collectionName}/register', authOnly: true, requiresSession: false, bodySchema: 'ApplicationRegistrationRequest' },
+  { operationId: 'loginApplicationUser', title: 'Log in an App User', titleKey: 'api.endpointTitles.loginApplicationUser', method: 'POST', template: '/api/v1/auth/{collectionName}/login', authOnly: true, requiresSession: false, bodySchema: 'ApplicationLoginRequest' },
+  { operationId: 'getApplicationSession', title: 'Read the current session', titleKey: 'api.endpointTitles.getApplicationSession', method: 'GET', template: '/api/v1/auth/{collectionName}/session', authOnly: true, requiresSession: true },
+  { operationId: 'logoutApplicationUser', title: 'Log out the current App User', titleKey: 'api.endpointTitles.logoutApplicationUser', method: 'POST', template: '/api/v1/auth/{collectionName}/logout', authOnly: true, requiresSession: true },
+  { operationId: 'changeApplicationPassword', title: 'Change the current password', titleKey: 'api.endpointTitles.changeApplicationPassword', method: 'PUT', template: '/api/v1/auth/{collectionName}/password', authOnly: true, requiresSession: true, bodySchema: 'ChangePasswordRequest' },
+  { operationId: 'listOwnApplicationSessions', title: 'List the current user sessions', titleKey: 'api.endpointTitles.listOwnApplicationSessions', method: 'GET', template: '/api/v1/auth/{collectionName}/sessions', authOnly: true, requiresSession: true },
+  { operationId: 'revokeOwnApplicationSession', title: 'Revoke an owned session', titleKey: 'api.endpointTitles.revokeOwnApplicationSession', method: 'POST', template: '/api/v1/auth/{collectionName}/sessions/{sessionId}/revoke', authOnly: true, requiresSession: true },
 ];
 
 function operationPath(template: string, collection: Collection): string {
@@ -64,6 +69,7 @@ export function endpointOpenApiSnippet(endpoint: EndpointDefinition, collection:
     createApplicationRecord: { '201': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
     getApplicationRecord: { '200': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
     readApplicationRecordFile: { '200': { description: 'Applied File Field content returned as an attachment; API Workspace hides the bytes from its response preview.', headers: { 'X-Request-Id': { $ref: '#/components/headers/RequestId' }, 'Content-Disposition': { schema: { type: 'string', const: 'attachment' } }, 'X-Content-Type-Options': { schema: { const: 'nosniff' } }, 'Cache-Control': { schema: { type: 'string', const: 'private, no-store' } }, 'Content-Length': { schema: { type: 'integer', minimum: 0 } } }, content: { '*/*': { schema: { type: 'string', format: 'binary' } } } } },
+    readApplicationRecordFileByIndex: { '200': { description: 'One immutable File object of an ordered files Field, returned as a private attachment; API Workspace hides the bytes from its response preview.', headers: { 'X-Request-Id': { $ref: '#/components/headers/RequestId' }, 'Content-Disposition': { schema: { type: 'string', const: 'attachment' } }, 'X-Content-Type-Options': { schema: { const: 'nosniff' } }, 'Cache-Control': { schema: { type: 'string', const: 'private, no-store' } }, 'Content-Length': { schema: { type: 'integer', minimum: 0 } } }, content: { '*/*': { schema: { type: 'string', format: 'binary' } } } } },
     updateApplicationRecord: { '200': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },
     deleteApplicationRecord: { '204': { description: 'Operation completed' } },
     registerApplicationUser: { '201': { description: 'Successful response', content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordResponse' } } } } },

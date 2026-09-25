@@ -11,9 +11,19 @@ export type OwnerSession = {
   expiresAt: string;
 };
 
+export type ControlPlanePermission = {
+  preset: 'fullAccess' | 'readOnly' | 'custom';
+  customPermissionVersion?: number;
+  customOperations?: string[];
+};
+
+export type ControlPlaneRole = 'owner' | 'administrator';
+
 export type OwnerSessionResponse = {
   owner: Owner;
   expiresAt: string;
+  role: ControlPlaneRole;
+  permission: ControlPlanePermission;
 };
 
 export type OwnerCredentials = {
@@ -111,6 +121,25 @@ function parseSession(value: unknown, response: Response): OwnerSession {
   return { expiresAt: value.expiresAt };
 }
 
+function parsePermission(value: unknown, response: Response): ControlPlanePermission {
+  if (!isRecord(value)) return invalidResponse(response, 'permission.preset');
+  if (value.preset !== 'fullAccess' && value.preset !== 'readOnly' && value.preset !== 'custom') {
+    return invalidResponse(response, 'permission.preset');
+  }
+  return {
+    preset: value.preset,
+    ...(typeof value.customPermissionVersion === 'number' ? { customPermissionVersion: value.customPermissionVersion } : {}),
+    ...(Array.isArray(value.customOperations)
+      ? { customOperations: value.customOperations.filter((item): item is string => typeof item === 'string') }
+      : {}),
+  };
+}
+
+function parseRole(value: unknown, response: Response): ControlPlaneRole {
+  if (value === 'owner' || value === 'administrator') return value;
+  return invalidResponse(response, 'role: owner | administrator');
+}
+
 function parseAuthenticatedOwner(value: unknown, response: Response): AuthenticatedOwner {
   if (!isRecord(value)) return invalidResponse(response, 'owner and session');
   return {
@@ -149,11 +178,13 @@ export async function loginOwner(credentials: OwnerCredentials, signal?: AbortSi
 export async function fetchOwnerSession(signal?: AbortSignal): Promise<OwnerSessionResponse> {
   const { data, response } = await request('/admin/api/v1/auth/session', { method: 'GET', signal });
   if (!isRecord(data) || typeof data.expiresAt !== 'string') {
-    return invalidResponse(response, 'owner and expiresAt');
+    return invalidResponse(response, 'owner, expiresAt, role and permission');
   }
   return {
     owner: parseOwner(data.owner, response),
     expiresAt: data.expiresAt,
+    role: parseRole(data.role, response),
+    permission: parsePermission(data.permission, response),
   };
 }
 

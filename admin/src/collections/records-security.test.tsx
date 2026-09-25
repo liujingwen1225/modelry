@@ -6,6 +6,8 @@ import type { AccessRule, AccessRulesState, ApplicationSession, AuthenticationCo
 import { CollectionRecordsPage } from './records';
 import { CollectionSecurityPage } from './security';
 import { CollectionWorkspacePage } from './pages';
+import { CommandRegistryProvider } from '../components/command-registry';
+import { LocaleProvider } from '../i18n/i18n';
 
 const collection: Collection = {
   id: 'col_posts', name: 'posts', type: 'Normal', schemaVersion: 1,
@@ -36,14 +38,14 @@ function CurrentLocation() {
 }
 
 function renderCollection(path: string) {
-  return render(<MemoryRouter initialEntries={[path]}>
+  return render(<LocaleProvider><CommandRegistryProvider><MemoryRouter initialEntries={[path]}>
     <Routes>
       <Route element={<><CurrentLocation /><CollectionWorkspacePage /></>} path="/collections/:collectionId">
         <Route element={<CollectionRecordsPage />} index />
         <Route element={<CollectionSecurityPage />} path="security" />
       </Route>
     </Routes>
-  </MemoryRouter>);
+  </MemoryRouter></CommandRegistryProvider></LocaleProvider>);
 }
 
 function workspaceResponse(path: string) {
@@ -263,5 +265,72 @@ describe('Collection Records and Security pages', () => {
     expect(screen.getByTestId('current-location').textContent).toContain('userSearch=alice');
     expect(screen.getByTestId('current-location').textContent).not.toContain('usersCursor=users_page_2');
     expect(screen.getByTestId('current-location').textContent).not.toContain('usersCursorStack=');
+  });
+
+  it('shows local password validation in the active locale but renders a Runtime rejection verbatim', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const workspace = path === '/admin/api/v1/collections/col_members' ? response(authCollection) : path.endsWith('/schema/pending-change') ? response(null) : undefined;
+      if (workspace) return Promise.resolve(workspace);
+      if (path === '/admin/api/v1/collections?limit=100') return Promise.resolve(response([authCollection]));
+      if (path.endsWith('/users?limit=50')) return Promise.resolve(response([{ recordId: 'rec_user_1', email: 'alice@example.test' }]));
+      if (path.endsWith('/records/rec_user_1')) return Promise.resolve(response({ id: 'rec_user_1', email: 'alice@example.test' }));
+      if (path.endsWith('/users/rec_user_1/password') && init?.method === 'PUT') {
+        return Promise.resolve(Response.json({ error: { code: 'VALIDATION_FAILED', message: 'Password must contain a symbol.', requestId: 'req_pw' } }, { status: 400 }));
+      }
+      return Promise.resolve(response({ applied: [], pending: [], version: 1 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_members/security?panel=users&user=rec_user_1');
+
+    await user.type(await screen.findByLabelText('新密码'), 'first-password');
+    await user.type(screen.getByLabelText('确认密码'), 'second-password');
+    await user.click(screen.getByRole('button', { name: '修改密码' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('两次输入的密码不一致。');
+
+    await user.clear(screen.getByLabelText('确认密码'));
+    await user.type(screen.getByLabelText('确认密码'), 'first-password');
+    await user.click(screen.getByRole('button', { name: '修改密码' }));
+
+    // Runtime 返回的校验信息是服务端数据，必须原样展示，不能被当成翻译键查找。
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password must contain a symbol.');
+    expect(document.body.textContent).not.toContain('⟪');
+  });
+
+  it('renders Collection Security, Access Rules, App Users and Sessions in Simplified Chinese', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const initialRules: AccessRule[] = ['list', 'view', 'create', 'update', 'delete'].map((operation) => ({ operation, mode: 'noAccess' })) as AccessRule[];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      const workspace = path === '/admin/api/v1/collections/col_members' ? response(authCollection) : path.endsWith('/schema/pending-change') ? response(null) : undefined;
+      if (workspace) return Promise.resolve(workspace);
+      if (path === '/admin/api/v1/collections?limit=100') return Promise.resolve(response([authCollection]));
+      if (path.endsWith('/access-rules')) return Promise.resolve(response({ applied: initialRules, pending: initialRules, version: 1 }));
+      if (path.endsWith('/users?limit=50')) return Promise.resolve(Response.json({ data: [{ recordId: 'rec_user_1', email: 'alice@example.test' }] }));
+      return Promise.resolve(response({ applied: initialRules, pending: initialRules, version: 1 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_members/security');
+
+    expect(await screen.findByRole('heading', { name: '安全设置' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '访问规则' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '认证' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '应用用户' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '会话' })).toBeInTheDocument();
+    expect(screen.queryByText('Access Rules')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '已应用的访问规则' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '编辑列表访问规则' })).toBeInTheDocument();
+    // 访问规则模式属于共享产品词汇，必须与 Application API 使用同一套翻译。
+    expect(screen.getAllByText('无访问权限').length).toBeGreaterThan(0);
+    expect(screen.queryByText('No access')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '模拟一次请求' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: '应用用户' }));
+    expect(await screen.findByRole('heading', { name: '应用用户' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: '搜索用户' })).toBeInTheDocument();
+    expect(await screen.findByText('alice@example.test')).toBeInTheDocument();
   });
 });

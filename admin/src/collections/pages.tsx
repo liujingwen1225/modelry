@@ -3,6 +3,8 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, Plus,
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { useI18n } from '../i18n/i18n';
+import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionSummary, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
 import './collections.css';
 import type { CollectionWorkspaceContext } from './workspace-context';
@@ -60,6 +62,7 @@ function PageTitle({ eyebrow, title, description, action }: {
 }
 
 export function CollectionsPage() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<CollectionSummary[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -106,47 +109,47 @@ export function CollectionsPage() {
   return (
     <div className="page-stack collection-page">
       <PageTitle
-        action={<Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={16} />Create Collection</Link>}
-        description="Define the data model for your application."
-        eyebrow="BUILD"
-        title="Collections"
+        action={<Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={16} />{t('collections.create')}</Link>}
+        description={t('collections.description')}
+        eyebrow={t('collections.eyebrow')}
+        title={t('collections.title')}
       />
       <Surface className="collection-toolbar" variant="standard">
         <label className="collection-search">
           <Search aria-hidden="true" size={16} />
-          <span className="sr-only">Search collections</span>
-          <input aria-label="Search collections" onChange={(event) => updateQuery('q', event.target.value)} placeholder="Search collections…" type="search" value={search} />
+          <span className="sr-only">{t('collections.search')}</span>
+          <input aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} type="search" value={search} />
         </label>
-        <label className="collection-filter"><SlidersHorizontal aria-hidden="true" size={15} /><span>Type</span>
-          <select aria-label="Type" onChange={(event) => updateQuery('type', event.target.value === 'all' ? '' : event.target.value)} value={type}>
-            <option value="all">All types</option><option value="Normal">Normal</option><option value="Auth">Auth</option>
+        <label className="collection-filter"><SlidersHorizontal aria-hidden="true" size={15} /><span>{t('collections.type')}</span>
+          <select aria-label={t('collections.type')} onChange={(event) => updateQuery('type', event.target.value === 'all' ? '' : event.target.value)} value={type}>
+            <option value="all">{t('collections.allTypes')}</option><option value="Normal">{t('collections.normal')}</option><option value="Auth">{t('collections.auth')}</option>
           </select>
         </label>
-        <label className="collection-filter"><span>Sort</span>
-          <select aria-label="Sort collections" onChange={(event) => updateQuery('sort', event.target.value)} value={sort}>
-            <option value="recent">Recently created</option><option value="name">Name</option>
+        <label className="collection-filter"><span>{t('collections.sort')}</span>
+          <select aria-label={t('collections.sortLabel')} onChange={(event) => updateQuery('sort', event.target.value)} value={sort}>
+            <option value="recent">{t('collections.recentlyCreated')}</option><option value="name">{t('collections.name')}</option>
           </select>
         </label>
-        <div aria-label="Collection view" className="collection-view-toggle" role="group">
-          <button aria-pressed={view === 'card'} onClick={() => updateQuery('view', '')} type="button">Cards</button>
-          <button aria-pressed={view === 'list'} onClick={() => updateQuery('view', 'list')} type="button">List</button>
+        <div aria-label={t('collections.viewLabel')} className="collection-view-toggle" role="group">
+          <button aria-pressed={view === 'card'} onClick={() => updateQuery('view', '')} type="button">{t('collections.viewCards')}</button>
+          <button aria-pressed={view === 'list'} onClick={() => updateQuery('view', 'list')} type="button">{t('collections.viewList')}</button>
         </div>
       </Surface>
 
-      {state === 'loading' && <LoadingState label="Loading collections" />}
+      {state === 'loading' && <LoadingState label={t('collections.loading')} />}
       {state === 'error' && (() => {
-        const copy = apiErrorCopy(error, 'Collections could not be loaded.');
+        const copy = apiErrorCopy(error, t('collections.loadFailed'));
         return <ErrorState description={copy.message} title={copy.title}>
-          <Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button>
+          <Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button>
         </ErrorState>;
       })()}
       {state === 'ready' && visible.length === 0 && items.length === 0 && (
-        <EmptyState description="Create a Collection with its first Fields. Your system fields are added automatically." title="No collections yet">
+        <EmptyState description={t('collections.emptyDescription')} title={t('collections.emptyTitle')}>
           <Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={15} />Create Collection</Link>
         </EmptyState>
       )}
       {state === 'ready' && visible.length === 0 && items.length > 0 && (
-        <EmptyState description="Try another name or adjust the type filter." title="No collections match this search" />
+        <EmptyState description={t('collections.noMatchDescription')} title={t('collections.noMatchTitle')} />
       )}
       {state === 'ready' && visible.length > 0 && view === 'card' && (
         <div className="collection-grid">
@@ -163,42 +166,47 @@ export function CollectionsPage() {
 }
 
 function CollectionCard({ collection }: { collection: CollectionSummary }) {
+  const { t } = useI18n();
   return (
     <Link className="collection-card" to={`/collections/${encodeURIComponent(collection.id)}`}>
       <div className="collection-card__top"><span className="collection-card__icon"><Database aria-hidden="true" size={18} /></span><StatusChip state={collection.type}>{collection.type}</StatusChip></div>
       <h2>{collection.name}</h2>
-      <p className="collection-card__description">{collection.description || 'No description'}</p>
+      <p className="collection-card__description">{collection.description || t('collections.noDescription')}</p>
       <div className="collection-card__meta">
-        <span>{collectionCount(collection.recordCount, 'record')}</span>
-        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field')}</span>
+        <span>{collectionCount(collection.recordCount, 'record', t)}</span>
+        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}</span>
         <CollectionChangeIndicator status={collection.pendingChangeStatus} />
       </div>
-      <span className="collection-card__open">Open workspace <ArrowRight aria-hidden="true" size={14} /></span>
+      <span className="collection-card__open">{t('collections.openWorkspace')} <ArrowRight aria-hidden="true" size={14} /></span>
     </Link>
   );
 }
 
 function CollectionListItem({ collection }: { collection: CollectionSummary }) {
+  const { t } = useI18n();
   return <Link className="collection-list__item" role="listitem" to={`/collections/${encodeURIComponent(collection.id)}`}>
     <span className="collection-list__icon"><Database aria-hidden="true" size={17} /></span>
-    <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || 'No description'}</span></span>
+    <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || t('collections.noDescription')}</span></span>
     <StatusChip state={collection.type}>{collection.type}</StatusChip>
     <span className="collection-list__meta">
-      {collectionCount(collection.recordCount, 'record')} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field')}
+      {collectionCount(collection.recordCount, 'record', t)} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}
       <CollectionChangeIndicator status={collection.pendingChangeStatus} />
     </span>
     <ArrowRight aria-hidden="true" className="collection-list__arrow" size={15} />
   </Link>;
 }
 
-function collectionCount(count: number | undefined, noun: 'record' | 'field') {
-  if (typeof count !== 'number') return `— ${noun}s`;
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+function collectionCount(count: number | undefined, noun: 'record' | 'field', translate: ReturnType<typeof useI18n>['t']) {
+  const singular = noun === 'record' ? 'collections.count.recordOne' : 'collections.count.fieldOne';
+  const plural = noun === 'record' ? 'collections.count.recordMany' : 'collections.count.fieldMany';
+  if (typeof count !== 'number') return '— ' + translate(plural, { count: 0 });
+  return translate(count === 1 ? singular : plural, { count });
 }
 
 function CollectionChangeIndicator({ status }: { status?: CollectionSummary['pendingChangeStatus'] }) {
+  const { t } = useI18n();
   if (!status) return null;
-  const label = status === 'failed' ? 'Failed change' : status === 'needsReview' ? 'Review needed' : 'Pending change';
+  const label = status === 'failed' ? t('collections.changeFailed') : status === 'needsReview' ? t('collections.changeReview') : t('collections.changePending');
   const tone = status === 'failed' ? 'failed' : status === 'needsReview' ? 'needs-review' : 'pending';
   return <span className={`collection-change collection-change--${tone}`}>{label}</span>;
 }
@@ -248,6 +256,7 @@ function parseInitialFields(fields: FieldDraft[], type: CollectionType): { field
 }
 
 export function CreateCollectionPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -343,10 +352,10 @@ export function CreateCollectionPage() {
 
   return (
     <main className="focused-workspace collection-create-page">
-      <Link className="text-link text-link--muted collection-back" to="/collections"><ArrowLeft aria-hidden="true" size={14} />Collections</Link>
-      <div className="collection-create-intro"><p className="eyebrow">BUILD · INITIAL MODEL</p><h1>Create Collection</h1><p>Set up the Collection and its first Fields together. You can keep evolving the schema later.</p></div>
+      <Link className="text-link text-link--muted collection-back" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
+      <div className="collection-create-intro"><p className="eyebrow">{t('collections.buildEyebrow')}</p><h1>{t('collections.create')}</h1><p>{t('collections.createDescription')}</p></div>
       {requestError !== undefined && (() => {
-        const copy = apiErrorCopy(requestError, 'The Collection could not be created.');
+        const copy = apiErrorCopy(requestError, t('collections.createFailed'));
         const api = requestError instanceof ApiClientError ? requestError.apiError : undefined;
         return <ErrorState className="collection-form-error" description={copy.message} title={copy.title}>
           {api?.details.violations && Array.isArray(api.details.violations) && <ul>{api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>{violation.message}</li>)}</ul>}
@@ -355,48 +364,48 @@ export function CreateCollectionPage() {
 
       <form className="collection-create-form" noValidate onSubmit={(event) => void submit(event)}>
         <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">COLLECTION DETAILS</p><h2>Choose a type and name</h2></div></div>
-          <fieldset className="collection-type-picker"><legend>Type</legend>
+          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.detailsEyebrow')}</p><h2>{t('collections.detailsTitle')}</h2></div></div>
+          <fieldset className="collection-type-picker"><legend>{t('collections.type')}</legend>
             {(['Normal', 'Auth'] as const).map((option) => <label className={`collection-type-card${type === option ? ' is-selected' : ''}`} key={option}>
-              <input aria-label={option === 'Normal' ? 'Normal Collection' : 'Auth Collection'} checked={type === option} name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
+              <input aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} checked={type === option} name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
               <span className="collection-type-card__check" aria-hidden="true"><Check size={14} /></span>
-              <span className="collection-type-card__text"><strong>{option === 'Normal' ? 'Normal Collection' : 'Auth Collection'}</strong><span>{option === 'Normal' ? 'A flexible business model for your application.' : 'A user profile with email and password sign-in.'}</span></span>
+              <span className="collection-type-card__text"><strong>{t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')}</strong><span>{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span></span>
             </label>)}
           </fieldset>
           <div className="collection-form-grid">
-            <FormField htmlFor="collection-name" label="Collection name" hint="Use the name you use for this kind of information.">
+            <FormField htmlFor="collection-name" label={t('collections.nameLabel')} hint={t('collections.nameHint')}>
               <input aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'collection-name-error' : undefined} autoComplete="off" id="collection-name" onChange={(event) => { setName(event.target.value); setNameError(''); setRequestError(undefined); }} value={name} />
             </FormField>
             {nameError && <p className="collection-field-error" id="collection-name-error" role="alert">{nameError}</p>}
-            <FormField htmlFor="collection-description" label="Description" hint="Optional. Help your team recognize this Collection.">
+            <FormField htmlFor="collection-description" label={t('collections.descriptionLabel')} hint={t('collections.descriptionHint')}>
               <textarea id="collection-description" onChange={(event) => setDescription(event.target.value)} rows={2} value={description} />
             </FormField>
           </div>
         </Surface>
 
         <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">ALWAYS AVAILABLE</p><h2>System fields</h2><p>These fields are managed by Modelry and added automatically.</p></div></div>
-          <div className="system-fields-table" role="table" aria-label="System fields">
-            <div className="system-fields-table__head" role="row"><span role="columnheader">Name</span><span role="columnheader">Type</span><span role="columnheader">Access</span></div>
-            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{field.label}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />System · Locked</span></div>)}
-            {type === 'Auth' && <div className="system-fields-table__row system-fields-table__row--auth" role="row"><strong role="cell">email</strong><span role="cell">Email identifier</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />Required · Unique</span></div>}
+          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.systemEyebrow')}</p><h2>{t('collections.systemTitle')}</h2><p>{t('collections.systemDescription')}</p></div></div>
+          <div className="system-fields-table" role="table" aria-label={t('collections.systemTitle')}>
+            <div className="system-fields-table__head" role="row"><span role="columnheader">{t('collections.systemName')}</span><span role="columnheader">{t('collections.systemType')}</span><span role="columnheader">{t('collections.systemAccess')}</span></div>
+            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{field.label}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</span></div>)}
+            {type === 'Auth' && <div className="system-fields-table__row system-fields-table__row--auth" role="row"><strong role="cell">email</strong><span role="cell">{t('collections.emailIdentifier')}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.requiredUnique')}</span></div>}
           </div>
         </Surface>
 
         {type === 'Auth' && <Surface className="collection-create-section auth-initial-settings" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">AUTHENTICATION</p><h2>Sign-in defaults</h2><p>Email is the required, unique identifier. Passwords are stored separately from profile fields.</p></div></div>
+          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2>{t('collections.authTitle')}</h2><p>{t('collections.authDescription')}</p></div></div>
           <div className="auth-default-grid">
-            <label className="auth-default-row"><span><strong>Email + password</strong><small>Sign-in method for this Auth Collection.</small></span><span className="auth-default-control"><input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />Enabled</span></label>
-            <label className="auth-default-row"><span><strong>Allow users to sign up</strong><small>When enabled, users can register through the Application API.</small></span><input aria-label="Allow users to sign up" checked={authentication.selfRegistration} onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" /></label>
-            <FormField htmlFor="session-duration" label="Session duration (days)" hint="Choose how long a sign-in stays active.">
+            <label className="auth-default-row"><span><strong>{t('collections.emailPassword')}</strong><small>{t('collections.emailPasswordHint')}</small></span><span className="auth-default-control"><input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />{t('collections.enabled')}</span></label>
+            <label className="auth-default-row"><span><strong>{t('collections.selfRegistration')}</strong><small>{t('collections.selfRegistrationHint')}</small></span><input aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" /></label>
+            <FormField htmlFor="session-duration" label={t('collections.sessionDuration')} hint={t('collections.sessionDurationHint')}>
               <input id="session-duration" min={1} onChange={(event) => setAuthentication((value) => ({ ...value, sessionDurationDays: Number(event.target.value) }))} type="number" value={authentication.sessionDurationDays} />
             </FormField>
           </div>
         </Surface>}
 
         <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading collection-section-heading--fields"><div><p className="eyebrow">INITIAL MODEL</p><h2>Initial fields</h2><p>Enter the first details your records need. Add a relation inline when a field connects to another Collection.</p></div><span className="collection-field-count">{fields.length} {fields.length === 1 ? 'field' : 'fields'}</span></div>
-          {targetsError && <div className="collection-inline-warning" role="status"><CircleAlert aria-hidden="true" size={15} /><span>Existing Collections could not be loaded. Retry to configure a Relation target.</span><Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">Retry</Button></div>}
+          <div className="collection-section-heading collection-section-heading--fields"><div><p className="eyebrow">{t('collections.initialEyebrow')}</p><h2>{t('collections.initialTitle')}</h2><p>{t('collections.initialDescription')}</p></div><span className="collection-field-count">{collectionCount(fields.length, 'field', t)}</span></div>
+          {targetsError && <div className="collection-inline-warning" role="status"><CircleAlert aria-hidden="true" size={15} /><span>{t('collections.targetsUnavailable')}</span><Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button></div>}
           {fields.map((field, index) => <FieldEditorRow
             errors={fieldErrors[field.key] ?? {}}
             field={field}
@@ -409,11 +418,11 @@ export function CreateCollectionPage() {
             targets={targets}
             targetsLoading={targetsLoading}
           />)}
-          <Button className="collection-add-field" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />Add initial field</Button>
-          <p className="collection-enter-hint"><kbd>Enter</kbd> in a field name adds another field.</p>
+          <Button className="collection-add-field" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.addField')}</Button>
+          <p className="collection-enter-hint"><kbd>Enter</kbd> {t('collections.enterHint')}</p>
         </Surface>
 
-        <footer className="collection-form-actions"><Link className="button button--secondary" to="/collections">Cancel</Link><Button disabled={submitting} type="submit" variant="primary">{submitting ? 'Creating Collection…' : 'Create Collection'}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
+        <footer className="collection-form-actions"><Link className="button button--secondary" to="/collections">{t('collections.cancel')}</Link><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
       </form>
     </main>
   );
@@ -442,7 +451,7 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
         </FormField>
         <FormField htmlFor={`field-type-${field.key}`} label="Type">
           <select id={`field-type-${field.key}`} onChange={(event) => onUpdate({ type: event.target.value as FieldType, ...(event.target.value === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type}>
-            <option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="dateTime">Date &amp; time</option><option value="json">JSON</option><option value="relation">Relation</option><option value="file">File</option>
+            <option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="dateTime">Date &amp; time</option><option value="json">JSON</option><option value="relation">Relation</option><option value="file">File</option><option value="files">Files</option>
           </select>
         </FormField>
         <label className="initial-field-toggle"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />Required</label>
@@ -486,6 +495,8 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
 export function CollectionWorkspacePage() {
   const { collectionId = '' } = useParams();
   const location = useLocation();
+  const { t } = useI18n();
+  const { rememberCollection } = useCommandRegistry();
   const [collection, setCollection] = useState<Collection | null>(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [collectionError, setCollectionError] = useState<unknown>();
@@ -493,6 +504,28 @@ export function CollectionWorkspacePage() {
   const [loadingCollection, setLoadingCollection] = useState(true);
   const [loadingPending, setLoadingPending] = useState(true);
   const [newlyCreated, setNewlyCreated] = useState(Boolean((location.state as { newlyCreated?: boolean } | null)?.newlyCreated));
+
+  const workspaceCommands = useMemo<AdminCommand[]>(() => {
+    if (!collection || !pending) return [];
+    const failed = pending.status === 'failed';
+    const route = failed
+      ? `/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`
+      : `/collections/${encodeURIComponent(collection.id)}/schema`;
+    return [{
+      id: `change.open.${pending.changeSetId}`,
+      category: 'commands.categories.changes',
+      label: () => t(failed ? 'commands.failedChange' : 'commands.pendingChange', { name: collection.name }),
+      keywords: () => ['pending', 'failed', 'change', 'schema', collection.name],
+      requiresCapabilities: ['admin:owner-session'],
+      execute: (context) => context.navigate(route),
+    }];
+  }, [collection, pending, t]);
+
+  useRegisterCommands(workspaceCommands);
+
+  useEffect(() => {
+    if (collection) rememberCollection({ id: collection.id, name: collection.name, type: collection.type });
+  }, [collection, rememberCollection]);
 
   async function refreshCollection() {
     setLoadingCollection(true);
@@ -524,26 +557,26 @@ export function CollectionWorkspacePage() {
   if (loadingCollection) return <div className="collection-page collection-workspace-page"><LoadingState label="Loading Collection workspace" /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, 'The Collection could not be loaded.');
-    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button><Link className="text-link" to="/collections">Back to Collections</Link></ErrorState></div>;
+    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button><Link className="text-link" to="/collections">Back to Collections</Link></ErrorState></div>;
   }
 
   const context: CollectionWorkspaceContext = { collection, pendingChange: pending, refreshCollection, refreshPendingChange };
   return (
     <div className="page-stack collection-page collection-workspace-page">
-      <div className="collection-breadcrumb"><Link to="/collections">Collections</Link><span aria-hidden="true">/</span><span>{collection.name}</span></div>
+      <div className="collection-breadcrumb"><Link to="/collections">{t('navigation.collections')}</Link><span aria-hidden="true">/</span><span>{collection.name}</span></div>
       <header className="collection-workspace-header">
         <div className="collection-workspace-identity"><span className="collection-workspace-icon"><Database aria-hidden="true" size={20} /></span><div><div className="collection-workspace-title"><h1>{collection.name}</h1><StatusChip state={collection.type}>{collection.type}</StatusChip></div><p>{collection.description || 'Collection workspace'}</p></div></div>
         <span className="collection-workspace-meta">Model v{collection.schemaVersion ?? 1} · {collection.fields.length} fields</span>
       </header>
       {newlyCreated && <div className="collection-created-notice" role="status"><Check aria-hidden="true" size={16} /><div><strong>Your collection is ready.</strong><span>The Collection and its initial model are saved. Continue with Records or edit the schema.</span></div><button aria-label="Dismiss collection created notice" onClick={() => setNewlyCreated(false)} type="button">Dismiss</button></div>}
-      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, 'Schema status is unavailable.').message} title="Could not load the Pending Change"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button></ErrorState>}
+      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, 'Schema status is unavailable.').message} title="Could not load the Pending Change"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button></ErrorState>}
       {!loadingPending && pending?.status === 'failed' && <div className="collection-recovery-banner" role="status"><CircleAlert aria-hidden="true" size={17} /><div><strong>A schema change needs attention.</strong><span>Your pending changes are saved. Review the recovery details before retrying.</span></div><Link className="text-link" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>View recovery details <ArrowRight aria-hidden="true" size={14} /></Link></div>}
-      <nav aria-label="Collection workspace" className="collection-workspace-tabs">
+      <nav aria-label={t('navigation.collectionWorkspace')} className="collection-workspace-tabs">
         {[
-          { label: 'Records', to: `/collections/${collectionId}`, end: true },
-          { label: 'Schema', to: `/collections/${collectionId}/schema` },
-          { label: 'Security', to: `/collections/${collectionId}/security` },
-          { label: 'API', to: `/collections/${collectionId}/api` },
+          { label: t('navigation.records'), to: `/collections/${collectionId}`, end: true },
+          { label: t('navigation.schema'), to: `/collections/${collectionId}/schema` },
+          { label: t('navigation.security'), to: `/collections/${collectionId}/security` },
+          { label: t('navigation.api'), to: `/collections/${collectionId}/api` },
         ].map((tab) => <NavLink end={tab.end} key={tab.label} to={tab.to}>{tab.label}</NavLink>)}
       </nav>
       <Outlet context={context} />

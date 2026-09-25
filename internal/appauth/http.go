@@ -11,6 +11,8 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 )
@@ -41,6 +43,10 @@ func (module *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/auth/{collectionName}/password", module.changePassword)
 	mux.HandleFunc("GET /api/v1/auth/{collectionName}/sessions", module.listOwnSessions)
 	mux.HandleFunc("POST /api/v1/auth/{collectionName}/sessions/{sessionId}/revoke", module.revokeOwnSession)
+	mux.HandleFunc("POST /api/v1/auth/{collectionName}/password-reset/request", module.requestPasswordReset)
+	mux.HandleFunc("POST /api/v1/auth/{collectionName}/password-reset/confirm", module.confirmPasswordReset)
+	mux.HandleFunc("POST /api/v1/auth/{collectionName}/email-verification/request", module.requestEmailVerification)
+	mux.HandleFunc("POST /api/v1/auth/{collectionName}/email-verification/confirm", module.confirmEmailVerification)
 }
 
 type dataResponse[T any] struct {
@@ -218,7 +224,7 @@ func (module *Module) register(w http.ResponseWriter, request *http.Request) {
 		module.writeError(w, request, err)
 		return
 	}
-	record, err := module.service.Register(request.Context(), request.PathValue("collectionName"), input.Profile, input.Password)
+	record, err := module.service.RegisterWithOrigin(request.Context(), request.PathValue("collectionName"), input.Profile, input.Password, requestOrigin(request))
 	if err != nil {
 		module.writeError(w, request, err)
 		return
@@ -434,6 +440,26 @@ func (module *Module) writeError(w http.ResponseWriter, request *http.Request, e
 	var violation *ValidationFailure
 	var recordValueError *backendmodel.RecordValueError
 	switch {
+	case errors.Is(err, recordlifecycle.ErrRuntimeUnavailable):
+		status = http.StatusServiceUnavailable
+		problem.Code = "EXTENSION_RUNTIME_UNAVAILABLE"
+		problem.Message = "A required Record lifecycle Extension is unavailable; no Profile or Credential was committed."
+	case errors.Is(err, recordlifecycle.ErrRejected):
+		status = http.StatusUnprocessableEntity
+		problem.Code = "CHANGE_REJECTED_BY_EXTENSION"
+		problem.Message = "A Record lifecycle Extension rejected this profile change."
+	case errors.Is(err, recordlifecycle.ErrBudgetExceeded):
+		status = http.StatusUnprocessableEntity
+		problem.Code = "EXTENSION_BUDGET_EXCEEDED"
+		problem.Message = "A Record lifecycle Extension exceeded its execution budget; no Profile or Credential was committed."
+	case errors.Is(err, recordlifecycle.ErrInvalidOutput):
+		status = http.StatusUnprocessableEntity
+		problem.Code = "VALIDATION_FAILED"
+		problem.Message = "A Record lifecycle Extension returned values that do not match the Applied Model."
+	case errors.Is(err, recordevents.ErrEventTooLarge):
+		status = http.StatusRequestEntityTooLarge
+		problem.Code = "PAYLOAD_TOO_LARGE"
+		problem.Message = "This App User Profile change exceeds the 1 MiB durable Event limit. Reduce the changed values and retry."
 	case errors.As(err, &input):
 		status, problem.Code, problem.Message = input.status, input.code, input.message
 	case errors.As(err, &violation):
@@ -442,6 +468,21 @@ func (module *Module) writeError(w http.ResponseWriter, request *http.Request, e
 		problem.Message = "Review the highlighted Auth values and try again."
 		problem.Hint = "Correct the highlighted values, then save again."
 		problem.Details = map[string]any{"violations": []Violation{violation.Violation}}
+	case errors.Is(err, ErrEmailNotVerified):
+		status = http.StatusForbidden
+		problem.Code = "EMAIL_NOT_VERIFIED"
+		problem.Message = "This Auth Collection requires a verified email address before sign-in."
+		problem.Hint = "Open the verification message for this address, then confirm the code and sign in again."
+	case errors.Is(err, ErrMailUnavailable):
+		status = http.StatusConflict
+		problem.Code = "MAIL_NOT_CONFIGURED"
+		problem.Message = "Email delivery is not configured for this project yet."
+		problem.Hint = "Ask a project administrator to configure Mail before using verification or password reset."
+	case errors.Is(err, ErrRecoveryTokenInvalid):
+		status = http.StatusBadRequest
+		problem.Code = "INVALID_ARGUMENT"
+		problem.Message = "This confirmation code is invalid, expired, or already used."
+		problem.Hint = "Request a new message and confirm the newest code."
 	case errors.Is(err, ErrRegistrationDisabled):
 		status = http.StatusForbidden
 		problem.Code = "REGISTRATION_DISABLED"
@@ -477,3 +518,111 @@ func (module *Module) writeError(w http.ResponseWriter, request *http.Request, e
 }
 
 var _ httpapi.APIModule = (*Module)(nil)
+
+type recoveryRequestPayload struct {
+	Email string `json:"email"`
+}
+
+type passwordResetConfirmPayload struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
+type emailVerificationConfirmPayload struct {
+	Token string `json:"token"`
+}
+
+type recoveryAcceptedResponse struct {
+	Data struct {
+		Accepted bool `json:"accepted"`
+	} `json:"data"`
+}
+
+// requestOrigin 只用于记录发起恢复请求的来源，邮件正文不含绝对链接，避免 Host 欺骗重定向。
+func requestOrigin(request *http.Request) string {
+	scheme := "http"
+	if request.TLS != nil {
+		scheme = "https"
+	}
+	if strings.EqualFold(strings.TrimSpace(request.Header.Get("X-Forwarded-Proto")), "https") {
+		scheme = "https"
+	}
+	if request.Host == "" {
+		return ""
+	}
+	return scheme + "://" + request.Host
+}
+
+func acceptedRecoveryResponse(w http.ResponseWriter) {
+	response := recoveryAcceptedResponse{}
+	response.Data.Accepted = true
+	httpapi.WriteAPIJSON(w, http.StatusAccepted, response)
+}
+
+func (module *Module) requestPasswordReset(w http.ResponseWriter, request *http.Request) {
+	if !module.ready(w, request) {
+		return
+	}
+	requests.MarkAuthentication(request.Context(), requests.AuthenticationAnonymous)
+	var input recoveryRequestPayload
+	if err := decodeRequest(w, request, &input); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	if err := module.service.RequestPasswordReset(request.Context(), request.PathValue("collectionName"), input.Email, requestOrigin(request)); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	acceptedRecoveryResponse(w)
+}
+
+func (module *Module) confirmPasswordReset(w http.ResponseWriter, request *http.Request) {
+	if !module.ready(w, request) {
+		return
+	}
+	requests.MarkAuthentication(request.Context(), requests.AuthenticationAnonymous)
+	var input passwordResetConfirmPayload
+	if err := decodeRequest(w, request, &input); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	if err := module.service.ConfirmPasswordReset(request.Context(), request.PathValue("collectionName"), input.Token, input.Password); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (module *Module) requestEmailVerification(w http.ResponseWriter, request *http.Request) {
+	if !module.ready(w, request) {
+		return
+	}
+	requests.MarkAuthentication(request.Context(), requests.AuthenticationAnonymous)
+	var input recoveryRequestPayload
+	if err := decodeRequest(w, request, &input); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	if err := module.service.RequestEmailVerification(request.Context(), request.PathValue("collectionName"), input.Email, requestOrigin(request)); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	acceptedRecoveryResponse(w)
+}
+
+func (module *Module) confirmEmailVerification(w http.ResponseWriter, request *http.Request) {
+	if !module.ready(w, request) {
+		return
+	}
+	requests.MarkAuthentication(request.Context(), requests.AuthenticationAnonymous)
+	var input emailVerificationConfirmPayload
+	if err := decodeRequest(w, request, &input); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	if err := module.service.ConfirmEmailVerification(request.Context(), request.PathValue("collectionName"), input.Token); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

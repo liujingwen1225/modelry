@@ -1,0 +1,15 @@
+.portability-page { gap: 18px; }
+.portability-card__heading { display: flex; align-items: center; gap: 12px; }
+.portability-card__heading h2 { margin: 0; }
+.portability-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.portability-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 12px 0; }
+.portability-facts div { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-soft); padding: 10px 12px; }
+.portability-facts dt { color: var(--color-ink-muted); font-size: 11px; }
+.portability-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.portability-preflight { margin-top: 12px; border-top: 1px solid var(--color-border); padding-top: 12px; }
+.portability-findings { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.portability-findings li { display: flex; gap: 8px; align-items: center; }
+.portability-import ul { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
+.portability-endpoints { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.portability-endpoints li { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--color-border); padding: 6px 0; }
+.portability-hint { color: var(--color-ink-muted); font-size: 11px; }

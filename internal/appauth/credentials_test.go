@@ -8,6 +8,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
@@ -26,7 +27,16 @@ func TestCredentialsSessionsAndProfileWritesAreDurableAndAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profiles, err := records.New(store, models)
+	events, err := recordevents.NewService(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subscription, err := events.Subscribe(collection.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer subscription.Close()
+	profiles, err := records.New(store, models, records.WithRecordEvents(events))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,9 +47,23 @@ func TestCredentialsSessionsAndProfileWritesAreDurableAndAtomic(t *testing.T) {
 	if _, err := service.Register(ctx, collection.Name, map[string]any{"email": "bob@example.com", "displayName": "Bob"}, "bob-secret"); !errors.Is(err, ErrRegistrationDisabled) {
 		t.Fatalf("self registration was not disabled by default: %v", err)
 	}
+	select {
+	case <-subscription.Wake():
+		t.Fatal("rejected registration notified a Record Event subscriber")
+	default:
+	}
 	alice, err := service.CreateUser(ctx, collection.ID, map[string]any{"email": "Alice@example.com", "displayName": "Alice"}, "alice-secret")
 	if err != nil {
 		t.Fatal(err)
+	}
+	select {
+	case <-subscription.Wake():
+	default:
+		t.Fatal("committed Auth Profile transaction did not notify Event subscribers")
+	}
+	eventsAfterAlice, err := events.ReadAfter(ctx, collection.ID, 0, 10)
+	if err != nil || len(eventsAfterAlice) != 1 || eventsAfterAlice[0].After["displayName"] != "Alice" {
+		t.Fatalf("Auth Profile Record Event = %+v err=%v", eventsAfterAlice, err)
 	}
 	profile, err := profiles.Get(ctx, collection.ID, alice.ID)
 	if err != nil || profile.Values["displayName"] != "Alice" || profile.Values["email"] != "alice@example.com" {
@@ -50,6 +74,11 @@ func TestCredentialsSessionsAndProfileWritesAreDurableAndAtomic(t *testing.T) {
 	}
 	if _, err := service.CreateUser(ctx, collection.ID, map[string]any{"email": "ALICE@example.com"}, "another-secret"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("case-insensitive email duplicate should conflict: %v", err)
+	}
+	select {
+	case <-subscription.Wake():
+		t.Fatal("failed duplicate App User transaction notified a Record Event subscriber")
+	default:
 	}
 	users, err := service.ListUsers(ctx, collection.ID, records.ListOptions{})
 	if err != nil || len(users.Data) != 1 || users.Data[0].RecordID != alice.ID {
@@ -72,6 +101,15 @@ func TestCredentialsSessionsAndProfileWritesAreDurableAndAtomic(t *testing.T) {
 	bob, err := service.Register(ctx, collection.Name, map[string]any{"email": "bob@example.com", "displayName": "Bob"}, "bob-secret")
 	if err != nil {
 		t.Fatalf("registration did not atomically create an App User: %v", err)
+	}
+	select {
+	case <-subscription.Wake():
+	default:
+		t.Fatal("committed registration transaction did not notify Event subscribers")
+	}
+	eventsAfterBob, err := events.ReadAfter(ctx, collection.ID, 1, 10)
+	if err != nil || len(eventsAfterBob) != 1 || eventsAfterBob[0].After["displayName"] != "Bob" {
+		t.Fatalf("registered App User Record Event = %+v err=%v", eventsAfterBob, err)
 	}
 	login, err := service.Login(ctx, collection.Name, "BOB@example.com", "bob-secret")
 	if err != nil || login.AccessToken == "" || login.TokenType != "Bearer" || login.Session.Status != "active" {

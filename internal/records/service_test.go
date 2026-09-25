@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -87,9 +89,81 @@ func TestRecordCRUDDurableAndSystemFieldsManaged(t *testing.T) {
 	}
 }
 
+func TestCreateEventTimestampMatchesRecordMutationTimestamp(t *testing.T) {
+	ctx := context.Background()
+	store, models, _ := newTestServices(t)
+	events, err := recordevents.NewService(ctx, store)
+	if err != nil {
+		t.Fatalf("initialize Record Events: %v", err)
+	}
+	service, err := New(store, models, WithRecordEvents(events))
+	if err != nil {
+		t.Fatalf("initialize Records with events: %v", err)
+	}
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "event-timestamps", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText, Required: true}},
+	})
+	if err != nil {
+		t.Fatalf("create Collection: %v", err)
+	}
+	created, err := service.Create(ctx, collection.ID, map[string]any{"title": "Timed"})
+	if err != nil {
+		t.Fatalf("create Record: %v", err)
+	}
+	retained, err := events.ReadAfter(ctx, collection.ID, 0, 10)
+	if err != nil || len(retained) != 1 {
+		t.Fatalf("read created Event: got %d events, %v", len(retained), err)
+	}
+	if got := retained[0].OccurredAt.Format(time.RFC3339Nano); got != created.CreatedAt {
+		t.Fatalf("Event occurredAt = %s, Record createdAt = %s", got, created.CreatedAt)
+	}
+}
+
+func TestRecordMutationRollsBackWhenDurableEventAppendFails(t *testing.T) {
+	ctx := context.Background()
+	store, models, _ := newTestServices(t)
+	events, err := recordevents.NewService(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordService, err := New(store, models, WithRecordEvents(events))
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "atomic_events", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{{Name: "title", Type: backendmodel.FieldTypeText, Required: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithTransaction(ctx, func(tx storage.Executor) error {
+		_, err := tx.ExecContext(ctx, `DROP TABLE modelry_record_events`)
+		return err
+	}); err != nil {
+		t.Fatalf("prepare Event append failure: %v", err)
+	}
+	if _, err := recordService.Create(ctx, collection.ID, map[string]any{"title": "must roll back"}); err == nil {
+		t.Fatal("Record mutation succeeded after its required Event append failed")
+	}
+	page, err := recordService.List(ctx, collection.ID, ListOptions{Limit: 10})
+	if err != nil || len(page.Data) != 0 {
+		t.Fatalf("Record persisted after Event failure: page=%+v err=%v", page, err)
+	}
+	position, err := events.State(ctx, collection.ID)
+	if err != nil || position.Head != 0 {
+		t.Fatalf("Event sequence advanced after failed transaction: state=%+v err=%v", position, err)
+	}
+}
+
 type allowAllTestEvaluator struct{}
 
 func (allowAllTestEvaluator) Evaluate(context.Context, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
+	return authorization.Decision{Allowed: true}, nil
+}
+
+func (allowAllTestEvaluator) EvaluateInTransaction(context.Context, storage.Executor, string, authorization.Operation, authorization.Principal, *authorization.Record) (authorization.Decision, error) {
 	return authorization.Decision{Allowed: true}, nil
 }
 

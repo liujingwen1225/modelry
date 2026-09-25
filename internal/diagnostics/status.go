@@ -25,7 +25,16 @@ type LocalStorageStatus struct {
 	Path     string
 }
 
+type FileStorageStatus struct {
+	State          string
+	Provider       string
+	ActiveProvider string
+	Message        string
+	Hint           string
+}
+
 type StorageStatus struct {
 	Database     Health
 	LocalStorage LocalStorageStatus
+	FileStorage  FileStorageStatus
 }
