@@ -53,6 +53,8 @@ tags:
     description: Manage Owner-authored lifecycle Extensions and safe Hook Run history.
   - name: Secrets
     description: Manage write-only Project Secrets for explicitly authorized Extensions.
+  - name: FileStorage
+    description: Configure the File Storage Provider, migrate immutable File objects between Providers, and read File values through Runtime-authorized routes.
   - name: Automation
     description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history. Outbound Webhook requests use the stable Delivery ID as Idempotency-Key; Record Event requests also repeat the body Event ID in X-Modelry-Event-Id.
 paths:
@@ -525,6 +527,194 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files':
+    get:
+      tags: [FileStorage]
+      operationId: getFileStorage
+      summary: Read the File Storage Provider configuration and health
+      description: Owner-only Control Plane snapshot. It reports the active Provider, safe configuration metadata, bounded health, referenced object count, and the current migration summary. Credential values are never returned.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Safe File Storage snapshot for the Owner session.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileStorageStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/provider':
+    put:
+      tags: [FileStorage]
+      operationId: configureFileStorageProvider
+      summary: Configure the File Storage Provider
+      description: Owner-only Control Plane write guarded by expectedRevision. Moving the active Provider, or changing the S3 object location while Durable Records reference File objects, requires an explicit migration and returns MIGRATION_REQUIRED. Object references stored in Records never change.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileStorageProviderInput'
+      responses:
+        '200':
+          description: Provider configuration saved; the response reports the new revision.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileStorageStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/provider/test':
+    post:
+      tags: [FileStorage]
+      operationId: testFileStorageProvider
+      summary: Test an S3-compatible Provider configuration
+      description: Owner-only bounded connectivity probe. It validates the endpoint, credentials, bucket, and key prefix without saving configuration and without creating or deleting objects.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileStorageProviderTestInput'
+      responses:
+        '200':
+          description: Safe probe result; an unreachable Provider reports state unavailable with an actionable hint.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileStorageProviderTestResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/migrations':
+    get:
+      tags: [FileStorage]
+      operationId: listFileStorageMigrations
+      summary: List recent File Storage migrations
+      description: Owner-only history of Provider migrations, newest first. At most twenty summaries are returned.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded migration history.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [FileStorage]
+      operationId: startFileStorageMigration
+      summary: Start a File Storage migration
+      description: Copies every File object referenced by a Durable Record to the requested target Provider and switches the active Provider only after all copies are verified. Only one migration may be active; the source objects are never deleted.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileMigrationInput'
+      responses:
+        '202':
+          description: Migration accepted and durably recorded.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/migrations/{migrationId}':
+    parameters:
+      - $ref: '#/components/parameters/MigrationId'
+    get:
+      tags: [FileStorage]
+      operationId: getFileStorageMigration
+      summary: Read one File Storage migration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Migration state, bounded progress, and safe error code.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/migrations/{migrationId}/cancel':
+    parameters:
+      - $ref: '#/components/parameters/MigrationId'
+    post:
+      tags: [FileStorage]
+      operationId: cancelFileStorageMigration
+      summary: Cancel a File Storage migration
+      description: Requests cancellation of a pending or running migration. The active Provider is unchanged and already copied objects stay in the target Provider.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Migration cancelled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
   '/admin/api/v1/storage/status':
     get:
       tags: [Runtime]
@@ -855,6 +1045,65 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/records/{recordId}/files/{fieldName}/{fileIndex}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/RecordId'
+      - name: fieldName
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - $ref: '#/components/parameters/FileIndex'
+    get:
+      tags: [Collections]
+      operationId: readRecordFileByIndex
+      summary: Read one File value of an ordered files Field
+      description: Resolves the zero-based position inside the ordered files Field of this Record and streams that immutable object. A single file Field uses the non-indexed route. Response bytes are attachment-only and never cached.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+        - name: fieldName
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/FileIndex'
+      responses:
+        '200':
+          description: Bound file content with the server-detected safe MIME type.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Always attachment; user supplied filenames are not used as paths.
+              schema:
+                type: string
+            X-Content-Type-Options:
+              description: Always nosniff.
+              schema:
+                const: nosniff
+            Cache-Control:
+              description: Always private, no-store.
+              schema:
+                const: private, no-store
+            Content-Length:
+              schema:
+                type: integer
+                minimum: 0
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
   '/api/v1/{collectionName}':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1167,6 +1416,72 @@ paths:
           schema:
             type: string
             minLength: 1
+      security:
+        - ApplicationSession: []
+        - {}
+      x-modelry-access-rule:
+        operation: view
+      responses:
+        '200':
+          description: Bound file content with the server-detected safe MIME type.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Always attachment; user supplied filenames are not used as paths.
+              schema:
+                const: attachment
+            X-Content-Type-Options:
+              description: Always nosniff.
+              schema:
+                const: nosniff
+            Cache-Control:
+              description: Always private, no-store.
+              schema:
+                const: private, no-store
+            Content-Length:
+              schema:
+                type: integer
+                minimum: 0
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+      - $ref: '#/components/parameters/RecordId'
+      - name: fieldName
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - $ref: '#/components/parameters/FileIndex'
+    get:
+      tags: [ApplicationRecords]
+      operationId: readApplicationRecordFileByIndex
+      summary: Read one File value of an ordered files Field through the Application API
+      description: The Applied Collection view Access Rule is enforced for the owning Record. The Runtime resolves the ordered position, streams the immutable object as a private, no-store attachment with nosniff, and never exposes a provider path, bucket, or credential.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/RecordId'
+        - name: fieldName
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/FileIndex'
       security:
         - ApplicationSession: []
         - {}
@@ -3017,6 +3332,22 @@ components:
         type: string
         enum: ['true', 'false']
   parameters:
+    FileIndex:
+      name: fileIndex
+      in: path
+      required: true
+      description: Zero-based position of a File value inside an ordered files Field.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 31
+    MigrationId:
+      name: migrationId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^fmig_[0-9a-f]{32}$'
     CollectionId:
       name: collectionId
       in: path
@@ -3442,12 +3773,14 @@ components:
     StorageStatusResponse:
       type: object
       description: Safe storage snapshot; the localStorage path is omitted unless the request has valid diagnostic authorization.
-      required: [database, localStorage]
+      required: [database, localStorage, fileStorage]
       properties:
         database:
           $ref: '#/components/schemas/Health'
         localStorage:
           $ref: '#/components/schemas/LocalStorageHealth'
+        fileStorage:
+          $ref: '#/components/schemas/FileStorageHealth'
       additionalProperties: false
     LocalStorageHealth:
       type: object
@@ -3516,7 +3849,7 @@ components:
           type: string
         type:
           type: string
-          enum: [text, number, boolean, dateTime, json, relation, file]
+          enum: [text, number, boolean, dateTime, json, relation, file, files]
         required:
           type: boolean
         unique:
@@ -3641,6 +3974,294 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Record'
+    FileStorageHealth:
+      type: object
+      description: Provider-neutral File Storage health reported in the Runtime status snapshot.
+      required: [state, provider, activeProvider]
+      properties:
+        state:
+          type: string
+          enum: [ready, degraded, unavailable, unknown]
+        provider:
+          type: string
+          enum: [Local, S3-compatible]
+        activeProvider:
+          type: string
+          enum: [local, s3]
+        message:
+          type: string
+          description: Safe diagnostic text; never contains credentials, object references, or an absolute path.
+        hint:
+          type: string
+          description: Safe actionable guidance; never contains credentials.
+      additionalProperties: false
+    StorageSecretReference:
+      type: object
+      description: Write-only Project Secret reference metadata. The Secret value is never returned by any File Storage response.
+      required: [secretId, name, configured]
+      properties:
+        secretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+        name:
+          type: string
+        configured:
+          type: boolean
+      additionalProperties: false
+    LocalFileStorageConfiguration:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: Owner-only absolute staging directory and Local object directory. Omitted from every non-Owner response.
+      additionalProperties: false
+    S3FileStorageInput:
+      type: object
+      description: S3-compatible Provider settings supplied by the Owner. Credentials are Project Secret references, never values.
+      required: [endpoint, region, bucket, accessKeySecretId, secretKeySecretId]
+      properties:
+        endpoint:
+          type: string
+          description: HTTPS endpoint, or HTTP only for a loopback, private, or link-local host. Must not contain user information, a query, or a fragment.
+        region:
+          type: string
+          minLength: 1
+          maxLength: 64
+        bucket:
+          type: string
+          minLength: 1
+          maxLength: 63
+        keyPrefix:
+          type: string
+          maxLength: 128
+        pathStyle:
+          type: boolean
+          default: true
+        accessKeySecretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+        secretKeySecretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+        sessionTokenSecretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+      additionalProperties: false
+    S3FileStorageConfiguration:
+      type: object
+      description: S3-compatible Provider settings without credential values.
+      required: [endpoint, region, bucket, keyPrefix, pathStyle, configured]
+      properties:
+        endpoint:
+          type: string
+        region:
+          type: string
+        bucket:
+          type: string
+        keyPrefix:
+          type: string
+        pathStyle:
+          type: boolean
+        configured:
+          type: boolean
+        accessKey:
+          $ref: '#/components/schemas/StorageSecretReference'
+        secretKey:
+          $ref: '#/components/schemas/StorageSecretReference'
+        sessionToken:
+          $ref: '#/components/schemas/StorageSecretReference'
+      additionalProperties: false
+    FileStorageConfiguration:
+      type: object
+      required: [provider, local]
+      properties:
+        provider:
+          type: string
+          enum: [local, s3]
+        local:
+          $ref: '#/components/schemas/LocalFileStorageConfiguration'
+        s3:
+          oneOf:
+            - $ref: '#/components/schemas/S3FileStorageConfiguration'
+            - type: 'null'
+      additionalProperties: false
+    FileMigration:
+      type: object
+      description: Durable Provider migration state. Object references are never listed individually.
+      required: [id, sourceProvider, targetProvider, status, totalObjects, copiedObjects, startedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^fmig_[0-9a-f]{32}$'
+        sourceProvider:
+          type: string
+          enum: [local, s3]
+        targetProvider:
+          type: string
+          enum: [local, s3]
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled, interrupted]
+        totalObjects:
+          type: integer
+          minimum: 0
+        copiedObjects:
+          type: integer
+          minimum: 0
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        errorCode:
+          type: string
+          enum: [providerUnavailable, credentialUnavailable, objectWriteFailed, verificationFailed, cancelled, interrupted]
+        message:
+          type: string
+          description: Safe actionable text; never contains credentials or object content.
+        targetEndpointHost:
+          type: string
+        targetBucket:
+          type: string
+        targetKeyPrefix:
+          type: string
+      additionalProperties: false
+    FileStorageStatus:
+      type: object
+      required: [activeProvider, provider, revision, providerState, configuration, health]
+      properties:
+        activeProvider:
+          type: string
+          enum: [local, s3]
+        provider:
+          type: string
+          enum: [Local, S3-compatible]
+        revision:
+          type: integer
+          minimum: 1
+        providerState:
+          type: string
+          enum: [ready, degraded, unavailable, unknown]
+        providerMessage:
+          type: string
+        providerHint:
+          type: string
+        configuration:
+          $ref: '#/components/schemas/FileStorageConfiguration'
+        health:
+          type: object
+          required: [state, observedAt]
+          properties:
+            state:
+              type: string
+              enum: [ready, degraded, unavailable, unknown]
+            message:
+              type: string
+            hint:
+              type: string
+            observedAt:
+              type: string
+              format: date-time
+            referencedObjects:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+        migration:
+          type: object
+          required: [active]
+          properties:
+            active:
+              type: boolean
+            latest:
+              oneOf:
+                - $ref: '#/components/schemas/FileMigration'
+                - type: 'null'
+          additionalProperties: false
+      additionalProperties: false
+    FileStorageStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FileStorageStatus'
+      additionalProperties: false
+    FileStorageProviderInput:
+      type: object
+      required: [expectedRevision, provider]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        provider:
+          type: string
+          enum: [local, s3]
+        s3:
+          $ref: '#/components/schemas/S3FileStorageInput'
+      additionalProperties: false
+    FileStorageProviderTestInput:
+      type: object
+      required: [s3]
+      properties:
+        s3:
+          $ref: '#/components/schemas/S3FileStorageInput'
+      additionalProperties: false
+    FileStorageProviderTestResult:
+      type: object
+      required: [state, message]
+      properties:
+        state:
+          type: string
+          enum: [ready, unavailable]
+        message:
+          type: string
+        hint:
+          type: string
+        endpointHost:
+          type: string
+        bucket:
+          type: string
+        objectCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    FileStorageProviderTestResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FileStorageProviderTestResult'
+      additionalProperties: false
+    FileMigrationInput:
+      type: object
+      required: [targetProvider]
+      properties:
+        targetProvider:
+          type: string
+          enum: [local, s3]
+        s3:
+          $ref: '#/components/schemas/S3FileStorageInput'
+      additionalProperties: false
+    FileMigrationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/FileMigration'
+      additionalProperties: false
+    FileMigrationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FileMigration'
+      additionalProperties: false
     FileUploadResponse:
       type: object
       required: [data]

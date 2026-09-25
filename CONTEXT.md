@@ -155,6 +155,19 @@ Hook Run 记录阶段、Extension Revision、绑定、开始/结束时间和安�
 **Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event Cursor 继续接收。
 _Avoid_：Record polling、Activity Timeline
 
+## File Values and Storage Providers
+
+**File value**：Collection Field 上的文件能力取值。`file` Field 保存单个 File value，`files` Field 保存有序列表；两者只保存 Runtime 生成的不透明对象引用，不保存文件名、路径或桶名。
+_Avoid_：File path、Bucket key、Filename
+
+**File object**：Runtime 写入 Storage Provider 的一份不可变字节内容。对象写入后永不覆盖；替换文件产生新对象，旧对象在宽限期后由 reconcile 回收。
+_Avoid_：Mutable file、Blob row
+
+**Storage provider**：实际存放 File object 的实现，当前为 `Local` 与 `S3-compatible`。Provider 是运行实现，不是 Backend Model 语义；切换 Provider 不修改任何 Record 值。
+_Avoid_：Backend、Bucket（作为产品术语）
+
+**Provider migration**：把所有 Durable Record 引用的 File object 复制到目标 Provider，并在全部校验通过后才切换 Provider 的耐久操作。它 bounded、可取消、restart-aware，且不删除源对象。
+_Avoid_：Sync、Replication、Copy job
 ## Change UX 不变量
 
 底层继续保留：
