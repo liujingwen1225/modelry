@@ -267,7 +267,15 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page).toHaveURL(/\/settings\/runtime\?filter=keep#selected$/);
   await expect(page.getByRole('heading', { name: '运行时设置', level: 1 })).toBeVisible();
   await expect(page.getByRole('link', { name: '活动' })).toBeVisible();
+  // 迁移到共享 i18n 的 V0.1 时代页面同样必须以中文渲染。
+  await page.goto(runtimeURL + '/');
+  await expect(page.getByRole('heading', { name: '总览', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '运行时与存储' }).first()).toBeVisible();
+  await page.goto(runtimeURL + '/settings');
+  await expect(page.getByRole('heading', { name: '设置', level: 1 })).toBeVisible();
   await page.locator('.locale-switcher select').selectOption('en');
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await page.goto(runtimeURL + '/settings/runtime');
   await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Activity' })).toBeVisible();
 
