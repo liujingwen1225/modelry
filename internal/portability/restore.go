@@ -532,17 +532,52 @@ func (plan *activationPlan) discardJournal() {
 	_ = os.Remove(plan.journalPath)
 }
 
-// CheckInterruptedRestore 报告项目是否停在一次未完成的 restore 中间态。
-// Runtime 在启动前调用它：一个半恢复的项目必须由 modelry restore 收敛，而不是被
-// 当成空项目打开。
+// CheckInterruptedRestore 在项目被打开之前收敛一次未完成的 restore。
+//
+// Runtime 与 CLI 都调用它：一个半恢复的项目必须由 modelry restore 收敛，而不是被当成
+// 空项目打开。一个已经提交、只是没来得及清理的 journal 会就地收敛，因此它不会让项目
+// 无法启动。
 func CheckInterruptedRestore(managedDir string) error {
 	journalPath := filepath.Join(managedDir, RestoreJournalName)
-	if _, err := os.Stat(journalPath); err == nil {
-		return fmt.Errorf("project %q is in the middle of an interrupted restore; run modelry restore --from <bundle> again to finish or roll it back before starting the Runtime", managedDir)
-	} else if !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(journalPath); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
 		return err
 	}
-	return nil
+	committed, err := journalCommitted(journalPath)
+	if err != nil {
+		return err
+	}
+	if committed {
+		return rollbackInterruptedRestore(managedDir)
+	}
+	return fmt.Errorf("project %q is in the middle of an interrupted restore; run modelry restore --from <bundle> again to finish or roll it back before starting the Runtime", managedDir)
+}
+
+// journalCommitted 报告 journal 是否已经记录过提交。
+func journalCommitted(journalPath string) (bool, error) {
+	file, err := os.Open(journalPath)
+	if err != nil {
+		return false, fmt.Errorf("%w: read the restore journal: %v", ErrStorage, err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var record journalRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			// 残缺的行只可能是最后一行，其动作用 write-ahead 语义保证还没有发生。
+			return false, nil
+		}
+		if record.Op == journalDone {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // rollbackInterruptedRestore 回滚上一次崩溃留下的激活。没有 journal 时它是空操作。
@@ -688,18 +723,14 @@ func removeEmptyDirectories(directories []string) {
 const restoreWorkPrefix = "restore-work-"
 
 // removeStaleWorkspaces 清理崩溃留下的暂存目录；它们可能包含整个项目的明文副本。
-// journal 永远不在清理范围内：它是项目处于中间态的唯一记录。
+// 这些前缀刻意都不匹配 RestoreJournalName，否则清理会删掉项目中间态的唯一记录。
 func removeStaleWorkspaces(managedDir string) {
-	journalPath := filepath.Join(managedDir, RestoreJournalName)
 	for _, pattern := range []string{restoreWorkPrefix + "*", "preflight-*", "backup-work-*"} {
 		matches, err := filepath.Glob(filepath.Join(managedDir, pattern))
 		if err != nil {
 			return
 		}
 		for _, match := range matches {
-			if match == journalPath {
-				continue
-			}
 			_ = os.RemoveAll(match)
 		}
 	}

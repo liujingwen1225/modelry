@@ -893,16 +893,26 @@ func TestRestoreReplacesAndRollsBackTheDatabaseSidecars(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 回滚路径：在侧车被移开之后、激活之前失败，旧 WAL/SHM 必须字节还原。
+	// 回滚路径：阶段二已经把数据库与 WAL 都移开、阶段三还没有激活任何东西时失败。
+	// 旧数据库与旧 WAL/SHM 都必须字节还原。
 	restoreFault = func(step string) error {
-		if step == restorePhasePreserve+":"+targetDatabase+"-wal" {
-			return errors.New("injected failure before preserving the old WAL")
+		if step != restorePhaseActivate+":"+targetDatabase {
+			return nil
 		}
-		return nil
+		// 证明这边车真的已经被移开，否则后面的字节比对是空转。
+		for _, suffix := range []string{"-wal", "-shm"} {
+			if _, err := os.Stat(targetDatabase + suffix); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("the %s sidecar was still in place when activation started: %v", suffix, err)
+			}
+		}
+		if _, err := os.Stat(targetDatabase); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("the database was still in place when activation started: %v", err)
+		}
+		return errors.New("injected failure before activating the restored database")
 	}
 	if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: targetDatabase, ObjectsDir: targetObjects}); err == nil {
 		restoreFault = nil
-		t.Fatal("restore reported success although preserving the old WAL was injected to fail")
+		t.Fatal("restore reported success although activation was injected to fail")
 	}
 	restoreFault = nil
 	if after := hashFile(t, targetDatabase); after != beforeDatabase {
@@ -1930,6 +1940,32 @@ func TestBackupAndPreflightAgreeOnZeroByteAndBoundaryObjects(t *testing.T) {
 func TestArchiveEntryBoundAccommodatesAFullBundle(t *testing.T) {
 	if int(maximumArchiveEntries) < maximumBundleObjects+2 {
 		t.Fatalf("maximumArchiveEntries = %d cannot hold %d objects plus a manifest and a database payload", maximumArchiveEntries, maximumBundleObjects)
+	}
+	// 边界必须能被真正走到：恰好到达对象上限的 manifest 合法，再多一个不合法。
+	// 两者结合才能保证「Backup 允许的满载 bundle 一定能通过 Preflight 的条目计数」。
+	objects := make([]ObjectEntry, 0, maximumBundleObjects+1)
+	for index := 0; index < maximumBundleObjects; index++ {
+		objects = append(objects, ObjectEntry{Key: fmt.Sprintf("obj_%032x", index), Bytes: 1, SHA256: strings.Repeat("b", 64)})
+	}
+	base := Manifest{
+		Format: FormatName, FormatVersion: FormatVersion, ProjectID: "prj_test",
+		RuntimeVersion: "test", AppliedModelHash: strings.Repeat("a", 64),
+		Database: DatabaseEntry{Path: DatabaseArchivePath, Bytes: 1 << 20, SHA256: strings.Repeat("c", 64)},
+		Objects:  objects,
+	}
+	if _, findings, err := planBundle(base); err != nil {
+		t.Fatalf("a manifest at the object limit was rejected: %v", err)
+	} else {
+		for _, finding := range findings {
+			if finding.Code == "object.invalidSize" || finding.Code == "object.invalidKey" || finding.Code == "object.invalidDigest" {
+				t.Fatalf("a manifest at the object limit produced %+v", finding)
+			}
+		}
+	}
+	overLimit := base
+	overLimit.Objects = append(append([]ObjectEntry(nil), objects...), ObjectEntry{Key: fmt.Sprintf("obj_%032x", maximumBundleObjects), Bytes: 1, SHA256: strings.Repeat("b", 64)})
+	if _, _, err := planBundle(overLimit); !errors.Is(err, ErrPayloadTooLarge) {
+		t.Fatalf("error = %v, want ErrPayloadTooLarge one object past the limit", err)
 	}
 }
 

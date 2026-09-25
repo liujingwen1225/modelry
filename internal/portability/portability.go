@@ -260,8 +260,12 @@ func hashCollections(collections []backendmodel.Collection) (string, error) {
 func (service *Service) appliedCollections(ctx context.Context) ([]backendmodel.Collection, error) {
 	collections, err := collectCollections(ctx, service.models)
 	if err != nil {
-		// %w 让调用方仍能识别具体原因，而不是把所有失败折叠成「Runtime 未就绪」。
-		return nil, fmt.Errorf("%w: read Applied Model: %w", ErrStorage, err)
+		// 明确的产品边界（Applied Model 超出读取上界）保持 INVALID_ARGUMENT，让调用方
+		// 得到可读的原因；其它读取失败仍然折叠为「Runtime 状态不可用」，不误导为请求错误。
+		if errors.Is(err, ErrInvalidArgument) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: read Applied Model: %v", ErrStorage, err)
 	}
 	return collections, nil
 }

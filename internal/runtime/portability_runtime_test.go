@@ -525,6 +525,42 @@ func TestRuntimeRefusesToStartInTheMiddleOfAnInterruptedRestore(t *testing.T) {
 	}
 }
 
+// TestRuntimeStartsAfterACommittedRestoreIsCleanedUp 证明一个已经提交、只是没来得及
+// 清理的 journal 不会把项目永久挡在启动之外：它会被就地收敛。
+func TestRuntimeStartsAfterACommittedRestoreIsCleanedUp(t *testing.T) {
+	rootPath := t.TempDir()
+	managed := filepath.Join(rootPath, ".modelry")
+	if err := os.MkdirAll(managed, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	journal := filepath.Join(managed, portability.RestoreJournalName)
+	backup := filepath.Join(managed, "project.sqlite.committed.old")
+	if err := os.WriteFile(backup, []byte("the-old-database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"op":"stage","dest":"x","path":"y"}` + "\n" +
+		`{"op":"backup","dest":"x","path":` + strconv.Quote(backup) + `}` + "\n" +
+		`{"op":"activate","dest":"x","path":"y"}` + "\n" +
+		`{"op":"done"}` + "\n"
+	if err := os.WriteFile(journal, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	instance, err := New(Options{ProjectRoot: project.RootConfig{FlagPath: &rootPath, WorkingDir: t.TempDir()}, Version: "test"})
+	if err != nil {
+		t.Fatalf("a committed restore blocked startup: %v", err)
+	}
+	if err := instance.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(journal); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the committed journal was not consumed: %v", err)
+	}
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the committed journal left its backup behind: %v", err)
+	}
+}
+
 // sendRawRequest 发送一个带原始字节载荷与显式 Content-Type 的请求。
 func sendRawRequest(t *testing.T, method, target, origin, cookie, contentType string, payload []byte) responseEvidence {
 	t.Helper()
