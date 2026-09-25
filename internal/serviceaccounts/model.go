@@ -1,6 +1,7 @@
 package serviceaccounts
 
 import (
+	"github.com/liujingwen1225/modelry/internal/permissions"
 	"errors"
 )
 
@@ -13,50 +14,53 @@ var (
 	ErrStorage         = errors.New("Service Account storage unavailable")
 )
 
-type Preset string
+// Preset、Operation 与 Grant 由 internal/permissions 共享，保证 Control Plane 主体使用同一词表。
+type Preset = permissions.Preset
 
 const (
-	PresetFullAccess Preset = "fullAccess"
-	PresetReadOnly   Preset = "readOnly"
-	PresetCustom     Preset = "custom"
+	PresetFullAccess = permissions.PresetFullAccess
+	PresetReadOnly   = permissions.PresetReadOnly
+	PresetCustom     = permissions.PresetCustom
 )
-
-const CustomPermissionVersion = 1
-
-type Operation string
-
+// CustomPermissionVersion 是自定义 Permission 的当前版本。
+const CustomPermissionVersion = permissions.CustomPermissionVersion
+type Operation = permissions.Operation
 const (
-	OperationRuntimeRead           Operation = "runtime.read"
-	OperationStorageRead           Operation = "storage.read"
-	OperationCollectionsRead       Operation = "collections.read"
-	OperationCollectionsCreate     Operation = "collections.create"
-	OperationRecordsRead           Operation = "records.read"
-	OperationRecordsCreate         Operation = "records.create"
-	OperationRecordsUpdate         Operation = "records.update"
-	OperationRecordsDelete         Operation = "records.delete"
-	OperationFilesRead             Operation = "files.read"
-	OperationFilesWrite            Operation = "files.write"
-	OperationSchemaRead            Operation = "schema.read"
-	OperationSchemaWrite           Operation = "schema.write"
-	OperationSchemaApply           Operation = "schema.apply"
-	OperationAccessRulesRead       Operation = "accessRules.read"
-	OperationAccessRulesWrite      Operation = "accessRules.write"
-	OperationAccessRulesApply      Operation = "accessRules.apply"
-	OperationAuthenticationRead    Operation = "authentication.read"
-	OperationAuthenticationWrite   Operation = "authentication.write"
-	OperationAuthenticationApply   Operation = "authentication.apply"
-	OperationUsersRead             Operation = "users.read"
-	OperationUsersCreate           Operation = "users.create"
-	OperationUsersManagePassword   Operation = "users.managePassword"
-	OperationSessionsRead          Operation = "sessions.read"
-	OperationSessionsRevoke        Operation = "sessions.revoke"
-	OperationServiceAccountsRead   Operation = "serviceAccounts.read"
-	OperationServiceAccountsManage Operation = "serviceAccounts.manage"
-	OperationAPIKeysRead           Operation = "apiKeys.read"
-	OperationAPIKeysCreate         Operation = "apiKeys.create"
-	OperationAPIKeysRevoke         Operation = "apiKeys.revoke"
-	OperationRequestsRead          Operation = "requests.read"
-	OperationAuditRead             Operation = "audit.read"
+	OperationRuntimeRead           = permissions.OperationRuntimeRead
+	OperationStorageRead           = permissions.OperationStorageRead
+	OperationCollectionsRead       = permissions.OperationCollectionsRead
+	OperationCollectionsCreate     = permissions.OperationCollectionsCreate
+	OperationRecordsRead           = permissions.OperationRecordsRead
+	OperationRecordsCreate         = permissions.OperationRecordsCreate
+	OperationRecordsUpdate         = permissions.OperationRecordsUpdate
+	OperationRecordsDelete         = permissions.OperationRecordsDelete
+	OperationFilesRead             = permissions.OperationFilesRead
+	OperationFilesWrite            = permissions.OperationFilesWrite
+	OperationSchemaRead            = permissions.OperationSchemaRead
+	OperationSchemaWrite           = permissions.OperationSchemaWrite
+	OperationSchemaApply           = permissions.OperationSchemaApply
+	OperationAccessRulesRead       = permissions.OperationAccessRulesRead
+	OperationAccessRulesWrite      = permissions.OperationAccessRulesWrite
+	OperationAccessRulesApply      = permissions.OperationAccessRulesApply
+	OperationAuthenticationRead    = permissions.OperationAuthenticationRead
+	OperationAuthenticationWrite   = permissions.OperationAuthenticationWrite
+	OperationAuthenticationApply   = permissions.OperationAuthenticationApply
+	OperationUsersRead             = permissions.OperationUsersRead
+	OperationUsersCreate           = permissions.OperationUsersCreate
+	OperationUsersManagePassword   = permissions.OperationUsersManagePassword
+	OperationSessionsRead          = permissions.OperationSessionsRead
+	OperationSessionsRevoke        = permissions.OperationSessionsRevoke
+	OperationServiceAccountsRead   = permissions.OperationServiceAccountsRead
+	OperationServiceAccountsManage = permissions.OperationServiceAccountsManage
+	OperationAPIKeysRead           = permissions.OperationAPIKeysRead
+	OperationAPIKeysCreate         = permissions.OperationAPIKeysCreate
+	OperationAPIKeysRevoke         = permissions.OperationAPIKeysRevoke
+	OperationRequestsRead          = permissions.OperationRequestsRead
+	OperationAuditRead             = permissions.OperationAuditRead
+	OperationAdministratorsRead    = permissions.OperationAdministratorsRead
+	OperationAdministratorsManage  = permissions.OperationAdministratorsManage
+	OperationMailRead              = permissions.OperationMailRead
+	OperationMailManage            = permissions.OperationMailManage
 )
 
 type AccountStatus string
@@ -137,11 +141,7 @@ type Page struct {
 	NextCursor string           `json:"nextCursor,omitempty"`
 }
 
-type Grant struct {
-	Preset     Preset      `json:"permission"`
-	Version    int         `json:"customPermissionVersion,omitempty"`
-	Operations []Operation `json:"customOperations,omitempty"`
-}
+type Grant = permissions.Grant
 
 type ValidationFailure struct {
 	Path    string `json:"path"`
