@@ -444,7 +444,7 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
         </FormField>
         <FormField htmlFor={`field-type-${field.key}`} label="Type">
           <select id={`field-type-${field.key}`} onChange={(event) => onUpdate({ type: event.target.value as FieldType, ...(event.target.value === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type}>
-            <option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="dateTime">Date &amp; time</option><option value="json">JSON</option><option value="relation">Relation</option><option value="file">File</option>
+            <option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="dateTime">Date &amp; time</option><option value="json">JSON</option><option value="relation">Relation</option><option value="file">File</option><option value="files">Files</option>
           </select>
         </FormField>
         <label className="initial-field-toggle"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />Required</label>

@@ -8,6 +8,7 @@ import {
   createApplicationUser,
   deleteRecord,
   downloadRecordFile,
+  downloadRecordFileAt,
   getRecord,
   listRecords,
   updateRecord,
@@ -360,6 +361,16 @@ export function CollectionRecordsPage() {
   );
 }
 
+function initialFileLists(fields: FieldDefinition[], record?: CollectionRecord): Record<string, string[]> {
+  const lists: Record<string, string[]> = {};
+  for (const field of fields) {
+    if (field.type !== 'files') continue;
+    const value = record?.[field.name];
+    lists[field.name] = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  }
+  return lists;
+}
+
 function initialRecordValues(fields: FieldDefinition[], record?: CollectionRecord) {
   const values: Record<string, string> = {};
   for (const field of fields) {
@@ -380,7 +391,8 @@ function fileRules(field: FieldDefinition) {
   const validation = isRecord(field.validation) ? field.validation : {};
   const maxBytes = typeof validation.maxBytes === 'number' && validation.maxBytes > 0 ? validation.maxBytes : 10 * 1024 * 1024;
   const allowed = Array.isArray(validation.allowedMimeTypes) ? validation.allowedMimeTypes.filter((value): value is string => typeof value === 'string') : ['text/plain', 'text/csv', 'application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  return { maxBytes, allowed };
+  const maxFiles = typeof validation.maxFiles === 'number' && validation.maxFiles > 0 ? validation.maxFiles : 8;
+  return { maxBytes, allowed, maxFiles };
 }
 
 function expandedRelationCopy(record: CollectionRecord, fieldName: string, requestedFields: string[]) {
@@ -416,6 +428,8 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
 }) {
   const [values, setValues] = useState<Record<string, string>>(() => initialRecordValues(fields, record));
   const [uploaded, setUploaded] = useState<Record<string, UploadedCollectionFile>>({});
+  const [fileLists, setFileLists] = useState<Record<string, string[]>>(() => initialFileLists(fields, record));
+  const [fileMeta, setFileMeta] = useState<Record<string, UploadedCollectionFile[]>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -444,16 +458,47 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
     try {
       const result = await uploadCollectionFile(collection.id, field.name, file);
       setUploaded((current) => ({ ...current, [field.name]: result }));
-      setValues((current) => ({ ...current, [field.name]: result.temporaryId }));
+      if (field.type === 'files') {
+        setFileLists((current) => ({ ...current, [field.name]: [...(current[field.name] ?? []), result.temporaryId] }));
+        setFileMeta((current) => ({ ...current, [field.name]: [...(current[field.name] ?? []), result] }));
+      } else {
+        setValues((current) => ({ ...current, [field.name]: result.temporaryId }));
+      }
     } catch (reason) {
       setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, 'The file could not be uploaded.').title }));
     } finally { setUploading((current) => ({ ...current, [field.name]: false })); }
+  }
+
+  function removeFile(field: FieldDefinition, index: number) {
+    setFileLists((current) => ({ ...current, [field.name]: (current[field.name] ?? []).filter((_, position) => position !== index) }));
+    setFileMeta((current) => ({ ...current, [field.name]: (current[field.name] ?? []).filter((_, position) => position !== index) }));
+  }
+
+  async function downloadAt(field: FieldDefinition, index: number) {
+    if (!record) return;
+    try {
+      const blob = await downloadRecordFileAt(collection.id, record.id, field.name, index);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = field.name + '-' + record.id + '-' + index;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, 'The file could not be downloaded.').title }));
+    }
   }
 
   function buildValues() {
     const result: Record<string, unknown> = {};
     for (const field of fields) {
       const raw = values[field.name] ?? '';
+      if (field.type === 'files') {
+        const list = fileLists[field.name] ?? [];
+        if (list.length) result[field.name] = list;
+        else if (record && record[field.name] !== undefined) result[field.name] = null;
+        continue;
+      }
       if (field.type === 'file') {
         if (uploaded[field.name]) result[field.name] = uploaded[field.name]?.temporaryId;
         else if (raw === '' && record && record[field.name] !== undefined) result[field.name] = null;
@@ -561,7 +606,11 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
           error={fieldErrors[field.name]}
           field={field}
           key={field.name}
+          fileList={fileLists[field.name] ?? []}
+          fileMeta={fileMeta[field.name] ?? []}
+          onDownloadAt={(index) => void downloadAt(field, index)}
           onFile={(file) => void uploadFile(field, file)}
+          onRemoveFile={(index) => removeFile(field, index)}
           onValue={(value) => setValue(field.name, value)}
           record={record}
           upload={uploaded[field.name]}
@@ -584,7 +633,7 @@ function recordErrorCopy(copy: ReturnType<typeof errorCopy> | undefined) {
   return copy ? <ErrorState description={copy.message} title={copy.title} /> : null;
 }
 
-function RecordField({ field, value, disabled, error, upload, uploadError, uploading, onValue, onFile, record }: {
+function RecordField({ field, value, disabled, error, upload, uploadError, uploading, onValue, onFile, record, fileList, fileMeta, onRemoveFile, onDownloadAt }: {
   field: FieldDefinition;
   value: string;
   disabled: boolean;
@@ -595,17 +644,45 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
   record?: CollectionRecord;
   onValue: (value: string) => void;
   onFile: (file?: File) => void;
+  fileList?: string[];
+  fileMeta?: UploadedCollectionFile[];
+  onRemoveFile?: (index: number) => void;
+  onDownloadAt?: (index: number) => void;
 }) {
   const inputId = `record-field-${field.name}`;
   const fileInput = useRef<HTMLInputElement>(null);
   const hint = field.description || (field.type === 'relation' ? `Enter a record ID from the related Collection${field.relation?.targetCollectionId ? ` (${field.relation.targetCollectionId})` : ''}.` : undefined);
-  const inputType = fieldInputType(field);
+  const inputType = field.type === 'files' ? 'file' : fieldInputType(field);
   let control;
   switch (inputType) {
     case 'boolean': control = <select disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} value={value}><option value="">Not set</option><option value="true">Yes</option><option value="false">No</option></select>; break;
     case 'json': control = <textarea disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} rows={5} value={value} />; break;
     case 'file': {
       const rules = fileRules(field);
+      if (field.type === 'files') {
+        const list = fileList ?? [];
+        control = <div className="record-file-control" data-testid={'record-files-' + field.name}>
+          <ul className="record-file-list">
+            {list.map((entry, index) => {
+              const meta = fileMeta?.find((item) => item.temporaryId === entry) ?? upload;
+              const staged = entry.startsWith('tmp_');
+              return <li key={entry + '-' + index}>
+                <span>#{index}</span>
+                <code>{entry}</code>
+                {meta && <small>{meta.contentType} · {meta.size.toLocaleString()} bytes</small>}
+                {!staged && !disabled && onDownloadAt && <Button onClick={() => onDownloadAt(index)} size="small" type="button" variant="quiet">Download</Button>}
+                {!disabled && onRemoveFile && <Button onClick={() => onRemoveFile(index)} size="small" type="button" variant="quiet">Remove</Button>}
+              </li>;
+            })};
+          </ul>
+          <input accept={rules.allowed.join(',')} aria-label={field.name + ' files'} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; for (const file of files) onFile(file); }} type="file" />
+          <small>Up to {rules.maxFiles} files · {Math.ceil(rules.maxBytes / 1024 / 1024)} MB each · {rules.allowed.join(', ')}</small>
+          {list.length >= rules.maxFiles && <span className="record-field-error" role="alert">This field already holds the maximum number of files.</span>}
+          {uploading && <span role="status">Uploading file…</span>}
+          {uploadError && <span className="record-field-error" role="alert">{uploadError}</span>}
+        </div>;
+        break;
+      }
       control = <div className="record-file-control">
         {Boolean(record?.[field.name]) && <span className="record-file-current">File attached to this record <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">Replace</Button></span>}
         <input accept={rules.allowed.join(',')} aria-label={`${field.name} file`} disabled={disabled || uploading} id={inputId} onChange={(event) => onFile(event.target.files?.[0])} ref={fileInput} type="file" />

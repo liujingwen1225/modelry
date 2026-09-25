@@ -530,10 +530,20 @@ function internalReturnPath(value: string | null) {
 function matchingEndpoint(collections: Collection[], record: RequestRecord) {
   const collection = collections.find((item) => item.id === record.collectionId);
   if (!collection) return undefined;
+  const candidate = record.endpoint.split('/');
+  // Durable telemetry stores route templates while callers may hold concrete paths; both must resolve.
   return endpointsForCollection(collection).find((item) => {
     if (item.method !== record.method) return false;
-    const escaped = item.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\{[^/{}]+\\\}/g, '[^/]+');
-    return new RegExp(`^${escaped}/?$`).test(record.endpoint);
+    const pattern = item.template.split('/');
+    if (pattern.length !== candidate.length) return false;
+    return pattern.every((segment, index) => {
+      const value = candidate[index] ?? '';
+      if (segment === '{collectionName}') {
+        return value === collection.name || value === encodeURIComponent(collection.name) || value === '{collectionName}';
+      }
+      if (segment.startsWith('{') && segment.endsWith('}')) return value.length > 0;
+      return segment === value;
+    });
   });
 }
 

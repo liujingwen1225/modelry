@@ -203,3 +203,18 @@ func (recorder *commitHeaderRecorder) WriteHeader(status int) {
 	recorder.trailerHeaderAtCommit = recorder.Header().Get("Trailer")
 	recorder.ResponseRecorder.WriteHeader(status)
 }
+
+func TestSafeEndpointKeepsFileRoutesParameterised(t *testing.T) {
+	cases := map[string]string{
+		"/api/v1/posts": "/api/v1/{collectionName}",
+		"/api/v1/posts/rec_abc": "/api/v1/{collectionName}/{recordId}",
+		"/api/v1/posts/rec_abc/files/attachment": "/api/v1/{collectionName}/{recordId}/files/{fieldName}",
+		"/api/v1/posts/rec_abc/files/attachments/2": "/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}",
+		"/api/v1/posts/rec_abc/files/attachments/2/extra": "/api/v1/{unmatched}",
+	}
+	for path, want := range cases {
+		if got := safeEndpoint(path); got != want {
+			t.Errorf("safeEndpoint(%q) = %q, want %q", path, got, want)
+		}
+	}
+}

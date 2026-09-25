@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CircleDot, HeartPulse, Layers3, LockKeyhole, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { DiagnosticsCards } from '../components/runtime-status';
 import { Button, PartialState, StatusChip, Surface } from '../components/ui';
@@ -168,6 +168,10 @@ export function SettingsPage() {
         <HealthSummary />
         <DiagnosticsCards />
       </section>
+      <Surface className="settings-note" variant="inset">
+        <span className="scope-icon"><HardDrive aria-hidden="true" size={17} /></span>
+        <div><strong>Files &amp; storage</strong><p>Choose the Local or S3-compatible Storage Provider and move existing files without changing Records.</p><Link className="text-link" to="/settings/storage">Open Files &amp; storage</Link></div>
+      </Surface>
       <Surface className="settings-note" variant="inset">
         <span className="scope-icon"><LockKeyhole aria-hidden="true" size={17} /></span>
         <div><strong>Read-only diagnostics</strong><p>Status requests show safe health snapshots. Only a signed-in Owner can see the Local Storage path.</p></div>

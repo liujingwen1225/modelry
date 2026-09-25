@@ -1,7 +1,7 @@
 import { ApiClientError, type ApiError } from '../api/client';
 
 export type CollectionType = 'Normal' | 'Auth';
-export type FieldType = 'text' | 'number' | 'boolean' | 'dateTime' | 'json' | 'relation' | 'file';
+export type FieldType = 'text' | 'number' | 'boolean' | 'dateTime' | 'json' | 'relation' | 'file' | 'files';
 
 export type RelationDefinition = { targetCollectionId: string; cardinality: string };
 
@@ -255,6 +255,13 @@ export async function uploadCollectionFile(collectionId: string, fieldName: stri
     signal,
   });
   return unwrap<UploadedCollectionFile>(await readResponse(response));
+}
+
+export async function downloadRecordFileAt(collectionId: string, recordId: string, fieldName: string, index: number, signal?: AbortSignal): Promise<Blob> {
+  const path = `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records/${encodeURIComponent(recordId)}/files/${encodeURIComponent(fieldName)}/${index}`;
+  const response = await fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', signal });
+  if (!response.ok) await readResponse(response);
+  return response.blob();
 }
 
 export async function downloadRecordFile(collectionId: string, recordId: string, fieldName: string, signal?: AbortSignal): Promise<Blob> {

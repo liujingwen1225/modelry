@@ -163,6 +163,10 @@ func safeEndpoint(path string) string {
 		if segments[2] == "files" {
 			return "/api/v1/{collectionName}/{recordId}/files/{fieldName}"
 		}
+	case 5:
+		if segments[2] == "files" {
+			return "/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}"
+		}
 	}
 	return "/api/v1/{unmatched}"
 }

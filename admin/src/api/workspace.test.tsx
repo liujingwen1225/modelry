@@ -32,6 +32,10 @@ const fileCollection: Collection = {
   ...collection,
   fields: [...collection.fields, { id: 'fld_attachment', name: 'attachment', type: 'file' }],
 };
+const filesCollection: Collection = {
+  ...collection,
+  fields: [...collection.fields, { id: 'fld_attachments', name: 'attachments', type: 'files' }],
+};
 const authCollection: Collection = {
   id: 'col_members', name: 'members', type: 'Auth', schemaVersion: 1,
   fields: [{ id: 'fld_email', name: 'email', type: 'text', required: true }],
@@ -228,6 +232,27 @@ describe('API Workspace', () => {
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=getApplicationRecord');
   });
 
+  it('resolves Request Detail links when durable telemetry stores a route template', async () => {
+    mocks.getRequestRecord.mockResolvedValue({ ...fileRequestRecord, endpoint: '/api/v1/{collectionName}/{recordId}/files/{fieldName}' });
+    mocks.listAllCollections.mockResolvedValue([fileCollection]);
+    render(<MemoryRouter initialEntries={['/requests/req_file_123456']}><Routes>
+      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
+    </Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
+  });
+
+  it('resolves ordered file read templates to the indexed endpoint', async () => {
+    mocks.getRequestRecord.mockResolvedValue({ ...fileRequestRecord, endpoint: '/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}' });
+    mocks.listAllCollections.mockResolvedValue([filesCollection]);
+    render(<MemoryRouter initialEntries={['/requests/req_file_ordered']}><Routes>
+      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
+    </Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
+  });
   it('preserves file endpoint context in Request Detail links', async () => {
     mocks.getRequestRecord.mockResolvedValue(fileRequestRecord);
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
