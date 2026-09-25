@@ -25,6 +25,26 @@ func (function invocationFunc) Invoke(ctx context.Context, invocation Invocation
 	return function(ctx, invocation)
 }
 
+type secretDeletionProbe struct {
+	fail        error
+	transaction bool
+	committed   bool
+}
+
+func (probe *secretDeletionProbe) RevokeSecretInTransaction(ctx context.Context, tx storage.Executor, secretID string) error {
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM modelry_secrets WHERE id=?`, secretID).Scan(&exists); err != nil {
+		return err
+	}
+	probe.transaction = true
+	if _, err := tx.ExecContext(ctx, `INSERT INTO modelry_secret_delete_probe(secret_id) VALUES(?)`, secretID); err != nil {
+		return err
+	}
+	return probe.fail
+}
+
+func (probe *secretDeletionProbe) SecretRevoked(string) { probe.committed = true }
+
 type extensionFixture struct {
 	root    string
 	managed string
@@ -175,6 +195,60 @@ func TestSecretIsEncryptedWriteOnlyAndMissingKeyFailsClosed(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(fixture.managed, "secrets.key")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing key was unexpectedly replaced: stat error = %v", err)
+	}
+}
+
+func TestSecretValueIsAvailableOnlyInsideClearedCallbackAndDeletionJoinsTransaction(t *testing.T) {
+	ctx := context.Background()
+	fixture := newExtensionFixture(t, nil)
+	secret, err := fixture.service.CreateSecret(ctx, "delivery signer", "signature-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, configured, err := fixture.service.SecretMetadata(ctx, secret.ID)
+	if err != nil || name != "delivery signer" || !configured {
+		t.Fatalf("SecretMetadata() = %q, %t, %v", name, configured, err)
+	}
+	var plaintext []byte
+	if err := fixture.service.WithSecretValue(ctx, secret.ID, func(value []byte) error {
+		plaintext = value
+		if string(value) != "signature-secret" {
+			return errors.New("callback received the wrong Secret")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Trim(string(plaintext), "\x00") != "" {
+		t.Fatal("Secret plaintext was not cleared after its callback returned")
+	}
+
+	if err := fixture.store.WithTransaction(ctx, func(tx storage.Executor) error {
+		_, err := tx.ExecContext(ctx, `CREATE TABLE modelry_secret_delete_probe(secret_id TEXT PRIMARY KEY)`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	probe := &secretDeletionProbe{fail: errors.New("rollback Secret deletion")}
+	fixture.service.SetSecretRevocationObserver(probe)
+	if err := fixture.service.DeleteSecret(ctx, secret.ID); !errors.Is(err, probe.fail) {
+		t.Fatalf("DeleteSecret() error = %v, want observer transaction failure", err)
+	}
+	if !probe.transaction || probe.committed {
+		t.Fatalf("observer callbacks were not ordered around commit: %+v", probe)
+	}
+	if _, configured, err := fixture.service.SecretMetadata(ctx, secret.ID); err != nil || !configured {
+		t.Fatalf("Secret was deleted despite transaction rollback: configured=%t err=%v", configured, err)
+	}
+	probe.fail = nil
+	if err := fixture.service.DeleteSecret(ctx, secret.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !probe.committed {
+		t.Fatal("SecretRevoked was not called after the Secret deletion committed")
+	}
+	if _, configured, err := fixture.service.SecretMetadata(ctx, secret.ID); err != nil || configured {
+		t.Fatalf("deleted Secret metadata = configured %t, err %v", configured, err)
 	}
 }
 

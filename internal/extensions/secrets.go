@@ -223,7 +223,13 @@ func (service *Service) ReplaceSecretValue(ctx context.Context, secretID, value 
 }
 
 func (service *Service) DeleteSecret(ctx context.Context, secretID string) error {
+	observer := service.currentSecretRevocationObserver()
 	err := service.store.WithTransaction(ctx, func(tx storage.Executor) error {
+		if observer != nil {
+			if err := observer.RevokeSecretInTransaction(ctx, tx, secretID); err != nil {
+				return err
+			}
+		}
 		if err := service.cancelPendingForSecret(ctx, tx, secretID); err != nil {
 			return err
 		}
@@ -242,8 +248,54 @@ func (service *Service) DeleteSecret(ctx context.Context, secretID string) error
 	})
 	if err == nil {
 		service.cancelRemovedActive("", secretID, "")
+		if observer != nil {
+			observer.SecretRevoked(secretID)
+		}
 	}
 	return err
+}
+
+// SecretMetadata 只向内部 Webhook 边界提供 Owner 配置的名称与是否已配置状态，不提供 Secret 明文。
+func (service *Service) SecretMetadata(ctx context.Context, secretID string) (string, bool, error) {
+	var name string
+	var configured int
+	err := service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		err := snapshot.QueryRowContext(ctx, `SELECT name,length(value_cipher)>0 FROM modelry_secrets WHERE id=?`, secretID).Scan(&name, &configured)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	})
+	return name, configured == 1, err
+}
+
+// WithSecretValue 解密当前 Secret 值并调用受限内部回调，返回前清空明文缓冲区。
+func (service *Service) WithSecretValue(ctx context.Context, secretID string, use func([]byte) error) error {
+	if use == nil || secretID == "" {
+		return ErrSecretNotAvailable
+	}
+	var version int64
+	var ciphertext []byte
+	err := service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		if err := snapshot.QueryRowContext(ctx, `SELECT version,value_cipher FROM modelry_secrets WHERE id=?`, secretID).Scan(&version, &ciphertext); errors.Is(err, sql.ErrNoRows) {
+			return ErrSecretNotAvailable
+		} else if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if len(ciphertext) == 0 {
+		return ErrSecretNotAvailable
+	}
+	plaintext, err := service.secrets.Decrypt(secretID, version, ciphertext)
+	if err != nil {
+		return mapSecretStoreError(err)
+	}
+	defer clear(plaintext)
+	return use(plaintext)
 }
 
 func (service *Service) cancelPendingForSecret(ctx context.Context, tx storage.Executor, secretID string) error {

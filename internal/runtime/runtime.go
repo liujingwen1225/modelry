@@ -17,6 +17,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/appauth"
 	"github.com/liujingwen1225/modelry/internal/applicationapi"
 	"github.com/liujingwen1225/modelry/internal/audit"
+	"github.com/liujingwen1225/modelry/internal/automation"
 	"github.com/liujingwen1225/modelry/internal/backendapi"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/diagnostics"
@@ -25,6 +26,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
 	"github.com/liujingwen1225/modelry/internal/serviceaccounts"
@@ -48,6 +50,7 @@ type Runtime struct {
 	store          *storage.Store
 	events         *recordevents.Service
 	extensions     *extensions.Service
+	automation     *automation.Service
 	version        string
 	databaseHealth string
 	fileHealth     string
@@ -72,8 +75,12 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	}
 	var store *storage.Store
 	var extensionService *extensions.Service
+	var automationService *automation.Service
 	defer func() {
 		if resultErr != nil {
+			if automationService != nil {
+				resultErr = errors.Join(resultErr, automationService.Close(context.Background()))
+			}
 			if extensionService != nil {
 				resultErr = errors.Join(resultErr, extensionService.Close(context.Background()))
 			}
@@ -117,7 +124,12 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Extension Runtime: %w", err)
 	}
-	recordService, err := records.NewWithLocalFiles(store, backendModel, root.TempFiles, root.Objects, records.WithAuthorization(accessRules, nil), records.WithRecordEvents(eventService), records.WithLifecycleHooks(extensionService.LifecycleHooks()))
+	automationService, err = newAutomationService(context.Background(), store, extensionService)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Webhooks and Jobs: %w", err)
+	}
+	extensionService.SetSecretRevocationObserver(automationService)
+	recordService, err := records.NewWithLocalFiles(store, backendModel, root.TempFiles, root.Objects, records.WithAuthorization(accessRules, nil), records.WithRecordEvents(eventService), records.WithLifecycleHooks(recordlifecycle.Combine(extensionService.LifecycleHooks(), automationService)))
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Records and Local Files: %w", err)
 	}
@@ -158,6 +170,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		store:          store,
 		events:         eventService,
 		extensions:     extensionService,
+		automation:     automationService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -190,6 +203,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 			return accesscontrol.InitializeCollection(ctx, tx, collection, initialRules)
 		}),
 		accesscontrol.NewModule(accessRules),
+		automation.NewModule(automationService),
 		extensions.NewModule(extensionService),
 		appauth.NewModule(authService),
 		applicationapi.NewModule(backendModel, recordService, applicationapi.WithSessionAuthenticator(authService)),
@@ -239,6 +253,12 @@ func (instance *Runtime) Run(ctx context.Context, listenAddress string, onReady 
 	instance.state = "ready"
 	server := instance.server
 	instance.mu.Unlock()
+	if instance.automation != nil {
+		if err := instance.automation.Start(ctx); err != nil {
+			instance.setState("unavailable")
+			return errors.Join(fmt.Errorf("cannot start Modelry Webhooks and Jobs dispatcher: %w", err), instance.Close())
+		}
+	}
 
 	serveResult := make(chan error, 1)
 	go func() {
@@ -293,6 +313,12 @@ func (instance *Runtime) Close() error {
 				serverErr = errors.Join(serverErr, instance.server.Close())
 			}
 		}
+		var automationErr error
+		if instance.automation != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
+			automationErr = instance.automation.Close(ctx)
+			cancel()
+		}
 		var extensionErr error
 		if instance.extensions != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
@@ -310,7 +336,7 @@ func (instance *Runtime) Close() error {
 		if instance.lock != nil {
 			lockErr = instance.lock.Release()
 		}
-		instance.closeErr = errors.Join(serverErr, extensionErr, storageErr, lockErr)
+		instance.closeErr = errors.Join(serverErr, automationErr, extensionErr, storageErr, lockErr)
 	})
 	return instance.closeErr
 }

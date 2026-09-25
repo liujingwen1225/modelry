@@ -50,20 +50,27 @@ type ServiceOptions struct {
 	HTTPRequest HTTPRequest
 }
 
+// SecretRevocationObserver 将其他 Project 资源加入 Secret 删除事务，并在提交后取消相关外部任务。
+type SecretRevocationObserver interface {
+	RevokeSecretInTransaction(context.Context, storage.Executor, string) error
+	SecretRevoked(string)
+}
+
 type Service struct {
-	store       transactionalStore
-	models      *backendmodel.Service
-	secrets     *secretstore.Store
-	invoker     Invoker
-	httpRequest HTTPRequest
-	now         func() time.Time
-	ctx         context.Context
-	cancel      context.CancelFunc
-	semaphore   chan struct{}
-	mu          sync.Mutex
-	cancels     map[string]activeRun
-	closed      bool
-	wg          sync.WaitGroup
+	store                    transactionalStore
+	models                   *backendmodel.Service
+	secrets                  *secretstore.Store
+	invoker                  Invoker
+	httpRequest              HTTPRequest
+	now                      func() time.Time
+	ctx                      context.Context
+	cancel                   context.CancelFunc
+	semaphore                chan struct{}
+	mu                       sync.Mutex
+	cancels                  map[string]activeRun
+	closed                   bool
+	wg                       sync.WaitGroup
+	secretRevocationObserver SecretRevocationObserver
 }
 
 type activeRun struct {
@@ -211,6 +218,18 @@ var extensionSchema = []string{
 }
 
 func (service *Service) LifecycleHooks() recordlifecycle.Hooks { return service }
+
+func (service *Service) SetSecretRevocationObserver(observer SecretRevocationObserver) {
+	service.mu.Lock()
+	service.secretRevocationObserver = observer
+	service.mu.Unlock()
+}
+
+func (service *Service) currentSecretRevocationObserver() SecretRevocationObserver {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	return service.secretRevocationObserver
+}
 
 func (service *Service) Close(ctx context.Context) error {
 	if service == nil {

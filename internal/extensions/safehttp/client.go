@@ -2,6 +2,7 @@
 package safehttp
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -22,6 +23,7 @@ const (
 	maxRequestsPerRun     = 3
 	maxHeaderValueBytes   = 8 * 1024
 	maxRequestBodyBytes   = 64 * 1024
+	maxWebhookBodyBytes   = 1 << 20
 	maxResponseBodyBytes  = 256 * 1024
 	maxResponseHeaderSize = 32 * 1024
 	requestDeadline       = 2 * time.Second
@@ -137,6 +139,24 @@ type Client struct {
 	requests int
 }
 
+// WebhookClient 面向 Owner 配置的 HTTPS 端点，每次处理一个受界限的请求，且不共享 Extension 请求配额。
+type WebhookClient struct {
+	resolver Resolver
+	dial     DialContextFunc
+	tls      *tls.Config
+}
+
+// WebhookTarget 保存单次处理尝试中已校验并固定的 DNS 地址，最多发出一个 HTTP 请求。
+type WebhookTarget struct {
+	client    *WebhookClient
+	host      string
+	port      string
+	url       *url.URL
+	addresses []netip.Addr
+	mu        sync.Mutex
+	used      bool
+}
+
 type origin struct {
 	host string
 	port string
@@ -145,6 +165,171 @@ type origin struct {
 // New 使用一次 Hook Run 显式配置的 HTTPS Origin Grant 创建客户端。
 func New(grants []string) (*Client, error) {
 	return newClient(grants, net.DefaultResolver, (&net.Dialer{}).DialContext, nil)
+}
+
+// NewWebhookClient 为普通 Runtime 创建安全的 HTTPS 发送端。
+func NewWebhookClient() *WebhookClient {
+	return &WebhookClient{resolver: net.DefaultResolver, dial: (&net.Dialer{}).DialContext}
+}
+
+// PrepareWebhook 校验并解析一次目标地址。所有解析结果都必须是公网单播地址，返回目标只拨号到已固定的地址。
+func (client *WebhookClient) PrepareWebhook(parent context.Context, target string) (*WebhookTarget, error) {
+	if client == nil || parent == nil {
+		return nil, ErrExternalRequestFailed
+	}
+	parsed, err := parseWebhookTarget(target)
+	if err != nil {
+		return nil, ErrOriginNotAllowed
+	}
+	origin, err := NormalizeOrigin("https://" + parsed.Host)
+	if err != nil {
+		return nil, ErrOriginNotAllowed
+	}
+	normalized, err := url.Parse(origin)
+	if err != nil {
+		return nil, ErrOriginNotAllowed
+	}
+	parsed.Host = normalized.Host
+	port := normalized.Port()
+	if port == "" {
+		port = "443"
+	}
+	host := normalized.Hostname()
+	ctx, cancel := context.WithTimeout(parent, requestDeadline)
+	defer cancel()
+	addresses, err := client.resolver.LookupNetIP(ctx, "ip", host+".")
+	if err != nil || len(addresses) == 0 {
+		return nil, ErrExternalRequestFailed
+	}
+	checked := make([]netip.Addr, 0, len(addresses))
+	seen := make(map[netip.Addr]struct{}, len(addresses))
+	for _, address := range addresses {
+		if !isPublicUnicast(address) {
+			return nil, ErrOriginNotAllowed
+		}
+		address = address.Unmap()
+		if _, exists := seen[address]; exists {
+			continue
+		}
+		seen[address] = struct{}{}
+		checked = append(checked, address)
+	}
+	return &WebhookTarget{client: client, host: host, port: port, url: parsed, addresses: checked}, nil
+}
+
+// Post 在两秒期限内发出一次 HTTPS POST，不读取响应体，错误只包含稳定安全类别。
+func (target *WebhookTarget) Post(parent context.Context, body []byte, headers http.Header) (int, error) {
+	if target == nil || target.client == nil || parent == nil || len(body) > maxWebhookBodyBytes || !utf8.Valid(body) || !validWebhookHeaders(headers) {
+		return 0, ErrExternalRequestFailed
+	}
+	target.mu.Lock()
+	if target.used {
+		target.mu.Unlock()
+		return 0, ErrExternalRequestFailed
+	}
+	target.used = true
+	target.mu.Unlock()
+	ctx, cancel := context.WithTimeout(parent, requestDeadline)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target.url.String(), bytes.NewReader(body))
+	if err != nil {
+		return 0, ErrExternalRequestFailed
+	}
+	request.Close = true
+	for name, values := range headers {
+		for _, value := range values {
+			request.Header.Add(name, value)
+		}
+	}
+	transport := &http.Transport{
+		Proxy:                  nil,
+		DisableKeepAlives:      true,
+		DisableCompression:     true,
+		MaxResponseHeaderBytes: maxResponseHeaderSize,
+		TLSClientConfig:        webhookTLSConfig(target.client.tls),
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			var lastErr error
+			for _, address := range target.addresses {
+				connection, dialErr := target.client.dial(ctx, network, net.JoinHostPort(address.String(), target.port))
+				if dialErr == nil {
+					return connection, nil
+				}
+				lastErr = dialErr
+				if ctx.Err() != nil {
+					break
+				}
+			}
+			if lastErr == nil {
+				lastErr = errors.New("no checked Webhook address")
+			}
+			return nil, lastErr
+		},
+	}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(request)
+	if err != nil {
+		return 0, ErrExternalRequestFailed
+	}
+	defer response.Body.Close()
+	return response.StatusCode, nil
+}
+
+func parseWebhookTarget(value string) (*url.URL, error) {
+	if value == "" || len(value) > 2048 || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t") {
+		return nil, ErrOriginNotAllowed
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed == nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.Opaque != "" || parsed.User != nil || parsed.Host == "" ||
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.RawFragment != "" {
+		return nil, ErrOriginNotAllowed
+	}
+	if parsed.Hostname() == "" || net.ParseIP(parsed.Hostname()) != nil {
+		return nil, ErrOriginNotAllowed
+	}
+	if strings.HasSuffix(parsed.Host, ":") {
+		return nil, ErrOriginNotAllowed
+	}
+	if _, err := strconv.Atoi(parsed.Port()); parsed.Port() != "" && err != nil {
+		return nil, ErrOriginNotAllowed
+	}
+	parsed.Scheme = "https"
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	return parsed, nil
+}
+
+func validWebhookHeaders(headers http.Header) bool {
+	allowed := map[string]struct{}{
+		"Content-Type": {}, "Idempotency-Key": {}, "X-Modelry-Delivery-Id": {},
+		"X-Modelry-Signature": {}, "X-Modelry-Event-Id": {},
+	}
+	count := 0
+	for name, values := range headers {
+		canonical := http.CanonicalHeaderKey(name)
+		if _, ok := allowed[canonical]; !ok || len(values) == 0 {
+			return false
+		}
+		for _, value := range values {
+			count++
+			if count > 5 || !utf8.ValidString(value) || len(value) > maxHeaderValueBytes || strings.ContainsAny(value, "\r\n") || containsHeaderControl(value) {
+				return false
+			}
+		}
+	}
+	return headers.Get("Content-Type") == "application/json" && headers.Get("Idempotency-Key") != "" && headers.Get("X-Modelry-Delivery-Id") != "" && headers.Get("X-Modelry-Signature") != ""
+}
+
+func webhookTLSConfig(base *tls.Config) *tls.Config {
+	if base == nil {
+		return &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	result := base.Clone()
+	if result.MinVersion < tls.VersionTLS12 {
+		result.MinVersion = tls.VersionTLS12
+	}
+	return result
 }
 
 func newClient(grants []string, resolver Resolver, dial DialContextFunc, tlsConfig *tls.Config) (*Client, error) {
