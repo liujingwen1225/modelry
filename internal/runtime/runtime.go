@@ -24,6 +24,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/extensions"
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/mail"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
@@ -56,6 +57,7 @@ type Runtime struct {
 	extensions     *extensions.Service
 	automation     *automation.Service
 	files          *filestore.Service
+	mail           *mail.Service
 	version        string
 	databaseHealth string
 	fileHealth     string
@@ -82,6 +84,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	var extensionService *extensions.Service
 	var automationService *automation.Service
 	var fileService *filestore.Service
+	var mailService *mail.Service
 	defer func() {
 		if resultErr != nil {
 			if automationService != nil {
@@ -89,6 +92,9 @@ func New(options Options) (_ *Runtime, resultErr error) {
 			}
 			if fileService != nil {
 				resultErr = errors.Join(resultErr, fileService.Close(context.Background()))
+			}
+			if mailService != nil {
+				resultErr = errors.Join(resultErr, mailService.Close(context.Background()))
 			}
 			if extensionService != nil {
 				resultErr = errors.Join(resultErr, extensionService.Close(context.Background()))
@@ -161,6 +167,15 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Application authentication: %w", err)
 	}
+	// Mail outbox 复用 App Auth 的投递正文渲染；App Auth 通过适配器在自身事务内写入投递意图。
+	mailService, err = mail.NewService(context.Background(), mail.ServiceOptions{
+		Store: store, Secrets: extensionService, Payloads: mailPayloadAdapter{service: authService},
+		Audits: mailAuditSink{audits: auditService},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Mail delivery: %w", err)
+	}
+	authService.SetRecoveryDependencies(mailEnqueuerAdapter{service: mailService}, extensionService, authAuditSink{audits: auditService})
 	requestService, err := requests.NewService(context.Background(), store)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Request History: %w", err)
@@ -194,6 +209,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		extensions:     extensionService,
 		automation:     automationService,
 		files:          fileService,
+		mail:           mailService,
 		version:        version,
 		databaseHealth: "ready",
 		fileHealth:     "ready",
@@ -234,6 +250,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		realtimeapi.NewModule(backendModel, eventService, accessRules, authService),
 		recordService,
 		requests.NewModule(requestService),
+		mail.NewModule(mailService),
 		serviceaccounts.NewModule(serviceAccountService),
 		audit.NewModule(auditService),
 	)
@@ -287,6 +304,12 @@ func (instance *Runtime) Run(ctx context.Context, listenAddress string, onReady 
 		if err := instance.files.Start(ctx); err != nil {
 			instance.setState("unavailable")
 			return errors.Join(fmt.Errorf("cannot start Modelry File Storage reconciliation: %w", err), instance.Close())
+		}
+	}
+	if instance.mail != nil {
+		if err := instance.mail.Start(ctx); err != nil {
+			instance.setState("unavailable")
+			return errors.Join(fmt.Errorf("cannot start Modelry Mail outbox: %w", err), instance.Close())
 		}
 	}
 
@@ -349,6 +372,12 @@ func (instance *Runtime) Close() error {
 			automationErr = instance.automation.Close(ctx)
 			cancel()
 		}
+		var mailErr error
+		if instance.mail != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
+			mailErr = instance.mail.Close(ctx)
+			cancel()
+		}
 		var filesErr error
 		if instance.files != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
@@ -372,7 +401,7 @@ func (instance *Runtime) Close() error {
 		if instance.lock != nil {
 			lockErr = instance.lock.Release()
 		}
-		instance.closeErr = errors.Join(serverErr, automationErr, filesErr, extensionErr, storageErr, lockErr)
+		instance.closeErr = errors.Join(serverErr, automationErr, filesErr, mailErr, extensionErr, storageErr, lockErr)
 	})
 	return instance.closeErr
 }

@@ -18,6 +18,7 @@ const (
 	ActorOwner          ActorKind = "owner"
 	ActorAdministrator  ActorKind = "administrator"
 	ActorServiceAccount ActorKind = "serviceAccount"
+	ActorAppUser        ActorKind = "appUser"
 )
 
 type Actor struct {

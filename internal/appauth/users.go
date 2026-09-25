@@ -81,6 +81,11 @@ func (service *Service) CreateUser(ctx context.Context, collectionID string, pro
 }
 
 func (service *Service) Register(ctx context.Context, collectionName string, profile map[string]any, password string) (records.Record, error) {
+	return service.RegisterWithOrigin(ctx, collectionName, profile, password, "")
+}
+
+// RegisterWithOrigin 在注册时按 Collection 的验证模式创建凭据，并在 required 模式下发验证邮件。
+func (service *Service) RegisterWithOrigin(ctx context.Context, collectionName string, profile map[string]any, password, origin string) (records.Record, error) {
 	prepared, email, err := prepareProfile(profile)
 	if err != nil {
 		return records.Record{}, err
@@ -146,8 +151,15 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 		if err != nil {
 			return fmt.Errorf("create registered App User Profile: %w", mapProfileError(err))
 		}
-		if err := insertCredential(ctx, tx, collection.ID, created.ID, email, salt, passwordHash, timestamp(service.now())); err != nil {
+		verified := normalizeEmailVerification(configuration.Applied.EmailVerification) != EmailVerificationRequired
+		if err := insertCredentialWithVerification(ctx, tx, collection.ID, created.ID, email, salt, passwordHash, timestamp(service.now()), verified); err != nil {
 			return err
+		}
+		if !verified {
+			// required 验证模式下注册必须能发出验证邮件，否则用户永远无法登录。
+			if _, err := service.issueRecoveryToken(ctx, tx, collection.ID, created.ID, email, origin, purposeEmailVerification); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -367,7 +379,18 @@ func verifyPassword(password string, salt, expected []byte) bool {
 }
 
 func insertCredential(ctx context.Context, tx storage.Executor, collectionID, userID, email string, salt, passwordHash []byte, now string) error {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO modelry_app_password_credentials (collection_id, user_record_id, email_key, password_salt, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, collectionID, userID, email, salt, passwordHash, now, now); err != nil {
+	return insertCredentialWithVerification(ctx, tx, collectionID, userID, email, salt, passwordHash, now, true)
+}
+
+// insertCredentialWithVerification 允许注册流程按 Collection 的验证模式创建未验证凭据。
+func insertCredentialWithVerification(ctx context.Context, tx storage.Executor, collectionID, userID, email string, salt, passwordHash []byte, now string, verified bool) error {
+	verifiedValue := 0
+	var verifiedAt any
+	if verified {
+		verifiedValue = 1
+		verifiedAt = now
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO modelry_app_password_credentials (collection_id, user_record_id, email_key, password_salt, password_hash, email_verified, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, collectionID, userID, email, salt, passwordHash, verifiedValue, verifiedAt, now, now); err != nil {
 		return mapCredentialWriteError(err)
 	}
 	return nil

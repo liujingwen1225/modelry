@@ -1,0 +1,183 @@
+internal\appauth\recovery.go:223:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:224:1: expected operand, found '}'
+internal\appauth\recovery.go:226:1: missing ',' in argument list
+internal\appauth\recovery.go:226:23: missing ',' in argument list
+internal\appauth\recovery.go:226:30: expected operand, found '{'
+internal\appauth\recovery.go:239:2: missing ',' in argument list
+internal\appauth\recovery.go:239:10: missing ',' in argument list
+internal\appauth\recovery.go:239:27: expected operand, found newline
+internal\appauth\recovery.go:240:2: missing ',' in argument list
+internal\appauth\recovery.go:240:14: missing ',' in argument list
+internal\appauth\recovery.go:240:21: expected operand, found newline
+internal\appauth\recovery.go:244:2: missing ',' in argument list
+internal\appauth\recovery.go:244:18: missing ',' before newline in argument list
+internal\appauth\recovery.go:245:1: expected operand, found '}'
+internal\appauth\recovery.go:249:2: missing ',' in argument list
+internal\appauth\recovery.go:249:24: missing ',' in argument list
+internal\appauth\recovery.go:250:3: expected operand, found 'return'
+internal\appauth\recovery.go:250:3: missing ',' in argument list
+internal\appauth\recovery.go:250:21: missing ',' before newline in argument list
+internal\appauth\recovery.go:251:2: expected operand, found '}'
+internal\appauth\recovery.go:252:2: missing ',' in argument list
+internal\appauth\recovery.go:252:80: missing ',' in argument list
+internal\appauth\recovery.go:253:3: expected operand, found 'return'
+internal\appauth\recovery.go:253:3: missing ',' in argument list
+internal\appauth\recovery.go:253:21: missing ',' before newline in argument list
+internal\appauth\recovery.go:254:2: expected operand, found '}'
+internal\appauth\recovery.go:255:2: missing ',' in argument list
+internal\appauth\recovery.go:255:12: missing ',' in argument list
+internal\appauth\recovery.go:255:44: missing ',' in argument list
+internal\appauth\recovery.go:256:3: expected operand, found 'return'
+internal\appauth\recovery.go:256:3: missing ',' in composite literal
+internal\appauth\recovery.go:256:21: missing ',' before newline in composite literal
+internal\appauth\recovery.go:257:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:258:7: missing ',' in argument list
+internal\appauth\recovery.go:258:41: missing ',' before newline in argument list
+internal\appauth\recovery.go:259:2: expected operand, found 'return'
+internal\appauth\recovery.go:259:2: missing ',' in argument list
+internal\appauth\recovery.go:259:23: missing ',' before newline in argument list
+internal\appauth\recovery.go:260:1: expected operand, found '}'
+internal\appauth\recovery.go:263:1: missing ',' in argument list
+internal\appauth\recovery.go:263:29: expected '==', found '='
+internal\appauth\recovery.go:263:71: missing ',' before newline in argument list
+internal\appauth\recovery.go:265:50: missing ',' in argument list
+internal\appauth\recovery.go:265:57: expected operand, found '.'
+internal\appauth\recovery.go:266:2: missing ',' in argument list
+internal\appauth\recovery.go:266:93: missing ',' before newline in argument list
+internal\appauth\recovery.go:267:1: expected operand, found '}'
+internal\appauth\recovery.go:270:2: missing ',' in argument list
+internal\appauth\recovery.go:270:91: missing ',' before newline in argument list
+internal\appauth\recovery.go:271:1: expected operand, found '}'
+internal\appauth\recovery.go:275:2: missing ',' in argument list
+internal\appauth\recovery.go:276:3: expected operand, found 'return'
+internal\appauth\recovery.go:276:3: missing ',' in composite literal
+internal\appauth\recovery.go:276:34: missing ',' before newline in composite literal
+internal\appauth\recovery.go:277:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:278:18: missing ',' in argument list
+internal\appauth\recovery.go:278:69: missing ',' before newline in argument list
+internal\appauth\recovery.go:279:2: expected operand, found 'if'
+internal\appauth\recovery.go:279:2: missing ',' in argument list
+internal\appauth\recovery.go:280:3: expected operand, found 'return'
+internal\appauth\recovery.go:280:3: missing ',' in composite literal
+internal\appauth\recovery.go:280:14: missing ',' before newline in composite literal
+internal\appauth\recovery.go:281:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:282:2: expected operand, found 'var'
+internal\appauth\recovery.go:282:2: missing ',' in argument list
+internal\appauth\recovery.go:282:26: expected operand, found ']'
+internal\appauth\recovery.go:282:27: missing ',' in argument list
+internal\appauth\recovery.go:282:32: expected operand, found newline
+internal\appauth\recovery.go:283:2: missing ',' in argument list
+internal\appauth\recovery.go:284:27: expected '==', found '='
+internal\appauth\recovery.go:284:54: missing ',' before newline in composite literal
+internal\appauth\recovery.go:285:3: expected operand, found 'if'
+internal\appauth\recovery.go:285:3: missing ',' in composite literal
+internal\appauth\recovery.go:286:4: expected operand, found 'return'
+internal\appauth\recovery.go:286:4: missing ',' in composite literal
+internal\appauth\recovery.go:286:15: missing ',' before newline in composite literal
+internal\appauth\recovery.go:287:5: missing ',' before newline in composite literal
+internal\appauth\recovery.go:288:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:289:2: expected operand, found 'return'
+internal\appauth\recovery.go:289:2: missing ',' in argument list
+internal\appauth\recovery.go:342:5: missing ',' before newline in argument list
+internal\appauth\recovery.go:343:1: expected operand, found '}'
+internal\appauth\recovery.go:347:2: missing ',' in argument list
+internal\appauth\recovery.go:347:66: missing ',' in argument list
+internal\appauth\recovery.go:348:3: expected operand, found 'return'
+internal\appauth\recovery.go:348:3: missing ',' in argument list
+internal\appauth\recovery.go:348:42: missing ',' before newline in argument list
+internal\appauth\recovery.go:349:2: expected operand, found '}'
+internal\appauth\recovery.go:350:2: missing ',' in argument list
+internal\appauth\recovery.go:350:10: missing ',' in argument list
+internal\appauth\recovery.go:350:27: expected operand, found newline
+internal\appauth\recovery.go:352:3: missing ',' in argument list
+internal\appauth\recovery.go:352:15: missing ',' in argument list
+internal\appauth\recovery.go:352:22: expected operand, found newline
+internal\appauth\recovery.go:353:3: missing ',' in argument list
+internal\appauth\recovery.go:353:15: expected operand, found ']'
+internal\appauth\recovery.go:353:16: missing ',' in argument list
+internal\appauth\recovery.go:353:21: expected operand, found newline
+internal\appauth\recovery.go:354:3: missing ',' in argument list
+internal\appauth\recovery.go:355:139: missing ',' before newline in argument list
+internal\appauth\recovery.go:356:2: expected operand, found '}'
+internal\appauth\recovery.go:357:2: missing ',' in argument list
+internal\appauth\recovery.go:358:3: expected operand, found 'return'
+internal\appauth\recovery.go:358:3: missing ',' in composite literal
+internal\appauth\recovery.go:358:93: missing ',' before newline in composite literal
+internal\appauth\recovery.go:359:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:360:2: expected operand, found 'if'
+internal\appauth\recovery.go:360:2: missing ',' in argument list
+internal\appauth\recovery.go:361:3: expected operand, found 'return'
+internal\appauth\recovery.go:361:3: missing ',' in composite literal
+internal\appauth\recovery.go:361:42: missing ',' before newline in composite literal
+internal\appauth\recovery.go:362:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:363:2: expected operand, found 'var'
+internal\appauth\recovery.go:363:2: missing ',' in argument list
+internal\appauth\recovery.go:363:13: expected operand, found ']'
+internal\appauth\recovery.go:363:14: missing ',' in argument list
+internal\appauth\recovery.go:363:19: expected operand, found newline
+internal\appauth\recovery.go:364:2: missing ',' in argument list
+internal\appauth\recovery.go:364:9: missing ',' in argument list
+internal\appauth\recovery.go:371:5: missing ',' in argument list
+internal\appauth\recovery.go:372:3: expected operand, found 'return'
+internal\appauth\recovery.go:372:3: missing ',' in composite literal
+internal\appauth\recovery.go:372:22: missing ',' before newline in composite literal
+internal\appauth\recovery.go:373:3: missing ',' before newline in argument list
+internal\appauth\recovery.go:374:12: missing ',' in argument list
+internal\appauth\recovery.go:374:61: missing ',' before newline in argument list
+internal\appauth\recovery.go:375:2: expected operand, found 'if'
+internal\appauth\recovery.go:375:2: missing ',' in argument list
+internal\appauth\recovery.go:376:3: expected operand, found 'return'
+internal\appauth\recovery.go:376:3: missing ',' in composite literal
+internal\appauth\recovery.go:376:22: missing ',' before newline in composite literal
+internal\appauth\recovery.go:377:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:378:7: missing ',' in argument list
+internal\appauth\recovery.go:378:68: missing ',' before newline in argument list
+internal\appauth\recovery.go:379:2: expected operand, found 'switch'
+internal\appauth\recovery.go:379:2: missing ',' in argument list
+internal\appauth\recovery.go:380:2: expected operand, found 'case'
+internal\appauth\recovery.go:382:3: missing ',' in composite literal
+internal\appauth\recovery.go:382:51: missing ',' before newline in composite literal
+internal\appauth\recovery.go:383:2: expected operand, found 'case'
+internal\appauth\recovery.go:385:3: missing ',' in composite literal
+internal\appauth\recovery.go:385:57: missing ',' before newline in composite literal
+internal\appauth\recovery.go:386:2: expected operand, found 'default'
+internal\appauth\recovery.go:387:3: missing ',' in composite literal
+internal\appauth\recovery.go:387:42: missing ',' before newline in composite literal
+internal\appauth\recovery.go:388:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:389:1: expected operand, found '}'
+internal\appauth\recovery.go:394:2: missing ',' in argument list
+internal\appauth\recovery.go:394:28: missing ',' in argument list
+internal\appauth\recovery.go:395:13: expected '==', found '='
+internal\appauth\recovery.go:395:29: missing ',' before newline in argument list
+internal\appauth\recovery.go:396:2: expected operand, found '}'
+internal\appauth\recovery.go:398:2: missing ',' in argument list
+internal\appauth\recovery.go:398:16: missing ',' in argument list
+internal\appauth\recovery.go:399:3: expected operand, found 'return'
+internal\appauth\recovery.go:399:3: missing ',' in argument list
+internal\appauth\recovery.go:399:15: missing ',' before newline in argument list
+internal\appauth\recovery.go:400:2: expected operand, found '}'
+internal\appauth\recovery.go:401:2: missing ',' in argument list
+internal\appauth\recovery.go:401:21: missing ',' before newline in argument list
+internal\appauth\recovery.go:402:1: expected operand, found '}'
+internal\appauth\recovery.go:405:2: missing ',' in argument list
+internal\appauth\recovery.go:405:11: missing ',' in argument list
+internal\appauth\recovery.go:405:18: expected operand, found newline
+internal\appauth\recovery.go:407:3: missing ',' in argument list
+internal\appauth\recovery.go:407:127: missing ',' before newline in argument list
+internal\appauth\recovery.go:408:2: expected operand, found '}'
+internal\appauth\recovery.go:409:2: missing ',' in argument list
+internal\appauth\recovery.go:410:3: expected operand, found 'return'
+internal\appauth\recovery.go:410:3: missing ',' in composite literal
+internal\appauth\recovery.go:410:63: missing ',' before newline in composite literal
+internal\appauth\recovery.go:411:4: missing ',' before newline in argument list
+internal\appauth\recovery.go:412:2: expected operand, found 'return'
+internal\appauth\recovery.go:412:2: missing ',' in argument list
+internal\appauth\recovery.go:412:19: missing ',' before newline in argument list
+internal\appauth\recovery.go:413:1: expected operand, found '}'
+internal\appauth\recovery.go:413:4: expected ')', found 'EOF'
+internal\appauth\recovery.go:413:4: expected ')', found 'EOF'
+internal\appauth\recovery.go:413:4: expected ';', found 'EOF'
+internal\appauth\recovery.go:413:4: expected ';', found 'EOF'
+internal\appauth\recovery.go:413:4: expected '}', found 'EOF'
+internal\appauth\recovery.go:413:4: missing ',' in argument list
+internal\appauth\recovery.go:413:4: missing ',' in argument list

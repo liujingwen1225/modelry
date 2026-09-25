@@ -77,12 +77,12 @@
 
 ### 3.7 Password Reset
 
-- `POST /api/v1/auth/{collectionName}/password-reset/request`：body `{email}`；始终 `202 accepted`（不枚举账号）。
+- `POST .../password-reset/request`：body `{email}`；mail 已配置时始终 `202 accepted`（不枚举账号）；mail 未配置时 `409 MAIL_NOT_CONFIGURED`。恢复邮件只包含单次使用代码，不包含绝对链接。
 - `POST /api/v1/auth/{collectionName}/password-reset/confirm`：body `{token, password}`；成功设置新密码、消费 token、撤销该 App User 的全部 Application Session，并在同一事务写入 Audit。
 
 ### 3.8 Recovery token
 
-- token 形态：`vfy_` / `rst_` + 32 hex；服务端只保存 SHA-256 hash + purpose + App User + expiresAt + usedAt。
+- token 形态：`vfy_` / `rst_` + 32 hex；服务端保存 SHA-256 hash（用于确认）与项目密钥加密的投递副本（用于渲染邮件），另存 purpose、App User、expiresAt、usedAt。
 - TTL 30 分钟；单次使用；同一 App User 每小时最多 16 次申请；保留上限 1,024。
 - 未知、过期、已使用、purpose 不匹配一律 `400 INVALID_ARGUMENT`（同一安全文案），不泄漏内部状态。
 

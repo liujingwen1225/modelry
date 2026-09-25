@@ -35,7 +35,7 @@ Delegation and recovery introduce three risks that must be decided here rather t
 
 ### Account recovery and verification
 
-- Recovery tokens are opaque, single-use, expiring, and stored only as a SHA-256 hash together with their purpose, App User, and expiry. The plaintext token exists only inside the delivered message and the confirm request.
+- Recovery tokens are opaque, single-use, and expiring. Modelry stores a SHA-256 hash for confirmation and an AES-256-GCM copy encrypted with the Project key for the delivery worker; the plaintext token exists only in memory. The delivered message contains the code itself and no absolute URL, so a spoofed Host header cannot redirect an App User to an attacker.
 - `POST /api/v1/auth/{collectionName}/password-reset/request` always answers with the same accepted response, whether or not the email exists, so the flow cannot enumerate App Users. It creates an intent only when the App User exists, the Auth Collection allows the flow, and mail is configured.
 - `POST /api/v1/auth/{collectionName}/password-reset/confirm` sets the new password, consumes the token, and revokes every Application session of that App User in the same transaction.
 - `POST .../email-verification/request` follows the same discipline, and `POST .../email-verification/confirm` marks the App User verified. Email verification is per Auth Collection: off, optional, or required. With `required`, an unverified App User cannot sign in until verification succeeds, and the login response explains the recovery path.

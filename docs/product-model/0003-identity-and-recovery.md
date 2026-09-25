@@ -17,7 +17,7 @@ A project Owner needs help. Today Modelry has exactly one human Control Plane id
 - A **Control Plane session** is a signed-in Owner or Administrator browser session. Sessions carry a role, expire, can be revoked, and never grant Application Data Plane access.
 - A **Permission** is the Control Plane operation set an Administrator may perform. Permissions use the same operation vocabulary as Service Accounts, so the same action is either allowed or denied consistently for every Control Plane principal.
 - The **Mail Provider** is the Project SMTP configuration used to deliver verification and password reset messages. It is disabled by default, its credentials are Project Secrets, and it never appears in a Record.
-- A **Recovery message** is a durable outbound mail intent created for one App User action: email verification or password reset. The message body carries a single-use link; Modelry stores only a hash of that link token.
+- A **Recovery message** is a durable outbound mail intent created for one App User action: email verification or password reset. The message body carries a single-use code, never an absolute URL, so a spoofed Host cannot redirect the App User; Modelry stores only a hash of that code for confirmation.
 - An **App User credential** is the password of one Auth Collection Record. It stays a write-only credential: no response, RequestRecord, Audit record, Extension, or log ever returns it.
 
 ## Owner workflow
@@ -38,7 +38,7 @@ A project Owner needs help. Today Modelry has exactly one human Control Plane id
 - When the Mail Provider is not configured or is disabled, verification and password reset requests fail closed with a clear configuration hint. They never silently succeed, and Modelry never falls back to logging a link.
 - Email verification is per Auth Collection: `off` keeps V0.1 behavior, `optional` lets App Users verify without blocking sign-in, and `required` blocks sign-in for unverified App Users with an actionable error until they verify.
 - Password reset requests always answer the same way whether or not the email exists, so the flow cannot be used to enumerate accounts.
-- Recovery links are single-use, expire, and are stored only as hashes. A used, expired, or unknown link is rejected with one safe error.
+- Recovery codes are single-use, expire, and are stored only as a hash for confirmation plus a project-key encrypted delivery copy. A used, expired, or unknown code is rejected with one safe error.
 
 ## Boundaries
 

@@ -39,7 +39,7 @@ func TestAuthConfigurationHasSafeDefaultsAndDurablePendingLifecycle(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if initial.Version != 1 || initial.HasPending || initial.Applied != (AuthConfig{EmailPasswordEnabled: true, SelfRegistration: false, SessionDurationDays: 7}) || initial.Pending != initial.Applied {
+	if initial.Version != 1 || initial.HasPending || initial.Applied != (AuthConfig{EmailPasswordEnabled: true, SelfRegistration: false, SessionDurationDays: 7, EmailVerification: EmailVerificationOff}) || initial.Pending != initial.Applied {
 		t.Fatalf("Auth Collection did not receive required defaults: %+v", initial)
 	}
 	if _, err := service.GetConfiguration(ctx, posts.ID); !errors.Is(err, ErrInvalidArgument) {
@@ -116,7 +116,7 @@ func TestCreateCollectionInitializesAuthConfigurationInSameTransaction(t *testin
 		t.Fatal(err)
 	}
 	state, err := service.GetConfiguration(ctx, collection.ID)
-	if err != nil || state.HasPending || state.Version != 1 || state.Applied != configuration {
+	if err != nil || state.HasPending || state.Version != 1 || state.Applied.EmailVerification != normalizeEmailVerification(configuration.EmailVerification) || state.Applied.EmailPasswordEnabled != configuration.EmailPasswordEnabled || state.Applied.SelfRegistration != configuration.SelfRegistration || state.Applied.SessionDurationDays != configuration.SessionDurationDays {
 		t.Fatalf("create-time Auth Configuration was not applied atomically: state=%+v err=%v", state, err)
 	}
 	normal, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{Name: "NormalCollection", Type: backendmodel.CollectionTypeNormal})

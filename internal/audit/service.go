@@ -269,7 +269,7 @@ func validateAppendInput(input AppendInput, when time.Time) error {
 
 func validActor(actor Actor) bool {
 	switch actor.Kind {
-	case ActorOwner, ActorAdministrator, ActorServiceAccount:
+	case ActorOwner, ActorAdministrator, ActorServiceAccount, ActorAppUser:
 		return actorIDPattern.MatchString(actor.ID)
 	default:
 		return false
