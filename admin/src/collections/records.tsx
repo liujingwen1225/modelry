@@ -51,7 +51,7 @@ function scalarFields(fields: FieldDefinition[]) {
 
 function formatValue(value: unknown, translate: ReturnType<typeof useI18n>['t']) {
   if (value === undefined || value === null || value === '') return '—';
-  if (typeof value === 'boolean') return value ? translate('records.yes') : translate('records.no');
+  if (typeof value === 'boolean') return value ? translate('common.yes') : translate('common.no');
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
@@ -314,7 +314,7 @@ export function CollectionRecordsPage() {
                 const value = event.target.value;
                 const draft = { ...filterDraft, value };
                 updateParams({ filterValue: value, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
-              }} value={filterDraft.value || 'true'}><option value="true">{t('records.yes')}</option><option value="false">{t('records.no')}</option></select>
+              }} value={filterDraft.value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>
               : <input aria-label={t('records.filterValue')} onChange={(event) => {
                 const field = availableFilterFields.find((item) => item.name === filterDraft.field);
                 const draft = { ...filterDraft, value: event.target.value };
@@ -347,13 +347,13 @@ export function CollectionRecordsPage() {
         <nav aria-label={t('records.pages')} className="records-pagination"><span>{t('records.page', { page: history.length + 1 })}</span><div><Button disabled={!history.length} onClick={previousPage} size="small"><ChevronLeft aria-hidden="true" size={14} />{t('records.previous')}</Button><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('records.next')}<ChevronRight aria-hidden="true" size={14} /></Button></div></nav>
       </>}
 
-      <Sheet open={isCreating || Boolean(selectedId)} onClose={closeSheet} size="wide" title={isCreating ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : isEditing ? t('records.editRecord') : t('records.record')}>
+      <Sheet closeLabel={t('records.close')} open={isCreating || Boolean(selectedId)} onClose={closeSheet} size="wide" title={isCreating ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : isEditing ? t('records.editRecord') : t('records.record')}>
         {isCreating && <RecordEditor collection={collection} fields={fields} key={`new-${collection.id}`} onCancel={closeSheet} onDelete={onRecordDeleted} onSaved={onRecordSaved} />}
         {!isCreating && selectedId && recordState === 'loading' && <LoadingState label={t('records.loadingRecord')} />}
         {!isCreating && selectedId && recordState === 'error' && (() => { const copy = errorCopy(recordError, t('records.openFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => openRecord(selectedId, isEditing)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
         {!isCreating && selectedId && recordState === 'ready' && activeRecord && <RecordEditor collection={collection} expandedFields={expandFields} fields={fields} key={`${activeRecord.id}-${isEditing ? 'edit' : 'view'}`} mode={isEditing ? 'edit' : 'view'} onCancel={closeSheet} onDelete={onRecordDeleted} onEdit={() => openRecord(activeRecord.id, true)} onSaved={onRecordSaved} record={activeRecord} />}
       </Sheet>
-      <Dialog open={Boolean(rowDeleteTarget)} onClose={() => { if (!rowDeleting) { setRowDeleteTarget(undefined); setRowDeleteError(undefined); } }} title={t('records.deleteTitle')}>
+      <Dialog closeLabel={t('records.cancel')} open={Boolean(rowDeleteTarget)} onClose={() => { if (!rowDeleting) { setRowDeleteTarget(undefined); setRowDeleteError(undefined); } }} title={t('records.deleteTitle')}>
         <p>{t('records.deleteBodyPrefix')}<code>{rowDeleteTarget?.id}</code>{t('records.deleteBodySuffix', { name: collection.name })}</p>
         {rowDeleteError !== undefined && (() => { const copy = errorCopy(rowDeleteError, t('records.deleteFailed'), t); return <ErrorState description={copy.message} title={copy.title} />; })()}
         <div className="record-editor-actions"><Button disabled={rowDeleting} onClick={() => { setRowDeleteTarget(undefined); setRowDeleteError(undefined); }} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={rowDeleting} onClick={() => void confirmRowDelete()} type="button" variant="danger">{rowDeleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div>
@@ -655,7 +655,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
   const inputType = field.type === 'files' ? 'file' : fieldInputType(field);
   let control;
   switch (inputType) {
-    case 'boolean': control = <select disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} value={value}><option value="">{t('records.notSet')}</option><option value="true">{t('records.yes')}</option><option value="false">{t('records.no')}</option></select>; break;
+    case 'boolean': control = <select disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} value={value}><option value="">{t('records.notSet')}</option><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>; break;
     case 'json': control = <textarea disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} rows={5} value={value} />; break;
     case 'file': {
       const rules = fileRules(field);

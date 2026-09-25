@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement, useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Check, Copy, X } from 'lucide-react';
+import { useI18n } from '../i18n/i18n';
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'quiet' | 'danger';
@@ -132,7 +133,8 @@ export async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error('Clipboard access is unavailable.');
 }
 
-export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
+export function CopyButton({ value, label }: { value: string; label: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   const feedbackId = useId();
@@ -161,16 +163,16 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
         variant="quiet"
       >
         {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? t('common.copied') : t('common.copy')}
       </Button>
       <span className="sr-only" id={feedbackId} aria-live="polite">
-        {failed ? 'Could not copy. Select and copy the value manually.' : copied ? 'Copied to clipboard.' : ''}
+        {failed ? t('common.copyFailed') : copied ? t('common.copiedToClipboard') : ''}
       </span>
     </>
   );
 }
 
-export function JsonViewer({ value, label = 'Structured details' }: { value: unknown; label?: string }) {
+export function JsonViewer({ value, label }: { value: unknown; label: string }) {
   return (
     <details className="json-viewer">
       <summary>{label}</summary>
@@ -184,7 +186,7 @@ export function Dialog({
   title,
   children,
   onClose,
-  closeLabel = 'Close dialog',
+  closeLabel,
   size = 'standard',
   presentation = 'dialog',
 }: {
@@ -192,7 +194,7 @@ export function Dialog({
   title: string;
   children: ReactNode;
   onClose: () => void;
-  closeLabel?: string;
+  closeLabel: string;
   size?: 'standard' | 'wide';
   presentation?: 'dialog' | 'sheet';
 }) {

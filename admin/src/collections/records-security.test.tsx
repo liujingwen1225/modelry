@@ -266,4 +266,39 @@ describe('Collection Records and Security pages', () => {
     expect(screen.getByTestId('current-location').textContent).not.toContain('usersCursor=users_page_2');
     expect(screen.getByTestId('current-location').textContent).not.toContain('usersCursorStack=');
   });
+
+  it('renders Collection Security, Access Rules, App Users and Sessions in Simplified Chinese', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const initialRules: AccessRule[] = ['list', 'view', 'create', 'update', 'delete'].map((operation) => ({ operation, mode: 'noAccess' })) as AccessRule[];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      const workspace = path === '/admin/api/v1/collections/col_members' ? response(authCollection) : path.endsWith('/schema/pending-change') ? response(null) : undefined;
+      if (workspace) return Promise.resolve(workspace);
+      if (path === '/admin/api/v1/collections?limit=100') return Promise.resolve(response([authCollection]));
+      if (path.endsWith('/access-rules')) return Promise.resolve(response({ applied: initialRules, pending: initialRules, version: 1 }));
+      if (path.endsWith('/users?limit=50')) return Promise.resolve(Response.json({ data: [{ recordId: 'rec_user_1', email: 'alice@example.test' }] }));
+      return Promise.resolve(response({ applied: initialRules, pending: initialRules, version: 1 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_members/security');
+
+    expect(await screen.findByRole('heading', { name: '安全设置' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '访问规则' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '认证' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '应用用户' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '会话' })).toBeInTheDocument();
+    expect(screen.queryByText('Access Rules')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '已应用的访问规则' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '编辑列表访问规则' })).toBeInTheDocument();
+    // 访问规则模式属于共享产品词汇，必须与 Application API 使用同一套翻译。
+    expect(screen.getAllByText('无访问权限').length).toBeGreaterThan(0);
+    expect(screen.queryByText('No access')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '模拟一次请求' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: '应用用户' }));
+    expect(await screen.findByRole('heading', { name: '应用用户' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: '搜索用户' })).toBeInTheDocument();
+    expect(await screen.findByText('alice@example.test')).toBeInTheDocument();
+  });
 });

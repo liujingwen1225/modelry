@@ -220,7 +220,7 @@ function WebhooksPanel({ params, setParams, navigate }: {
       </Surface>)}
     </div>}
     {formOpen && <WebhookForm editing={editing} secrets={secrets} onCancel={closeForm} onSaved={(created) => { setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
-    <Dialog open={Boolean(disableItem)} title={t('automation.webhooks.disableConfirmTitle')} onClose={() => setDisableItem(undefined)}>
+    <Dialog closeLabel={t('automation.common.cancel')} open={Boolean(disableItem)} title={t('automation.webhooks.disableConfirmTitle')} onClose={() => setDisableItem(undefined)}>
       <p>{t('automation.webhooks.disableWarning')}</p>
       <div className="automation-form-actions">
         <Button onClick={() => setDisableItem(undefined)} type="button" variant="quiet">{t('automation.common.cancel')}</Button>

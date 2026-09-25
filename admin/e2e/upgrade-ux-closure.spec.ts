@@ -279,6 +279,73 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Activity' })).toBeVisible();
 
+  // 5b) V0.1 时代的四个产品面（Collection Schema / Collection Security / Access · Audit /
+  //     Application API Workspace）必须在两种语言下都完整可用，且不得残留另一语言的界面文案。
+  const collectionBase = runtimeURL + '/collections/' + collectionId;
+  await page.locator('.locale-switcher select').selectOption('zh-CN');
+
+  await page.goto(collectionBase + '/schema?view=indexes');
+  await expect(page.getByRole('heading', { name: '结构', level: 2 })).toBeVisible();
+  await expect(page.getByRole('button', { name: '添加索引' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '已应用历史' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂无额外索引' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Schema', level: 2 })).toHaveCount(0);
+  // 语言切换必须保留 Schema 深链上下文（view=indexes 不能被重置）。
+  await page.locator('.locale-switcher select').selectOption('en');
+  await expect(page).toHaveURL(/\/collections\/[^/]+\/schema\?view=indexes$/);
+  await expect(page.getByRole('heading', { name: 'Schema', level: 2 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add index' })).toBeVisible();
+  // 深链上下文在两种语言下都保持：Indexes 仍是当前视图。
+  await expect(page.getByRole('button', { name: 'Indexes', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: '索引', exact: true })).toHaveCount(0);
+  await page.locator('.locale-switcher select').selectOption('zh-CN');
+  await expect(page.getByRole('button', { name: '添加索引' })).toBeVisible();
+
+  await page.goto(collectionBase + '/security');
+  await expect(page.getByRole('heading', { name: '安全设置', level: 1 })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '访问规则' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '模拟一次请求' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '已应用的访问规则' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '编辑列表访问规则' })).toBeVisible();
+  // Collection 名与 Access 模式之外的领域词汇（列 / view / create …）保持英文原文。
+  await expect(page.getByText('Applied access')).toHaveCount(0);
+  await page.locator('.locale-switcher select').selectOption('en');
+  await expect(page.getByRole('heading', { name: 'Security', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit List access' })).toBeVisible();
+
+  await page.locator('.locale-switcher select').selectOption('zh-CN');
+  await page.goto(runtimeURL + '/access');
+  await expect(page.getByRole('heading', { name: '访问', level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: '审计' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '创建服务账号' }).first()).toBeVisible();
+  await page.getByRole('link', { name: '审计' }).click();
+  await expect(page.getByRole('heading', { name: '审计', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '主体' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply filters' })).toHaveCount(0);
+  await page.locator('.locale-switcher select').selectOption('en');
+  await expect(page.getByRole('heading', { name: 'Audit', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply filters' })).toBeVisible();
+
+  await page.locator('.locale-switcher select').selectOption('zh-CN');
+  await page.goto(collectionBase + '/api');
+  await expect(page.getByRole('heading', { name: 'posts API', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: /列出记录/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '发送 GET 请求' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '试一试该端点' })).toBeVisible();
+  await expect(page.getByText('View OpenAPI')).toHaveCount(0);
+  // operationId 与路由是契约标识，任何时候都不翻译，只有它们周围的产品文案切换语言。
+  await expect(page.locator('.api-endpoint-meta')).toContainText('listApplicationRecords');
+  await expect(page.locator('.api-endpoint-meta')).toContainText('操作');
+  await expect(page.locator('.api-endpoint-option').first()).toContainText('/api/v1/posts');
+  await page.goto(runtimeURL + '/api?tab=requests');
+  await expect(page.getByRole('heading', { name: 'API 工作区', level: 1 })).toBeVisible();
+  await expect(page.getByRole('table', { name: '应用请求记录' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible();
+  await page.locator('.locale-switcher select').selectOption('en');
+  await expect(page.getByRole('heading', { name: 'API Workspace', level: 1 })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Application Request Records' })).toBeVisible();
+
   // 6) 同 root 重启后新持久资源仍然可用（restart-aware）。
   await stopRuntime();
   await startRuntime(currentBinary, legacyRoot);

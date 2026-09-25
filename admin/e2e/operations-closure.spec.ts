@@ -270,7 +270,8 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   const allowedPanel = page.locator('[data-simulation-decision="allow"]');
   await expect(allowedPanel).toBeVisible();
   await expect(allowedPanel).toContainText('not authoritative');
-  await expect(allowedPanel).toContainText('anyone');
+  // 判定规则以产品词汇呈现（与 Access Rules 列表共用同一套标签），不是原始枚举值。
+  await expect(allowedPanel).toContainText('Rule: Anyone');
   const realAllowed = await requestJSON(page, 'GET', '/api/v1/posts?limit=1');
   expect(realAllowed.status).toBe(200);
 

@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { allApplicationEndpoints } from './api/endpoints';
 import { App } from './app';
 import { en } from './i18n/locales/en';
 import { zhCN } from './i18n/locales/zh-CN';
@@ -59,12 +60,42 @@ describe('Community V0.1.x closure', () => {
       'navigation.secrets', 'navigation.collections', 'navigation.changes', 'navigation.access',
       'activity.title', 'drift.title', 'runtimeSettings.title', 'portability.title',
       'mail.title', 'storage.title', 'administrators.title', 'automation.title', 'extensions.title',
+      // V0.1 时代的四个产品面已经迁移到同一套 i18n，必须与 V0.1.x 面共享同一份词条。
+      'collections.title', 'records.title', 'changes.title',
+      'schema.title', 'schema.views.history', 'schema.previewReviewTitle',
+      'security.title', 'security.tabs.rules', 'security.simulationTitle',
+      'access.title', 'access.auditTitle', 'access.revealTitle',
+      'api.workspaceTitle', 'api.requestDetailTitle', 'api.endpointTitles.listApplicationRecords',
     ];
     const english = flatten(en as unknown as Resource);
     const chinese = flatten(zhCN as unknown as Resource);
     for (const key of surfaces) {
       expect(english, 'missing English key ' + key).toContain(key);
       expect(chinese, 'missing Chinese key ' + key).toContain(key);
+    }
+  });
+
+  it('gives every Application endpoint a localized label and keeps the compact access-mode vocabulary shared', () => {
+    const english = flatten(en as unknown as Resource);
+    const chinese = flatten(zhCN as unknown as Resource);
+    const endpoints = allApplicationEndpoints([{
+      id: 'col_posts', name: 'posts', type: 'Normal', schemaVersion: 1,
+      fields: [{ id: 'fld_attachment', name: 'attachment', type: 'file' }],
+    }, {
+      id: 'col_members', name: 'members', type: 'Auth', schemaVersion: 1,
+      fields: [{ id: 'fld_email', name: 'email', type: 'text' }],
+    }]);
+    expect(endpoints.length).toBeGreaterThan(0);
+    for (const endpoint of endpoints) {
+      expect(english, 'missing English endpoint title for ' + endpoint.operationId).toContain(endpoint.titleKey);
+      expect(chinese, 'missing Chinese endpoint title for ' + endpoint.operationId).toContain(endpoint.titleKey);
+    }
+    // 同一套访问模式词汇同时服务 Application API 与 Collection Security。
+    for (const mode of ['noAccess', 'anyone', 'signedInUsers', 'recordOwner', 'custom']) {
+      expect(english).toContain('accessModes.' + mode + '.label');
+      expect(chinese).toContain('accessModes.' + mode + '.label');
+      expect(english).toContain('accessModes.' + mode + '.description');
+      expect(chinese).toContain('accessModes.' + mode + '.description');
     }
   });
 
