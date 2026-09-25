@@ -55,6 +55,10 @@ tags:
     description: Manage write-only Project Secrets for explicitly authorized Extensions.
   - name: FileStorage
     description: Configure the File Storage Provider, migrate immutable File objects between Providers, and read File values through Runtime-authorized routes.
+  - name: Administrators
+    description: Create and manage additional Control Plane Administrators, their Permissions, and their sessions.
+  - name: Mail
+    description: Configure the Project Mail Provider and inspect durable verification and password reset delivery.
   - name: Automation
     description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history. Outbound Webhook requests use the stable Delivery ID as Idempotency-Key; Record Event requests also repeat the body Event ID in X-Modelry-Event-Id.
 paths:
@@ -521,6 +525,372 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RuntimeStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators':
+    get:
+      tags: [Administrators]
+      operationId: listAdministrators
+      summary: List Control Plane Administrators
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded Administrator list.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Administrators]
+      operationId: createAdministrator
+      summary: Create a Control Plane Administrator
+      description: Owner-only. The new Administrator can sign in immediately with the supplied password and holds exactly the supplied Permission.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministratorCreateInput'
+      responses:
+        '201':
+          description: Administrator created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    get:
+      tags: [Administrators]
+      operationId: getAdministrator
+      summary: Read one Administrator
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Administrator metadata without credential material.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    patch:
+      tags: [Administrators]
+      operationId: updateAdministrator
+      summary: Update an Administrator email or Permission
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministratorUpdateInput'
+      responses:
+        '200':
+          description: Administrator updated.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [Administrators]
+      operationId: deleteAdministrator
+      summary: Delete an Administrator and revoke its sessions
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Administrator deleted.
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: enableAdministrator
+      summary: Enable an Administrator
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Administrator enabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: disableAdministrator
+      summary: Disable an Administrator and revoke its sessions
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Administrator disabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/password':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: setAdministratorPassword
+      summary: Set an Administrator password and revoke its sessions
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministratorPasswordInput'
+      responses:
+        '204':
+          description: Password set; existing Administrator sessions were revoked.
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/sessions':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    get:
+      tags: [Administrators]
+      operationId: listAdministratorSessions
+      summary: List Administrator sessions
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded session list without tokens.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorSessionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/sessions/revoke-all':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: revokeAdministratorSessions
+      summary: Revoke every session of an Administrator
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Sessions revoked.
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail':
+    get:
+      tags: [Mail]
+      operationId: getMailProvider
+      summary: Read the Project Mail Provider configuration
+      description: Owner-only. Credentials are Project Secrets and are never returned as values.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Mail Provider configuration with Secret metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailProviderResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Mail]
+      operationId: configureMailProvider
+      summary: Configure the Project Mail Provider
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailProviderInput'
+      responses:
+        '200':
+          description: Mail Provider configuration saved; the response reports the new revision.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailProviderResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail/test':
+    post:
+      tags: [Mail]
+      operationId: testMailProvider
+      summary: Send a test message through the Mail Provider
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailTestInput'
+      responses:
+        '200':
+          description: Safe delivery result; SMTP response text and credentials are never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailTestResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail/deliveries':
+    get:
+      tags: [Mail]
+      operationId: listMailDeliveries
+      summary: List retained Mail Deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded delivery history without message bodies or tokens.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailDeliveryListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail/deliveries/{deliveryId}/retry':
+    parameters:
+      - $ref: '#/components/parameters/MailDeliveryId'
+    post:
+      tags: [Mail]
+      operationId: retryMailDelivery
+      summary: Retry a failed Mail Delivery
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Delivery queued for another bounded attempt.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailDeliveryResponse'
         '4XX':
           $ref: '#/components/responses/StructuredError'
         '5XX':
@@ -2186,6 +2556,130 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/password-reset/request':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: requestApplicationPasswordReset
+      summary: Request a password reset link for an App User
+      description: Always answers with the same accepted response so the flow cannot enumerate App Users. A durable mail intent is created only when the App User exists, the Auth Collection allows the flow, and the Mail Provider is configured.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryRequestInput'
+      security:
+        - {}
+      responses:
+        '202':
+          description: The request was accepted.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryAcceptedResponse'
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/auth/{collectionName}/password-reset/confirm':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: confirmApplicationPasswordReset
+      summary: Complete a password reset with a single-use link token
+      description: Sets the new password, consumes the token, and revokes every Application session of that App User in one transaction.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmInput'
+      security:
+        - {}
+      responses:
+        '204':
+          description: Password reset completed and existing App User sessions were revoked.
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/auth/{collectionName}/email-verification/request':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: requestApplicationEmailVerification
+      summary: Request an email verification link for an App User
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryRequestInput'
+      security:
+        - {}
+      responses:
+        '202':
+          description: The request was accepted.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryAcceptedResponse'
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/auth/{collectionName}/email-verification/confirm':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: confirmApplicationEmailVerification
+      summary: Confirm an App User email address with a single-use link token
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailVerificationConfirmInput'
+      security:
+        - {}
+      responses:
+        '204':
+          description: Email address verified.
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/register':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -3332,6 +3826,20 @@ components:
         type: string
         enum: ['true', 'false']
   parameters:
+    AdministratorId:
+      name: administratorId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^adm_[0-9a-f]{32}$'
+    MailDeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^mail_[0-9a-f]{32}$'
     FileIndex:
       name: fileIndex
       in: path
@@ -3742,6 +4250,11 @@ components:
         expiresAt:
           type: string
           format: date-time
+        role:
+          type: string
+          enum: [owner, administrator]
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
     OwnerSession:
       type: object
       required: [expiresAt]
@@ -4602,7 +5115,7 @@ components:
       additionalProperties: false
     AuthenticationConfiguration:
       type: object
-      required: [emailPasswordEnabled, selfRegistration, sessionDurationDays]
+      required: [emailPasswordEnabled, selfRegistration, sessionDurationDays, emailVerification]
       properties:
         emailPasswordEnabled:
           type: boolean
@@ -4611,6 +5124,10 @@ components:
         sessionDurationDays:
           type: integer
           minimum: 1
+        emailVerification:
+          type: string
+          enum: [off, optional, required]
+          description: off keeps V0.1 behaviour; optional never blocks sign-in; required blocks sign-in until the App User verifies the address.
     AuthenticationConfigurationRequest:
       type: object
       required: [expectedVersion, configuration]
@@ -4823,10 +5340,323 @@ components:
           type: string
           format: date-time
       additionalProperties: false
+    AdministratorPermission:
+      type: object
+      description: Control Plane Permission. It uses the same operation vocabulary as Service Accounts.
+      required: [preset]
+      properties:
+        preset:
+          type: string
+          enum: [fullAccess, readOnly, custom]
+        customPermissionVersion:
+          type: integer
+        customOperations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAccountOperation'
+      additionalProperties: false
+    Administrator:
+      type: object
+      required: [id, email, status, permission, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^adm_[0-9a-f]{32}$'
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [active, disabled]
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      additionalProperties: false
+    AdministratorCreateInput:
+      type: object
+      required: [email, password, permission]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          description: Write-only initial credential, 12 to 1024 bytes.
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
+      additionalProperties: false
+    AdministratorUpdateInput:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
+      additionalProperties: false
+    AdministratorPasswordInput:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: Write-only replacement credential, 12 to 1024 bytes.
+      additionalProperties: false
+    AdministratorSession:
+      type: object
+      required: [id, createdAt, expiresAt, current, status]
+      properties:
+        id:
+          type: string
+          pattern: '^ses_[0-9a-f]{32}$'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        revokedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        current:
+          type: boolean
+      additionalProperties: false
+    AdministratorResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Administrator'
+      additionalProperties: false
+    AdministratorListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/Administrator'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    AdministratorSessionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministratorSession'
+      additionalProperties: false
+    RecoveryRequestInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+      additionalProperties: false
+    RecoveryAcceptedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accepted]
+          properties:
+            accepted:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    PasswordResetConfirmInput:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          description: Write-only replacement credential, 12 to 1024 bytes.
+      additionalProperties: false
+    EmailVerificationConfirmInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+      additionalProperties: false
+    MailProviderSecurity:
+      type: string
+      enum: [startTLS, tls]
+    MailProvider:
+      type: object
+      required: [enabled, host, port, security, fromAddress, fromName, revision, updatedAt]
+      properties:
+        enabled:
+          type: boolean
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        security:
+          $ref: '#/components/schemas/MailProviderSecurity'
+        fromAddress:
+          type: string
+          format: email
+        fromName:
+          type: string
+        username:
+          oneOf:
+            - $ref: '#/components/schemas/StorageSecretReference'
+            - type: 'null'
+        password:
+          oneOf:
+            - $ref: '#/components/schemas/StorageSecretReference'
+            - type: 'null'
+        revision:
+          type: integer
+          minimum: 1
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    MailProviderInput:
+      type: object
+      required: [expectedRevision, enabled, host, port, security, fromAddress]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        security:
+          $ref: '#/components/schemas/MailProviderSecurity'
+        fromAddress:
+          type: string
+          format: email
+        fromName:
+          type: string
+        usernameSecretId:
+          type: string
+        passwordSecretId:
+          type: string
+      additionalProperties: false
+    MailProviderResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MailProvider'
+      additionalProperties: false
+    MailTestInput:
+      type: object
+      required: [recipient]
+      properties:
+        recipient:
+          type: string
+          format: email
+      additionalProperties: false
+    MailTestResult:
+      type: object
+      required: [state, message]
+      properties:
+        state:
+          type: string
+          enum: [delivered, unavailable]
+        message:
+          type: string
+      additionalProperties: false
+    MailTestResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MailTestResult'
+      additionalProperties: false
+    MailDelivery:
+      type: object
+      required: [id, kind, recipient, status, attempts, createdAt]
+      properties:
+        id:
+          type: string
+          pattern: '^mail_[0-9a-f]{32}$'
+        kind:
+          type: string
+          enum: [test, verification, passwordReset]
+        recipient:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled, interrupted]
+        attempts:
+          type: integer
+          minimum: 0
+        nextAttemptAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        errorCode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      additionalProperties: false
+    MailDeliveryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MailDelivery'
+      additionalProperties: false
+    MailDeliveryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MailDelivery'
+      additionalProperties: false
     ServiceAccountOperation:
       type: string
       description: Version 1 fixed Control Plane allowlist; application data-plane operations use their corresponding explicit grants.
-      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read]
+      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read, administrators.read, administrators.manage, mail.read, mail.manage]
     ServiceAccountResponse:
       type: object
       required: [data]
