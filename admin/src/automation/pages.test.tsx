@@ -250,6 +250,8 @@ describe('Automation Admin surface', () => {
     renderAutomation('/automations?tab=deliveries&deliveryId=dly_1');
 
     expect((await screen.findAllByRole('heading', { name: 'Mail receiver' })).length).toBe(2);
+    expect(screen.getByText('Delivery ID')).toBeInTheDocument();
+    expect(screen.getByText('dly_1', { exact: true })).toBeInTheDocument();
     expect((await screen.findAllByText('The remote request failed. Check the receiver and try again.')).length).toBeGreaterThan(0);
     expect(screen.getByText('85 ms')).toBeInTheDocument();
     expect(screen.queryByText(sensitive)).not.toBeInTheDocument();
@@ -288,5 +290,21 @@ describe('Automation Admin surface', () => {
 
     expect(await screen.findByText('The Delivery queue is full. Reduce pending work, then retry; this Delivery and its retry allowance are unchanged.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry Delivery' })).not.toBeInTheDocument();
+  });
+
+  it('shows the complete Delivery ID with the Simplified Chinese label', async () => {
+    const delivery = { id: 'dly_zh_1234', sourceType: 'test', sourceId: 'whk_mail', webhookId: 'whk_mail', webhookName: '收件 Webhook', webhookRevision: 1, eventType: 'webhook.test', status: 'succeeded', createdAt: '2026-09-25T09:00:00Z', attemptCount: 0, manualRedriveCount: 0, errorCode: 'none' };
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    vi.stubGlobal('fetch', vi.fn((path: string) => {
+      if (path === '/admin/api/v1/deliveries?limit=50') return Promise.resolve(Response.json({ data: [delivery] }));
+      if (path === '/admin/api/v1/deliveries/dly_zh_1234') return Promise.resolve(Response.json({ data: { ...delivery, attempts: [] } }));
+      if (path === '/admin/api/v1/webhooks') return Promise.resolve(Response.json({ data: [] }));
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    }));
+
+    renderAutomation('/automations?tab=deliveries&deliveryId=dly_zh_1234');
+
+    expect(await screen.findByText('投递 ID')).toBeInTheDocument();
+    expect(screen.getByText('dly_zh_1234', { exact: true })).toBeInTheDocument();
   });
 });

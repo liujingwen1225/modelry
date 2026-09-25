@@ -161,7 +161,7 @@ export const en = {
       description: 'Review bounded delivery outcomes and retry an eligible failed Delivery.',
       list: 'Delivery history', emptyTitle: 'No Deliveries yet', emptyDescription: 'Tests, matching Record Events, and due Job schedules will appear here.',
       filters: 'Delivery filters', allSources: 'All sources', allStatuses: 'All statuses', source: 'Source', status: 'Status',
-      createdAt: 'Created', event: 'Event', webhook: 'Webhook', attempts: 'Attempts', outcome: 'Outcome', view: 'View details',
+        createdAt: 'Created', deliveryId: 'Delivery ID', event: 'Event', webhook: 'Webhook', attempts: 'Attempts', outcome: 'Outcome', view: 'View details',
       detail: 'Delivery details', attemptHistory: 'Attempt history', round: 'Round', attempt: 'Attempt', attemptStatus: 'Attempt status',
         startedAt: 'Started', duration: 'Duration', httpStatus: 'HTTP status', errorCode: 'Safe error category', noAttempts: 'No attempts have started yet.', noError: 'None',
       retry: 'Retry Delivery', retrying: 'Queueing retry…', retryLimit: 'This Delivery has used all three manual retries.',

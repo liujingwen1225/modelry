@@ -163,7 +163,7 @@ export const zhCN = {
       description: '查看有界投递结果，并重试符合条件的失败投递。',
       list: '投递记录', emptyTitle: '还没有投递记录', emptyDescription: '测试、匹配的记录事件和到期任务计划会显示在此处。',
       filters: '投递筛选', allSources: '所有来源', allStatuses: '所有状态', source: '来源', status: '状态',
-      createdAt: '创建时间', event: '事件', webhook: 'Webhook', attempts: '尝试次数', outcome: '结果', view: '查看详情',
+      createdAt: '创建时间', deliveryId: '投递 ID', event: '事件', webhook: 'Webhook', attempts: '尝试次数', outcome: '结果', view: '查看详情',
       detail: '投递详情', attemptHistory: '尝试记录', round: '轮次', attempt: '尝试', attemptStatus: '尝试状态',
       startedAt: '开始时间', duration: '耗时', httpStatus: 'HTTP 状态码', errorCode: '安全错误类别', noAttempts: '尚未开始尝试。', noError: '无',
       retry: '重试投递', retrying: '正在排队重试…', retryLimit: '此投递已用完三次手动重试。',
