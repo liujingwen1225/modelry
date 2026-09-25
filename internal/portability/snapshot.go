@@ -2,6 +2,7 @@ package portability
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
@@ -103,6 +104,9 @@ func collectCollections(ctx context.Context, source collectionLister) ([]backend
 			return nil, err
 		}
 		collections = append(collections, page.Data...)
+		if len(collections) > maximumAppliedCollections {
+			return nil, fmt.Errorf("%w: this project has more than %d Applied Collections", ErrInvalidArgument, maximumAppliedCollections)
+		}
 		if page.NextCursor == "" || len(page.Data) == 0 {
 			break
 		}

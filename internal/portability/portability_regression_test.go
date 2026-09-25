@@ -1852,6 +1852,10 @@ func TestCollectCollectionsRefusesToTruncateTheAppliedModel(t *testing.T) {
 			t.Fatalf("collected %d collections, want all %d", len(collected), total)
 		}
 	}
+	// 读取仍然有界：超过安全上界时明确失败，而不是继续读或静默截断。
+	if _, err := collectCollections(ctx, pagedCollections{total: maximumAppliedCollections + 1}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("error = %v, want ErrInvalidArgument above the safety bound", err)
+	}
 }
 
 // TestBuildContractRefusesMoreCollectionsThanItCanDescribe 证明 Contract 的 Collection

@@ -76,10 +76,12 @@ const (
 	// archiveOverheadAllowance 为 manifest 与全部归档条目的 tar 头/padding 预留余量。
 	// 它按条目上限推导，因此调整 maximumArchiveEntries 或对象键长度不会让合法 bundle 被误判。
 	archiveOverheadAllowance = maximumManifestBytes + maximumArchiveEntries*1024 + (1 << 20)
-	// maximumContractCollections 是 Contract 生成与 Applied Model 读取的 Collection 上限。
-	// 超过它时 Runtime 明确失败，绝不静默丢弃一部分 Collection——否则 appliedModelHash
-	// 会描述一个不完整的模型，import 的 model gate 就会失效。
+	// maximumContractCollections 是 Typed Application API Contract 能描述的 Collection 上限。
 	maximumContractCollections = 512
+	// maximumAppliedCollections 是 Applied Model 读取的安全上界。它远高于任何真实项目，
+	// 存在的意义只是让读取保持有界；超过它时 Runtime 明确失败，绝不静默丢弃一部分
+	// Collection——那会让 appliedModelHash 描述一个不完整的模型，使 import 的 model gate 失效。
+	maximumAppliedCollections = 100000
 
 	maximumImportRecords = 1000
 	maximumExportRecords = 100000
