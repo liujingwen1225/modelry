@@ -2,13 +2,21 @@ import { useDiagnostics } from './diagnostics-context';
 import { Button, CopyButton, ErrorState, JsonViewer, StatusChip, Surface } from './ui';
 import type { HealthSnapshot } from '../api/status';
 import type { ApiClientError } from '../api/client';
-import { useI18n } from '../i18n/i18n';
+import { useI18n, type TranslationKey, type TranslationValues } from '../i18n/i18n';
 
 function titleCase(value: string): string {
   return value.replace(/([A-Z])/g, ' $1').replace(/[-_]/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
+// stateLabel 优先使用共享 i18n；未知状态回退到人类可读的英文形态，避免丢失诊断信息。
+function stateLabel(value: string, translate: (key: TranslationKey, values?: TranslationValues) => string): string {
+  const key = ('diagnostics.states.' + value) as TranslationKey;
+  const translated = translate(key);
+  return translated === key ? titleCase(value) : translated;
+}
+
 function ErrorDetails({ error }: { error: ApiClientError }) {
+  const { t } = useI18n();
   return (
     <div className="error-details">
       <div className="error-details__title">
@@ -17,11 +25,11 @@ function ErrorDetails({ error }: { error: ApiClientError }) {
       </div>
       {error.apiError.hint && <p className="error-hint">{error.apiError.hint}</p>}
       <div className="request-id-line">
-        <span>Request ID</span>
+        <span>{t('diagnostics.requestId')}</span>
         <code>{error.apiError.requestId}</code>
-        <CopyButton label="Copy request ID" value={error.apiError.requestId} />
+        <CopyButton label={t('diagnostics.copyRequestId')} value={error.apiError.requestId} />
       </div>
-      <JsonViewer label="Error details" value={error.apiError.details} />
+      <JsonViewer label={t('diagnostics.errorDetails')} value={error.apiError.details} />
     </div>
   );
 }
@@ -33,9 +41,10 @@ function HealthValue({
   resource: { state: 'ready'; value: HealthSnapshot } | { state: string };
   label: string;
 }) {
-  if (resource.state === 'loading') return <span className="skeleton skeleton--inline" aria-label={`Loading ${label} status`} />;
-  if (resource.state !== 'ready' || !('value' in resource)) return <StatusChip state="unknown">Unknown</StatusChip>;
-  return <StatusChip state={resource.value.state}>{titleCase(resource.value.state)}</StatusChip>;
+  const { t } = useI18n();
+  if (resource.state === 'loading') return <span className="skeleton skeleton--inline" aria-label={t('diagnostics.loading', { label })} />;
+  if (resource.state !== 'ready' || !('value' in resource)) return <StatusChip state="unknown">{t('diagnostics.unknown')}</StatusChip>;
+  return <StatusChip state={resource.value.state}>{stateLabel(resource.value.state, t)}</StatusChip>;
 }
 
 export function RuntimeBadge() {
@@ -49,11 +58,12 @@ export function RuntimeBadge() {
   if (!runtime.value) return <StatusChip state="unknown">{t('runtime.unknown')}</StatusChip>;
 
   const state = runtime.value.state;
-  const label = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: titleCase(state) });
+  const label = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: stateLabel(state, t) });
   return <StatusChip state={state}>{state === 'ready' && <span className="pulse-dot" aria-hidden="true" />}{label}</StatusChip>;
 }
 
 export function DiagnosticsCards() {
+  const { t } = useI18n();
   const { runtime, storage, refresh } = useDiagnostics();
   const runtimeError = runtime.state === 'error' && runtime.error instanceof Error ? runtime.error : null;
   const storageError = storage.state === 'error' && storage.error instanceof Error ? storage.error : null;
@@ -63,22 +73,22 @@ export function DiagnosticsCards() {
       <Surface className="diagnostic-card" variant="raised">
         <div className="diagnostic-card__top">
           <div>
-            <p className="eyebrow">Runtime</p>
-            <h3>Application process</h3>
+            <p className="eyebrow">{t('diagnostics.runtime.eyebrow')}</p>
+            <h3>{t('diagnostics.runtime.title')}</h3>
           </div>
           {runtime.state === 'ready'
-            ? <StatusChip state={runtime.value.state}>{titleCase(runtime.value.state)}</StatusChip>
+            ? <StatusChip state={runtime.value.state}>{stateLabel(runtime.value.state, t)}</StatusChip>
             : runtime.state === 'loading'
-              ? <StatusChip state="loading">Checking</StatusChip>
-              : <StatusChip state="unavailable">Unavailable</StatusChip>}
+              ? <StatusChip state="loading">{t('diagnostics.checking')}</StatusChip>
+              : <StatusChip state="unavailable">{t('diagnostics.unavailable')}</StatusChip>}
         </div>
         {runtimeError instanceof Error ? (
           <ErrorDetailsPanel error={runtimeError} onRetry={refresh} />
         ) : (
           <div className="diagnostic-rows">
-            <div><span>Database</span><HealthValue label="database" resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.database } : runtime} /></div>
-            <div><span>Local storage</span><HealthValue label="local storage" resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.localStorage } : runtime} /></div>
-            {runtime.state === 'ready' && <p className="diagnostic-note">Observed {new Date(runtime.value.observedAt).toLocaleTimeString()}</p>}
+            <div><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.database } : runtime} /></div>
+            <div><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.localStorage } : runtime} /></div>
+            {runtime.state === 'ready' && <p className="diagnostic-note">{t('diagnostics.observed', { date: new Date(runtime.value.observedAt).toLocaleTimeString() })}</p>}
           </div>
         )}
       </Surface>
@@ -86,27 +96,27 @@ export function DiagnosticsCards() {
       <Surface className="diagnostic-card" variant="raised">
         <div className="diagnostic-card__top">
           <div>
-            <p className="eyebrow">Storage</p>
-            <h3>Local project data</h3>
+            <p className="eyebrow">{t('diagnostics.storage.eyebrow')}</p>
+            <h3>{t('diagnostics.storage.title')}</h3>
           </div>
           {storage.state === 'ready'
-            ? <StatusChip state={storage.value.localStorage.state}>{titleCase(storage.value.localStorage.state)}</StatusChip>
+            ? <StatusChip state={storage.value.localStorage.state}>{stateLabel(storage.value.localStorage.state, t)}</StatusChip>
             : storage.state === 'loading'
-              ? <StatusChip state="loading">Checking</StatusChip>
-              : <StatusChip state="unavailable">Unavailable</StatusChip>}
+              ? <StatusChip state="loading">{t('diagnostics.checking')}</StatusChip>
+              : <StatusChip state="unavailable">{t('diagnostics.unavailable')}</StatusChip>}
         </div>
         {storageError ? (
           <ErrorDetailsPanel error={storageError} onRetry={refresh} />
         ) : (
           <div className="diagnostic-rows">
-            <div><span>Provider</span><strong>{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
-            <div><span>Local storage</span><HealthValue label="local storage" resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
-            <div><span>Database</span><HealthValue label="database" resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
+            <div><span>{t('diagnostics.provider')}</span><strong>{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
+            <div><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
+            <div><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
             {storage.state === 'ready' && storage.value.localStorage.path && (
               <div className="diagnostic-path">
-                <span>Local path</span>
+                <span>{t('diagnostics.localPath')}</span>
                 <code className="diagnostic-path__value">{storage.value.localStorage.path}</code>
-                <CopyButton label="Copy Local Storage path" value={storage.value.localStorage.path} />
+                <CopyButton label={t('diagnostics.copyLocalPath')} value={storage.value.localStorage.path} />
               </div>
             )}
             {storage.state === 'ready' && storage.value.localStorage.message && <p className="diagnostic-note">{storage.value.localStorage.message}</p>}
@@ -118,14 +128,15 @@ export function DiagnosticsCards() {
 }
 
 function ErrorDetailsPanel({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  const { t } = useI18n();
   return (
     <ErrorState
       className="resource-error"
-      description={error instanceof Error && 'apiError' in error ? 'Review the structured response details.' : error.message || 'The status request failed.'}
-      title="Status request failed"
+      description={error instanceof Error && 'apiError' in error ? t('diagnostics.structuredDetails') : error.message || t('diagnostics.requestFailed')}
+      title={t('diagnostics.statusRequestFailed')}
     >
       {error instanceof Error && 'apiError' in error && <ErrorDetails error={error as ApiClientError} />}
-      <Button onClick={onRetry} size="small" variant="secondary">Retry</Button>
+      <Button onClick={onRetry} size="small" variant="secondary">{t('diagnostics.retry')}</Button>
     </ErrorState>
   );
 }

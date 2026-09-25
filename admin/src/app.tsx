@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { AppShell } from './components/app-shell';
 import { DiagnosticsProvider } from './components/diagnostics-context';
 import { ThemeProvider } from './components/theme-context';
-import { LocaleProvider } from './i18n/i18n';
+import { LocaleProvider, useI18n } from './i18n/i18n';
 import { OwnerSessionProvider, useOwnerSession } from './auth/owner-session';
 import { BootstrapPage, LoginPage, fetchBootstrapStatus, resolveOwnerReturnTo } from './auth';
 import type { BootstrapStatus } from './auth/client';
@@ -23,25 +23,27 @@ import { RuntimeSettingsPage } from './settings/pages';
 import { PortabilityPage } from './portability/pages';
 
 function NotFoundPage() {
+  const { t } = useI18n();
   return (
     <div className="not-found" role="status">
-      <p className="eyebrow">PAGE NOT FOUND</p>
-      <h1>This route is not part of the workspace.</h1>
-      <a className="text-link" href="/">Return to Overview</a>
+      <p className="eyebrow">{t('notFound.eyebrow')}</p>
+      <h1>{t('notFound.title')}</h1>
+      <a className="text-link" href="/">{t('notFound.back')}</a>
     </div>
   );
 }
 
 function SessionRecovery({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  const message = error instanceof Error ? error.message : 'The Runtime could not verify the Owner session.';
+  const { t } = useI18n();
+  const message = error instanceof Error ? error.message : t('recovery.unknownError');
   return (
     <main className="auth-screen">
       <Surface className="session-recovery" variant="raised">
-        <p className="eyebrow">OWNER SESSION</p>
-        <h1>Could not connect to this project</h1>
-        <ErrorState description={message} title="Owner session could not be checked" />
-        <p>Check that the Runtime is running, then retry. Your project data is unchanged.</p>
-        <Button onClick={onRetry} type="button" variant="primary">Retry connection</Button>
+        <p className="eyebrow">{t('recovery.eyebrow')}</p>
+        <h1>{t('recovery.title')}</h1>
+        <ErrorState description={message} title={t('recovery.errorTitle')} />
+        <p>{t('recovery.description')}</p>
+        <Button onClick={onRetry} type="button" variant="primary">{t('recovery.retry')}</Button>
       </Surface>
     </main>
   );
@@ -112,6 +114,7 @@ function AuthenticatedRedirect() {
 }
 
 function AnonymousWorkspace() {
+  const { t } = useI18n();
   const { refresh, state } = useOwnerSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -135,7 +138,7 @@ function AnonymousWorkspace() {
     if (session) navigate(returnTo ?? defaultPath, { replace: true });
   }
 
-  if (bootstrap.status === 'loading') return <AuthLoading label="Checking project setup" />;
+  if (bootstrap.status === 'loading') return <AuthLoading label={t('recovery.checkingSetup')} />;
   if (bootstrap.status === 'error') {
     return <SessionRecovery error={bootstrap.error} onRetry={() => setGeneration((value) => value + 1)} />;
   }
@@ -158,8 +161,9 @@ function AnonymousWorkspace() {
 }
 
 function OwnerGate() {
+  const { t } = useI18n();
   const { state, refresh } = useOwnerSession();
-  if (state.status === 'loading') return <AuthLoading label="Checking Owner session" />;
+  if (state.status === 'loading') return <AuthLoading label={t('recovery.checkingSession')} />;
   if (state.status === 'error') return <SessionRecovery error={state.error} onRetry={() => { void refresh().catch(() => undefined); }} />;
   if (state.status === 'authenticated') return <AuthenticatedWorkspace />;
   return <AnonymousWorkspace />;
