@@ -1,8 +1,17 @@
-import { render, screen } from '@testing-library/react';
+import { render as renderRTL, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type React from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LocaleProvider } from '../i18n/i18n';
 import { CollectionsPage, CreateCollectionPage } from './pages';
+
+// render 用 LocaleProvider 包裹页面，因为页面文案现在来自共享 i18n 层。
+async function render(ui: React.ReactNode) {
+  const result = renderRTL(<LocaleProvider>{ui}</LocaleProvider>);
+  await waitFor(() => expect(document.querySelector('.locale-load-state')).toBeNull());
+  return result;
+}
 
 function response(data: unknown, status = 200) {
   return Response.json({ data }, { status });

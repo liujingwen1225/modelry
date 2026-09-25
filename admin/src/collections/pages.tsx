@@ -62,6 +62,7 @@ function PageTitle({ eyebrow, title, description, action }: {
 }
 
 export function CollectionsPage() {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<CollectionSummary[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -108,47 +109,47 @@ export function CollectionsPage() {
   return (
     <div className="page-stack collection-page">
       <PageTitle
-        action={<Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={16} />Create Collection</Link>}
-        description="Define the data model for your application."
-        eyebrow="BUILD"
-        title="Collections"
+        action={<Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={16} />{t('collections.create')}</Link>}
+        description={t('collections.description')}
+        eyebrow={t('collections.eyebrow')}
+        title={t('collections.title')}
       />
       <Surface className="collection-toolbar" variant="standard">
         <label className="collection-search">
           <Search aria-hidden="true" size={16} />
-          <span className="sr-only">Search collections</span>
-          <input aria-label="Search collections" onChange={(event) => updateQuery('q', event.target.value)} placeholder="Search collections…" type="search" value={search} />
+          <span className="sr-only">{t('collections.search')}</span>
+          <input aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} type="search" value={search} />
         </label>
-        <label className="collection-filter"><SlidersHorizontal aria-hidden="true" size={15} /><span>Type</span>
-          <select aria-label="Type" onChange={(event) => updateQuery('type', event.target.value === 'all' ? '' : event.target.value)} value={type}>
-            <option value="all">All types</option><option value="Normal">Normal</option><option value="Auth">Auth</option>
+        <label className="collection-filter"><SlidersHorizontal aria-hidden="true" size={15} /><span>{t('collections.type')}</span>
+          <select aria-label={t('collections.type')} onChange={(event) => updateQuery('type', event.target.value === 'all' ? '' : event.target.value)} value={type}>
+            <option value="all">{t('collections.allTypes')}</option><option value="Normal">{t('collections.normal')}</option><option value="Auth">{t('collections.auth')}</option>
           </select>
         </label>
-        <label className="collection-filter"><span>Sort</span>
-          <select aria-label="Sort collections" onChange={(event) => updateQuery('sort', event.target.value)} value={sort}>
-            <option value="recent">Recently created</option><option value="name">Name</option>
+        <label className="collection-filter"><span>{t('collections.sort')}</span>
+          <select aria-label={t('collections.sortLabel')} onChange={(event) => updateQuery('sort', event.target.value)} value={sort}>
+            <option value="recent">{t('collections.recentlyCreated')}</option><option value="name">{t('collections.name')}</option>
           </select>
         </label>
-        <div aria-label="Collection view" className="collection-view-toggle" role="group">
-          <button aria-pressed={view === 'card'} onClick={() => updateQuery('view', '')} type="button">Cards</button>
-          <button aria-pressed={view === 'list'} onClick={() => updateQuery('view', 'list')} type="button">List</button>
+        <div aria-label={t('collections.viewLabel')} className="collection-view-toggle" role="group">
+          <button aria-pressed={view === 'card'} onClick={() => updateQuery('view', '')} type="button">{t('collections.viewCards')}</button>
+          <button aria-pressed={view === 'list'} onClick={() => updateQuery('view', 'list')} type="button">{t('collections.viewList')}</button>
         </div>
       </Surface>
 
-      {state === 'loading' && <LoadingState label="Loading collections" />}
+      {state === 'loading' && <LoadingState label={t('collections.loading')} />}
       {state === 'error' && (() => {
-        const copy = apiErrorCopy(error, 'Collections could not be loaded.');
+        const copy = apiErrorCopy(error, t('collections.loadFailed'));
         return <ErrorState description={copy.message} title={copy.title}>
-          <Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button>
+          <Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button>
         </ErrorState>;
       })()}
       {state === 'ready' && visible.length === 0 && items.length === 0 && (
-        <EmptyState description="Create a Collection with its first Fields. Your system fields are added automatically." title="No collections yet">
+        <EmptyState description={t('collections.emptyDescription')} title={t('collections.emptyTitle')}>
           <Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={15} />Create Collection</Link>
         </EmptyState>
       )}
       {state === 'ready' && visible.length === 0 && items.length > 0 && (
-        <EmptyState description="Try another name or adjust the type filter." title="No collections match this search" />
+        <EmptyState description={t('collections.noMatchDescription')} title={t('collections.noMatchTitle')} />
       )}
       {state === 'ready' && visible.length > 0 && view === 'card' && (
         <div className="collection-grid">
@@ -165,42 +166,47 @@ export function CollectionsPage() {
 }
 
 function CollectionCard({ collection }: { collection: CollectionSummary }) {
+  const { t } = useI18n();
   return (
     <Link className="collection-card" to={`/collections/${encodeURIComponent(collection.id)}`}>
       <div className="collection-card__top"><span className="collection-card__icon"><Database aria-hidden="true" size={18} /></span><StatusChip state={collection.type}>{collection.type}</StatusChip></div>
       <h2>{collection.name}</h2>
-      <p className="collection-card__description">{collection.description || 'No description'}</p>
+      <p className="collection-card__description">{collection.description || t('collections.noDescription')}</p>
       <div className="collection-card__meta">
-        <span>{collectionCount(collection.recordCount, 'record')}</span>
-        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field')}</span>
+        <span>{collectionCount(collection.recordCount, 'record', t)}</span>
+        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}</span>
         <CollectionChangeIndicator status={collection.pendingChangeStatus} />
       </div>
-      <span className="collection-card__open">Open workspace <ArrowRight aria-hidden="true" size={14} /></span>
+      <span className="collection-card__open">{t('collections.openWorkspace')} <ArrowRight aria-hidden="true" size={14} /></span>
     </Link>
   );
 }
 
 function CollectionListItem({ collection }: { collection: CollectionSummary }) {
+  const { t } = useI18n();
   return <Link className="collection-list__item" role="listitem" to={`/collections/${encodeURIComponent(collection.id)}`}>
     <span className="collection-list__icon"><Database aria-hidden="true" size={17} /></span>
-    <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || 'No description'}</span></span>
+    <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || t('collections.noDescription')}</span></span>
     <StatusChip state={collection.type}>{collection.type}</StatusChip>
     <span className="collection-list__meta">
-      {collectionCount(collection.recordCount, 'record')} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field')}
+      {collectionCount(collection.recordCount, 'record', t)} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}
       <CollectionChangeIndicator status={collection.pendingChangeStatus} />
     </span>
     <ArrowRight aria-hidden="true" className="collection-list__arrow" size={15} />
   </Link>;
 }
 
-function collectionCount(count: number | undefined, noun: 'record' | 'field') {
-  if (typeof count !== 'number') return `— ${noun}s`;
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+function collectionCount(count: number | undefined, noun: 'record' | 'field', translate: ReturnType<typeof useI18n>['t']) {
+  const singular = noun === 'record' ? 'collections.count.recordOne' : 'collections.count.fieldOne';
+  const plural = noun === 'record' ? 'collections.count.recordMany' : 'collections.count.fieldMany';
+  if (typeof count !== 'number') return '— ' + translate(plural, { count: 0 });
+  return translate(count === 1 ? singular : plural, { count });
 }
 
 function CollectionChangeIndicator({ status }: { status?: CollectionSummary['pendingChangeStatus'] }) {
+  const { t } = useI18n();
   if (!status) return null;
-  const label = status === 'failed' ? 'Failed change' : status === 'needsReview' ? 'Review needed' : 'Pending change';
+  const label = status === 'failed' ? t('collections.changeFailed') : status === 'needsReview' ? t('collections.changeReview') : t('collections.changePending');
   const tone = status === 'failed' ? 'failed' : status === 'needsReview' ? 'needs-review' : 'pending';
   return <span className={`collection-change collection-change--${tone}`}>{label}</span>;
 }
@@ -550,7 +556,7 @@ export function CollectionWorkspacePage() {
   if (loadingCollection) return <div className="collection-page collection-workspace-page"><LoadingState label="Loading Collection workspace" /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, 'The Collection could not be loaded.');
-    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button><Link className="text-link" to="/collections">Back to Collections</Link></ErrorState></div>;
+    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button><Link className="text-link" to="/collections">Back to Collections</Link></ErrorState></div>;
   }
 
   const context: CollectionWorkspaceContext = { collection, pendingChange: pending, refreshCollection, refreshPendingChange };
@@ -562,7 +568,7 @@ export function CollectionWorkspacePage() {
         <span className="collection-workspace-meta">Model v{collection.schemaVersion ?? 1} · {collection.fields.length} fields</span>
       </header>
       {newlyCreated && <div className="collection-created-notice" role="status"><Check aria-hidden="true" size={16} /><div><strong>Your collection is ready.</strong><span>The Collection and its initial model are saved. Continue with Records or edit the schema.</span></div><button aria-label="Dismiss collection created notice" onClick={() => setNewlyCreated(false)} type="button">Dismiss</button></div>}
-      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, 'Schema status is unavailable.').message} title="Could not load the Pending Change"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> Retry</Button></ErrorState>}
+      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, 'Schema status is unavailable.').message} title="Could not load the Pending Change"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button></ErrorState>}
       {!loadingPending && pending?.status === 'failed' && <div className="collection-recovery-banner" role="status"><CircleAlert aria-hidden="true" size={17} /><div><strong>A schema change needs attention.</strong><span>Your pending changes are saved. Review the recovery details before retrying.</span></div><Link className="text-link" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>View recovery details <ArrowRight aria-hidden="true" size={14} /></Link></div>}
       <nav aria-label={t('navigation.collectionWorkspace')} className="collection-workspace-tabs">
         {[
