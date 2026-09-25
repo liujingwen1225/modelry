@@ -256,6 +256,7 @@ function parseInitialFields(fields: FieldDraft[], type: CollectionType): { field
 }
 
 export function CreateCollectionPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -351,10 +352,10 @@ export function CreateCollectionPage() {
 
   return (
     <main className="focused-workspace collection-create-page">
-      <Link className="text-link text-link--muted collection-back" to="/collections"><ArrowLeft aria-hidden="true" size={14} />Collections</Link>
-      <div className="collection-create-intro"><p className="eyebrow">BUILD · INITIAL MODEL</p><h1>Create Collection</h1><p>Set up the Collection and its first Fields together. You can keep evolving the schema later.</p></div>
+      <Link className="text-link text-link--muted collection-back" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
+      <div className="collection-create-intro"><p className="eyebrow">{t('collections.buildEyebrow')}</p><h1>{t('collections.create')}</h1><p>{t('collections.createDescription')}</p></div>
       {requestError !== undefined && (() => {
-        const copy = apiErrorCopy(requestError, 'The Collection could not be created.');
+        const copy = apiErrorCopy(requestError, t('collections.createFailed'));
         const api = requestError instanceof ApiClientError ? requestError.apiError : undefined;
         return <ErrorState className="collection-form-error" description={copy.message} title={copy.title}>
           {api?.details.violations && Array.isArray(api.details.violations) && <ul>{api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>{violation.message}</li>)}</ul>}
@@ -363,48 +364,48 @@ export function CreateCollectionPage() {
 
       <form className="collection-create-form" noValidate onSubmit={(event) => void submit(event)}>
         <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">COLLECTION DETAILS</p><h2>Choose a type and name</h2></div></div>
-          <fieldset className="collection-type-picker"><legend>Type</legend>
+          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.detailsEyebrow')}</p><h2>{t('collections.detailsTitle')}</h2></div></div>
+          <fieldset className="collection-type-picker"><legend>{t('collections.type')}</legend>
             {(['Normal', 'Auth'] as const).map((option) => <label className={`collection-type-card${type === option ? ' is-selected' : ''}`} key={option}>
-              <input aria-label={option === 'Normal' ? 'Normal Collection' : 'Auth Collection'} checked={type === option} name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
+              <input aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} checked={type === option} name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
               <span className="collection-type-card__check" aria-hidden="true"><Check size={14} /></span>
-              <span className="collection-type-card__text"><strong>{option === 'Normal' ? 'Normal Collection' : 'Auth Collection'}</strong><span>{option === 'Normal' ? 'A flexible business model for your application.' : 'A user profile with email and password sign-in.'}</span></span>
+              <span className="collection-type-card__text"><strong>{t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')}</strong><span>{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span></span>
             </label>)}
           </fieldset>
           <div className="collection-form-grid">
-            <FormField htmlFor="collection-name" label="Collection name" hint="Use the name you use for this kind of information.">
+            <FormField htmlFor="collection-name" label={t('collections.nameLabel')} hint={t('collections.nameHint')}>
               <input aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'collection-name-error' : undefined} autoComplete="off" id="collection-name" onChange={(event) => { setName(event.target.value); setNameError(''); setRequestError(undefined); }} value={name} />
             </FormField>
             {nameError && <p className="collection-field-error" id="collection-name-error" role="alert">{nameError}</p>}
-            <FormField htmlFor="collection-description" label="Description" hint="Optional. Help your team recognize this Collection.">
+            <FormField htmlFor="collection-description" label={t('collections.descriptionLabel')} hint={t('collections.descriptionHint')}>
               <textarea id="collection-description" onChange={(event) => setDescription(event.target.value)} rows={2} value={description} />
             </FormField>
           </div>
         </Surface>
 
         <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">ALWAYS AVAILABLE</p><h2>System fields</h2><p>These fields are managed by Modelry and added automatically.</p></div></div>
-          <div className="system-fields-table" role="table" aria-label="System fields">
-            <div className="system-fields-table__head" role="row"><span role="columnheader">Name</span><span role="columnheader">Type</span><span role="columnheader">Access</span></div>
-            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{field.label}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />System · Locked</span></div>)}
-            {type === 'Auth' && <div className="system-fields-table__row system-fields-table__row--auth" role="row"><strong role="cell">email</strong><span role="cell">Email identifier</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />Required · Unique</span></div>}
+          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.systemEyebrow')}</p><h2>{t('collections.systemTitle')}</h2><p>{t('collections.systemDescription')}</p></div></div>
+          <div className="system-fields-table" role="table" aria-label={t('collections.systemTitle')}>
+            <div className="system-fields-table__head" role="row"><span role="columnheader">{t('collections.systemName')}</span><span role="columnheader">{t('collections.systemType')}</span><span role="columnheader">{t('collections.systemAccess')}</span></div>
+            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{field.label}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</span></div>)}
+            {type === 'Auth' && <div className="system-fields-table__row system-fields-table__row--auth" role="row"><strong role="cell">email</strong><span role="cell">{t('collections.emailIdentifier')}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.requiredUnique')}</span></div>}
           </div>
         </Surface>
 
         {type === 'Auth' && <Surface className="collection-create-section auth-initial-settings" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">AUTHENTICATION</p><h2>Sign-in defaults</h2><p>Email is the required, unique identifier. Passwords are stored separately from profile fields.</p></div></div>
+          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2>{t('collections.authTitle')}</h2><p>{t('collections.authDescription')}</p></div></div>
           <div className="auth-default-grid">
-            <label className="auth-default-row"><span><strong>Email + password</strong><small>Sign-in method for this Auth Collection.</small></span><span className="auth-default-control"><input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />Enabled</span></label>
-            <label className="auth-default-row"><span><strong>Allow users to sign up</strong><small>When enabled, users can register through the Application API.</small></span><input aria-label="Allow users to sign up" checked={authentication.selfRegistration} onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" /></label>
-            <FormField htmlFor="session-duration" label="Session duration (days)" hint="Choose how long a sign-in stays active.">
+            <label className="auth-default-row"><span><strong>{t('collections.emailPassword')}</strong><small>{t('collections.emailPasswordHint')}</small></span><span className="auth-default-control"><input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />{t('collections.enabled')}</span></label>
+            <label className="auth-default-row"><span><strong>{t('collections.selfRegistration')}</strong><small>{t('collections.selfRegistrationHint')}</small></span><input aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" /></label>
+            <FormField htmlFor="session-duration" label={t('collections.sessionDuration')} hint={t('collections.sessionDurationHint')}>
               <input id="session-duration" min={1} onChange={(event) => setAuthentication((value) => ({ ...value, sessionDurationDays: Number(event.target.value) }))} type="number" value={authentication.sessionDurationDays} />
             </FormField>
           </div>
         </Surface>}
 
         <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading collection-section-heading--fields"><div><p className="eyebrow">INITIAL MODEL</p><h2>Initial fields</h2><p>Enter the first details your records need. Add a relation inline when a field connects to another Collection.</p></div><span className="collection-field-count">{fields.length} {fields.length === 1 ? 'field' : 'fields'}</span></div>
-          {targetsError && <div className="collection-inline-warning" role="status"><CircleAlert aria-hidden="true" size={15} /><span>Existing Collections could not be loaded. Retry to configure a Relation target.</span><Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">Retry</Button></div>}
+          <div className="collection-section-heading collection-section-heading--fields"><div><p className="eyebrow">{t('collections.initialEyebrow')}</p><h2>{t('collections.initialTitle')}</h2><p>{t('collections.initialDescription')}</p></div><span className="collection-field-count">{collectionCount(fields.length, 'field', t)}</span></div>
+          {targetsError && <div className="collection-inline-warning" role="status"><CircleAlert aria-hidden="true" size={15} /><span>{t('collections.targetsUnavailable')}</span><Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button></div>}
           {fields.map((field, index) => <FieldEditorRow
             errors={fieldErrors[field.key] ?? {}}
             field={field}
@@ -417,11 +418,11 @@ export function CreateCollectionPage() {
             targets={targets}
             targetsLoading={targetsLoading}
           />)}
-          <Button className="collection-add-field" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />Add initial field</Button>
-          <p className="collection-enter-hint"><kbd>Enter</kbd> in a field name adds another field.</p>
+          <Button className="collection-add-field" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.addField')}</Button>
+          <p className="collection-enter-hint"><kbd>Enter</kbd> {t('collections.enterHint')}</p>
         </Surface>
 
-        <footer className="collection-form-actions"><Link className="button button--secondary" to="/collections">Cancel</Link><Button disabled={submitting} type="submit" variant="primary">{submitting ? 'Creating Collection…' : 'Create Collection'}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
+        <footer className="collection-form-actions"><Link className="button button--secondary" to="/collections">{t('collections.cancel')}</Link><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
       </form>
     </main>
   );
