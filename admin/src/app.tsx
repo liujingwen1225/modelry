@@ -13,6 +13,7 @@ import { AccessPage, AuditPage } from './access';
 import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage } from './api';
 import { OverviewPage, SettingsPage } from './pages/pages';
 import { ExtensionsPage, SecretsPage } from './extensions/pages';
+import { AutomationPage } from './automation/pages';
 
 function NotFoundPage() {
   return (
@@ -81,6 +82,7 @@ function AuthenticatedWorkspace() {
         <Route element={<ExtensionsPage />} path="/extensions" />
         <Route element={<ExtensionsPage />} path="/extensions/:extensionId" />
         <Route element={<SecretsPage />} path="/secrets" />
+        <Route element={<AutomationPage />} path="/automations" />
         <Route element={<SettingsPage />} path="/settings" />
         <Route element={<AuthenticatedRedirect />} path="/login" />
         <Route element={<NotFoundPage />} path="*" />

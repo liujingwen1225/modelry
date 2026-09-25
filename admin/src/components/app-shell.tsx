@@ -15,6 +15,7 @@ import {
   Settings2,
   ShieldCheck,
   Sun,
+  Webhook,
 } from 'lucide-react';
 import type { TranslationKey } from '../i18n/i18n';
 import { useI18n } from '../i18n/i18n';
@@ -42,6 +43,7 @@ const groups: Array<{
     items: [
       { label: 'navigation.changes', to: '/changes', icon: GitBranch },
       { label: 'navigation.access', to: '/access', icon: ShieldCheck },
+      { label: 'navigation.automations', to: '/automations', icon: Webhook },
       { label: 'navigation.extensions', to: '/extensions', icon: Puzzle },
       { label: 'navigation.secrets', to: '/secrets', icon: KeyRound },
     ],
@@ -192,6 +194,7 @@ function ShellCommands() {
       go('navigate.api', 'commands.api', '/api'),
       go('navigate.changes', 'commands.changes', '/changes'),
       go('navigate.access', 'commands.access', '/access'),
+      go('navigate.automations', 'commands.automations', '/automations', ['webhook', 'event hook', 'cron', 'delivery']),
       go('navigate.extensions', 'commands.extensions', '/extensions', ['hooks', 'lifecycle', 'runtime']),
       go('navigate.secrets', 'commands.secrets', '/secrets', ['write-only', 'secret']),
       go('navigate.settings', 'commands.settings', '/settings'),

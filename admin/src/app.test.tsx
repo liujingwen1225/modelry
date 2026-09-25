@@ -27,6 +27,51 @@ function diagnosticResponse(path: string): Response {
 }
 
 describe('Modelry Admin shell', () => {
+  it('opens the Automation workspace from the shared Command Registry', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === '/admin/api/v1/webhooks') return Promise.resolve(Response.json({ data: [] }));
+      if (path === '/admin/api/v1/secrets') return Promise.resolve(Response.json({ data: [] }));
+      return Promise.resolve(diagnosticResponse(path));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
+    await user.click(screen.getByRole('button', { name: /Search commands/ }));
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    await user.type(search, 'Automations');
+    await user.click(await screen.findByRole('option', { name: 'Automations' }));
+
+    expect(await screen.findByRole('heading', { name: 'Automations' })).toBeInTheDocument();
+    expect(within(navigation).getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('preserves the current Automation search context in a Command Palette create deep link', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/automations?tab=webhooks&q=mail');
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === '/admin/api/v1/webhooks') return Promise.resolve(Response.json({ data: [] }));
+      if (path === '/admin/api/v1/secrets') return Promise.resolve(Response.json({ data: [] }));
+      if (path === '/admin/api/v1/event-hooks') return Promise.resolve(Response.json({ data: [] }));
+      if (path.startsWith('/admin/api/v1/collections?')) return Promise.resolve(Response.json({ data: [{ id: 'col_orders', name: 'Orders' }] }));
+      return Promise.resolve(diagnosticResponse(path));
+    }));
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'Automations' });
+    await user.click(screen.getByRole('button', { name: /Search commands/ }));
+    await user.type(screen.getByRole('combobox', { name: 'Search commands' }), 'Create Event Hook');
+    await user.click(await screen.findByRole('option', { name: 'Create Event Hook' }));
+
+    expect(await screen.findByRole('heading', { name: 'New Event Hook' })).toBeInTheDocument();
+    expect(window.location.pathname + window.location.search).toBe('/automations?q=mail&tab=eventHooks&create=1');
+  });
+
   it('renders the shared sidebar and reads runtime health through the diagnostics client', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     const fetchMock = vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input))));
@@ -36,7 +81,7 @@ describe('Modelry Admin shell', () => {
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Extensions', 'Secrets', 'Settings',
+      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Automations', 'Extensions', 'Secrets', 'Settings',
     ]);
     expect(navigation).not.toHaveTextContent(/Activity/);
     expect(await screen.findByText('Runtime ready')).toBeInTheDocument();

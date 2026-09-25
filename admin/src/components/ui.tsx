@@ -209,7 +209,8 @@ export function Dialog({
           if (typeof element.showModal === 'function') element.showModal();
           else element.setAttribute('open', '');
         } else if (!open && element.open) {
-          element.close();
+          if (typeof element.close === 'function') element.close();
+          else element.removeAttribute('open');
         }
       }}
       >
