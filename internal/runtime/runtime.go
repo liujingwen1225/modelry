@@ -119,6 +119,12 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		}
 	}()
 
+	// 一次被中断的 restore 会让项目停在「新内容已激活、原内容仍在备份里」的中间态，
+	// 或者短暂地没有 project.sqlite。此时打开 SQLite 会创建一个全新的空项目，操作者
+	// 会看到数据全无。宁可在启动前拒绝，让操作者用 modelry restore 把项目恢复到确定状态。
+	if err := portability.CheckInterruptedRestore(root.ManagedDir); err != nil {
+		return nil, err
+	}
 	for _, directory := range []string{root.TempFiles, root.Objects} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
 			return nil, fmt.Errorf("cannot prepare Modelry Local Storage directory %q: %w", directory, err)

@@ -15,9 +15,9 @@ import (
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
+// noObjects 是一个没有任何 File object 的 ObjectSource。
 type noObjects struct{}
 
-func (noObjects) ReferencedFileKeys(context.Context) ([]string, error) { return nil, nil }
 func (noObjects) OpenObject(context.Context, string) (io.ReadCloser, error) {
 	return nil, os.ErrNotExist
 }

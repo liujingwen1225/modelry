@@ -15,6 +15,9 @@ func (store *Store) SnapshotTo(ctx context.Context, destination string) error {
 	if store == nil || store.db == nil || store.IsClosed() {
 		return errors.New("SQLite store is not open")
 	}
+	if store.readOnly {
+		return errors.New("a read-only SQLite store cannot produce a snapshot")
+	}
 	if strings.TrimSpace(destination) == "" {
 		return errors.New("snapshot destination is required")
 	}

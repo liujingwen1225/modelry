@@ -16,7 +16,9 @@ import (
 
 const (
 	maximumImportRequestBytes = 8 << 20
-	maximumRestoreUploadBytes = 1 << 30
+	// maximumRestoreUploadBytes 是 HTTP 层读入的上限。它是绝对上限；preflight
+	// 还会按 manifest 自己声明的载荷收紧预算，因此合法的大对象不会被误伤。
+	maximumRestoreUploadBytes = maximumRestoreBytes + archiveOverheadAllowance
 )
 
 // AuditSink 由 Runtime 注入：写入 Portability Control Plane 事实。
@@ -159,15 +161,12 @@ func (module *Module) importRecords(w http.ResponseWriter, request *http.Request
 		return
 	}
 	request.Body = http.MaxBytesReader(w, request.Body, maximumImportRequestBytes)
-	summary, err := module.service.ImportStream(request.Context(), module.records, module.resolver, request.PathValue("collectionId"), request.Body)
+	summary, err := module.service.ImportStream(request.Context(), module.records, module.resolver, request.PathValue("collectionId"), maxBytesBody{reader: request.Body})
 	if err != nil {
-		if summary.Created > 0 || summary.Failed > 0 {
-			httpapi.WriteAPIJSON(w, http.StatusOK, struct {
-				Data ImportSummary `json:"data"`
-			}{Data: summary})
-			return
-		}
-		module.writeError(w, request, err)
+		// ImportStream 的 error 都是请求级失败（header 不合法、model 不匹配、请求体或
+		// Record 数量越界、读取中断）。单条 Record 的失败不是 error，而是摘要里的一项。
+		// 请求级失败必须给出稳定的错误码，绝不能用一个看起来成功的部分摘要掩盖它。
+		module.writeErrorDetails(w, request, err, importProgressDetails(summary))
 		return
 	}
 	httpapi.WriteAPIJSON(w, http.StatusOK, struct {
@@ -193,6 +192,19 @@ func (module *Module) contract(w http.ResponseWriter, request *http.Request) {
 	}{Data: contract})
 }
 
+// maxBytesBody 把 http.MaxBytesReader 的溢出转换为稳定的 PAYLOAD_TOO_LARGE，
+// 使超过请求体上限的 import 返回 Spec 0010 §6 约定的错误码，而不是 INVALID_ARGUMENT。
+type maxBytesBody struct{ reader io.Reader }
+
+func (body maxBytesBody) Read(buffer []byte) (int, error) {
+	read, err := body.reader.Read(buffer)
+	var limit *http.MaxBytesError
+	if errors.As(err, &limit) {
+		return read, fmt.Errorf("%w: the import body exceeds the %d byte request limit", ErrPayloadTooLarge, limit.Limit)
+	}
+	return read, err
+}
+
 func (module *Module) ready(w http.ResponseWriter, request *http.Request) bool {
 	if module.service != nil && module.records != nil && module.resolver != nil {
 		return true
@@ -203,10 +215,27 @@ func (module *Module) ready(w http.ResponseWriter, request *http.Request) bool {
 	return false
 }
 
+// importProgressDetails 让一个请求级失败的响应仍然告诉调用方哪些 Record 已经落库，
+// 否则重复导入同一条 NDJSON 会产生重复数据。
+func importProgressDetails(summary ImportSummary) map[string]any {
+	if summary.Created == 0 && summary.Failed == 0 {
+		return nil
+	}
+	return map[string]any{"created": summary.Created, "failed": summary.Failed}
+}
+
 func (module *Module) writeError(w http.ResponseWriter, request *http.Request, err error) {
+	module.writeErrorDetails(w, request, err, nil)
+}
+
+func (module *Module) writeErrorDetails(w http.ResponseWriter, request *http.Request, err error, details map[string]any) {
 	status := http.StatusInternalServerError
 	problem := httpapi.APIError{Code: "INTERNAL_ERROR", Message: "The Runtime could not complete this Portability request."}
 	switch {
+	// ErrPayloadTooLarge 必须先于 ErrInvalidArgument 判定：一个超大的请求体同时是
+	// 「请求体超限」与「输入不合法」，而 Spec 0010 §6 要求前者返回 PAYLOAD_TOO_LARGE。
+	case errors.Is(err, ErrPayloadTooLarge):
+		status, problem.Code, problem.Message = http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "This Backup bundle carries more payload than the Runtime accepts."
 	case errors.Is(err, ErrInvalidArgument):
 		status, problem.Code, problem.Message = http.StatusBadRequest, "INVALID_ARGUMENT", "The Portability request is invalid."
 	case errors.Is(err, ErrInvalidBundle):
@@ -223,6 +252,9 @@ func (module *Module) writeError(w http.ResponseWriter, request *http.Request, e
 		status, problem.Code, problem.Message = http.StatusNotFound, "NOT_FOUND", "The requested Collection or Record was not found."
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded), errors.Is(err, ErrStorage):
 		status, problem.Code, problem.Message = http.StatusServiceUnavailable, "RUNTIME_NOT_READY", "Portability could not read or write project state. Retry after the Runtime is ready."
+	}
+	if len(details) != 0 {
+		problem.Details = details
 	}
 	httpapi.WriteAPIError(w, request, status, problem)
 }

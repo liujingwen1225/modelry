@@ -13,14 +13,10 @@ import (
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
-// portabilityObjects 让 Backup 读取当前 Provider 中真正被引用的文件对象。
+// portabilityObjects 让 Backup 按键读取当前 Provider 中的文件对象字节。
+// 被引用的 key 集合来自 SQLite 快照，因此这里只负责读字节。
 type portabilityObjects struct {
-	files      *filestore.Service
-	references filestore.ReferenceSource
-}
-
-func (source portabilityObjects) ReferencedFileKeys(ctx context.Context) ([]string, error) {
-	return source.references.ReferencedFileKeys(ctx)
+	files *filestore.Service
 }
 
 func (source portabilityObjects) OpenObject(ctx context.Context, key string) (io.ReadCloser, error) {
@@ -90,7 +86,7 @@ func (source portabilityRecordSource) Create(ctx context.Context, collectionID s
 
 // newPortabilityService 组装 Backup/Restore/Export/Import/Contract 编排。
 func newPortabilityService(options portabilityOptions) (*portability.Service, *portability.Module, error) {
-	objects := portabilityObjects{files: options.files, references: options.records}
+	objects := portabilityObjects{files: options.files}
 	service, err := portability.NewService(portability.Options{
 		Store: options.store, Objects: objects, Models: options.models,
 		ManagedDir: options.managedDir, Version: options.version,

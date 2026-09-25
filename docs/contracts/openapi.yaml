@@ -3986,9 +3986,10 @@ paths:
       operationId: createProjectBackup
       summary: Create a consistent Backup bundle of this project
       description: >-
-        Owner-only. The Runtime snapshots the live database with SQLite VACUUM INTO, collects every referenced file
-        object, and streams a tar archive whose manifest records the format version, project identity, Runtime
-        version, and a SHA-256 for every payload. The project keeps serving requests while the backup is produced.
+        Owner-only. The Runtime snapshots the live database with SQLite VACUUM INTO and reads the referenced file
+        objects, counts, and applied model hash from that same snapshot, so the bundle stays self-consistent while the
+        project keeps serving requests. The streamed tar archive's manifest records the format version, project
+        identity, Runtime version, and the byte length and SHA-256 of every payload.
       security:
         - OwnerSession: []
       responses:
@@ -4018,9 +4019,11 @@ paths:
       operationId: preflightProjectRestore
       summary: Validate a Backup bundle without writing anything
       description: >-
-        Owner-only and read-only. Validates format version, payload digests, archive entries, and database
-        compatibility, then reports structured findings. Applying a restore in place stays a CLI operation on a
-        stopped project so a live Runtime is never overwritten.
+        Owner-only and read-only. Validates format version, the byte length and digest of every payload, archive
+        entries, and database compatibility, then reports structured findings. Applying a restore in place stays a CLI
+        operation on a stopped project so a live Runtime is never overwritten. Bounds are per object, never per
+        bundle: the manifest is limited to 64 MiB, one file object payload to 128 MiB (the product's single-file
+        limit), and one bundle to 4 GiB of declared payload.
       security:
         - OwnerSession: []
       requestBody:
@@ -4040,6 +4043,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BackupPreflightResponse'
+        '413':
+          description: >-
+            The bundle declares more payload than the Runtime accepts, or the upload exceeds the absolute upload
+            bound. Nothing was written.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '4XX':
           $ref: '#/components/responses/StructuredError'
         '5XX':
@@ -4078,9 +4092,14 @@ paths:
       operationId: importCollectionRecords
       summary: Import NDJSON Records into one Collection
       description: >-
-        Owner-only. Every Record is created through the same Record creation path the Application API uses, so
-        Validation, Required, Unique, Relation, and File rules behave identically. The request is rejected when the
-        header model hash does not match the applied model.
+        Owner-only. The body is NDJSON: a collection header line followed by one {"kind":"record","values":…} line per
+        Record. Every Record is created through the same Record creation path the Application API uses, so Validation,
+        Required, Unique, Relation, and File rules behave identically. The header must carry a non-empty
+        appliedModelHash: a missing or empty hash is INVALID_ARGUMENT, and a hash that does not match the applied
+        model is MODEL_MISMATCH, so omitting the hash can never bypass the model compatibility gate. The request body
+        is limited to 8 MiB and 1,000 Records; a request-level failure is reported as a structured error rather than a
+        partial success, and because each Record keeps its own transaction the error's details report the created and
+        failed counts that were already committed.
       security:
         - OwnerSession: []
       parameters:
@@ -4101,6 +4120,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordImportResponse'
+        '413':
+          description: The import body exceeds the 8 MiB request limit.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '4XX':
           $ref: '#/components/responses/StructuredError'
         '5XX':
@@ -4518,7 +4546,7 @@ components:
       properties:
         code:
           type: string
-          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, EVENT_CURSOR_INVALID, EVENT_CURSOR_EXPIRED, STREAM_CAPACITY_REACHED, STREAM_UNAVAILABLE, ACCESS_RULE_UNAVAILABLE, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, EXTENSION_RUNTIME_UNAVAILABLE, CHANGE_REJECTED_BY_EXTENSION, EXTENSION_BUDGET_EXCEEDED, BINDING_CONFLICT, SECRET_KEY_UNAVAILABLE, SECRET_NOT_AVAILABLE, ORIGIN_NOT_ALLOWED, INTERNAL_ERROR]
+          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, MODEL_MISMATCH, PROJECT_IN_USE, PROJECT_NOT_EMPTY, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, EVENT_CURSOR_INVALID, EVENT_CURSOR_EXPIRED, STREAM_CAPACITY_REACHED, STREAM_UNAVAILABLE, ACCESS_RULE_UNAVAILABLE, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, EXTENSION_RUNTIME_UNAVAILABLE, CHANGE_REJECTED_BY_EXTENSION, EXTENSION_BUDGET_EXCEEDED, BINDING_CONFLICT, SECRET_KEY_UNAVAILABLE, SECRET_NOT_AVAILABLE, ORIGIN_NOT_ALLOWED, INTERNAL_ERROR]
         message:
           type: string
           description: Human-readable message without stack traces, SQL, credentials, sensitive body content, or anonymous diagnostic paths.

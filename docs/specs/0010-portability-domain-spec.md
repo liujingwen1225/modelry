@@ -31,6 +31,7 @@
 - 归档格式：`tar`。条目顺序固定：`manifest.json`、`database/project.sqlite`、`objects/<key>`（按 key 升序）。
 - `manifest.json` 字段：`format`（`modelry.community.backup`）、`formatVersion`（1）、`projectId`、`runtimeVersion`、`createdAt`、`appliedModelHash`、`database`（`path`、`bytes`、`sha256`、`sqliteVersion`）、`objects[]`（`key`、`bytes`、`sha256`）、`counts`（`collections`、`records`、`objects`）。
 - 数据库载荷使用 SQLite `VACUUM INTO` 从运行中的数据库产生一致快照，包含已提交的 WAL 内容；禁止直接复制 `project.sqlite`。
+- 数据库载荷、引用对象集合、`counts` 与 `appliedModelHash` 必须来自同一个逻辑快照：它们从该快照读取，而不是从仍在变化的 Runtime 读取。
 - File object 只包含 Applied Model 当前引用的对象；`objects[]` 与归档条目必须一一对应。
 - 归档以流式方式产生与写出，不在内存中缓存整个项目。
 
@@ -38,8 +39,8 @@
 
 - Preflight（只读）校验：
   - `format` 与 `formatVersion` 受支持；
-  - manifest 列出的每个条目存在且 SHA-256 匹配；
-  - 归档中不存在未列出的条目；
+  - manifest 列出的每个条目存在、字节长度与声明的 `bytes` 一致且 SHA-256 匹配；
+  - 归档中不存在未列出的条目，也不存在重复条目；
   - 数据库载荷可打开并包含 Modelry 内部 migration 表；
   - 数据库格式版本不高于当前 Runtime。
 - Preflight 输出结构化 finding：`code`、`severity`（`info`/`warning`/`error`）、`message`，以及 `compatible` 布尔值、`projectId`、`runtimeVersion`、`createdAt`、`counts`。
@@ -47,7 +48,11 @@
   - 若项目 Runtime lock 被其它进程持有，直接拒绝；
   - 若项目目录已有项目且未提供 `--force`，拒绝并报告将替换的内容；
   - 先解压到 managed directory 内的 staging 目录，重新校验 staged 数据库，然后才替换数据库与 object store；
-  - 失败时不改变原项目状态。
+  - 替换分三个阶段：先把全部新内容准备到目标所在目录，再统一把原内容移到备份位置，最后统一激活；每一步都先写入 managed directory 内的 journal，因此中途失败或进程被杀都会完整回滚；
+  - 只有「移开原件」这一步真正发生（备份文件存在）时，回滚才会删除目标位置的内容；否则目标是原件，必须原样保留；
+  - 替换数据库时同时移除旧的 `project.sqlite-wal` / `-shm`，避免旧日志被回放到新数据库上；
+  - 失败时不改变原项目状态：原数据库与原 object store 保持字节级不变；
+  - 项目存在未完成的 journal 时，Runtime 拒绝启动，直到操作者用 CLI 再次执行 restore 把它收敛。
 - Admin Surface 只提供 preflight；in-place apply 只能通过 CLI 在已停止的项目上执行。
 - Runtime 内执行的 preflight 写入 Audit fact `restore.preflight`。
 
@@ -57,9 +62,11 @@
   - 首行 `{"kind":"collection","collectionId":…,"name":…,"type":…,"appliedModelHash":…,"fields":[…]}`；
   - 其后每行 `{"kind":"record","values":{…}}`（导出附带 `"id"`）。
 - Export 通过 Records Service 读取已提交 Record，`appliedModelHash` 由 Applied Model 计算；File 字段导出 object key，绝不导出字节；Password Credential、Session、Secret 永不导出。
+- Export 无损搬移每个产品字段的值（包括名字像秘密的普通字段，以及 JSON 字段里的高精度数字）；凭据不进入导出是因为它们不属于 Record，而不是因为字段名被过滤。
 - Import 通过 `records.Service.Create` 创建每条 Record，因此 Field Validation、Required、Unique、Relation、File 引用规则与 Application API 完全一致。
-- Import 在 header 的 `appliedModelHash` 与当前 Applied Model 不一致时整体拒绝（409 `MODEL_MISMATCH`），不做字段猜测。
+- Import 要求 header 携带非空 `appliedModelHash`：缺失或空值整体拒绝（400 `INVALID_ARGUMENT`），与当前 Applied Model 不一致时整体拒绝（409 `MODEL_MISMATCH`）。省略 hash 不能绕过 model compatibility gate，也不做字段猜测。
 - Import 结果逐条返回：`index`、`status`（`created`/`failed`）、`recordId?`、`code?`。单条失败不影响后续 Record（除非请求本身不合法）。
+- 请求级失败（header 不合法、model 不匹配、请求体超过 8 MiB、Record 数超过 1,000、读取中断）返回结构化错误，绝不被一个看起来成功的部分摘要掩盖。因为每条 Record 有自己的事务，失败前的前缀可能已经提交，所以这类响应在 `details` 里报告 `created`/`failed` 计数。
 - 每条 Record 保持自己的事务与副作用边界；整个导入不包在单个 SQLite 事务里。
 
 ### 3.4 Typed Application API Contract
@@ -89,8 +96,10 @@
 
 ## 5. Bounds
 
+这些上限各自约束自己描述的对象，任何一条都不能被当作整个 bundle 的上限：
+
 - Backup：最多 100,000 个 File object；快照写入 managed directory；归档 32 KiB 缓冲流式写出。
-- Restore：最多 100,000 个归档条目、manifest 最大 64 MiB。
+- Restore：最多 100,000 个归档条目；manifest 最大 64 MiB；单个 File object 载荷最大 128 MiB（与产品单文件上限一致）；单个数据库载荷最大 4 GiB；一个 bundle 声明的载荷总量最大 4 GiB。Preflight 按 manifest 自己声明的长度收紧读取预算，因此合法的大对象不会被整体上限误伤。
 - Export：单次最多 100,000 条 Record；Import：单次最多 1,000 条 Record 且请求体最大 8 MiB。
 - Contract：最多 512 个 Collection、每 Collection 最多 4,096 个 Field。
 

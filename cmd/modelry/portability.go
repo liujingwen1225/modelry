@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,23 +11,15 @@ import (
 	"path/filepath"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
-	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
-// cliObjects 让 CLI 直接从本地对象目录读取被引用的文件对象。
-// CLI 只在项目已停止时运行，因此不需要运行中的 Provider。
-type cliObjects struct {
-	keys   []string
-	root   string
-	locked bool
-}
-
-func (source cliObjects) ReferencedFileKeys(context.Context) ([]string, error) {
-	return source.keys, nil
-}
+// cliObjects 让 CLI 直接从本地对象目录读取文件对象字节。
+// CLI 只在项目已停止时运行，因此不需要运行中的 Provider；
+// 需要哪些 key 由 SQLite 快照决定，CLI 不预先从 live 数据库读取。
+type cliObjects struct{ root string }
 
 func (source cliObjects) OpenObject(_ context.Context, key string) (io.ReadCloser, error) {
 	return os.Open(filepath.Join(source.root, key))
@@ -75,18 +68,8 @@ func runBackup(args []string, stdout, stderr io.Writer, workingDirectory string)
 		_, _ = fmt.Fprintf(stderr, "cannot open the Backend Model: %v\n", err)
 		return 1
 	}
-	recordService, err := records.New(store, models)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "cannot prepare Record access: %v\n", err)
-		return 1
-	}
-	objects, err := recordService.ReferencedFileKeys(context.Background())
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "cannot read referenced file objects: %v\n", err)
-		return 1
-	}
 	service, err := portability.NewService(portability.Options{
-		Store: store, Objects: cliObjects{keys: objects, root: root.Objects}, Models: models,
+		Store: store, Objects: cliObjects{root: root.Objects}, Models: models,
 		ManagedDir: root.ManagedDir, Version: version,
 	})
 	if err != nil {
@@ -170,13 +153,15 @@ func runRestore(args []string, stdout, stderr io.Writer, workingDirectory string
 		return 1
 	}
 	defer lock.Release()
-	if _, err := os.Stat(root.Database); err == nil && !*force {
-		_, _ = fmt.Fprintln(stderr, "this project already contains state; pass --force to replace it")
-		return 1
-	}
+	// 「项目是否已有状态」由 Apply 在回滚掉任何残留的中间态之后判断，CLI 不重复判断：
+	// 一个残留的 journal 可能短暂地让 project.sqlite 不存在，从而让 --force 这道门被绕过。
 	if _, err := service.Apply(context.Background(), *from, portability.ApplyOptions{
 		Force: *force, DatabasePath: root.Database, ObjectsDir: root.Objects,
 	}); err != nil {
+		if errors.Is(err, portability.ErrProjectNotEmpty) {
+			_, _ = fmt.Fprintln(stderr, "this project already contains state; pass --force to replace it")
+			return 1
+		}
 		_, _ = fmt.Fprintf(stderr, "restore failed: %v\n", err)
 		return 1
 	}

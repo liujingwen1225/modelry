@@ -113,7 +113,10 @@ func (service *Service) ExportStream(ctx context.Context, source RecordSource, r
 			return err
 		}
 		for _, record := range page.Data {
-			line := ExportRecordLine{Kind: "record", ID: record.ID, Values: safeRecordValues(record.Values)}
+			// Export 无损搬移 Record 的每一个产品字段。是否泄漏 Credential 由领域边界
+			// 决定，而不是由字段名决定：Password Credential、Session 与 Secret 存在
+			// 独立的表里，永远不会出现在 Record Values 中。
+			line := ExportRecordLine{Kind: "record", ID: record.ID, Values: record.Values}
 			encoded, err := json.Marshal(line)
 			if err != nil {
 				return fmt.Errorf("%w: encode export record: %v", ErrStorage, err)
@@ -134,20 +137,6 @@ func (service *Service) ExportStream(ctx context.Context, source RecordSource, r
 	return writer.Flush()
 }
 
-// safeRecordValues 只导出产品允许搬移的值：永不导出 Password Credential 或 Secret 材料。
-func safeRecordValues(values map[string]any) map[string]any {
-	projected := make(map[string]any, len(values))
-	for key, value := range values {
-		switch strings.ToLower(key) {
-		case "password", "passwordhash", "password_hash", "token", "secret":
-			continue
-		default:
-			projected[key] = value
-		}
-	}
-	return projected
-}
-
 // ImportStream 读取 NDJSON 并通过 Record 创建路径导入每条 Record。
 func (service *Service) ImportStream(ctx context.Context, source RecordSource, resolver CollectionResolver, collectionID string, input io.Reader) (ImportSummary, error) {
 	if source == nil || resolver == nil {
@@ -162,7 +151,8 @@ func (service *Service) ImportStream(ctx context.Context, source RecordSource, r
 		return ImportSummary{}, err
 	}
 	scanner := bufio.NewScanner(input)
-	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
+	// 单行上限与请求体上限一致：请求体已经限流，因此这里不需要更早、更不可预期的截断。
+	scanner.Buffer(make([]byte, 0, 64<<10), maximumImportRequestBytes)
 	summary := ImportSummary{Results: make([]ImportResult, 0, 16)}
 	index := 0
 	for scanner.Scan() {
@@ -178,7 +168,12 @@ func (service *Service) ImportStream(ctx context.Context, source RecordSource, r
 			if err := json.Unmarshal([]byte(line), &header); err != nil || strings.TrimSpace(header.Kind) != "collection" {
 				return summary, fmt.Errorf("%w: the first line must be a collection header", ErrInvalidArgument)
 			}
-			if header.AppliedModelHash != "" && header.AppliedModelHash != modelHash {
+			// model compatibility gate 不能因为省略 hash 而被绕过：缺失或空的
+			// appliedModelHash 是一个不合法的请求，而不是一次匹配。
+			if strings.TrimSpace(header.AppliedModelHash) == "" {
+				return summary, fmt.Errorf("%w: the collection header must carry the appliedModelHash it was exported from", ErrInvalidArgument)
+			}
+			if header.AppliedModelHash != modelHash {
 				return summary, fmt.Errorf("%w: the exported model does not match the applied model of this project", ErrModelMismatch)
 			}
 			if header.CollectionID != "" && header.CollectionID != collection.ID {
@@ -191,7 +186,11 @@ func (service *Service) ImportStream(ctx context.Context, source RecordSource, r
 			return summary, fmt.Errorf("%w: a single import accepts at most %d Records", ErrInvalidArgument, maximumImportRecords)
 		}
 		var payload ImportLine
-		if err := json.Unmarshal([]byte(line), &payload); err != nil {
+		// UseNumber 是数据保持的一部分：JSON 字段里的整数与高精度小数不能被折成
+		// float64，否则 Export -> Import 会静默改值。
+		decoder := json.NewDecoder(strings.NewReader(line))
+		decoder.UseNumber()
+		if err := decoder.Decode(&payload); err != nil || payload.Kind != "record" {
 			summary.Failed++
 			summary.Results = append(summary.Results, ImportResult{Index: index, Status: "failed", Code: "INVALID_ARGUMENT"})
 			index++
@@ -216,7 +215,8 @@ func (service *Service) ImportStream(ctx context.Context, source RecordSource, r
 		index++
 	}
 	if err := scanner.Err(); err != nil {
-		return summary, fmt.Errorf("%w: read import stream: %v", ErrInvalidArgument, err)
+		// %w 让调用方仍能识别 ErrPayloadTooLarge 之类的具体原因。
+		return summary, fmt.Errorf("%w: read import stream: %w", ErrInvalidArgument, err)
 	}
 	if index == 0 {
 		return summary, fmt.Errorf("%w: the import stream is empty", ErrInvalidArgument)

@@ -23,6 +23,10 @@ let runtimeLauncher = '';
 let runtimeProcess: RuntimeProcess | undefined;
 let runtimeProcessId: number | undefined;
 let runtimeURL = '';
+// 由第一个测试产生，供第二个测试用真实 CLI restore 回放。
+let latestBundlePath = '';
+let latestCollectionId = '';
+let latestContractHash = '';
 
 function runChecked(command: string, args: string[], cwd: string) {
   execFileSync(command, args, { cwd, stdio: 'inherit', env: process.env });
@@ -183,6 +187,7 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   await expect(page.getByRole('heading', { name: 'Developer and portability', level: 1 })).toBeVisible();
   const hash = await page.getByTestId('contract-hash').textContent();
   expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  latestContractHash = hash ?? '';
 
   // Backup：Runtime 产生一个带 manifest 的 tar 归档。
   const downloadPromise = page.waitForEvent('download');
@@ -190,6 +195,8 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   const download = await downloadPromise;
   const bundlePath = path.join(archiveDirectory, download.suggestedFilename());
   await download.saveAs(bundlePath);
+  latestBundlePath = bundlePath;
+  latestCollectionId = collectionId;
   const bundle = await readFile(bundlePath);
   expect(bundle.includes(Buffer.from('manifest.json'))).toBe(true);
   expect(bundle.includes(Buffer.from('modelry.community.backup'))).toBe(true);
@@ -228,6 +235,59 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   expect(audit.text).toContain('backup.created');
   expect(audit.text).toContain('restore.preflight');
   expect(audit.text).not.toContain('portable');
+
+  await stopRuntime();
+  expect(issues).toEqual([]);
+});
+
+// 真实闭环：Admin 产生的 bundle 由真实 CLI restore 到另一个项目根目录，再启动一个
+// 真实 Runtime，并确认恢复出来的项目在 Admin 里仍然是完整的产品状态。
+test('WP28 a CLI restore of an Admin bundle restarts as a complete project', async ({ page }) => {
+  test.setTimeout(300_000);
+  expect(latestBundlePath, 'the previous test must have produced a bundle').not.toBe('');
+  const restoredRoot = path.join(runtimeDirectory, 'restored');
+  await mkdir(restoredRoot);
+  runChecked(runtimeBinary, ['restore', '--project-root', restoredRoot, '--from', latestBundlePath], repositoryRoot);
+
+  const issues: string[] = [];
+  const expectedHTTPFailures = new Set<string>();
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource: the server responded with a status of ')) issues.push('Console: ' + message.text());
+  });
+  page.on('pageerror', (error) => issues.push('Page: ' + error.message));
+  page.on('response', (response) => {
+    if (response.status() < 400) return;
+    const key = String(response.status()) + ' ' + response.url();
+    if (expectedHTTPFailures.delete(key)) return;
+    issues.push('HTTP ' + String(response.status()) + ': ' + response.url());
+  });
+
+  const restored = await startRuntime(restoredRoot);
+  expectedHTTPFailures.add('401 ' + new URL('/admin/api/v1/auth/session', restored.url).toString());
+
+  // 恢复出来的项目自带原来的 Owner 账户，因此直接登录而不是重新 bootstrap。
+  await page.goto(restored.url);
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await page.getByLabel('Email').fill(ownerEmail);
+  await page.getByLabel('Password').fill(ownerPassword);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).not.toHaveURL(/\/login/);
+
+  // 恢复出来的项目必须在 Admin 上呈现同一个 Applied Model。
+  await page.goto(restored.url + '/settings/portability');
+  await expect(page.getByRole('heading', { name: 'Developer and portability', level: 1 })).toBeVisible();
+  await expect(page.getByTestId('contract-hash')).toHaveText(latestContractHash);
+
+  const listed = await requestJSON(page, 'GET', '/admin/api/v1/collections/' + latestCollectionId + '/records?limit=10');
+  expect(listed.status).toBe(200);
+  // bundle 是在导入之前产生的，因此恢复出来的项目必须精确重现那一刻的状态：
+  // 有原始的 portable Record，没有之后才导入的 imported Record。
+  expect(listed.text).toContain('portable');
+  expect(listed.text).not.toContain('imported');
+
+  // 恢复出来的项目必须仍然可以产生一个自洽的 bundle。
+  const backup = await requestJSON(page, 'POST', '/admin/api/v1/backup');
+  expect(backup.status).toBe(200);
 
   await stopRuntime();
   expect(issues).toEqual([]);
