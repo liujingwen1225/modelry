@@ -160,3 +160,46 @@ func TestAdministratorLifecyclePermissionEnforcementAndAudit(t *testing.T) {
 		}
 	}
 }
+
+// TestAdministratorSelfServiceSessionAndFailClosedRoutes 证明 Administrator 始终可以读取并结束自己的会话，
+// 而任何未映射的 Control Plane 路由仍然 fail closed。
+func TestAdministratorSelfServiceSessionAndFailClosedRoutes(t *testing.T) {
+	_, service, handler, _ := openTestService(t)
+	service.SetAuditSink(&recordingAuditSink{})
+	ownerCookie := bootstrapOwnerSession(t, handler)
+
+	createBody := `{"email":"self@example.test","password":"administrator-password","permission":{"preset":"custom","customPermissionVersion":1,"customOperations":["runtime.read"]}}`
+	created := request(t, handler, http.MethodPost, "/admin/api/v1/administrators", createBody, ownerCookie, "http://localhost")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create administrator status = %d, body = %s", created.Code, created.Body.String())
+	}
+	login := request(t, handler, http.MethodPost, "/admin/api/v1/auth/login", `{"email":"self@example.test","password":"administrator-password"}`, nil, "http://localhost")
+	if login.Code != http.StatusOK {
+		t.Fatalf("administrator login status = %d, body = %s", login.Code, login.Body.String())
+	}
+	administratorCookie := findOwnerCookie(t, login)
+
+	session := request(t, handler, http.MethodGet, "/admin/api/v1/auth/session", "", administratorCookie, "")
+	if session.Code != http.StatusOK {
+		t.Fatalf("administrator session status = %d, body = %s", session.Code, session.Body.String())
+	}
+	var payload struct {
+		Role string `json:"role"`
+	}
+	if err := json.Unmarshal(session.Body.Bytes(), &payload); err != nil || payload.Role != "administrator" {
+		t.Fatalf("administrator session payload = %s", session.Body.String())
+	}
+
+	granted := request(t, handler, http.MethodGet, "/admin/api/v1/runtime/status", "", administratorCookie, "")
+	if granted.Code == http.StatusForbidden || granted.Code == http.StatusUnauthorized {
+		t.Fatalf("runtime.read Permission was denied: %d %s", granted.Code, granted.Body.String())
+	}
+	unmapped := request(t, handler, http.MethodGet, "/admin/api/v1/secrets", "", administratorCookie, "")
+	assertAPIError(t, unmapped, http.StatusForbidden, "FORBIDDEN")
+
+	logout := request(t, handler, http.MethodPost, "/admin/api/v1/auth/logout", "", administratorCookie, "http://localhost")
+	if logout.Code != http.StatusNoContent {
+		t.Fatalf("administrator logout status = %d, body = %s", logout.Code, logout.Body.String())
+	}
+	assertAPIError(t, request(t, handler, http.MethodGet, "/admin/api/v1/auth/session", "", administratorCookie, ""), http.StatusUnauthorized, "UNAUTHENTICATED")
+}

@@ -9,15 +9,18 @@ import {
   Home,
   KeyRound,
   LogOut,
+  Mail,
   Moon,
   Network,
   Puzzle,
   Settings2,
   ShieldCheck,
   Sun,
+  UserCog,
   Webhook,
 } from 'lucide-react';
 import type { TranslationKey } from '../i18n/i18n';
+import type { ControlPlanePermission } from '../auth/client';
 import { useI18n } from '../i18n/i18n';
 import { RuntimeBadge } from './runtime-status';
 import { useDiagnostics } from './diagnostics-context';
@@ -28,31 +31,65 @@ import { useTheme } from './theme-context';
 
 const groups: Array<{
   label: TranslationKey | null;
-  items: Array<{ label: TranslationKey; to: string; icon: LucideIcon }>;
+  items: Array<{ label: TranslationKey; to: string; icon: LucideIcon; operation?: string }>;
 }> = [
-  { label: null, items: [{ label: 'navigation.overview', to: '/', icon: Home }] },
+  { label: null, items: [{ label: 'navigation.overview', to: '/', icon: Home, operation: 'runtime.read' }] },
   {
     label: 'navigation.build',
     items: [
-      { label: 'navigation.collections', to: '/collections', icon: FileStack },
-      { label: 'navigation.api', to: '/api', icon: Network },
+      { label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read' },
+      { label: 'navigation.api', to: '/api', icon: Network, operation: 'collections.read' },
     ],
   },
   {
     label: 'navigation.operate',
     items: [
-      { label: 'navigation.changes', to: '/changes', icon: GitBranch },
-      { label: 'navigation.access', to: '/access', icon: ShieldCheck },
+      { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
+      { label: 'navigation.access', to: '/access', icon: ShieldCheck, operation: 'accessRules.read' },
       { label: 'navigation.automations', to: '/automations', icon: Webhook },
       { label: 'navigation.extensions', to: '/extensions', icon: Puzzle },
       { label: 'navigation.secrets', to: '/secrets', icon: KeyRound },
     ],
   },
-  { label: 'navigation.system', items: [{ label: 'navigation.settings', to: '/settings', icon: Settings2 }] },
+  { label: 'navigation.system', items: [
+    { label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' },
+    { label: 'navigation.administrators', to: '/administrators', icon: UserCog },
+    { label: 'navigation.mail', to: '/settings/mail', icon: Mail },
+  ] },
 ];
 
-function Sidebar() {
+const readOnlyControlPlaneOperations = new Set([
+  'runtime.read', 'storage.read', 'collections.read', 'records.read', 'files.read', 'schema.read',
+  'accessRules.read', 'authentication.read', 'users.read', 'sessions.read', 'serviceAccounts.read',
+  'apiKeys.read', 'requests.read', 'audit.read', 'administrators.read', 'mail.read',
+]);
+
+// allowsOperation 在 Admin Shell 中复现 Control Plane 的 fail closed 语义。
+// 没有显式 operation 的导航项只对 Owner 可见。
+function allowsOperation(role: AppShellProps['role'], permission: ControlPlanePermission | undefined, operation: string): boolean {
+  if (role === undefined || role === 'owner') return true;
+  if (!permission) return false;
+  switch (permission.preset) {
+    case 'fullAccess': return true;
+    case 'readOnly': return readOnlyControlPlaneOperations.has(operation);
+    case 'custom': return (permission.customOperations ?? []).includes(operation);
+    default: return false;
+  }
+}
+
+// canSeeNavigationItem 让没有显式 operation 的导航项只对 Owner 可见。
+function canSeeNavigationItem(role: AppShellProps['role'], permission: ControlPlanePermission | undefined, item: { operation?: string }): boolean {
+  if (item.operation === undefined) return role === undefined || role === 'owner';
+  return allowsOperation(role, permission, item.operation);
+}
+function Sidebar({ role, permission }: { role?: AppShellProps['role']; permission?: ControlPlanePermission }) {
   const { t } = useI18n();
+  const visibleGroups = useMemo(
+    () => groups
+      .map((group) => ({ ...group, items: group.items.filter((item) => canSeeNavigationItem(role, permission, item)) }))
+      .filter((group) => group.items.length > 0),
+    [role, permission],
+  );
   return (
     <aside className="sidebar" aria-label={t('navigation.projectNavigation')}>
       <div className="sidebar__brand">
@@ -61,7 +98,7 @@ function Sidebar() {
         <span className="brand-edition">{t('shell.localEdition')}</span>
       </div>
       <nav aria-label={t('navigation.projectNavigation')} className="side-navigation">
-        {groups.map((group, groupIndex) => (
+        {visibleGroups.map((group, groupIndex) => (
           <div className="nav-group" key={group.label ?? 'overview'}>
             {group.label && <p className="nav-group__label">{t(group.label)}</p>}
             {group.items.map(({ label, to, icon: Icon }) => (
@@ -75,7 +112,7 @@ function Sidebar() {
                 <span>{t(label)}</span>
               </NavLink>
             ))}
-            {groupIndex < groups.length - 1 && <div className="nav-separator" />}
+            {groupIndex < visibleGroups.length - 1 && <div className="nav-separator" />}
           </div>
         ))}
       </nav>
@@ -114,10 +151,12 @@ function LanguageSwitcher() {
 export type AppShellProps = {
   ownerEmail?: string;
   sessionExpiresAt?: string;
+  role?: 'owner' | 'administrator';
+  permission?: ControlPlanePermission;
   onLogout?: () => Promise<void>;
 };
 
-function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProps) {
+function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout, role }: AppShellProps) {
   const [signOutState, setSignOutState] = useState<'idle' | 'loading' | 'error'>('idle');
   const { formatDate, t } = useI18n();
   const ownerLabel = ownerEmail ? t('shell.ownerMenuFor', { email: ownerEmail }) : t('shell.ownerMenu');
@@ -144,6 +183,7 @@ function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProps) {
       <div className="owner-menu__popover">
         <div className="owner-menu__identity">
           <strong>{ownerEmail ?? t('shell.owner')}</strong>
+          <span>{t(role === 'administrator' ? 'shell.roleAdministrator' : 'shell.roleOwner')}</span>
           <span>{t('shell.ownerSessionActive')}</span>
           {sessionExpiresAt && <span>{t('shell.expires', { date: formatDate(sessionExpiresAt) })}</span>}
         </div>
@@ -171,7 +211,7 @@ function recordsTarget(context: CommandContext): string {
   return `${collectionPath}${search ? `?${search}` : ''}`;
 }
 
-function ShellCommands() {
+function ShellCommands({ role, permission }: { role?: AppShellProps['role']; permission?: ControlPlanePermission }) {
   const { t, locale, setLocale } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const { runtime, storage } = useDiagnostics();
@@ -198,6 +238,22 @@ function ShellCommands() {
       go('navigate.extensions', 'commands.extensions', '/extensions', ['hooks', 'lifecycle', 'runtime']),
       go('navigate.secrets', 'commands.secrets', '/secrets', ['write-only', 'secret']),
       go('navigate.settings', 'commands.settings', '/settings'),
+      ...(role === undefined || role === 'owner' ? [
+        {
+          id: 'navigate.administrators',
+          category: 'commands.categories.system' as const,
+          label: () => t('commands.administrators'),
+          keywords: () => [t('administrators.searchKeywords')],
+          execute: (context: CommandContext) => context.navigate('/administrators'),
+        },
+        {
+          id: 'navigate.mail',
+          category: 'commands.categories.system' as const,
+          label: () => t('commands.mail'),
+          keywords: () => [t('mail.searchKeywords')],
+          execute: (context: CommandContext) => context.navigate('/settings/mail'),
+        },
+      ] : []),
       {
         id: 'create.collection',
         category: 'commands.categories.create',
@@ -284,18 +340,18 @@ function ShellCommands() {
     }
 
     return result.map((command) => ({ ...command, requiresCapabilities: ['admin:owner-session'] }));
-  }, [currentId, locale, recentCollections, runtime, setLocale, storage, t, theme, toggleTheme]);
+  }, [currentId, locale, permission, recentCollections, role, runtime, setLocale, storage, t, theme, toggleTheme]);
 
   useRegisterCommands(commands);
   return null;
 }
 
-function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProps) {
+function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permission }: AppShellProps) {
   const { t } = useI18n();
   return (
     <div className="app-frame">
       <a className="skip-link" href="#main-content">{t('shell.skipToMainContent')}</a>
-      <Sidebar />
+      <Sidebar permission={permission} role={role} />
       <div className="workspace">
         <header className="topbar">
           <div className="topbar__identity">
@@ -311,7 +367,7 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProp
             <LanguageSwitcher />
             <ThemeButton />
             <span className="topbar__action-divider" aria-hidden="true" />
-            <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} sessionExpiresAt={sessionExpiresAt} />
+            <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} role={role} sessionExpiresAt={sessionExpiresAt} />
           </div>
         </header>
         <main className="page-area" id="main-content" tabIndex={-1}>
@@ -330,7 +386,7 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout }: AppShellProp
 export function AppShell(props: AppShellProps) {
   return (
     <CommandRegistryProvider>
-      <ShellCommands />
+      <ShellCommands permission={props.permission} role={props.role} />
       <AppShellLayout {...props} />
     </CommandRegistryProvider>
   );

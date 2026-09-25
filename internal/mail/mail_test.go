@@ -247,3 +247,51 @@ func TestRestartReturnsRunningDeliveriesToPending(t *testing.T) {
 		t.Fatalf("restarted delivery = %+v", stored)
 	}
 }
+
+func TestPlaintextMailTransportStaysLoopbackOnly(t *testing.T) {
+	fixture := newMailFixture(t, fakePayloads{subject: "s", body: "b"})
+	base := Config{
+		Enabled: true, Port: 1025, Security: SecurityPlaintext,
+		FromAddress: "modelry@example.test", FromName: "Modelry",
+		UsernameSecretID: "sec_user", PasswordSecretID: "sec_pass",
+	}
+	remote := base
+	remote.Host = "smtp.example.test"
+	if _, err := fixture.service.SaveConfig(context.Background(), 1, remote); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("plaintext remote host error = %v, want ErrInvalidArgument", err)
+	}
+	local := base
+	local.Host = "127.0.0.1"
+	saved, err := fixture.service.SaveConfig(context.Background(), 1, local)
+	if err != nil {
+		t.Fatalf("plaintext loopback host error = %v", err)
+	}
+	if saved.Security != SecurityPlaintext {
+		t.Fatalf("saved security = %q, want plaintext", saved.Security)
+	}
+	if err := (SMTPSender{}).Send(context.Background(), remote, Credentials{}, Message{}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("plaintext remote send error = %v, want ErrInvalidArgument", err)
+	}
+	if !isLoopbackHost("localhost") || !isLoopbackHost("::1") || !isLoopbackHost("[::1]") || !isLoopbackHost("127.0.0.1") {
+		t.Fatal("loopback hosts must be recognized")
+	}
+	if isLoopbackHost("10.0.0.5") || isLoopbackHost("smtp.example.test") {
+		t.Fatal("remote hosts must not be treated as loopback")
+	}
+}
+
+func TestTestDeliveryUsesBuiltInPayload(t *testing.T) {
+	fixture := newMailFixture(t, fakePayloads{fail: errors.New("the recovery payload source must not render test deliveries")})
+	fixture.enable(t)
+	delivery, err := fixture.service.SendTest(context.Background(), "owner@example.test")
+	if err != nil {
+		t.Fatalf("SendTest error = %v", err)
+	}
+	if delivery.Status != DeliverySucceeded {
+		t.Fatalf("test delivery status = %q, error = %q", delivery.Status, delivery.ErrorCode)
+	}
+	messages := fixture.sender.messages()
+	if len(messages) != 1 || messages[0].Subject != "Modelry test message" || messages[0].To != "owner@example.test" {
+		t.Fatalf("test delivery messages = %+v", messages)
+	}
+}

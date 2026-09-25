@@ -157,3 +157,61 @@ func TestAuditListServerFiltersAreInclusiveAndCursorBound(t *testing.T) {
 		t.Fatalf("reversed time range was accepted: %v", err)
 	}
 }
+
+// TestAuditSchemaMigratesLegacyActorKindConstraint 证明旧项目的 AuditRecord 表会在启动时就地迁移，
+// 允许 Administrator 与 App User 审计事实，同时保留历史记录与 append-only 触发器。
+func TestAuditSchemaMigratesLegacyActorKindConstraint(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "project.sqlite")
+	store, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	legacy := `CREATE TABLE modelry_audit_records (
+		id TEXT PRIMARY KEY NOT NULL,
+		request_id TEXT NOT NULL,
+		occurred_at TEXT NOT NULL,
+		occurred_unix_nano INTEGER NOT NULL,
+		actor_kind TEXT NOT NULL CHECK (actor_kind IN ('owner', 'serviceAccount')),
+		actor_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		resource_json TEXT NOT NULL,
+		result TEXT NOT NULL
+	)`
+	if err := store.WithTransaction(ctx, func(tx storage.Executor) error {
+		if _, err := tx.ExecContext(ctx, legacy); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO modelry_audit_records (id, request_id, occurred_at, occurred_unix_nano, actor_kind, actor_id, action, resource_json, result) VALUES ('aud_legacy00000000001', 'req_legacy0001', '2026-09-25T09:00:00Z', 1, 'owner', 'own_legacy', 'collections.created', '{"kind":"collection","id":"col_legacy"}', 'success')`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := NewService(ctx, store)
+	if err != nil {
+		t.Fatalf("migrating a legacy AuditRecord table: %v", err)
+	}
+	if err := service.Append(ctx, AppendInput{
+		Actor: Actor{Kind: ActorAppUser, ID: "rec_app_user"}, Action: "auth.emailVerificationConfirmed",
+		Resource: Resource{Kind: "authCollection", ID: "col_members"}, Result: "success",
+	}); err != nil {
+		t.Fatalf("append App User audit fact after migration: %v", err)
+	}
+	listed, err := service.List(ctx, ListOptions{Limit: 10, ActorKind: ActorAppUser})
+	if err != nil || len(listed.Data) != 1 {
+		t.Fatalf("filter App User audit facts = %+v, err = %v", listed, err)
+	}
+	legacyRecord, err := service.Get(ctx, "aud_legacy00000000001")
+	if err != nil || legacyRecord.Actor.ID != "own_legacy" {
+		t.Fatalf("legacy AuditRecord was not preserved: %+v, %v", legacyRecord, err)
+	}
+	if err := store.WithTransaction(ctx, func(tx storage.Executor) error {
+		_, err := tx.ExecContext(ctx, `UPDATE modelry_audit_records SET result = 'denied' WHERE id = 'aud_legacy00000000001'`)
+		return err
+	}); err == nil {
+		t.Fatal("append-only update protection was lost during the migration")
+	}
+}

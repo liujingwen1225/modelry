@@ -22,11 +22,13 @@ Delegation and recovery introduce three risks that must be decided here rather t
 - One login surface. `POST /admin/api/v1/auth/login` accepts Owner and Administrator credentials and returns the session role plus the effective Permission. The session cookie keeps its existing name so existing projects and browser flows continue to work.
 - The session record distinguishes its principal kind. `OwnerFromContext` keeps returning the Owner only, so existing Owner-only decisions stay owner-only; new code asks for the Administrator context or the operation-level Permission check.
 - Permission evaluation is fail closed: an Administrator is denied when the request maps to an operation it does not hold, and any Control Plane route without a known operation requires the Owner. Denials are audited as denied Control Plane facts.
+- GET /admin/api/v1/auth/session and POST /admin/api/v1/auth/logout are self-service routes: any authenticated Control Plane identity may read and end its own session, whatever Permission it holds. Every other unmapped route still requires the Owner.
 - Administrator sessions are durable rows with expiry and revocation, mirroring Application sessions. Disabling or deleting an Administrator revokes its sessions in the same transaction; every later request with that session is rejected.
 
 ### Mail delivery
 
 - The Project owns one Mail Provider configuration: enabled flag, SMTP host, port, transport security, sender address and name, and Project Secret references for the username and password. It is Owner-only, revision-guarded, and disabled by default.
+- Transport security is STARTTLS or implicit TLS for any remote host. Plaintext SMTP is accepted only for a loopback host, mirroring the File Storage rule from ADR-0005, so a self-hosted Mailpit or MailHog can be used without weakening remote delivery.
 - A verification or password reset request writes a durable mail intent in SQLite and returns. The outbound SMTP conversation happens only after commit, on a bounded worker, exactly like the Webhook dispatcher from ADR-0004. A delivery failure never rolls back the request.
 - The outbox stores the recipient, the intent kind, an opaque payload reference, and safe attempt metadata. It never stores the message body, the token, a Secret value, or a credential. History keeps the attempt outcome and an optional SMTP status class.
 - Retries are bounded with backoff, the worker is cancellable, and a Runtime restart turns in-flight attempts into interrupted history and returns the intent to pending only while its budget remains. A disabled Provider pauses new attempts instead of failing the intent permanently.

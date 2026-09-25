@@ -189,16 +189,21 @@ func (service *Service) normalizeConfig(ctx context.Context, next Config) (Confi
 	normalized.FromAddress = strings.TrimSpace(next.FromAddress)
 	switch normalized.Security {
 	case SecurityStartTLS, SecurityTLS:
+	case SecurityPlaintext:
 	case "":
 		normalized.Security = SecurityStartTLS
 	default:
-		return Config{}, fmt.Errorf("%w: transport security must be startTLS or tls", ErrInvalidArgument)
+		return Config{}, fmt.Errorf("%w: transport security must be startTLS, tls, or plaintext", ErrInvalidArgument)
 	}
 	if !normalized.Enabled {
 		return normalized, nil
 	}
 	if normalized.Host == "" || normalized.Port < 1 || normalized.Port > 65535 {
 		return Config{}, fmt.Errorf("%w: host and port are required to enable mail", ErrInvalidArgument)
+	}
+	// 明文 SMTP 只用于 loopback，例如本机 Mailpit 或 MailHog。
+	if normalized.Security == SecurityPlaintext && !isLoopbackHost(normalized.Host) {
+		return Config{}, fmt.Errorf("%w: plaintext SMTP is only accepted for a loopback host", ErrInvalidArgument)
 	}
 	address, err := mail.ParseAddress(normalized.FromAddress)
 	if err != nil || address.Address != normalized.FromAddress {

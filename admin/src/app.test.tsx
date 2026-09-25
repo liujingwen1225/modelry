@@ -8,6 +8,8 @@ function diagnosticResponse(path: string): Response {
     return new Response(JSON.stringify({
       owner: { id: 'own_test', email: 'owner@example.com' },
       expiresAt: '2026-09-25T09:00:00Z',
+      role: 'owner',
+      permission: { preset: 'fullAccess' },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -81,7 +83,7 @@ describe('Modelry Admin shell', () => {
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Automations', 'Extensions', 'Secrets', 'Settings',
+      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Automations', 'Extensions', 'Secrets', 'Settings', 'Administrators', 'Mail',
     ]);
     expect(navigation).not.toHaveTextContent(/Activity/);
     expect(await screen.findByText('Runtime ready')).toBeInTheDocument();

@@ -15,6 +15,8 @@ import { OverviewPage, SettingsPage } from './pages/pages';
 import { ExtensionsPage, SecretsPage } from './extensions/pages';
 import { AutomationPage } from './automation/pages';
 import { FileStoragePage } from './storage/pages';
+import { AdministratorsPage } from './administrators/pages';
+import { MailPage } from './mail/pages';
 
 function NotFoundPage() {
   return (
@@ -64,7 +66,7 @@ function AuthenticatedWorkspace() {
   const session = state.session;
   return (
     <Routes>
-      <Route element={<AppShell onLogout={logout} ownerEmail={session.owner.email} sessionExpiresAt={session.expiresAt} />}>
+      <Route element={<AppShell onLogout={logout} ownerEmail={session.owner.email} permission={session.permission} role={session.role} sessionExpiresAt={session.expiresAt} />}>
         <Route element={<OverviewPage />} path="/" />
         <Route element={<CollectionsPage />} path="/collections" />
         <Route element={<CreateCollectionPage />} path="/collections/new" />
@@ -86,6 +88,8 @@ function AuthenticatedWorkspace() {
         <Route element={<AutomationPage />} path="/automations" />
         <Route element={<SettingsPage />} path="/settings" />
         <Route element={<FileStoragePage />} path="/settings/storage" />
+        <Route element={<MailPage />} path="/settings/mail" />
+        <Route element={<AdministratorsPage />} path="/administrators" />
         <Route element={<AuthenticatedRedirect />} path="/login" />
         <Route element={<NotFoundPage />} path="*" />
       </Route>

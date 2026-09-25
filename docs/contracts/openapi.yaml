@@ -5508,7 +5508,8 @@ components:
       additionalProperties: false
     MailProviderSecurity:
       type: string
-      enum: [startTLS, tls]
+      description: STARTTLS or implicit TLS for any host. Plaintext is accepted only for a loopback host such as a local Mailpit or MailHog.
+      enum: [startTLS, tls, plaintext]
     MailProvider:
       type: object
       required: [enabled, host, port, security, fromAddress, fromName, revision, updatedAt]

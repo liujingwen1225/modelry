@@ -9,6 +9,10 @@ import (
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
+// testMessagePayload 返回固定的测试邮件正文；它不引用任何恢复 token，也不暴露凭据。
+func testMessagePayload() (string, string) {
+	return "Modelry test message", "This test message was sent from Modelry Admin.\n\nYour Mail Provider accepted it, so email verification and password reset messages can be delivered to Application users.\n"
+}
 // SendTest 同步发送一封测试邮件；结果作为一条耐久 test 投递记录保留。
 func (service *Service) SendTest(ctx context.Context, recipient string) (Delivery, error) {
 	config, err := service.GetConfig(ctx)

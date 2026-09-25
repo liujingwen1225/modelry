@@ -19,6 +19,9 @@ func (SMTPSender) Send(ctx context.Context, config Config, credentials Credentia
 	dialer := &net.Dialer{Timeout: DialTimeout}
 	var connection net.Conn
 	var err error
+	if config.Security == SecurityPlaintext && !isLoopbackHost(config.Host) {
+		return fmt.Errorf("%w: plaintext SMTP is only accepted for a loopback host", ErrInvalidArgument)
+	}
 	tlsConfig := &tls.Config{ServerName: config.Host, MinVersion: tls.VersionTLS12}
 	if config.Security == SecurityTLS {
 		connection, err = tls.DialWithDialer(dialer, "tcp", address, tlsConfig)
@@ -98,6 +101,16 @@ func sanitizeHeader(value string) string {
 	value = strings.ReplaceAll(value, "\r", " ")
 	value = strings.ReplaceAll(value, "\n", " ")
 	return strings.TrimSpace(value)
+}
+
+// isLoopbackHost 判断 SMTP 主机是否只在本机可达。
+func isLoopbackHost(host string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(host))
+	if trimmed == "localhost" {
+		return true
+	}
+	address := net.ParseIP(strings.Trim(trimmed, "[]"))
+	return address != nil && address.IsLoopback()
 }
 
 var _ = errors.Is

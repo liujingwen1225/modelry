@@ -43,10 +43,12 @@ export type CollectionCreateRequest = {
   authentication?: AuthenticationConfiguration;
   accessRules?: Array<Record<string, unknown>>;
 };
+export type EmailVerificationMode = 'off' | 'optional' | 'required';
 export type AuthenticationConfiguration = {
   emailPasswordEnabled: boolean;
   selfRegistration: boolean;
   sessionDurationDays: number;
+  emailVerification?: EmailVerificationMode;
 };
 export type Page<T> = { data: T[]; nextCursor?: string };
 export type OperationKind = 'field' | 'relation' | 'index';

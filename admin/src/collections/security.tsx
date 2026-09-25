@@ -30,6 +30,7 @@ import {
   type AuthenticationConfiguration,
   type AuthenticationConfigurationState,
   type Collection,
+  type EmailVerificationMode,
   type FieldDefinition,
 } from './client';
 import { useCollectionWorkspace } from './workspace-context';
@@ -363,6 +364,21 @@ function AccessRuleEditor({ rule, ownerFields, customFields, busy, onSave, onCan
   </form>;
 }
 
+function emailVerificationLabel(mode: EmailVerificationMode | undefined): string {
+  switch (mode) {
+    case 'required': return 'Required';
+    case 'optional': return 'Optional';
+    default: return 'Off';
+  }
+}
+
+function emailVerificationHint(mode: EmailVerificationMode | undefined): string {
+  switch (mode) {
+    case 'required': return 'Application users cannot sign in until they confirm their email address.';
+    case 'optional': return 'Application users can confirm their email address but sign-in is not blocked.';
+    default: return 'No email confirmation is requested and sign-in is never blocked.';
+  }
+}
 function AuthenticationPanel({ collectionId }: { collectionId: string }) {
   const [state, setState] = useState<AuthenticationConfigurationState>();
   const [draft, setDraft] = useState<AuthenticationConfiguration>();
@@ -452,10 +468,12 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
           <div><dt>Email + password</dt><dd><strong>{state.pending.emailPasswordEnabled ? 'Enabled' : 'Disabled'}</strong><span>{state.pending.emailPasswordEnabled ? 'Application users can authenticate with their email and password.' : 'Email and password login is unavailable.'}</span></dd></div>
           <div><dt>Self registration</dt><dd><strong>{state.pending.selfRegistration ? 'Enabled' : 'Disabled'}</strong><span>{state.pending.selfRegistration ? 'Users can create their own accounts.' : 'Only an Administrator can create users.'}</span></dd></div>
           <div><dt>Session duration</dt><dd><strong>{state.pending.sessionDurationDays} days</strong><span>New Application sessions expire after this period.</span></dd></div>
+          <div><dt>Email verification</dt><dd><strong>{emailVerificationLabel(state.pending.emailVerification)}</strong><span>{emailVerificationHint(state.pending.emailVerification)}</span></dd></div>
         </dl> : <form className="security-auth-editor" onSubmit={(event) => void save(event)}>
           <FormField htmlFor="auth-email-password" hint="Email remains the Auth identifier field." label="Email + password"><select id="auth-email-password" onChange={(event) => setDraft({ ...draft, emailPasswordEnabled: event.target.value === 'enabled' })} value={draft.emailPasswordEnabled ? 'enabled' : 'disabled'}><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></FormField>
           <FormField htmlFor="auth-self-registration" label="Self registration"><select id="auth-self-registration" onChange={(event) => setDraft({ ...draft, selfRegistration: event.target.value === 'enabled' })} value={draft.selfRegistration ? 'enabled' : 'disabled'}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></FormField>
           <FormField htmlFor="auth-session-days" hint="At least 1 day." label="Session duration (days)"><input id="auth-session-days" min="1" onChange={(event) => setDraft({ ...draft, sessionDurationDays: Number(event.target.value) })} type="number" value={draft.sessionDurationDays} /></FormField>
+          <FormField htmlFor="auth-email-verification" hint="Applies to Application sign-in. Required blocks sign-in until the address is confirmed." label="Email verification"><select id="auth-email-verification" onChange={(event) => setDraft({ ...draft, emailVerification: event.target.value as EmailVerificationMode })} value={draft.emailVerification ?? 'off'}><option value="off">Off</option><option value="optional">Optional</option><option value="required">Required</option></select></FormField>
           <div className="security-rule-editor-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(false); }} type="button" variant="quiet">Cancel</Button><Button disabled={saving || draft.sessionDurationDays < 1 || !Number.isInteger(draft.sessionDurationDays)} type="submit" variant="primary">{saving ? 'Saving…' : 'Save pending settings'}</Button></div>
         </form>}
         {!editing && <div className="security-auth-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(true); }} size="small">Edit</Button></div>}

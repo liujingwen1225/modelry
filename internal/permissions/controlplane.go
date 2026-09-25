@@ -6,7 +6,21 @@ import (
 	"strings"
 )
 
+// SelfServiceRoute 判断 Method + Path 是否属于任何已认证身份都可使用的自有会话路由。
+// 这些路由只作用于发起请求的会话本身，因此不参与 Control Plane Permission 强制。
+func SelfServiceRoute(method, path string) bool {
+	switch {
+	case method == http.MethodGet && path == "/admin/api/v1/auth/session":
+		return true
+	case method == http.MethodPost && path == "/admin/api/v1/auth/logout":
+		return true
+	default:
+		return false
+	}
+}
+
 // ControlPlaneOperation 把 Control Plane 的 Method + Path 映射到一个 Permission 操作。
+
 // 未映射的路由返回 false，调用方必须 fail closed。
 func ControlPlaneOperation(method, path string) (Operation, bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")

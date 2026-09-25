@@ -54,7 +54,7 @@
 
 ### 3.4 Mail Provider
 
-- 单例配置：enabled、host、port、security（`startTLS` / `tls`）、from address、from name、username secret id、password secret id、revision、updatedAt。
+- 单例配置：enabled、host、port、security（`startTLS` / `tls` / `plaintext`）、from address、from name、username secret id、password secret id、revision、updatedAt。`plaintext` 只接受 loopback 主机，用于本机 Mailpit 或 MailHog。
 - 仅 Owner 可读可写；写入必须携带 expectedRevision。
 - 默认 `enabled=false`。启用需要 host、port、from address 与已配置的 username / password Secret；否则 `409 MAIL_NOT_CONFIGURED`。
 - `POST /admin/api/v1/mail/test` 同步发送一封测试邮件（bounded，最长 20 秒），不写入 delivery 历史以外的状态；失败返回安全错误码，不泄漏 SMTP 响应正文。

@@ -459,7 +459,7 @@ func (service *Service) RequirePrincipal(next http.Handler) http.Handler {
 			}
 		}
 		principal := session.principal
-		if principal.Kind == PrincipalAdministrator {
+		if principal.Kind == PrincipalAdministrator && !permissions.SelfServiceRoute(request.Method, request.URL.Path) {
 			operation, found := permissions.ControlPlaneOperation(request.Method, request.URL.Path)
 			denied := !found || OwnerOnlyResources(operation) || !principal.Allows(operation)
 			if denied {

@@ -609,7 +609,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
           fileList={fileLists[field.name] ?? []}
           fileMeta={fileMeta[field.name] ?? []}
           onDownloadAt={(index) => void downloadAt(field, index)}
-          onFile={(file) => void uploadFile(field, file)}
+          onFile={(file) => uploadFile(field, file)}
           onRemoveFile={(index) => removeFile(field, index)}
           onValue={(value) => setValue(field.name, value)}
           record={record}
@@ -643,7 +643,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
   uploading: boolean;
   record?: CollectionRecord;
   onValue: (value: string) => void;
-  onFile: (file?: File) => void;
+  onFile: (file?: File) => Promise<void> | void;
   fileList?: string[];
   fileMeta?: UploadedCollectionFile[];
   onRemoveFile?: (index: number) => void;
@@ -675,7 +675,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
               </li>;
             })};
           </ul>
-          <input accept={rules.allowed.join(',')} aria-label={field.name + ' files'} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; for (const file of files) onFile(file); }} type="file" />
+          <input accept={rules.allowed.join(',')} aria-label={field.name + ' files'} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
           <small>Up to {rules.maxFiles} files · {Math.ceil(rules.maxBytes / 1024 / 1024)} MB each · {rules.allowed.join(', ')}</small>
           {list.length >= rules.maxFiles && <span className="record-field-error" role="alert">This field already holds the maximum number of files.</span>}
           {uploading && <span role="status">Uploading file…</span>}
@@ -685,7 +685,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
       }
       control = <div className="record-file-control">
         {Boolean(record?.[field.name]) && <span className="record-file-current">File attached to this record <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">Replace</Button></span>}
-        <input accept={rules.allowed.join(',')} aria-label={`${field.name} file`} disabled={disabled || uploading} id={inputId} onChange={(event) => onFile(event.target.files?.[0])} ref={fileInput} type="file" />
+        <input accept={rules.allowed.join(',')} aria-label={`${field.name} file`} disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
         <small>Single file · up to {Math.ceil(rules.maxBytes / 1024 / 1024)} MB · {rules.allowed.join(', ')}</small>
         {uploading && <span role="status">Uploading file…</span>}
         {upload && <span role="status">File ready · {upload.contentType} · {upload.size.toLocaleString()} bytes</span>}

@@ -16,7 +16,7 @@ import (
 // fakeCipher 只做可逆标记，用于验证 Recovery token 的 at-rest 边界，不参与生产加密。
 type fakeCipher struct{}
 
-func (fakeCipher) EncryptProjectValue(_ context.Context, contextID string, plaintext []byte) ([]byte, error) {
+func (fakeCipher) EncryptProjectValue(_ context.Context, _ storage.Executor, contextID string, plaintext []byte) ([]byte, error) {
 	return append([]byte(contextID+":"), plaintext...), nil
 }
 

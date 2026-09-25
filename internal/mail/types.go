@@ -31,6 +31,8 @@ type ProviderSecurity string
 const (
 	SecurityStartTLS ProviderSecurity = "startTLS"
 	SecurityTLS      ProviderSecurity = "tls"
+	// SecurityPlaintext 只允许 loopback SMTP（例如本机 Mailpit 或 MailHog）；它拒绝任何远程主机。
+	SecurityPlaintext ProviderSecurity = "plaintext"
 )
 
 // 单次投递尝试与队列的固定上限。

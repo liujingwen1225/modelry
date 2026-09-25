@@ -140,10 +140,15 @@ func (service *Service) dispatch(ctx context.Context, delivery Delivery) {
 		service.reschedule(ctx, delivery, ErrorCredentialMissing, false)
 		return
 	}
-	subject, body, err := service.payloads.RenderDeliveryPayload(attemptCtx, delivery.Kind, delivery.PayloadRef, delivery.Recipient)
-	if err != nil {
-		service.reschedule(ctx, delivery, ErrorPayloadInvalid, true)
-		return
+	// 测试邮件由 Mail Provider 自己生成正文；它不经过 App Auth 的恢复载荷。
+	subject, body := testMessagePayload()
+	if delivery.Kind != KindTest {
+		var renderErr error
+		subject, body, renderErr = service.payloads.RenderDeliveryPayload(attemptCtx, delivery.Kind, delivery.PayloadRef, delivery.Recipient)
+		if renderErr != nil {
+			service.reschedule(ctx, delivery, ErrorPayloadInvalid, true)
+			return
+		}
 	}
 	message := Message{
 		From: config.FromAddress, FromName: config.FromName, To: delivery.Recipient,

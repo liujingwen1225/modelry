@@ -46,8 +46,9 @@ type MailEnqueuer interface {
 }
 
 // ValueCipher 由 Runtime 注入的项目密钥边界，用于加密 Recovery token 的投递副本。
+// 加密必须复用调用方的事务：SQLite 事务不可嵌套，Runtime 也不允许在事务外制造隐藏副作用。
 type ValueCipher interface {
-	EncryptProjectValue(ctx context.Context, contextID string, plaintext []byte) ([]byte, error)
+	EncryptProjectValue(ctx context.Context, tx storage.Executor, contextID string, plaintext []byte) ([]byte, error)
 	DecryptProjectValue(ctx context.Context, contextID string, ciphertext []byte) ([]byte, error)
 }
 
@@ -141,7 +142,7 @@ func (service *Service) issueRecoveryToken(ctx context.Context, tx storage.Execu
 	if err != nil {
 		return false, err
 	}
-	ciphertext, err := service.cipher.EncryptProjectValue(ctx, tokenID, []byte(token))
+	ciphertext, err := service.cipher.EncryptProjectValue(ctx, tx, tokenID, []byte(token))
 	if err != nil {
 		return false, err
 	}
