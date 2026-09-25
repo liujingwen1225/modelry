@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { createServer, type Server } from 'node:https';
 import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -150,7 +151,7 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
   const isWindows = process.platform === 'win32';
   const command = isWindows ? runtimeLauncher : runtimeBinary;
   const args = isWindows ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0'] : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
-  const runtimeEnv = { ...process.env, MODELRY_E2E_WEBHOOK_FIXTURE_ADDR: fixtureAddress, MODELRY_E2E_WEBHOOK_CA: fixtureCA, MODELRY_E2E_RETRY_DELAY_MS: process.env.MODELRY_E2E_RETRY_DELAY_MS ?? '100' };
+  const runtimeEnv = { ...process.env, MODELRY_E2E_WEBHOOK_FIXTURE_ADDR: fixtureAddress, MODELRY_E2E_WEBHOOK_CA: fixtureCA, MODELRY_E2E_RETRY_DELAY_MS: process.env.MODELRY_E2E_RETRY_DELAY_MS ?? '1100' };
   const child = spawn(command, args, { cwd: repositoryRoot, env: runtimeEnv, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   runtimeProcess = child;
   let stdoutBuffer = '';
@@ -226,6 +227,15 @@ async function requestJSON(page: Page, method: string, requestPath: string, body
 function data<T>(value: unknown): T {
   if (!value || typeof value !== 'object' || !('data' in value)) throw new Error('Expected an API response with a data field.');
   return (value as { data: T }).data;
+}
+
+function assertWebhookSignature(request: CapturedRequest, secret: string): string {
+  const match = request.signature.match(/^t=(\d+),v1=([a-f0-9]{64})$/);
+  expect(match, 'Webhook signature must include a Unix timestamp and SHA-256 digest').not.toBeNull();
+  const timestamp = match![1]!;
+  const expectedDigest = createHmac('sha256', secret).update(`${timestamp}.${request.body}`, 'utf8').digest('hex');
+  expect(match![2]).toBe(expectedDigest);
+  return timestamp;
 }
 
 async function getDelivery(page: Page, id: string): Promise<Delivery> {
@@ -440,6 +450,10 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(page.getByRole('heading', { name: 'webhook-events' })).toBeVisible();
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
   expect(collectionId).toMatch(/^col_/);
+  const collectionResult = await requestJSON(page, 'GET', `/admin/api/v1/collections/${encodeURIComponent(collectionId)}`);
+  expect(collectionResult.status).toBe(200);
+  const collection = data<{ schemaVersion: number }>(collectionResult.body);
+  expect(collection.schemaVersion).toBeGreaterThan(0);
 
   page.on('response', (response) => {
     const requestId = response.headers()['x-request-id'];
@@ -484,10 +498,27 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(receivedFirst[1]!.deliveryId).toBe(receivedFirst[0]!.deliveryId);
   expect(receivedFirst[1]!.idempotencyKey).toBe(receivedFirst[0]!.idempotencyKey);
   expect(receivedFirst[1]!.body).toBe(receivedFirst[0]!.body);
-  expect(receivedFirst[0]!.signature).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
-  expect(receivedFirst[1]!.signature).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
-  const eventId = (JSON.parse(receivedFirst[0]!.body) as { event?: { id?: string } }).event?.id;
+  const firstTimestamp = assertWebhookSignature(receivedFirst[0]!, primarySecret);
+  const retryTimestamp = assertWebhookSignature(receivedFirst[1]!, primarySecret);
+  expect(retryTimestamp).not.toBe(firstTimestamp);
+  expect(receivedFirst[1]!.signature).not.toBe(receivedFirst[0]!.signature);
+  const envelope = JSON.parse(receivedFirst[0]!.body) as {
+    event?: {
+      id?: string;
+      type?: string;
+      collectionId?: string;
+      recordId?: string;
+      schemaVersion?: number;
+      after?: { title?: string };
+    };
+  };
+  const eventId = envelope.event?.id;
   expect(eventId).toMatch(/^evt_/);
+  expect(envelope.event?.type).toBe('record.created');
+  expect(envelope.event?.collectionId).toBe(collectionId);
+  expect(envelope.event?.recordId).toBe(createdRecordId);
+  expect(envelope.event?.schemaVersion).toBe(collection.schemaVersion);
+  expect(envelope.event?.after?.title).toBe(privateRecordMarker);
   expect(receivedFirst[0]!.eventId).toBe(eventId);
   expect(receivedFirst[1]!.eventId).toBe(eventId);
   const successDelivery = await deliveryForEvent(page, primaryHook.id, eventId!, 'succeeded');
@@ -551,7 +582,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   const beforeManualRetry = fixture!.count('/record-hook');
   fixture!.respond('/record-hook', ...Array.from({ length: 8 }, () => 503));
   await createRecord(page, collectionId, manualRetryMarker);
-  await expect.poll(() => fixture!.count('/record-hook'), { timeout: 20_000, intervals: [50, 100, 200] }).toBe(beforeManualRetry + 8);
+  await expect.poll(() => fixture!.count('/record-hook'), { timeout: 15_000, intervals: [50, 100, 200] }).toBe(beforeManualRetry + 8);
   const failedRoundRequests = fixture!.requests.filter((request) => request.path === '/record-hook').slice(beforeManualRetry);
   expect(failedRoundRequests).toHaveLength(8);
   const failedEventId = (JSON.parse(failedRoundRequests[0]!.body) as { event?: { id?: string } }).event?.id;
