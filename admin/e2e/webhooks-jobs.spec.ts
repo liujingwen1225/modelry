@@ -488,6 +488,8 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(receivedFirst[1]!.signature).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
   const eventId = (JSON.parse(receivedFirst[0]!.body) as { event?: { id?: string } }).event?.id;
   expect(eventId).toMatch(/^evt_/);
+  expect(receivedFirst[0]!.eventId).toBe(eventId);
+  expect(receivedFirst[1]!.eventId).toBe(eventId);
   const successDelivery = await deliveryForEvent(page, primaryHook.id, eventId!, 'succeeded');
   expect(successDelivery.id).toBe(receivedFirst[0]!.deliveryId);
   expect(successDelivery.attemptCount).toBe(2);
