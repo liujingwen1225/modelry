@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/liujingwen1225/modelry/internal/accesscontrol"
-	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/audit"
+	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/records"
@@ -88,18 +88,18 @@ func (source portabilityRecordSource) Create(ctx context.Context, collectionID s
 func newPortabilityService(options portabilityOptions) (*portability.Service, *portability.Module, error) {
 	objects := portabilityObjects{files: options.files}
 	service, err := portability.NewService(portability.Options{
-		Store: options.store, Objects: objects, Models: options.models,
+		Store: options.store, Objects: objects, Models: options.models, SecretKeys: options.secretKeys,
 		ManagedDir: options.managedDir, Version: options.version,
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	module := portability.NewModule(portability.ModuleOptions{
-		Service: service,
-		Records: portabilityRecordSource{records: options.records},
+		Service:  service,
+		Records:  portabilityRecordSource{records: options.records},
 		Resolver: options.models,
-		Rules: portabilityRules{rules: options.accessRules},
-		Audits: portabilityAuditSink{audits: options.audits},
+		Rules:    portabilityRules{rules: options.accessRules},
+		Audits:   portabilityAuditSink{audits: options.audits},
 	})
 	return service, module, nil
 }
@@ -110,6 +110,7 @@ type portabilityOptions struct {
 	models      *backendmodel.Service
 	records     *records.Service
 	files       *filestore.Service
+	secretKeys  portability.ProjectSecretKeySource
 	accessRules *accesscontrol.Service
 	audits      *audit.Service
 	managedDir  string

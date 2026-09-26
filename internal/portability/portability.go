@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/extensions/secretstore"
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
@@ -46,11 +47,14 @@ var (
 // 归档与 manifest 的固定标识。
 const (
 	FormatName               = "modelry.community.backup"
-	FormatVersion            = 1
+	FormatVersion            = 2
 	ManifestPath             = "manifest.json"
 	DatabaseArchivePath      = "database/project.sqlite"
+	ProjectSecretKeyPath     = "security/project-secret-key"
 	ObjectsArchivePrefix     = "objects/"
 	databaseCompatibilityMsg = "The backup was produced by a newer Modelry project format than this Runtime supports."
+	legacyFormatVersion      = 1
+	projectSecretKeySize     = 32
 )
 
 // Bounds 与 Spec 0010 §5 一一对应。这些上限只约束它们各自描述的对象：
@@ -59,9 +63,9 @@ const (
 const (
 	// maximumBundleObjects 是一个 bundle 能携带的 File object 数量。
 	maximumBundleObjects = 100000
-	// maximumArchiveEntries 是一个归档能包含的条目数量。它必须容纳 manifest、数据库载荷
-	// 以及上限数量的 File object，否则 Backup 能写出一个自己拒绝读取的 bundle。
-	maximumArchiveEntries = maximumBundleObjects + 2
+	// maximumArchiveEntries 是一个归档能包含的条目数量。它必须容纳 manifest、数据库载荷、
+	// 可选 Project-key payload 与上限数量的 File object，否则 Backup 会写出自己拒绝读取的 bundle。
+	maximumArchiveEntries = maximumBundleObjects + 3
 	// maximumManifestBytes 只约束 manifest.json 自身。
 	maximumManifestBytes = 64 << 20
 	// maximumObjectPayloadBytes 约束单个 File object 载荷。它与产品的单对象硬上限
@@ -122,6 +126,14 @@ type ObjectEntry struct {
 	SHA256 string `json:"sha256"`
 }
 
+// SecurityEntry describes the protected Project Secret key payload. It never
+// includes key bytes; those exist only in the archive payload itself.
+type SecurityEntry struct {
+	Path   string `json:"path"`
+	Bytes  int64  `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
 // Counts 是 bundle 的记录数量摘要。
 type Counts struct {
 	Collections int64 `json:"collections"`
@@ -131,15 +143,16 @@ type Counts struct {
 
 // Manifest 是 bundle 的自描述元数据。
 type Manifest struct {
-	Format           string        `json:"format"`
-	FormatVersion    int           `json:"formatVersion"`
-	ProjectID        string        `json:"projectId"`
-	RuntimeVersion   string        `json:"runtimeVersion"`
-	CreatedAt        time.Time     `json:"createdAt"`
-	AppliedModelHash string        `json:"appliedModelHash"`
-	Database         DatabaseEntry `json:"database"`
-	Objects          []ObjectEntry `json:"objects"`
-	Counts           Counts        `json:"counts"`
+	Format           string         `json:"format"`
+	FormatVersion    int            `json:"formatVersion"`
+	ProjectID        string         `json:"projectId"`
+	RuntimeVersion   string         `json:"runtimeVersion"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	AppliedModelHash string         `json:"appliedModelHash"`
+	Database         DatabaseEntry  `json:"database"`
+	Security         *SecurityEntry `json:"security,omitempty"`
+	Objects          []ObjectEntry  `json:"objects"`
+	Counts           Counts         `json:"counts"`
 }
 
 // Finding 是一条 preflight 结论。
@@ -169,6 +182,12 @@ type ObjectSource interface {
 	OpenObject(ctx context.Context, key string) (io.ReadCloser, error)
 }
 
+// ProjectSecretKeySource exposes the validated raw key only to Backup. Callers
+// must clear the returned byte slice after staging the security payload.
+type ProjectSecretKeySource interface {
+	BackupKeyMaterial() ([]byte, error)
+}
+
 // ModelSource 提供 Applied Model 摘要与哈希。
 type ModelSource interface {
 	ListCollections(ctx context.Context, options backendmodel.ListOptions) (backendmodel.Page[backendmodel.Collection], error)
@@ -176,20 +195,22 @@ type ModelSource interface {
 
 // Service 提供 backup、restore 与导入导出所需的编排能力。
 type Service struct {
-	store     *storage.Store
-	objects   ObjectSource
-	models    ModelSource
-	snapshots SnapshotSource
-	managed   string
-	version   string
-	now       func() time.Time
+	store      *storage.Store
+	objects    ObjectSource
+	secretKeys ProjectSecretKeySource
+	models     ModelSource
+	snapshots  SnapshotSource
+	managed    string
+	version    string
+	now        func() time.Time
 }
 
 // Options 构造 Portability Service。
 type Options struct {
-	Store   *storage.Store
-	Objects ObjectSource
-	Models  ModelSource
+	Store      *storage.Store
+	Objects    ObjectSource
+	SecretKeys ProjectSecretKeySource
+	Models     ModelSource
 	// Snapshots 为一个已落盘的 SQLite 快照打开只读读取器。省略时使用内建实现。
 	Snapshots  SnapshotSource
 	ManagedDir string
@@ -209,7 +230,7 @@ func NewService(options Options) (*Service, error) {
 	if snapshots == nil {
 		snapshots = liveSnapshotSource{}
 	}
-	return &Service{store: options.Store, objects: options.Objects, models: options.Models, snapshots: snapshots, managed: options.ManagedDir, version: version, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Service{store: options.Store, objects: options.Objects, secretKeys: options.SecretKeys, models: options.Models, snapshots: snapshots, managed: options.ManagedDir, version: version, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 // InspectionOptions 构造只做 preflight 与 contract 生成的轻量服务。
@@ -385,6 +406,25 @@ func (service *Service) CreateBackup(ctx context.Context, options BackupOptions)
 	if err != nil {
 		return BackupResult{}, err
 	}
+	var securityKey []byte
+	defer clear(securityKey)
+	var securityEntry *SecurityEntry
+	if facts.keyProbe != nil {
+		if service.secretKeys == nil {
+			return BackupResult{}, fmt.Errorf("%w: Project Secret encryption material is unavailable", ErrStorage)
+		}
+		securityKey, err = service.secretKeys.BackupKeyMaterial()
+		if err != nil || len(securityKey) != projectSecretKeySize {
+			clear(securityKey)
+			return BackupResult{}, fmt.Errorf("%w: Project Secret encryption material is unavailable", ErrStorage)
+		}
+		if err := secretstore.ProbeKeyMaterial(securityKey, facts.projectID, facts.keyProbe.ContextID, facts.keyProbe.Version, facts.keyProbe.Ciphertext); err != nil {
+			clear(securityKey)
+			return BackupResult{}, fmt.Errorf("%w: Project Secret encryption material does not match the database snapshot", ErrStorage)
+		}
+		digest := sha256.Sum256(securityKey)
+		securityEntry = &SecurityEntry{Path: ProjectSecretKeyPath, Bytes: int64(len(securityKey)), SHA256: hex.EncodeToString(digest[:])}
+	}
 	keys := facts.fileKeys
 	if len(keys) > maximumBundleObjects {
 		return BackupResult{}, fmt.Errorf("%w: this project references %d file objects; a bundle is limited to %d", ErrInvalidArgument, len(keys), maximumBundleObjects)
@@ -414,13 +454,14 @@ func (service *Service) CreateBackup(ctx context.Context, options BackupOptions)
 	}
 	// Backup 必须遵守与 Preflight 完全相同的边界，否则它会产出一份连自己都无法恢复的
 	// bundle：错误暴露点从备份当天推迟到 restore 当天，那时已经不可补救。
-	if err := checkPayloadBounds(databaseBytes, entries); err != nil {
+	if err := checkPayloadBounds(databaseBytes, entries, int64(len(securityKey))); err != nil {
 		return BackupResult{}, err
 	}
 	manifest := Manifest{
 		Format: FormatName, FormatVersion: FormatVersion, ProjectID: facts.projectID,
 		RuntimeVersion: service.version, CreatedAt: service.now().UTC(), AppliedModelHash: facts.modelHash,
 		Database: DatabaseEntry{Path: DatabaseArchivePath, Bytes: databaseBytes, SHA256: databaseDigest, SQLiteVersion: service.sqliteVersion()},
+		Security: securityEntry,
 		Objects:  entries,
 		Counts:   Counts{Collections: facts.collections, Records: facts.records, Objects: int64(len(entries))},
 	}
@@ -435,7 +476,7 @@ func (service *Service) CreateBackup(ctx context.Context, options BackupOptions)
 	}
 	archiveDigest := sha256.New()
 	writer := tar.NewWriter(io.MultiWriter(destinationFile, archiveDigest))
-	writeErr := writeArchive(writer, manifestBytes, snapshotPath, objectsDir, entries)
+	writeErr := writeArchive(writer, manifestBytes, snapshotPath, securityKey, objectsDir, entries)
 	if writeErr == nil {
 		writeErr = writer.Close()
 	}
@@ -481,7 +522,7 @@ func (service *Service) stageObject(ctx context.Context, key, destination string
 }
 
 // checkPayloadBounds 执行与 planBundle 同源的载荷边界检查。
-func checkPayloadBounds(databaseBytes int64, objects []ObjectEntry) error {
+func checkPayloadBounds(databaseBytes int64, objects []ObjectEntry, securityBytes ...int64) error {
 	if databaseBytes <= 0 {
 		return fmt.Errorf("%w: the project database is empty", ErrStorage)
 	}
@@ -492,6 +533,12 @@ func checkPayloadBounds(databaseBytes int64, objects []ObjectEntry) error {
 		return fmt.Errorf("%w: this project references %d file objects; a bundle is limited to %d", ErrPayloadTooLarge, len(objects), maximumBundleObjects)
 	}
 	total := databaseBytes
+	if len(securityBytes) > 0 {
+		if securityBytes[0] < 0 || securityBytes[0] > projectSecretKeySize {
+			return fmt.Errorf("%w: Project Secret encryption material has an invalid size", ErrPayloadTooLarge)
+		}
+		total += securityBytes[0]
+	}
 	for _, entry := range objects {
 		// 零字节对象是合法的；负长度永远不合法。
 		if entry.Bytes < 0 || entry.Bytes > maximumObjectPayloadBytes {
@@ -513,6 +560,7 @@ type snapshotFacts struct {
 	records     int64
 	modelHash   string
 	fileKeys    []string
+	keyProbe    *ProjectCiphertextProbe
 }
 
 // readSnapshotFacts 从已经落盘的 SQLite 快照读取 Applied Model、计数与 File 引用。
@@ -541,14 +589,22 @@ func (service *Service) readSnapshotFacts(ctx context.Context, snapshotPath stri
 	if err != nil {
 		return snapshotFacts{}, fmt.Errorf("%w: read referenced file objects from the database snapshot: %v", ErrStorage, err)
 	}
+	probe, hasEncryptedValue, err := reader.FirstProjectCiphertext(ctx)
+	if err != nil {
+		return snapshotFacts{}, fmt.Errorf("%w: read Project Secret state from the database snapshot: %v", ErrStorage, err)
+	}
 	sort.Strings(keys)
-	return snapshotFacts{
+	facts := snapshotFacts{
 		projectID:   reader.ProjectID(),
 		collections: counts.Collections,
 		records:     counts.Records,
 		modelHash:   modelHash,
 		fileKeys:    keys,
-	}, nil
+	}
+	if hasEncryptedValue {
+		facts.keyProbe = &probe
+	}
+	return facts, nil
 }
 
 func fileDigest(path string) (int64, string, error) {
@@ -565,7 +621,7 @@ func fileDigest(path string) (int64, string, error) {
 	return written, hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-func writeArchive(writer *tar.Writer, manifest []byte, snapshotPath, objectsDir string, entries []ObjectEntry) error {
+func writeArchive(writer *tar.Writer, manifest []byte, snapshotPath string, securityKey []byte, objectsDir string, entries []ObjectEntry) error {
 	if err := writeTarEntry(writer, ManifestPath, manifest, time.Time{}); err != nil {
 		return err
 	}
@@ -580,6 +636,11 @@ func writeArchive(writer *tar.Writer, manifest []byte, snapshotPath, objectsDir 
 	}
 	if err := writeTarStream(writer, DatabaseArchivePath, snapshotFile, snapshotInfo.Size()); err != nil {
 		return err
+	}
+	if len(securityKey) > 0 {
+		if err := writeTarEntry(writer, ProjectSecretKeyPath, securityKey, time.Time{}); err != nil {
+			return err
+		}
 	}
 	for _, entry := range entries {
 		file, err := os.Open(filepath.Join(objectsDir, entry.Key))
@@ -694,7 +755,7 @@ func preflightArchive(ctx context.Context, source io.Reader, workDir, sqliteVers
 	preflight := Preflight{Compatible: false, Findings: findings}
 
 	header, err := reader.Next()
-	if err != nil || path.Clean(header.Name) != ManifestPath {
+	if err != nil || !canonicalArchiveName(header.Name) || header.Name != ManifestPath {
 		return Preflight{}, fmt.Errorf("%w: the bundle must start with %s", ErrInvalidBundle, ManifestPath)
 	}
 	if !regularArchiveEntry(header) {
@@ -736,6 +797,10 @@ func preflightArchive(ctx context.Context, source io.Reader, workDir, sqliteVers
 	bounded.tighten(archiveEnvelope(plan.declaredPayloadBytes))
 
 	stagedDatabase := filepath.Join(workDir, "project.sqlite")
+	stagedProjectKey := ""
+	if manifest.Security != nil {
+		stagedProjectKey = filepath.Join(workDir, "project-secret-key")
+	}
 	seen := map[string]struct{}{}
 	// manifest 自身也是一个归档条目，因此计数从 1 开始。
 	entries := 1
@@ -756,7 +821,12 @@ func preflightArchive(ctx context.Context, source io.Reader, workDir, sqliteVers
 		if entries > maximumArchiveEntries {
 			return Preflight{}, fmt.Errorf("%w: the archive contains more entries than this Runtime accepts", ErrPayloadTooLarge)
 		}
-		name := path.Clean(header.Name)
+		if !canonicalArchiveName(header.Name) {
+			compatible = false
+			findings = append(findings, Finding{Code: "archive.invalidPath", Severity: "error", Message: "The archive contains a non-canonical payload path."})
+			continue
+		}
+		name := header.Name
 		declared, found := expected[name]
 		if !found {
 			compatible = false
@@ -776,15 +846,32 @@ func preflightArchive(ctx context.Context, source io.Reader, workDir, sqliteVers
 		hasher := sha256.New()
 		var sink io.Writer = hasher
 		var staged *os.File
+		stagedPath := ""
+		protectProjectKey := false
 		if name == DatabaseArchivePath {
-			staged, err = os.OpenFile(stagedDatabase, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			stagedPath = stagedDatabase
+		} else if name == ProjectSecretKeyPath {
+			stagedPath = stagedProjectKey
+			protectProjectKey = true
+		}
+		if stagedPath != "" {
+			staged, err = os.OpenFile(stagedPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 			if err != nil {
 				return Preflight{}, fmt.Errorf("%w: stage bundle payload: %v", ErrStorage, err)
+			}
+			if protectProjectKey {
+				if err := secretstore.ProtectKeyFile(stagedPath, staged); err != nil {
+					_ = staged.Close()
+					return Preflight{}, fmt.Errorf("%w: protect staged Project Secret material", ErrStorage)
+				}
 			}
 			sink = io.MultiWriter(hasher, staged)
 		}
 		written, copyErr := io.Copy(sink, reader)
 		if staged != nil {
+			if syncErr := staged.Sync(); copyErr == nil {
+				copyErr = syncErr
+			}
 			if closeErr := staged.Close(); copyErr == nil {
 				copyErr = closeErr
 			}
@@ -828,6 +915,16 @@ func preflightArchive(ctx context.Context, source io.Reader, workDir, sqliteVers
 		} else if len(manifest.Objects) > 0 {
 			findings = append(findings, Finding{Code: "objects.localOnly", Severity: "warning", Message: "Restore writes the bundle's file objects into the local object directory. A project configured for S3-compatible storage must migrate objects after restore."})
 		}
+		if compatible {
+			finding, err := verifyProjectKeyPair(ctx, stagedDatabase, stagedProjectKey, manifest)
+			if err != nil {
+				return Preflight{}, fmt.Errorf("%w: validate Project Secret encryption material", ErrStorage)
+			}
+			if finding != nil {
+				compatible = false
+				findings = append(findings, *finding)
+			}
+		}
 	}
 	preflight.Compatible = compatible
 	if findings == nil {
@@ -840,6 +937,10 @@ func preflightArchive(ctx context.Context, source io.Reader, workDir, sqliteVers
 // regularArchiveEntry 只接受普通文件；目录、符号链接与设备节点一律拒绝。
 func regularArchiveEntry(header *tar.Header) bool {
 	return header.Typeflag == tar.TypeReg || header.Typeflag == tar.TypeRegA
+}
+
+func canonicalArchiveName(name string) bool {
+	return name != "" && !path.IsAbs(name) && path.Clean(name) == name
 }
 
 // truncatedBundle 判断一个读取错误是否表示归档提前结束，而不是底层设备故障。

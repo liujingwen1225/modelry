@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/liujingwen1225/modelry/internal/storage"
@@ -37,5 +39,35 @@ func TestEncryptProjectValueRunsInsideCallerTransaction(t *testing.T) {
 	plaintext, err := fixture.service.DecryptProjectValue(ctx, "rtk_inside", ciphertext)
 	if err != nil || string(plaintext) != "token-inside-transaction" {
 		t.Fatalf("decrypt = %q, %v", plaintext, err)
+	}
+}
+
+func TestExistingRecoveryCiphertextPreventsReplacementKeyCreation(t *testing.T) {
+	fixture := newExtensionFixture(t, invocationFunc(func(context.Context, Invocation) (json.RawMessage, error) { return nil, errors.New("unused") }))
+	ctx := context.Background()
+	const contextID = "rst_existing_recovery_ciphertext"
+	err := fixture.store.WithTransaction(ctx, func(tx storage.Executor) error {
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE modelry_app_recovery_tokens (id TEXT PRIMARY KEY NOT NULL, token_cipher BLOB NOT NULL)`); err != nil {
+			return err
+		}
+		ciphertext, err := fixture.service.EncryptProjectValue(ctx, tx, contextID, []byte("recovery token"))
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO modelry_app_recovery_tokens(id,token_cipher) VALUES(?,?)`, contextID, ciphertext)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(fixture.managed, "secrets.key")
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.service.CreateSecret(ctx, "replacement attempt", "must fail closed"); !errors.Is(err, ErrSecretKeyUnavailable) {
+		t.Fatalf("CreateSecret with retained Recovery ciphertext and missing key = %v, want ErrSecretKeyUnavailable", err)
+	}
+	if _, err := os.Lstat(keyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a replacement Project key was created beside old Recovery ciphertext: %v", err)
 	}
 }

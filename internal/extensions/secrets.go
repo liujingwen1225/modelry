@@ -117,11 +117,11 @@ func (service *Service) CreateSecret(ctx context.Context, name, value string) (S
 		if err := ensureSecretNameAvailable(ctx, tx, "", name); err != nil {
 			return err
 		}
-		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM modelry_secrets WHERE length(value_cipher)>0`).Scan(&count); err != nil {
+		keyInUse, err := projectKeyInUse(ctx, tx)
+		if err != nil {
 			return err
 		}
-		if err := service.secrets.EnsureKey(count > 0); err != nil {
+		if err := service.secrets.EnsureKey(keyInUse); err != nil {
 			return mapSecretStoreError(err)
 		}
 		ciphertext, err := service.secrets.Encrypt(id, 1, plain)
@@ -189,11 +189,11 @@ func (service *Service) ReplaceSecretValue(ctx context.Context, secretID, value 
 		} else if err != nil {
 			return err
 		}
-		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM modelry_secrets WHERE length(value_cipher)>0`).Scan(&count); err != nil {
+		keyInUse, err := projectKeyInUse(ctx, tx)
+		if err != nil {
 			return err
 		}
-		if err := service.secrets.EnsureKey(count > 0); err != nil {
+		if err := service.secrets.EnsureKey(keyInUse); err != nil {
 			return mapSecretStoreError(err)
 		}
 		version++
@@ -335,6 +335,20 @@ func (service *Service) cancelPendingForSecret(ctx context.Context, tx storage.E
 		}
 	}
 	return nil
+}
+
+// BackupKeyMaterial exposes the verified project encryption key only to the internal
+// Portability workflow. HTTP/Admin handlers must never serialize or return these bytes;
+// the caller must clear the returned buffer after staging the backup payload.
+func (service *Service) BackupKeyMaterial() ([]byte, error) {
+	if service == nil || service.secrets == nil {
+		return nil, ErrSecretKeyUnavailable
+	}
+	key, err := service.secrets.BackupKeyMaterial()
+	if err != nil {
+		return nil, ErrSecretKeyUnavailable
+	}
+	return key, nil
 }
 
 func validateSecretName(name string) (string, error) {

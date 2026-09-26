@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/extensions"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
@@ -22,9 +23,13 @@ type SnapshotReader interface {
 	ReferencedFileKeys(ctx context.Context) ([]string, error)
 	// Counts 返回快照中的 Collection 与 Record 计数。
 	Counts(ctx context.Context) (Counts, error)
+	// FirstProjectCiphertext 返回快照中一条由 Project key 加密的耐久值，用于校验 key 配对。
+	FirstProjectCiphertext(ctx context.Context) (ProjectCiphertextProbe, bool, error)
 	// Close 释放快照读取器；它不改变快照文件。
 	Close() error
 }
+
+type ProjectCiphertextProbe = extensions.ProjectCiphertextProbe
 
 // SnapshotSource 为一个已经落盘的 SQLite 快照打开只读读取器。
 type SnapshotSource interface {
@@ -80,6 +85,16 @@ func (reader *snapshotReader) Counts(ctx context.Context) (Counts, error) {
 		return Counts{}, err
 	}
 	return Counts{Collections: collections, Records: recordCount}, nil
+}
+
+func (reader *snapshotReader) FirstProjectCiphertext(ctx context.Context) (ProjectCiphertextProbe, bool, error) {
+	var probe extensions.ProjectCiphertextProbe
+	err := reader.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		var err error
+		probe, _, err = extensions.FirstProjectCiphertext(ctx, snapshot)
+		return err
+	})
+	return probe, len(probe.Ciphertext) > 0, err
 }
 
 func (reader *snapshotReader) Close() error { return reader.store.Close() }

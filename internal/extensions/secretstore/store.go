@@ -64,10 +64,10 @@ func New(managedDir, projectID string) (*Store, error) {
 	return &Store{managedDir: absolute, managedInfo: managedInfo, keyPath: filepath.Join(absolute, keyFileName), projectID: projectID}, nil
 }
 
-// EnsureKey 仅允许在数据库中还没有加密 Secret 时创建缺失的项目密钥。
-// 调用方必须在持有相应数据库写锁/事务时依据 Secret 行数传入准确值。
+// EnsureKey 仅允许在数据库中还没有任何 Project-key ciphertext 时创建缺失的项目密钥。
+// 调用方必须在持有相应数据库写锁/事务时传入准确值。
 // 文件创建不属于 SQLite 事务；即使数据库事务回滚，已创建的空闲项目密钥也会保留。
-func (store *Store) EnsureKey(hasEncryptedSecrets bool) error {
+func (store *Store) EnsureKey(hasProjectCiphertext bool) error {
 	if store == nil {
 		return ErrInvalidArgument
 	}
@@ -76,12 +76,75 @@ func (store *Store) EnsureKey(hasEncryptedSecrets bool) error {
 	key, err := store.readKey()
 	if err == nil {
 		clear(key)
-		return nil
+		// Ensure the directory entry is durable before a caller can commit a new
+		// ciphertext row that depends on this key.
+		return syncKeyDirectory(store)
 	}
-	if !errors.Is(err, ErrKeyMissing) || hasEncryptedSecrets {
+	if !errors.Is(err, ErrKeyMissing) || hasProjectCiphertext {
 		return err
 	}
 	return store.createKey()
+}
+
+// BackupKeyMaterial returns a verified copy of the stable project encryption key.
+// The caller must clear the returned bytes after writing the protected backup payload.
+func (store *Store) BackupKeyMaterial() ([]byte, error) {
+	if store == nil {
+		return nil, ErrInvalidArgument
+	}
+	store.keyMu.RLock()
+	defer store.keyMu.RUnlock()
+	return store.readKey()
+}
+
+// ProbeKeyMaterial verifies that key authenticates ciphertext for the supplied
+// Project Secret identity without returning or retaining its plaintext.
+func ProbeKeyMaterial(key []byte, projectID, secretID string, version int64, ciphertext []byte) error {
+	probe := &Store{projectID: projectID}
+	if err := validateContext(probe, secretID, version); err != nil {
+		return err
+	}
+	if len(key) != keySize || len(ciphertext) < nonceSize+authTagSize || len(ciphertext) > nonceSize+authTagSize+maximumSecretLen {
+		return ErrKeyInvalid
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return ErrKeyInvalid
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return ErrKeyInvalid
+	}
+	nonce, body := ciphertext[:gcm.NonceSize()], ciphertext[gcm.NonceSize():]
+	plaintext, err := gcm.Open(nil, nonce, body, associatedData(projectID, secretID, version))
+	if err != nil {
+		return ErrCiphertext
+	}
+	clear(plaintext)
+	return nil
+}
+
+// ProtectKeyFile applies and verifies the platform's existing Project key-file
+// access policy to an already-created regular file before key bytes are written.
+func ProtectKeyFile(path string, file *os.File) error {
+	if path == "" || file == nil {
+		return ErrInvalidArgument
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return ErrKeyInvalid
+	}
+	opened, err := file.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return ErrKeyInvalid
+	}
+	if err := secureNewKeyFile(path, file); err != nil {
+		return ErrKeyInvalid
+	}
+	if err := verifyKeyAccess(path, file); err != nil {
+		return ErrKeyInvalid
+	}
+	return nil
 }
 
 // Encrypt 使用 AES-256-GCM 加密 Secret；创建密钥须先调用 EnsureKey(false)。
@@ -265,6 +328,9 @@ func (store *Store) createKey() error {
 		return ErrKeyInvalid
 	}
 	if err := store.verifyManagedDirectory(); err != nil {
+		return ErrKeyInvalid
+	}
+	if err := syncKeyDirectory(store); err != nil {
 		return ErrKeyInvalid
 	}
 	info, err := os.Lstat(store.keyPath)

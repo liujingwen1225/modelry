@@ -65,6 +65,40 @@ func TestEncryptDecryptAndIdentityBinding(t *testing.T) {
 	}
 }
 
+func TestBackupKeyMaterialAuthenticatesOnlyItsProjectSecret(t *testing.T) {
+	managed := newManagedDir(t)
+	store, err := New(managed, "project-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnsureKey(false); err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := store.Encrypt("secret-a", 1, []byte("probe plaintext"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := store.BackupKeyMaterial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(key)
+	if err := ProbeKeyMaterial(key, "project-a", "secret-a", 1, ciphertext); err != nil {
+		t.Fatalf("probe matching Project Secret: %v", err)
+	}
+	if err := ProbeKeyMaterial(key, "project-b", "secret-a", 1, ciphertext); !errors.Is(err, ErrCiphertext) {
+		t.Fatalf("probe with a different Project ID = %v, want ErrCiphertext", err)
+	}
+	wrongKey := append([]byte(nil), key...)
+	wrongKey[0] ^= 1
+	if err := ProbeKeyMaterial(wrongKey, "project-a", "secret-a", 1, ciphertext); !errors.Is(err, ErrCiphertext) {
+		t.Fatalf("probe with a different key = %v, want ErrCiphertext", err)
+	}
+	if err := ProbeKeyMaterial(key, "project-a", "secret-a", 2, ciphertext); !errors.Is(err, ErrCiphertext) {
+		t.Fatalf("probe with a different version = %v, want ErrCiphertext", err)
+	}
+}
+
 func TestKeyCreationFailsClosed(t *testing.T) {
 	managed := newManagedDir(t)
 	store, err := New(managed, "project-a")

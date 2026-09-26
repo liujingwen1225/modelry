@@ -28,10 +28,14 @@
 
 ### 3.1 Backup Bundle
 
-- 归档格式：`tar`。条目顺序固定：`manifest.json`、`database/project.sqlite`、`objects/<key>`（按 key 升序）。
-- `manifest.json` 字段：`format`（`modelry.community.backup`）、`formatVersion`（1）、`projectId`、`runtimeVersion`、`createdAt`、`appliedModelHash`、`database`（`path`、`bytes`、`sha256`、`sqliteVersion`）、`objects[]`（`key`、`bytes`、`sha256`）、`counts`（`collections`、`records`、`objects`）。
+- 归档格式：`tar`。新归档 `formatVersion` 为 2，条目顺序固定：`manifest.json`、`database/project.sqlite`、存在 Project-key ciphertext 时的 `security/project-secret-key`、`objects/<key>`（按 key 升序）。
+- `manifest.json` 字段：`format`（`modelry.community.backup`）、`formatVersion`（新归档为 2）、`projectId`、`runtimeVersion`、`createdAt`、`appliedModelHash`、`database`（`path`、`bytes`、`sha256`、`sqliteVersion`）、可选 `security`（`path`、`bytes`、`sha256`）、`objects[]`（`key`、`bytes`、`sha256`）、`counts`（`collections`、`records`、`objects`）。Manifest 只记录 key payload 的路径、字节数与摘要，不含 key bytes。
 - 数据库载荷使用 SQLite `VACUUM INTO` 从运行中的数据库产生一致快照，包含已提交的 WAL 内容；禁止直接复制 `project.sqlite`。
 - 数据库载荷、引用对象集合、`counts` 与 `appliedModelHash` 必须来自同一个逻辑快照：它们从该快照读取，而不是从仍在变化的 Runtime 读取。
+- Project Secret 密文以及其它由同一 project-level AES-256 key 加密的耐久值共同构成 Project durable state；当前包括 `modelry_app_recovery_tokens.token_cipher`。该 key 不是 File object，不得进入 Collection Export/Import，也不得由 HTTP/Admin API 以独立字段、明文预览或 key metadata 形式返回。授权的 HTTP Backup response body 可以包含完整 Bundle。
+- Backup 按同一 SQLite snapshot 中是否有任何由 Project key 加密的耐久值决定是否读取并包含 key。首次写入任何此类密文时，Secret Store 必须先持久化 key 文件与其 managed-directory 条目，然后才可提交密文行；key 不轮换，因此并发密文更新产生的快照仍对应同一 key。备份对快照中的一个密文执行 AES-GCM authenticated-decryption probe，只验证配对，不保留或输出明文。
+- Community Backup 不加密、不设密码，也不使用本地 wrapping key 或 KMS。包含 `security/project-secret-key` 的整个 Bundle 属于高度敏感的安全资产，应按 Secret 等级保护。Admin API、Preflight、日志、Audit 与 manifest 不得单独暴露 key bytes；manifest 仅含 security payload 的 path、bytes 与 sha256。
+- 没有任何 Project-key ciphertext 的项目不要求 key payload；若 SQLite snapshot 含此类密文，则 key payload 必须存在并与快照密文配对。不得为了旧 Bundle 创建新 key。
 - File object 只包含 Applied Model 当前引用的对象；`objects[]` 与归档条目必须一一对应。
 - 归档以流式方式产生与写出，不在内存中缓存整个项目。
 
@@ -43,18 +47,22 @@
   - 归档中不存在未列出的条目，也不存在重复条目；
   - 数据库载荷可打开并包含 Modelry 内部 migration 表；
   - 数据库格式版本不高于当前 Runtime。
+  - 若 `security` 存在，其 path 必须为 `security/project-secret-key`、长度必须为 32 字节且 payload digest 匹配；
+  - 若 snapshot 含由 Project key 加密的耐久值，必须存在 key，并通过至少一个 ciphertext 的 AES-GCM 认证解密探针；这包括 Recovery token delivery copy，即使没有 `modelry_secrets` 行。若 snapshot 不含任何由该 key 加密的值，key payload 必须缺省；
 - Bundle 的 manifest 是权威元数据；Preflight 验证 manifest 所描述的 payload 完整性与结构一致性。当前格式没有外层可信 digest 或签名，因此不承诺识别对 `counts`、`createdAt`、`runtimeVersion` 等 manifest 元数据的恶意重写，也不提供 Bundle 来源真实性证明。
+- 新 Bundle 使用 `formatVersion=2`。旧 `formatVersion=1` Bundle 没有 Project key encryption material：数据库没有任何 Project-key ciphertext 时仍可兼容；数据库含任何此类 ciphertext 时 Preflight 报不兼容并 fail closed。Preflight finding 只能说明 security material present/missing/invalid，不返回 key bytes。
 - Preflight 输出结构化 finding：`code`、`severity`（`info`/`warning`/`error`）、`message`，以及 `compatible` 布尔值、`projectId`、`runtimeVersion`、`createdAt`、`counts`。
 - Apply：
   - 若项目 Runtime lock 被其它进程持有，直接拒绝；
-  - 若项目目录已有项目且未提供 `--force`，拒绝并报告将替换的内容；
-  - 先解压到 managed directory 内的 staging 目录，重新校验 staged 数据库，然后才替换数据库与 object store；
+- 若项目目录已有项目且未提供 `--force`，拒绝并报告将替换的内容；
+- 先解压到 managed directory 内的 staging 目录，重新校验 staged 数据库与 key 配对，然后才替换数据库、key state 与引用对象；
   - 替换分三个阶段：先把全部新内容准备到目标所在目录，再统一把原内容移到备份位置，最后统一激活；每个状态变更前先将 journal intent 写入并同步；
   - POSIX 平台对每个受影响的 parent directory 执行真实目录 `fsync` 并传播错误。独立 commit marker 先写入、flush、同步，再原子 rename 并同步 managed directory；marker rename 后的 managed-directory `fsync` 成功是唯一 commit point。此前的失败回滚原状态，此后的崩溃恢复只清理备份，不回滚新状态；
   - Windows 当前无法通过 Go 标准库提供 POSIX directory `fsync`；使用文件 `Sync` 与同卷原子 rename，并明确依赖 Windows 文件系统的目录项耐久性保证，不宣称 POSIX 等价保证；
   - 只有「移开原件」这一步真正发生（备份文件存在）时，回滚才会删除目标位置的内容；否则目标是原件，必须原样保留；
   - 替换数据库时同时移除旧的 `project.sqlite-wal` / `-shm`，避免旧日志被回放到新数据库上；
-  - 失败时不改变原项目状态：原数据库与原 object store 保持字节级不变；
+  - database、security key（或 key 的缺省状态）与引用对象作为一个逻辑 Project state 进入同一个 activation plan；key 使用与数据库及对象相同的 stage → preserve → activate → directory sync → commit marker → cleanup 语义；
+  - 失败时不改变原项目状态：原数据库、原 `secrets.key` 与原 object store 保持字节级不变；成功后新 key 与数据库中的密文配对；
   - 项目存在未完成的 journal 时，Runtime 拒绝启动，直到操作者用 CLI 再次执行 restore 把它收敛。
 - 旧版仅以 `journalDone` 表示提交的 journal 无法证明当时的 `Sync` 是否成功；新 Runtime 与普通 restore 都 fail closed，不从该行推断提交。操作者检查并保留项目目录副本后，可在下一次显式 restore 时传入 `--force --resolve-legacy-restore=accept-current`，明确接受当前激活的目标并清理旧备份，再应用指定 Bundle；若要恢复旧状态，必须从保留的目录副本中手动恢复。新格式的 journal 不使用此兼容路径。
 - Restore 恢复 bundle 描述的逻辑项目状态及其引用的 File object，不保证将目标 Provider 物理存储镜像成 bundle。目标中 bundle 未引用的旧对象可能暂时保留；它们仍按既有 File Storage orphan reconcile 与 grace period 策略回收，不扩大本次 Restore 的替换集合。
@@ -104,7 +112,7 @@
 这些上限各自约束自己描述的对象，任何一条都不能被当作整个 bundle 的上限：
 
 - Backup：最多 100,000 个 File object；快照写入 managed directory；归档 32 KiB 缓冲流式写出。
-- Restore：最多 100,002 个归档条目（含 manifest、数据库载荷与上限数量的 File object）；manifest 最大 64 MiB；单个 File object 载荷最大 128 MiB（与产品单文件上限一致，零字节对象合法）；单个数据库载荷最大 4 GiB；一个 bundle 声明的载荷总量最大 4 GiB。Preflight 按 manifest 自己声明的长度收紧读取预算，因此合法的大对象不会被整体上限误伤。Backup 使用同一组边界，因此它绝不会产出一份自己无法恢复的 bundle。
+- Restore：最多 100,003 个归档条目（含 manifest、数据库载荷、可选 security payload 与上限数量的 File object）；manifest 最大 64 MiB；单个 File object 载荷最大 128 MiB（与产品单文件上限一致，零字节对象合法）；单个数据库载荷最大 4 GiB；一个 bundle 声明的载荷总量最大 4 GiB。Preflight 按 manifest 自己声明的长度收紧读取预算，因此合法的大对象不会被整体上限误伤。Backup 使用同一组边界，因此它绝不会产出一份自己无法恢复的 bundle。
 - Export：单次最多 100,000 条 Record；Import：单次最多 1,000 条 Record 且请求体最大 8 MiB。
 - Contract：最多 512 个 Collection、每 Collection 最多 4,096 个 Field。这个上限只约束 Contract 的生成与读取：超过它时 Contract 明确失败，而 Backup、Export、Import 仍然读取完整的 Applied Model 并计算覆盖全部 Collection 的 `appliedModelHash`。
 

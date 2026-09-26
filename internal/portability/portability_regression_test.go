@@ -21,6 +21,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/appauth"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
+	"github.com/liujingwen1225/modelry/internal/extensions"
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/storage"
@@ -308,6 +309,370 @@ func TestBackupFactsComeFromOneLogicalSnapshot(t *testing.T) {
 	}
 	if !preflight.Compatible {
 		t.Fatalf("a bundle built from one snapshot is not compatible: %+v", preflight.Findings)
+	}
+}
+
+func TestBackupProjectSecretMaterialAndPreflightCompatibility(t *testing.T) {
+	ctx := context.Background()
+	fixture := newPortabilityFixtureWithFiles(t)
+	secretService, err := extensions.NewService(ctx, fixture.store, fixture.models, extensions.ServiceOptions{
+		ManagedDir: fixture.managed, ProjectID: fixture.store.ProjectID(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secretService.Close(ctx)
+	fixture.service.secretKeys = secretService
+	plaintext := "project-secret-regression-marker-" + strings.Repeat("a7d95e", 12)
+	secret, err := secretService.CreateSecret(ctx, "backup probe", plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ciphertext []byte
+	if err := fixture.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		return snapshot.QueryRowContext(ctx, `SELECT value_cipher FROM modelry_secrets WHERE id=?`, secret.ID).Scan(&ciphertext)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(ciphertext) == 0 || bytes.Contains(ciphertext, []byte(plaintext)) {
+		t.Fatal("Project Secret was not stored as ciphertext")
+	}
+
+	bundlePath := filepath.Join(fixture.managed, "project-secret.tar")
+	if _, err := fixture.service.CreateBackup(ctx, BackupOptions{Destination: bundlePath}); err != nil {
+		t.Fatalf("backup Project Secret: %v", err)
+	}
+	manifest := readBundleManifest(t, bundlePath)
+	manifestBytes := readBundleEntry(t, bundlePath, ManifestPath)
+	if bytes.Contains(manifestBytes, []byte(plaintext)) {
+		t.Fatal("Project Secret plaintext appeared in backup manifest")
+	}
+	if manifest.Security == nil || manifest.Security.Path != ProjectSecretKeyPath || manifest.Security.Bytes != 32 || !validDigest(manifest.Security.SHA256) {
+		t.Fatalf("manifest security payload = %+v", manifest.Security)
+	}
+	key := readBundleEntry(t, bundlePath, ProjectSecretKeyPath)
+	if len(key) != projectSecretKeySize || digestOf(key) != manifest.Security.SHA256 {
+		t.Fatal("Project Secret payload does not match its manifest metadata")
+	}
+	database := readBundleEntry(t, bundlePath, DatabaseArchivePath)
+
+	// A legacy bundle that omitted its key cannot be accepted when the snapshot
+	// contains ciphertext; a no-Secret legacy project remains compatible.
+	legacyMissing := manifest
+	legacyMissing.FormatVersion = legacyFormatVersion
+	legacyMissing.Security = nil
+	legacyPath := writeBundle(t, fixture.managed, "legacy-secret-missing.tar", legacyMissing, database, nil)
+	legacyPreflight, err := fixture.service.Preflight(ctx, legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyPreflight.Compatible || !hasFinding(legacyPreflight, "security.materialMissing") {
+		t.Fatalf("legacy encrypted-secret bundle preflight = %+v, want security.materialMissing", legacyPreflight)
+	}
+
+	noSecretFixture := newPortabilityFixtureWithFiles(t)
+	noSecretBundle := filepath.Join(noSecretFixture.managed, "no-secret.tar")
+	if _, err := noSecretFixture.service.CreateBackup(ctx, BackupOptions{Destination: noSecretBundle}); err != nil {
+		t.Fatalf("backup project without Secrets: %v", err)
+	}
+	noSecretManifest := readBundleManifest(t, noSecretBundle)
+	if noSecretManifest.Security != nil {
+		t.Fatalf("no-Secret backup unexpectedly contains key metadata: %+v", noSecretManifest.Security)
+	}
+	noSecretManifest.FormatVersion = legacyFormatVersion
+	legacyNoSecret := writeBundle(t, noSecretFixture.managed, "legacy-no-secret.tar", noSecretManifest, readBundleEntry(t, noSecretBundle, DatabaseArchivePath), nil)
+	noSecretPreflight, err := noSecretFixture.service.Preflight(ctx, legacyNoSecret)
+	if err != nil || !noSecretPreflight.Compatible {
+		t.Fatalf("legacy no-Secret bundle preflight = %+v, %v; want compatible", noSecretPreflight, err)
+	}
+
+	tampered := append([]byte(nil), key...)
+	tampered[0] ^= 0x80
+	tamperedPath := writeBundleWithSecretKey(t, fixture.managed, "tampered-secret-key.tar", manifest, database, tampered)
+	tamperedPreflight, err := fixture.service.Preflight(ctx, tamperedPath)
+	if err != nil || tamperedPreflight.Compatible || !hasFinding(tamperedPreflight, "payload.digestMismatch") {
+		t.Fatalf("tampered key preflight = %+v, %v; want digest mismatch", tamperedPreflight, err)
+	}
+
+	wrongKey := append([]byte(nil), key...)
+	wrongKey[0] ^= 1
+	wrongKeyManifest := manifest
+	wrongKeyManifest.Security = &SecurityEntry{Path: ProjectSecretKeyPath, Bytes: int64(len(wrongKey)), SHA256: digestOf(wrongKey)}
+	wrongKeyPath := writeBundleWithSecretKey(t, fixture.managed, "wrong-project-key.tar", wrongKeyManifest, database, wrongKey)
+	wrongKeyPreflight, err := fixture.service.Preflight(ctx, wrongKeyPath)
+	if err != nil || wrongKeyPreflight.Compatible || !hasFinding(wrongKeyPreflight, "security.materialInvalid") {
+		t.Fatalf("wrong-key preflight = %+v, %v; want authenticated Secret probe failure", wrongKeyPreflight, err)
+	}
+}
+
+func TestBackupCarriesKeyForRecoveryCiphertextWithoutProjectSecrets(t *testing.T) {
+	ctx := context.Background()
+	fixture := newPortabilityFixtureWithFiles(t)
+	secrets, err := extensions.NewService(ctx, fixture.store, fixture.models, extensions.ServiceOptions{
+		ManagedDir: fixture.managed, ProjectID: fixture.store.ProjectID(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secrets.Close(ctx)
+	fixture.service.secretKeys = secrets
+	const recoveryID = "rst_recovery_probe_0123456789abcdef"
+	const recoveryToken = "recovery-token-project-key-round-trip-37c9a28e"
+	var ciphertext []byte
+	if err := fixture.store.WithTransaction(ctx, func(tx storage.Executor) error {
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE modelry_app_recovery_tokens (id TEXT PRIMARY KEY NOT NULL, token_cipher BLOB NOT NULL)`); err != nil {
+			return err
+		}
+		value, err := secrets.EncryptProjectValue(ctx, tx, recoveryID, []byte(recoveryToken))
+		if err != nil {
+			return err
+		}
+		ciphertext = value
+		_, err = tx.ExecContext(ctx, `INSERT INTO modelry_app_recovery_tokens(id,token_cipher) VALUES(?,?)`, recoveryID, value)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var secretRows int
+	if err := fixture.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		return snapshot.QueryRowContext(ctx, `SELECT COUNT(*) FROM modelry_secrets WHERE length(value_cipher)>0`).Scan(&secretRows)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if secretRows != 0 || len(ciphertext) == 0 {
+		t.Fatalf("fixture should have recovery ciphertext but no Project Secret rows: secretRows=%d", secretRows)
+	}
+
+	bundlePath := filepath.Join(fixture.managed, "recovery-token-backup.tar")
+	if _, err := fixture.service.CreateBackup(ctx, BackupOptions{Destination: bundlePath}); err != nil {
+		t.Fatal(err)
+	}
+	manifest := readBundleManifest(t, bundlePath)
+	if manifest.Security == nil || manifest.Security.Path != ProjectSecretKeyPath {
+		t.Fatalf("backup omitted key material used by Recovery ciphertext: %+v", manifest.Security)
+	}
+	preflight, err := fixture.service.Preflight(ctx, bundlePath)
+	if err != nil || !preflight.Compatible {
+		t.Fatalf("recovery-token backup preflight = %+v, %v", preflight, err)
+	}
+
+	legacy := manifest
+	legacy.FormatVersion = legacyFormatVersion
+	legacy.Security = nil
+	legacyPath := writeBundle(t, fixture.managed, "legacy-recovery-token-no-key.tar", legacy, readBundleEntry(t, bundlePath, DatabaseArchivePath), nil)
+	legacyPreflight, err := fixture.service.Preflight(ctx, legacyPath)
+	if err != nil || legacyPreflight.Compatible || !hasFinding(legacyPreflight, "security.materialMissing") {
+		t.Fatalf("legacy Recovery ciphertext preflight = %+v, %v; want incompatible", legacyPreflight, err)
+	}
+
+	targetRoot := t.TempDir()
+	targetManaged := filepath.Join(targetRoot, ".modelry")
+	targetObjects := filepath.Join(targetManaged, "files", "objects")
+	if err := os.MkdirAll(targetObjects, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := NewInspectionService(InspectionOptions{ManagedDir: targetManaged, Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{DatabasePath: filepath.Join(targetManaged, "project.sqlite"), ObjectsDir: targetObjects}); err != nil {
+		t.Fatalf("restore Recovery ciphertext project: %v", err)
+	}
+	store, err := storage.Open(filepath.Join(targetManaged, "project.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, err := backendmodel.NewService(ctx, store)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	restoredSecrets, err := extensions.NewService(ctx, store, models, extensions.ServiceOptions{ManagedDir: targetManaged, ProjectID: store.ProjectID()})
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = restoredSecrets.Close(ctx)
+		_ = store.Close()
+	}()
+	var restoredCiphertext []byte
+	if err := store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		return snapshot.QueryRowContext(ctx, `SELECT token_cipher FROM modelry_app_recovery_tokens WHERE id=?`, recoveryID).Scan(&restoredCiphertext)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plaintext, err := restoredSecrets.DecryptProjectValue(ctx, recoveryID, restoredCiphertext)
+	if err != nil || string(plaintext) != recoveryToken {
+		t.Fatalf("restored Recovery token decrypt = %q, %v", plaintext, err)
+	}
+}
+
+func writeBundleWithSecretKey(t *testing.T, directory, name string, manifest Manifest, database, key []byte) string {
+	t.Helper()
+	path := filepath.Join(directory, name)
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := tar.NewWriter(file)
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range []struct {
+		name    string
+		payload []byte
+	}{{ManifestPath, encoded}, {DatabaseArchivePath, database}, {ProjectSecretKeyPath, key}} {
+		if err := writer.WriteHeader(&tar.Header{Name: entry.name, Mode: 0o600, Size: int64(len(entry.payload)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := writer.Write(entry.payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestRestoreRollbackPreservesOldProjectSecretKey(t *testing.T) {
+	ctx := context.Background()
+	source := newPortabilityFixtureWithFiles(t)
+	source.putObject(t, firstObjectKey, []byte("new restored object"))
+	collection := createFileCollection(t, source.models, "posts")
+	if _, err := source.records.Create(ctx, collection.ID, map[string]any{"title": "new", "attachment": firstObjectKey}); err != nil {
+		t.Fatal(err)
+	}
+	sourceSecrets, err := extensions.NewService(ctx, source.store, source.models, extensions.ServiceOptions{
+		ManagedDir: source.managed, ProjectID: source.store.ProjectID(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sourceSecrets.Close(ctx)
+	source.service.secretKeys = sourceSecrets
+	newSecret, err := sourceSecrets.CreateSecret(ctx, "new project secret", "new-state-secret-value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundlePath := filepath.Join(source.managed, "restore-secret-rollback.tar")
+	if _, err := source.service.CreateBackup(ctx, BackupOptions{Destination: bundlePath}); err != nil {
+		t.Fatal(err)
+	}
+
+	targetRoot := t.TempDir()
+	targetManaged := filepath.Join(targetRoot, ".modelry")
+	targetObjects := filepath.Join(targetManaged, "files", "objects")
+	if err := os.MkdirAll(targetObjects, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	targetStore, err := storage.Open(filepath.Join(targetManaged, "project.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetModels, err := backendmodel.NewService(ctx, targetStore)
+	if err != nil {
+		_ = targetStore.Close()
+		t.Fatal(err)
+	}
+	targetSecrets, err := extensions.NewService(ctx, targetStore, targetModels, extensions.ServiceOptions{
+		ManagedDir: targetManaged, ProjectID: targetStore.ProjectID(),
+	})
+	if err != nil {
+		_ = targetStore.Close()
+		t.Fatal(err)
+	}
+	oldSecret, err := targetSecrets.CreateSecret(ctx, "old project secret", "old-state-secret-value")
+	if err != nil {
+		_ = targetSecrets.Close(ctx)
+		_ = targetStore.Close()
+		t.Fatal(err)
+	}
+	oldKey, err := os.ReadFile(filepath.Join(targetManaged, "secrets.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetObjects, firstObjectKey), []byte("old preserved object"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := targetSecrets.Close(ctx); err != nil {
+		_ = targetStore.Close()
+		t.Fatal(err)
+	}
+	if err := targetStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	targetDatabase := filepath.Join(targetManaged, "project.sqlite")
+	oldDatabaseDigest := hashFile(t, targetDatabase)
+	oldObject, err := os.ReadFile(filepath.Join(targetObjects, firstObjectKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inspection, err := NewInspectionService(InspectionOptions{ManagedDir: targetManaged, Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreFault = func(step string) error {
+		if step == restorePhaseActivate+":"+filepath.Join(targetObjects, firstObjectKey) {
+			return errors.New("injected failure after Project key activation")
+		}
+		return nil
+	}
+	t.Cleanup(func() { restoreFault = nil })
+	if _, err := inspection.Apply(ctx, bundlePath, ApplyOptions{Force: true, DatabasePath: targetDatabase, ObjectsDir: targetObjects}); err == nil {
+		t.Fatal("restore succeeded despite the injected object activation failure")
+	}
+	restoreFault = nil
+	if got := hashFile(t, targetDatabase); got != oldDatabaseDigest {
+		t.Fatalf("rollback changed the old database: %s -> %s", oldDatabaseDigest, got)
+	}
+	keyAfter, err := os.ReadFile(filepath.Join(targetManaged, "secrets.key"))
+	if err != nil || !bytes.Equal(keyAfter, oldKey) {
+		t.Fatalf("rollback changed old Project key bytes: equal=%t err=%v", bytes.Equal(keyAfter, oldKey), err)
+	}
+	objectAfter, err := os.ReadFile(filepath.Join(targetObjects, firstObjectKey))
+	if err != nil || !bytes.Equal(objectAfter, oldObject) {
+		t.Fatalf("rollback changed old object bytes: equal=%t err=%v", bytes.Equal(objectAfter, oldObject), err)
+	}
+	if _, err := os.Stat(filepath.Join(targetManaged, RestoreJournalName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("restore journal did not converge after rollback: %v", err)
+	}
+
+	reopened, err := storage.Open(targetDatabase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopenedModels, err := backendmodel.NewService(ctx, reopened)
+	if err != nil {
+		_ = reopened.Close()
+		t.Fatal(err)
+	}
+	reopenedSecrets, err := extensions.NewService(ctx, reopened, reopenedModels, extensions.ServiceOptions{
+		ManagedDir: targetManaged, ProjectID: reopened.ProjectID(),
+	})
+	if err != nil {
+		_ = reopened.Close()
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = reopenedSecrets.Close(ctx)
+		_ = reopened.Close()
+	}()
+	var oldPlaintext []byte
+	if err := reopenedSecrets.WithSecretValue(ctx, oldSecret.ID, func(value []byte) error {
+		oldPlaintext = append([]byte(nil), value...)
+		return nil
+	}); err != nil || string(oldPlaintext) != "old-state-secret-value" {
+		t.Fatalf("old Secret after rollback = %q, %v", oldPlaintext, err)
+	}
+	if _, configured, err := reopenedSecrets.SecretMetadata(ctx, newSecret.ID); err != nil || configured {
+		t.Fatalf("new restored Secret survived rollback: configured=%t err=%v", configured, err)
 	}
 }
 
@@ -1751,6 +2116,42 @@ func TestPreflightRejectsOverstatedAndTruncatedPayloads(t *testing.T) {
 			Database: databaseEntry, Counts: Counts{},
 		}
 	}
+	t.Run("tar payload paths cannot use traversal aliases", func(t *testing.T) {
+		path := filepath.Join(fixture.managed, "traversal-alias.tar")
+		file, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writer := tar.NewWriter(file)
+		encoded, err := json.Marshal(base())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range []struct {
+			name    string
+			payload []byte
+		}{{ManifestPath, encoded}, {"database/../database/project.sqlite", database}} {
+			if err := writer.WriteHeader(&tar.Header{Name: entry.name, Mode: 0o600, Size: int64(len(entry.payload)), Typeflag: tar.TypeReg}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := writer.Write(entry.payload); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		preflight, err := fixture.service.Preflight(ctx, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if preflight.Compatible || !hasFinding(preflight, "archive.invalidPath") {
+			t.Fatalf("traversal-alias preflight = %+v, want archive.invalidPath", preflight)
+		}
+	})
 
 	t.Run("object size lies about the payload length", func(t *testing.T) {
 		manifest := base()

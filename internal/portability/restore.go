@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/liujingwen1225/modelry/internal/extensions/secretstore"
 	"github.com/liujingwen1225/modelry/internal/filestore"
 )
 
@@ -91,6 +91,11 @@ func (service *Service) Apply(ctx context.Context, archivePath string, options A
 	if err := validateSnapshotDatabase(ctx, staged.databasePath, service.sqliteVersion()); err != nil {
 		return preflight, fmt.Errorf("%w: %v", ErrIncompatibleBundle, err)
 	}
+	if finding, err := verifyProjectKeyPair(ctx, staged.databasePath, staged.secretKeyPath, staged.manifest); err != nil {
+		return preflight, fmt.Errorf("%w: validate Project Secret encryption material", ErrStorage)
+	} else if finding != nil {
+		return preflight, ErrIncompatibleBundle
+	}
 	plan, err := buildActivationPlan(service.managed, options.DatabasePath, options.ObjectsDir, staged)
 	if err != nil {
 		return preflight, err
@@ -119,7 +124,7 @@ func planBundle(manifest Manifest) (bundlePlan, []Finding, error) {
 	}
 	plan := bundlePlan{
 		manifest: manifest,
-		expected: make(map[string]ObjectEntry, len(manifest.Objects)+1),
+		expected: make(map[string]ObjectEntry, len(manifest.Objects)+2),
 	}
 	findings := make([]Finding, 0, 4)
 	invalid := func(code, message string) {
@@ -128,8 +133,11 @@ func planBundle(manifest Manifest) (bundlePlan, []Finding, error) {
 	if manifest.Format != FormatName {
 		invalid("format.unsupported", "This archive is not a Modelry Community backup bundle.")
 	}
-	if manifest.FormatVersion != FormatVersion {
+	if manifest.FormatVersion != FormatVersion && manifest.FormatVersion != legacyFormatVersion {
 		invalid("format.versionUnsupported", databaseCompatibilityMsg)
+	}
+	if manifest.FormatVersion == legacyFormatVersion && manifest.Security != nil {
+		invalid("security.versionUnsupported", "The legacy bundle format does not define Project Secret encryption material.")
 	}
 	database := manifest.Database
 	if database.Path != DatabaseArchivePath || database.SHA256 == "" || database.Bytes <= 0 {
@@ -142,6 +150,21 @@ func planBundle(manifest Manifest) (bundlePlan, []Finding, error) {
 	}
 	plan.declaredPayloadBytes = database.Bytes
 	plan.expected[DatabaseArchivePath] = ObjectEntry{Key: DatabaseArchivePath, Bytes: database.Bytes, SHA256: database.SHA256}
+	if security := manifest.Security; security != nil {
+		switch {
+		case manifest.FormatVersion != FormatVersion:
+			invalid("security.versionUnsupported", "Project Secret encryption material requires backup format version 2.")
+		case security.Path != ProjectSecretKeyPath:
+			invalid("security.invalidPath", "The manifest lists an invalid Project Secret security payload path.")
+		case security.Bytes != projectSecretKeySize:
+			invalid("security.invalidSize", "The manifest lists Project Secret encryption material with an invalid size.")
+		case !validDigest(security.SHA256):
+			invalid("security.invalidDigest", "The manifest lists Project Secret encryption material with an invalid digest.")
+		default:
+			plan.expected[ProjectSecretKeyPath] = ObjectEntry{Key: ProjectSecretKeyPath, Bytes: security.Bytes, SHA256: security.SHA256}
+			plan.declaredPayloadBytes += security.Bytes
+		}
+	}
 	for _, entry := range manifest.Objects {
 		switch {
 		case !filestore.ValidObjectKey(entry.Key):
@@ -170,11 +193,15 @@ func planBundle(manifest Manifest) (bundlePlan, []Finding, error) {
 
 // stagedBundle 是一次 restore 在 managed staging 目录里准备好的新项目状态。
 type stagedBundle struct {
-	databasePath  string
-	objectsDir    string
-	databaseEntry ObjectEntry
-	objectKeys    []string
-	objectEntries []ObjectEntry
+	databasePath   string
+	objectsDir     string
+	databaseEntry  ObjectEntry
+	objectKeys     []string
+	objectEntries  []ObjectEntry
+	manifest       Manifest
+	secretKeyPath  string
+	secretKeyEntry ObjectEntry
+	hasSecretKey   bool
 }
 
 // stageBundle 解压一个 Backup Bundle 到 staging 目录，并对每个载荷重新校验
@@ -196,7 +223,7 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 	reader := tar.NewReader(bounded)
 
 	header, err := reader.Next()
-	if err != nil || path.Clean(header.Name) != ManifestPath {
+	if err != nil || !canonicalArchiveName(header.Name) || header.Name != ManifestPath {
 		return stagedBundle{}, fmt.Errorf("%w: the bundle must start with %s", ErrInvalidBundle, ManifestPath)
 	}
 	if !regularArchiveEntry(header) || header.Size > maximumManifestBytes {
@@ -227,6 +254,12 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 		databasePath:  filepath.Join(workDir, "project.sqlite"),
 		objectsDir:    filepath.Join(workDir, "objects"),
 		databaseEntry: ObjectEntry{Key: DatabaseArchivePath, Bytes: plan.manifest.Database.Bytes, SHA256: plan.manifest.Database.SHA256},
+		manifest:      plan.manifest,
+	}
+	if plan.manifest.Security != nil {
+		staged.secretKeyPath = filepath.Join(workDir, "project-secret-key")
+		staged.secretKeyEntry = plan.expected[ProjectSecretKeyPath]
+		staged.hasSecretKey = true
 	}
 	seen := map[string]struct{}{}
 	// manifest 自身也是一个归档条目，因此计数从 1 开始。
@@ -246,7 +279,10 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 		if entries > maximumArchiveEntries {
 			return stagedBundle{}, fmt.Errorf("%w: the archive contains more entries than this Runtime accepts", ErrPayloadTooLarge)
 		}
-		name := path.Clean(header.Name)
+		if !canonicalArchiveName(header.Name) {
+			return stagedBundle{}, fmt.Errorf("%w: the archive contains a non-canonical payload path", ErrInvalidBundle)
+		}
+		name := header.Name
 		declared, found := plan.expected[name]
 		if !found {
 			return stagedBundle{}, fmt.Errorf("%w: the archive contains an entry the manifest does not list", ErrInvalidBundle)
@@ -259,7 +295,11 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 			return stagedBundle{}, fmt.Errorf("%w: a bundle payload does not match the byte length recorded in the manifest", ErrIncompatibleBundle)
 		}
 		destination := staged.databasePath
-		if name != DatabaseArchivePath {
+		protectKey := false
+		if name == ProjectSecretKeyPath {
+			destination = staged.secretKeyPath
+			protectKey = true
+		} else if name != DatabaseArchivePath {
 			key := strings.TrimPrefix(name, ObjectsArchivePrefix)
 			staged.objectKeys = append(staged.objectKeys, key)
 			staged.objectEntries = append(staged.objectEntries, declared)
@@ -268,7 +308,7 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 				return stagedBundle{}, fmt.Errorf("%w: stage bundle payload: %v", ErrStorage, err)
 			}
 		}
-		if err := writeVerifiedPayload(reader, destination, declared); err != nil {
+		if err := writeVerifiedPayload(reader, destination, declared, protectKey); err != nil {
 			return stagedBundle{}, err
 		}
 	}
@@ -284,10 +324,16 @@ func stageBundle(ctx context.Context, archivePath, workDir string) (stagedBundle
 	return staged, nil
 }
 
-func writeVerifiedPayload(source io.Reader, destination string, declared ObjectEntry) error {
+func writeVerifiedPayload(source io.Reader, destination string, declared ObjectEntry, protectProjectKey bool) error {
 	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("%w: stage bundle payload: %v", ErrStorage, err)
+	}
+	if protectProjectKey {
+		if err := secretstore.ProtectKeyFile(destination, file); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("%w: protect staged Project Secret material", ErrStorage)
+		}
 	}
 	hasher := sha256.New()
 	written, copyErr := io.Copy(io.MultiWriter(file, hasher), source)
@@ -313,6 +359,80 @@ func writeVerifiedPayload(source io.Reader, destination string, declared ObjectE
 	return nil
 }
 
+// verifyProjectSecretPair checks the database/key relationship before a bundle
+// can be called compatible or activated. One authenticated probe is sufficient
+// because the project key is stable and each Secret row carries its own GCM tag.
+func verifyProjectKeyPair(ctx context.Context, databasePath, keyPath string, manifest Manifest) (*Finding, error) {
+	reader, err := (liveSnapshotSource{}).OpenSnapshot(ctx, databasePath)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	probe, hasProjectCiphertext, err := reader.FirstProjectCiphertext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hasKey := manifest.Security != nil
+	if hasProjectCiphertext && !hasKey {
+		return &Finding{Code: "security.materialMissing", Severity: "error", Message: "Required Project encryption material is missing from this backup."}, nil
+	}
+	if !hasProjectCiphertext && hasKey {
+		return &Finding{Code: "security.materialUnexpected", Severity: "error", Message: "This backup contains Project encryption material without encrypted Project values."}, nil
+	}
+	if !hasProjectCiphertext {
+		return nil, nil
+	}
+	key, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(key)
+	if len(key) != projectSecretKeySize || secretstore.ProbeKeyMaterial(key, reader.ProjectID(), probe.ContextID, probe.Version, probe.Ciphertext) != nil {
+		return &Finding{Code: "security.materialInvalid", Severity: "error", Message: "Project encryption material does not match the backup database."}, nil
+	}
+	return nil, nil
+}
+
+// copyProjectKeyFile copies key bytes only after applying the same restrictive
+// platform ACL used by the live Secret Store to the new file descriptor.
+func copyProjectKeyFile(sourcePath, destinationPath string, expected ObjectEntry) error {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open staged Project Secret material: %w", err)
+	}
+	defer source.Close()
+	destination, err := os.OpenFile(destinationPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("create activated Project Secret material: %w", err)
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = destination.Close()
+		}
+	}()
+	if err := secretstore.ProtectKeyFile(destinationPath, destination); err != nil {
+		return fmt.Errorf("protect activated Project Secret material: %w", err)
+	}
+	hasher := sha256.New()
+	written, err := io.Copy(io.MultiWriter(destination, hasher), source)
+	if err != nil {
+		return fmt.Errorf("copy staged Project Secret material: %w", err)
+	}
+	if written != expected.Bytes || hex.EncodeToString(hasher.Sum(nil)) != expected.SHA256 {
+		return errors.New("staged Project Secret material changed during activation")
+	}
+	if err := destination.Sync(); err != nil {
+		return fmt.Errorf("sync activated Project Secret material: %w", err)
+	}
+	if err := destination.Close(); err != nil {
+		closed = true
+		return fmt.Errorf("close activated Project Secret material: %w", err)
+	}
+	closed = true
+	return nil
+}
+
 // activationKind 区分「替换一个文件」与「移除一个文件（例如旧数据库的 WAL 边车）」。
 type activationKind string
 
@@ -329,6 +449,7 @@ type activationEntry struct {
 	backup      string
 	tmp         string
 	expected    ObjectEntry
+	projectKey  bool
 }
 
 // activationPlan 是一次 restore 的三阶段激活计划。
@@ -345,7 +466,7 @@ func buildActivationPlan(managedDir, databasePath, objectsDir string, staged sta
 	if err != nil {
 		return nil, fmt.Errorf("%w: prepare restore activation: %v", ErrStorage, err)
 	}
-	entries := make([]activationEntry, 0, len(staged.objectKeys)+3)
+	entries := make([]activationEntry, 0, len(staged.objectKeys)+4)
 	entries = append(entries, activationEntry{
 		kind: activationReplace, staged: staged.databasePath, destination: databasePath,
 		backup: databasePath + "." + nonce + ".old", tmp: databasePath + "." + nonce + ".new", expected: staged.databaseEntry,
@@ -355,6 +476,20 @@ func buildActivationPlan(managedDir, databasePath, objectsDir string, staged sta
 	for _, sidecar := range []string{databasePath + "-wal", databasePath + "-shm"} {
 		entries = append(entries, activationEntry{
 			kind: activationRemove, destination: sidecar, backup: sidecar + "." + nonce + ".old",
+		})
+	}
+	keyDestination := filepath.Join(managedDir, "secrets.key")
+	if staged.hasSecretKey {
+		entries = append(entries, activationEntry{
+			kind: activationReplace, staged: staged.secretKeyPath, destination: keyDestination,
+			backup: keyDestination + "." + nonce + ".old", tmp: keyDestination + "." + nonce + ".new",
+			expected: staged.secretKeyEntry, projectKey: true,
+		})
+	} else {
+		// A no-Secret bundle restores the no-key state too; retaining a target's old
+		// key beside the restored database would create a mismatched Project state.
+		entries = append(entries, activationEntry{
+			kind: activationRemove, destination: keyDestination, backup: keyDestination + "." + nonce + ".old",
 		})
 	}
 	for index, key := range staged.objectKeys {
@@ -469,8 +604,14 @@ func (plan *activationPlan) run() error {
 		if err := plan.prepareDirectory(writer, filepath.Dir(entry.destination)); err != nil {
 			return plan.fail(err)
 		}
-		if err := copyFile(entry.staged, entry.tmp); err != nil {
-			return plan.fail(err)
+		copyErr := error(nil)
+		if entry.projectKey {
+			copyErr = copyProjectKeyFile(entry.staged, entry.tmp, entry.expected)
+		} else {
+			copyErr = copyFile(entry.staged, entry.tmp)
+		}
+		if copyErr != nil {
+			return plan.fail(copyErr)
 		}
 	}
 	// 阶段二：把原内容移到同目录的备份位置。窗口只包含 rename。

@@ -96,7 +96,7 @@ func runBackup(args []string, stdout, stderr io.Writer, workingDirectory string)
 		return 1
 	}
 	service, err := portability.NewService(portability.Options{
-		Store: store, Objects: cliObjects{files: files}, Models: models,
+		Store: store, Objects: cliObjects{files: files}, Models: models, SecretKeys: secrets,
 		ManagedDir: root.ManagedDir, Version: version,
 	})
 	if err != nil {

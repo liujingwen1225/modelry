@@ -15,8 +15,6 @@ import (
 	"github.com/liujingwen1225/modelry/internal/accesscontrol"
 	"github.com/liujingwen1225/modelry/internal/activity"
 	"github.com/liujingwen1225/modelry/internal/adminauth"
-	"github.com/liujingwen1225/modelry/internal/drift"
-	"github.com/liujingwen1225/modelry/internal/runtimesettings"
 	"github.com/liujingwen1225/modelry/internal/appauth"
 	"github.com/liujingwen1225/modelry/internal/applicationapi"
 	"github.com/liujingwen1225/modelry/internal/audit"
@@ -24,6 +22,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/backendapi"
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/diagnostics"
+	"github.com/liujingwen1225/modelry/internal/drift"
 	"github.com/liujingwen1225/modelry/internal/extensions"
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
@@ -35,6 +34,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 	"github.com/liujingwen1225/modelry/internal/records"
 	"github.com/liujingwen1225/modelry/internal/requests"
+	"github.com/liujingwen1225/modelry/internal/runtimesettings"
 	"github.com/liujingwen1225/modelry/internal/serviceaccounts"
 	"github.com/liujingwen1225/modelry/internal/storage"
 	"github.com/liujingwen1225/modelry/internal/webui"
@@ -243,7 +243,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	}
 	portabilityService, portabilityModule, err := newPortabilityService(portabilityOptions{
 		store: store, models: backendModel, records: recordService, files: fileService,
-		accessRules: accessRules, audits: auditService, managedDir: root.ManagedDir, version: version,
+		secretKeys: extensionService, accessRules: accessRules, audits: auditService, managedDir: root.ManagedDir, version: version,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Portability: %w", err)

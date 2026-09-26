@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -41,6 +42,7 @@ type cliProject struct {
 	managed      string
 	objects      string
 	collectionID string
+	recordID     string
 }
 
 // newCLIProject 建立一个带 file Field 的真实项目，并写入一个真实的 File object。
@@ -81,13 +83,15 @@ func newCLIProject(t *testing.T, objectBytes []byte) cliProject {
 	if err := os.WriteFile(filepath.Join(project.objects, cliObjectKey), objectBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := recordService.Create(ctx, collection.ID, map[string]any{"title": "ported", "attachment": cliObjectKey}); err != nil {
+	record, err := recordService.Create(ctx, collection.ID, map[string]any{"title": "ported", "attachment": cliObjectKey})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
 	project.collectionID = collection.ID
+	project.recordID = record.ID
 	return project
 }
 
@@ -406,7 +410,12 @@ func (fixture *cliS3Fixture) object(key string) ([]byte, bool) {
 	return append([]byte(nil), payload...), ok
 }
 
-func prepareActiveS3CLIProject(t *testing.T, objectBytes []byte) (cliProject, *cliS3Fixture, string) {
+type cliS3SecretIDs struct {
+	accessKey string
+	secretKey string
+}
+
+func prepareActiveS3CLIProject(t *testing.T, objectBytes []byte) (cliProject, *cliS3Fixture, cliS3SecretIDs) {
 	t.Helper()
 	project := newCLIProject(t, objectBytes)
 	fixture := newCLIS3Fixture(t)
@@ -482,12 +491,25 @@ func prepareActiveS3CLIProject(t *testing.T, objectBytes []byte) (cliProject, *c
 		_ = store.Close()
 		t.Fatalf("Local to S3 migration status = %s (%s)", migration.Status, migration.Message)
 	}
-	provider, err := files.ActiveProvider(context.Background())
-	if err != nil || provider.Name() != string(filestore.ProviderS3) {
-		_ = files.Close(context.Background())
-		_ = secrets.Close(context.Background())
-		_ = store.Close()
-		t.Fatalf("active Provider = %v (%v), want S3", provider, err)
+	providerDeadline := time.Now().Add(10 * time.Second)
+	for {
+		provider, providerErr := files.ActiveProvider(context.Background())
+		if providerErr != nil {
+			_ = files.Close(context.Background())
+			_ = secrets.Close(context.Background())
+			_ = store.Close()
+			t.Fatalf("load active Provider after migration: %v", providerErr)
+		}
+		if provider != nil && provider.Name() == string(filestore.ProviderS3) {
+			break
+		}
+		if time.Now().After(providerDeadline) {
+			_ = files.Close(context.Background())
+			_ = secrets.Close(context.Background())
+			_ = store.Close()
+			t.Fatalf("active Provider = %v, want S3 after migration completion", provider)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	remote, ok := fixture.object(cliS3Prefix + "/" + cliObjectKey)
 	if !ok || !bytes.Equal(remote, objectBytes) {
@@ -514,7 +536,7 @@ func prepareActiveS3CLIProject(t *testing.T, objectBytes []byte) (cliProject, *c
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	return project, fixture, secretSecret.ID
+	return project, fixture, cliS3SecretIDs{accessKey: accessSecret.ID, secretKey: secretSecret.ID}
 }
 
 func TestPortabilityCLIBackupReadsActiveS3AndRestoresTheFileObject(t *testing.T) {
@@ -565,50 +587,210 @@ func TestPortabilityCLIBackupReadsActiveS3AndRestoresTheFileObject(t *testing.T)
 	if code := run([]string{"restore", "--project-root", targetRoot, "--from", bundlePath}, &restoreOut, &restoreErr); code != 0 {
 		t.Fatalf("S3 bundle restore exited %d: %s", code, restoreErr.String())
 	}
-	startStopCLIRuntime(t, targetRoot)
+	baseURL, stopRuntime := startCLIRuntime(t, targetRoot)
+	ownerCookie := bootstrapCLIRuntimeOwner(t, baseURL)
+	status := getCLIRuntimeResponse(t, baseURL+"/admin/api/v1/storage/files", ownerCookie)
+	var statusBody struct {
+		Data struct {
+			ActiveProvider string `json:"activeProvider"`
+			Provider       string `json:"provider"`
+			ProviderState  string `json:"providerState"`
+		} `json:"data"`
+	}
+	if status.status != http.StatusOK || json.Unmarshal(status.body, &statusBody) != nil {
+		t.Fatalf("restored Runtime File Storage status = %d %s", status.status, status.body)
+	}
+	if statusBody.Data.Provider != filestore.ProviderLabel(filestore.ProviderS3) || statusBody.Data.ActiveProvider != string(filestore.ProviderS3) || statusBody.Data.ProviderState != filestore.StateReady {
+		t.Fatalf("restored active Provider = %+v, want usable S3", statusBody.Data)
+	}
+	fileResponse := getCLIRuntimeResponse(t, baseURL+"/admin/api/v1/collections/"+source.collectionID+"/records/"+source.recordID+"/files/attachment", ownerCookie)
+	if fileResponse.status != http.StatusOK || !bytes.Equal(fileResponse.body, objectBytes) {
+		t.Fatalf("restored Record File read through Runtime = %d %q, want original S3 bytes", fileResponse.status, fileResponse.body)
+	}
+	stopRuntime()
+}
 
-	store, err := storage.Open(filepath.Join(targetRoot, ".modelry", "project.sqlite"))
+func TestPortabilityCLIProjectSecretRoundTrip(t *testing.T) {
+	project := newCLIProject(t, nil)
+	markerBytes := make([]byte, 48)
+	if _, err := io.ReadFull(rand.Reader, markerBytes); err != nil {
+		t.Fatal(err)
+	}
+	marker := "project-secret-round-trip-" + hex.EncodeToString(markerBytes)
+	secretID, ciphertext := createCLIProjectSecret(t, project, marker)
+	if bytes.Contains(ciphertext, []byte(marker)) || len(ciphertext) == 0 {
+		t.Fatal("SQLite value_cipher did not contain encrypted Secret data")
+	}
+
+	bundlePath := filepath.Join(project.root, "secret-backup.tar")
+	var backupOut, backupErr bytes.Buffer
+	if code := run([]string{"backup", "--project-root", project.root, "--out", bundlePath}, &backupOut, &backupErr); code != 0 {
+		t.Fatalf("Secret backup exited %d: %s", code, backupErr.String())
+	}
+	manifestBytes, err := readCLIBundleEntry(t, bundlePath, portability.ManifestPath)
 	if err != nil {
-		t.Fatalf("open project after Runtime restart: %v", err)
+		t.Fatal(err)
+	}
+	if bytes.Contains(manifestBytes, []byte(marker)) || strings.Contains(backupOut.String()+backupErr.String(), marker) {
+		t.Fatal("Project Secret plaintext appeared in backup manifest or CLI output")
+	}
+	var manifest struct {
+		Security *struct {
+			Path   string `json:"path"`
+			Bytes  int64  `json:"bytes"`
+			SHA256 string `json:"sha256"`
+		} `json:"security"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Security == nil || manifest.Security.Path != portability.ProjectSecretKeyPath || manifest.Security.Bytes != 32 || len(manifest.Security.SHA256) != 64 {
+		t.Fatalf("backup security metadata = %+v, want namespaced key path, 32 bytes and digest", manifest.Security)
+	}
+	var securityFields map[string]json.RawMessage
+	var manifestObject map[string]json.RawMessage
+	if err := json.Unmarshal(manifestBytes, &manifestObject); err != nil || json.Unmarshal(manifestObject["security"], &securityFields) != nil {
+		t.Fatalf("decode manifest security metadata: %v", err)
+	}
+	if len(securityFields) != 3 || securityFields["path"] == nil || securityFields["bytes"] == nil || securityFields["sha256"] == nil {
+		t.Fatalf("manifest exposes more than key path/length/digest: %s", manifestObject["security"])
+	}
+	keyBytes, err := readCLIBundleEntry(t, bundlePath, portability.ProjectSecretKeyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDigest := sha256.Sum256(keyBytes)
+	if len(keyBytes) != 32 || manifest.Security.SHA256 != hex.EncodeToString(keyDigest[:]) {
+		t.Fatal("backup Project Secret payload does not match its manifest digest")
+	}
+	if bytes.Contains(manifestBytes, keyBytes) || bytes.Contains(backupOut.Bytes(), keyBytes) || bytes.Contains(backupErr.Bytes(), keyBytes) {
+		t.Fatal("Project Secret encryption key appeared in the manifest or CLI backup output")
+	}
+
+	var preflightOut, preflightErr bytes.Buffer
+	if code := run([]string{"restore", "--project-root", t.TempDir(), "--from", bundlePath, "--preflight"}, &preflightOut, &preflightErr); code != 0 || !strings.Contains(preflightOut.String(), `"compatible":true`) {
+		t.Fatalf("Project Secret preflight exited %d: %s %s", code, preflightOut.String(), preflightErr.String())
+	}
+	if bytes.Contains(preflightOut.Bytes(), keyBytes) || bytes.Contains(preflightErr.Bytes(), keyBytes) {
+		t.Fatal("Project Secret encryption key appeared in CLI preflight output")
+	}
+	targetRoot := t.TempDir()
+	var restoreOut, restoreErr bytes.Buffer
+	if code := run([]string{"restore", "--project-root", targetRoot, "--from", bundlePath}, &restoreOut, &restoreErr); code != 0 {
+		t.Fatalf("Project Secret restore exited %d: %s", code, restoreErr.String())
+	}
+	if bytes.Contains(restoreOut.Bytes(), keyBytes) || bytes.Contains(restoreErr.Bytes(), keyBytes) {
+		t.Fatal("Project Secret encryption key appeared in CLI restore output")
+	}
+	baseURL, stopRuntime := startCLIRuntime(t, targetRoot)
+	ownerCookie := bootstrapCLIRuntimeOwner(t, baseURL)
+	response := getCLIRuntimeResponse(t, baseURL+"/admin/api/v1/secrets", ownerCookie)
+	if response.status != http.StatusOK || !bytes.Contains(response.body, []byte(secretID)) || !bytes.Contains(response.body, []byte(`"configured":true`)) {
+		t.Fatalf("restored Secret metadata = %d %s", response.status, response.body)
+	}
+	if bytes.Contains(response.body, []byte(marker)) {
+		t.Fatal("Admin Secret metadata response exposed the plaintext")
+	}
+	assertCLIProjectSecretValue(t, targetRoot, secretID, marker)
+	stopRuntime()
+}
+
+func createCLIProjectSecret(t *testing.T, project cliProject, plaintext string) (string, []byte) {
+	t.Helper()
+	store, err := storage.Open(project.database())
+	if err != nil {
+		t.Fatal(err)
 	}
 	models, err := backendmodel.NewService(context.Background(), store)
 	if err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}
-	objectsDir := filepath.Join(targetRoot, ".modelry", "files", "objects")
-	recordsService, err := records.NewWithLocalFiles(store, models, filepath.Join(targetRoot, ".modelry", "files", "tmp"), objectsDir)
+	rootPath := project.root
+	root, err := modelryproject.ResolveRoot(modelryproject.RootConfig{FlagPath: &rootPath, WorkingDir: project.root})
 	if err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}
-	page, err := recordsService.List(context.Background(), source.collectionID, records.ListOptions{Limit: 10})
+	service, err := extensions.NewService(context.Background(), store, models, extensions.ServiceOptions{ManagedDir: root.ManagedDir, ProjectID: store.ProjectID()})
 	if err != nil {
 		_ = store.Close()
-		t.Fatalf("read restored Records after Runtime restart: %v", err)
+		t.Fatal(err)
 	}
-	if len(page.Data) != 1 || page.Data[0].Values["attachment"] != cliObjectKey {
+	secret, err := service.CreateSecret(context.Background(), "round trip", plaintext)
+	if err != nil {
+		_ = service.Close(context.Background())
 		_ = store.Close()
-		t.Fatalf("restored File Record reference = %#v", page.Data)
+		t.Fatal(err)
+	}
+	var ciphertext []byte
+	err = store.WithReadSnapshot(context.Background(), func(snapshot storage.Executor) error {
+		return snapshot.QueryRowContext(context.Background(), `SELECT value_cipher FROM modelry_secrets WHERE id=?`, secret.ID).Scan(&ciphertext)
+	})
+	if err != nil {
+		_ = service.Close(context.Background())
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := service.Close(context.Background()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	restoredObject := filepath.Join(objectsDir, cliObjectKey)
-	if got, err := os.ReadFile(restoredObject); err != nil || !bytes.Equal(got, objectBytes) {
-		t.Fatalf("restored Local object = %q (%v), want the original S3 bytes", got, err)
+	return secret.ID, ciphertext
+}
+
+func assertCLIProjectSecretValue(t *testing.T, projectRoot, secretID, want string) {
+	t.Helper()
+	rootPath := projectRoot
+	root, err := modelryproject.ResolveRoot(modelryproject.RootConfig{FlagPath: &rootPath, WorkingDir: projectRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.Open(root.Database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, err := backendmodel.NewService(context.Background(), store)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	service, err := extensions.NewService(context.Background(), store, models, extensions.ServiceOptions{ManagedDir: root.ManagedDir, ProjectID: store.ProjectID()})
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = service.Close(context.Background())
+		_ = store.Close()
+	}()
+	if name, configured, err := service.SecretMetadata(context.Background(), secretID); err != nil || name != "round trip" || !configured {
+		t.Fatalf("restored SecretMetadata = %q, %t, %v", name, configured, err)
+	}
+	var got []byte
+	if err := service.WithSecretValue(context.Background(), secretID, func(value []byte) error {
+		got = append([]byte(nil), value...)
+		return nil
+	}); err != nil {
+		t.Fatalf("restored WithSecretValue: %v", err)
+	}
+	if string(got) != want {
+		t.Fatalf("restored Secret plaintext = %q, want original value", got)
 	}
 }
 
 func TestPortabilityCLIBackupFailsClosedForMissingS3CredentialAndUnavailableS3(t *testing.T) {
 	t.Run("missing credential does not fall back to Local", func(t *testing.T) {
-		project, _, secretID := prepareActiveS3CLIProject(t, []byte("only-in-S3"))
+		project, _, secretIDs := prepareActiveS3CLIProject(t, []byte("only-in-S3"))
 		store, err := storage.Open(project.database())
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := store.WithTransaction(context.Background(), func(tx storage.Executor) error {
-			_, err := tx.ExecContext(context.Background(), `DELETE FROM modelry_secrets WHERE id=?`, secretID)
+			_, err := tx.ExecContext(context.Background(), `DELETE FROM modelry_secrets WHERE id=?`, secretIDs.secretKey)
 			return err
 		}); err != nil {
 			_ = store.Close()
@@ -658,7 +840,7 @@ func assertCLIBackupFailureIsRedacted(t *testing.T, bundlePath, stdout, stderr s
 	}
 }
 
-func startStopCLIRuntime(t *testing.T, projectRoot string) {
+func startCLIRuntime(t *testing.T, projectRoot string) (string, func()) {
 	t.Helper()
 	path := projectRoot
 	instance, err := modelryruntime.New(modelryruntime.Options{
@@ -671,8 +853,9 @@ func startStopCLIRuntime(t *testing.T, projectRoot string) {
 	done := make(chan error, 1)
 	ready := make(chan net.Addr, 1)
 	go func() { done <- instance.Run(ctx, "127.0.0.1:0", func(address net.Addr) { ready <- address }) }()
+	var address net.Addr
 	select {
-	case <-ready:
+	case address = <-ready:
 	case err := <-done:
 		cancel()
 		t.Fatalf("Runtime exited before ready: %v", err)
@@ -681,16 +864,80 @@ func startStopCLIRuntime(t *testing.T, projectRoot string) {
 		_ = instance.Close()
 		t.Fatal("Runtime did not become ready")
 	}
-	cancel()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("stop Runtime for %s: %v", projectRoot, err)
+	stopped := false
+	stop := func() {
+		if stopped {
+			return
 		}
-	case <-time.After(10 * time.Second):
-		_ = instance.Close()
-		t.Fatal("Runtime did not stop")
+		stopped = true
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("stop Runtime for %s: %v", projectRoot, err)
+			}
+		case <-time.After(10 * time.Second):
+			_ = instance.Close()
+			t.Error("Runtime did not stop")
+		}
 	}
+	t.Cleanup(stop)
+	return "http://" + address.String(), stop
+}
+
+func startStopCLIRuntime(t *testing.T, projectRoot string) {
+	_, stop := startCLIRuntime(t, projectRoot)
+	stop()
+}
+
+type cliHTTPResponse struct {
+	status int
+	body   []byte
+}
+
+func bootstrapCLIRuntimeOwner(t *testing.T, baseURL string) string {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/bootstrap/owner", strings.NewReader(`{"email":"owner@example.com","password":"Sufficient-Owner-Password-42"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", baseURL)
+	response, err := (&http.Client{Timeout: 5 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("bootstrap restored project Owner = %d %s", response.StatusCode, body)
+	}
+	for _, cookie := range response.Cookies() {
+		if cookie.Name == "modelry_admin_session" && cookie.Value != "" {
+			return cookie.Name + "=" + cookie.Value
+		}
+	}
+	t.Fatal("restored Runtime did not bootstrap an Owner session")
+	return ""
+}
+
+func getCLIRuntimeResponse(t *testing.T, target, cookie string) cliHTTPResponse {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Cookie", cookie)
+	response, err := (&http.Client{Timeout: 5 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cliHTTPResponse{status: response.StatusCode, body: body}
 }
 
 func readCLIBundleEntry(t *testing.T, bundlePath, name string) ([]byte, error) {

@@ -12,7 +12,7 @@ A self-hosted project is only as useful as the operator's ability to move it, re
 
 ## Product terms
 
-- A **Backup bundle** is an archive the Runtime produces from a running project: a consistent database snapshot, the file objects the applied model references, and a manifest that records the format version, the project identity, the Runtime version, and a SHA-256 for every payload.
+- A **Backup bundle** is an archive the Runtime produces from a running project: a consistent database snapshot, the file objects the applied model references, any Project Secret encryption material required by that snapshot, and a manifest that records the format version, the project identity, the Runtime version, and a SHA-256 for every payload.
 - **Restore** is an explicit operator action that replaces a stopped project's state with the contents of a verified Backup bundle. It never merges and never runs against a live project.
 - **Preflight** is the validation pass that runs before anything is written: format version, payload digests, project identity, and database compatibility.
 - An **Export** is a stream of one Collection's applied model header plus its committed Records, in a line-delimited format that preserves field names and file references.
@@ -31,6 +31,10 @@ A self-hosted project is only as useful as the operator's ability to move it, re
 ## Product behavior
 
 - A backup always contains a consistent database snapshot even while requests are being served; it is never a copy of a live file.
+- Project Secret ciphertext and other durable values encrypted with the same project-level key form one durable Project state. When the snapshot contains any such ciphertext, including an App User Recovery token delivery copy, the Backup bundle includes the matching key at `security/project-secret-key`; the key is a protected security payload, not a File object.
+- The key payload is raw Project encryption material. Community Backup does not encrypt or password-protect the bundle, so the complete bundle is a highly sensitive security asset and must be protected at least as carefully as Project Secrets. Its manifest records only the payload path, byte length, and SHA-256 digest.
+- If the snapshot contains no ciphertext protected by the project key, the bundle omits the key. Restore never invents a replacement key for encrypted rows.
+- Project Secret encryption material is never returned as a standalone HTTP/Admin field, key metadata, or plaintext preview, and is never included in Collection Export or Import. An authorized HTTP Backup response may carry it inside the complete bundle and has the same protection requirement as a CLI-produced bundle.
 - The manifest is machine readable and human readable: format version, Runtime version, project id, creation time, database digest, every object digest, and the applied model hash.
 - Preflight never writes. It reports incompatibilities as structured findings instead of failing halfway through a restore.
 - Restore refuses to touch a project whose Runtime is running, and refuses to replace an existing project without an explicit `--force`.
@@ -42,6 +46,7 @@ A self-hosted project is only as useful as the operator's ability to move it, re
 ## Boundaries
 
 - No Cloud, Enterprise, fleet, or scheduled backup service; no remote storage target and no retention policy engine.
+- No backup password, local wrapping key, KMS, or encrypted-bundle feature in Community V0.1.x.
 - No partial or merging restore, no restore into a running project, and no silent overwrite of a newer project format.
 - No import of file bytes: file fields reference existing objects, and an import that references a missing object fails that Record.
 - No SQL-level import or export, no table dump, and no direct database write path.
