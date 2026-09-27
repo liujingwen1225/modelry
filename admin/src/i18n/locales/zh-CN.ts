@@ -31,6 +31,8 @@ export const zhCN = {
   },
   shell: {
     skipToMainContent: '跳到主要内容',
+    collapseProjectNavigation: '折叠项目导航',
+    expandProjectNavigation: '展开项目导航',
     localEdition: '本地',
     projectWorkspace: '项目工作区',
     localContext: '本地',

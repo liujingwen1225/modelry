@@ -29,6 +29,8 @@ export const en = {
   },
   shell: {
     skipToMainContent: 'Skip to main content',
+    collapseProjectNavigation: 'Collapse project navigation',
+    expandProjectNavigation: 'Expand project navigation',
     localEdition: 'LOCAL',
     projectWorkspace: 'Project workspace',
     localContext: 'Local',

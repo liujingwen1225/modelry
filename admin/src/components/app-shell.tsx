@@ -12,6 +12,8 @@ import {
   LogOut,
   Moon,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings2,
   ShieldCheck,
   Sun,
@@ -170,7 +172,12 @@ function canSeeNavigationItem(role: AppShellProps['role'], permission: ControlPl
   if (item.operation === undefined) return role === undefined || role === 'owner';
   return allowsOperation(role, permission, item.operation);
 }
-function Sidebar({ role, permission }: { role?: AppShellProps['role']; permission?: ControlPlanePermission }) {
+function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
+  role?: AppShellProps['role'];
+  permission?: ControlPlanePermission;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   const { t } = useI18n();
   const { pathname } = useLocation();
   const visibleGroups = useMemo(
@@ -184,6 +191,15 @@ function Sidebar({ role, permission }: { role?: AppShellProps['role']; permissio
       <div className="sidebar__brand">
         <span className="brand-mark" aria-hidden="true"><Command size={17} strokeWidth={2.2} /></span>
         <span className="brand-word">modelry</span>
+        <button
+          aria-label={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
+          className="sidebar__toggle"
+          onClick={onToggleCollapsed}
+          title={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
+          type="button"
+        >
+          {collapsed ? <PanelLeftOpen aria-hidden="true" size={17} /> : <PanelLeftClose aria-hidden="true" size={17} />}
+        </button>
       </div>
       <nav aria-label={t('navigation.projectNavigation')} className="side-navigation">
         {visibleGroups.map((group, groupIndex) => (
@@ -191,10 +207,12 @@ function Sidebar({ role, permission }: { role?: AppShellProps['role']; permissio
             {group.label && <p className="nav-group__label">{t(group.label)}</p>}
             {group.items.map(({ label, to, icon: Icon }) => (
               <NavLink
+                aria-label={collapsed ? t(label) : undefined}
                 aria-current={isPrimaryLinkActive(pathname, to) ? 'page' : undefined}
                 className={() => `nav-link${isPrimaryLinkActive(pathname, to) ? ' nav-link--active' : ''}`}
                 end={to === '/'}
                 key={to}
+                title={collapsed ? t(label) : undefined}
                 to={to}
               >
                 <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
@@ -475,10 +493,11 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
   const { t } = useI18n();
   const location = useLocation();
   const area = productAreaNavigation(location.pathname);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   return (
-    <div className="app-frame" data-product-area={area?.id}>
+    <div className={`app-frame${sidebarCollapsed ? ' app-frame--sidebar-collapsed' : ''}`} data-product-area={area?.id}>
       <a className="skip-link" href="#main-content">{t('shell.skipToMainContent')}</a>
-      <Sidebar permission={permission} role={role} />
+      <Sidebar collapsed={sidebarCollapsed} onToggleCollapsed={() => setSidebarCollapsed((value) => !value)} permission={permission} role={role} />
       <div className="workspace">
         <header className="topbar">
           <div className="topbar__identity">
