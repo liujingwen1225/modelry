@@ -11,99 +11,145 @@
 7. docs/05-product-experience-and-acceptance.md
 8. docs/06-product-architecture.md
 9. docs/specs/0001-admin-product-ux-spec.md
-10. 与当前任务直接相关的 Accepted ADR / Spec / Contract
+10. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
+
+## 当前产品定位
+
+Modelry 是面向个人开发者、独立开发者和编码智能体的本地优先后端工作台。
+
+不要默认把 Modelry 优化成企业后端平台，也不要因为“未来可能需要”提前设计：
+
+- PostgreSQL；
+- 组织 / 团队治理；
+- 企业 SSO / SAML / SCIM；
+- 复杂企业 RBAC；
+- HA / 集群；
+- 批量实例管理；
+- Kubernetes 优先部署；
+- 合规平台；
+- 多项目运行时。
+
+这些能力只有在真实需求和证据证明当前架构形成明确瓶颈后，才通过新的产品决策和 ADR 进入路线。
 
 ## 产品原则
 
-不要把 Modelry 优化成内部工程系统。
-
 每个用户可见功能都必须先问：
 
+- 一个人能不能理解？
+- 一个人能不能部署和维护？
+- 能不能减少完成应用的时间？
 - 能不能少理解一个概念？
 - 能不能少跳一次页面？
 - 能不能少点一次按钮？
-- 能不能使用安全合理的默认值？
-- Durable Result 是否原地可见？
-- Error 是否给出明确恢复路径？
-- Search / Filter / Sort / Pagination / Deep Link Context 是否保留？
+- 默认值是否安全合理？
+- 成功结果是否耐久并原地可见？
+- 错误是否给出明确恢复路径？
+- 编码智能体能不能安全可靠地操作？
 - 是否形成真实业务闭环？
 
-## V0.1 Community 基线
+## 当前技术基线
 
 - Go
-- SQLite Only
+- SQLite
 - React + TypeScript + Vite
-- Modular Monolith
-- Contract First
-- Zero-config-first
-- 简单 Self-hosted Delivery
-- One Runtime / One Project in V0.1
+- 模块化单体
+- 契约优先
+- 零配置优先
+- 自托管优先
+- 单运行时 / 单项目
 
-## V0.1 产品 Gate
+SQLite 与单运行时 / 单项目是当前有意的产品架构，不是等待企业版或 PostgreSQL 替换的临时实现。
 
-优先证明：
+同时必须保持后端模型与 SQLite 物理结构分离，不能让数据库内部语义泄漏成产品语义。
+
+## 当前产品门槛
+
+开发者：
 
 ~~~text
-First Run
-→ Model
-→ Data
-→ Secure
-→ API
-→ Observe
-→ Evolve
+首次运行
+→ 建模
+→ 数据
+→ 安全
+→ API / SDK
+→ 观察
+→ 演进
 ~~~
 
-不要因为长期 Community 需要某个能力，就默认它必须进入 V0.1。
+编码智能体：
 
-Realtime、Lifecycle Hooks、Secrets UI、Standalone Activity、Policy Simulation、Additional Administrator Management 等默认属于 V0.1.x，除非权威 Scope 明确重新纳入。
+~~~text
+检查
+→ 理解
+→ 提出变更
+→ 差异 / 风险
+→ 应用
+→ 验证
+→ 审计
+~~~
+
+V0.1.x 产品成熟化已经完成。实时订阅、钩子、密钥配置、Webhook、任务、S3、多管理员、策略模拟、活动记录、漂移检测、运行时设置、SDK、导入 / 导出、备份 / 恢复均已交付，不得再次当作未完成未来项。
 
 ## 架构规则
 
-- Modelry Product Semantics 不得等同于 SQLite-specific Semantics。
-- V0.1 不实现 PostgreSQL，但不得让未来 PostgreSQL 需要重写 Domain Model。
-- 当存在 Product Concept 时，不直接向普通用户暴露 Raw Database Concept。
-- Data Plane 与 Control Plane 分离。
-- Admin Auth 与 Application Auth 分离。
-- Backend Model Evolution 统一经过 ChangeSet / Diff / Risk / Apply / History。
-- Schema Pending Changes 必须耐久保存。
-- Schema、Policy、Auth Configuration 不共享一个隐形 Collection-wide UX Draft。
-- MCP 只是同一 Product Semantics 的另一个 Interface，不拥有隐藏旁路。
-- Contract 在 Transport Implementation 之前定义。
+- Modelry 产品语义不能等同于 SQLite 特有语义。
+- 应用数据面与管理面分离。
+- Admin 认证与应用认证分离。
+- 后端模型演进统一经过变更集、差异、风险、应用和历史。
+- 结构待应用变更必须耐久保存。
+- 结构、策略、认证配置不共享一个隐形的集合级草稿。
+- Admin、HTTP、SDK、CLI、MCP 操作同一套产品语义。
+- MCP 不拥有隐藏旁路，不得直接改 SQLite 绕过变更生命周期。
+- 先定义契约，再实现传输层。
+- Go 核心不要求用户编写 Go 插件；扩展面向 JavaScript / TypeScript。
+- 外部副作用不得被描述为可回滚数据库事务。
 
-## UI Vocabulary
+## 界面术语
 
-Domain 可以保留内部术语，但 Product UI 优先使用：
+领域模型可以保留内部术语，但产品界面优先使用：
 
 ~~~text
-ChangeSet       -> Pending change
-Migration       -> Applied change / Technical details
-Principal       -> Administrator / Service account / App user
-Capability      -> Permission
-Credential      -> Password / API key / Session
-Policy          -> Access rule
+ChangeSet       → 待应用变更
+Migration       → 已应用变更 / 技术详情
+Principal       → 管理员 / 服务账号 / 应用用户
+Capability      → 权限
+Credential      → 密码 / API Key / 会话
+Policy          → 访问规则
 ~~~
+
+## 近期优先级
+
+1. 首次公开发布、打包和安装；
+2. 5 分钟完成首个可用后端；
+3. GitHub / Google 应用 OAuth / OIDC；
+4. SDK 接入体验；
+5. MCP / 编码智能体接入与安全演进；
+6. 示例应用 / 模板 / 部署指引；
+7. 邮件配置体验。
+
+不要自行把企业版、PostgreSQL 或云端控制面基础设施插到这些优先级之前。
 
 ## 质量规则
 
-Definition of Done 必须同时覆盖：
+每个用户可见能力必须同时满足：
 
 ~~~text
-Functional Closure
+功能闭环
 +
-UX Closure
+体验闭环
 +
-Visual Closure
+视觉闭环
 +
-Error Closure
+错误闭环
 +
-Business Flow Closure
+业务流程闭环
 ~~~
 
-Mandatory Acceptance 使用：
+强制验收使用：
 
-- Real Runtime
-- Real SQLite
-- Real HTTP
-- Real Admin Browser
-- Durable State Verification
-- Cross-Surface Verification
+- 真实运行时；
+- 真实 SQLite；
+- 真实 HTTP；
+- 真实 Admin 浏览器；
+- 耐久状态验证；
+- 跨界面验证。

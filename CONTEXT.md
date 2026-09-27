@@ -1,218 +1,234 @@
 # Modelry 当前上下文
 
-## 产品定位
+## 当前定位
 
-Modelry 是一个面向人类开发者与 Coding Agent 的产品化 Backend Platform。
+Modelry 是一个面向个人开发者、独立开发者和 AI 辅助开发场景的**本地优先后端工作台**。
 
-V0.1 的核心用户路径统一为：
+核心目标：
+
+> 让一个开发者和编码智能体使用同一套安全、可理解、可审计的后端语义，创建、运行并持续演进应用后端。
+
+企业开发者可以使用 Modelry，但企业后端平台不是当前产品目标。不要为了假设中的未来需求提前引入 PostgreSQL、组织 / 团队治理、企业单点登录、复杂 RBAC、HA、集群、Kubernetes 或合规体系。
+
+## 当前状态
+
+V0.1 核心闭环和 V0.1.x 产品成熟化已经完成并合入 main。
+
+已交付的重要能力包括：
+
+- 实时订阅；
+- JavaScript / TypeScript 扩展和生命周期钩子；
+- 密钥配置；
+- 事件钩子、Webhook、定时任务；
+- 多文件和 S3 兼容存储；
+- 多管理员和账号恢复；
+- 策略模拟、活动记录、漂移检测、运行时设置；
+- 类型化应用 API 和 SDK 生成；
+- 导入 / 导出；
+- 完整备份 / 恢复；
+- 中英文 Admin；
+- 命令面板和主题切换。
+
+因此这些能力不再属于“未来 V0.1.x”。
+
+当前下一阶段是：**首次公开发布 + 开发者启用体验**，随后进入 V0.2 开发者与编码智能体体验。
+
+## 北极星体验
+
+开发者：
 
 ~~~text
-First Run
-→ Create Backend Model
-→ Manage Data
-→ Secure
-→ Use API
-→ Observe
-→ Evolve
+首次运行
+→ 建模
+→ 管理数据
+→ 配置安全
+→ 使用 API / SDK
+→ 观察
+→ 安全演进
 ~~~
 
-扩展能力是重要方向，但不作为第一个 V0.1 Release Gate 的前置条件。
+编码智能体：
 
-Modelry 不能演变成“数据库管理工具 + 一堆附加功能”。
+~~~text
+检查
+→ 理解
+→ 提出变更
+→ 差异 / 风险
+→ 应用
+→ 验证
+→ 审计
+~~~
 
-## 产品化要求
+## 产品判断标准
 
-所有产品和技术决策必须优先服务：
+所有新增能力先回答：
 
-- **易用**：少理解一个内部概念、少一次跳转、少一次无意义确认。
-- **好用**：真实工作流连续，默认值合理，结果原地可见。
-- **好看**：视觉、信息层级与交互统一。
-- **功能完整**：核心 Backend 工作流真正闭环，而不是拥有很多未闭环能力。
+1. 一个人能不能理解？
+2. 一个人能不能部署和维护？
+3. 能不能明显减少完成应用的时间？
+4. 默认路径能不能更少步骤？
+5. 编码智能体能不能通过受控接口安全、可靠地完成任务？
 
-技术纯粹性、提前抽象和内部对象模型不得凌驾于产品体验。
+如果不能明显改善这些目标，就不进入近期路线。
 
-## 产品体系
+同时继续坚持：
 
-### Community
+- 成功结果必须耐久并可再次查看；
+- 错误必须可理解、可恢复；
+- 默认安全；
+- 高级复杂度渐进暴露；
+- 深链接和页面上下文尽量保持；
+- 开发者与编码智能体使用同一套后端语义。
 
-开源、自托管、SQLite Only、零配置优先。
+## 产品形态
 
-Community 的长期产品可以持续拥有 Files、Realtime、Hooks、Secrets 等能力，但 V0.1 不要求一次完成所有长期 Community 能力。
+~~~text
+Modelry
+开源 / 自托管
+        ↓
+开发者体验 + 编码智能体体验
+        ↓
+Modelry 云服务
+~~~
 
-### Commercial / Enterprise
+不再规划独立商业版 / 企业版。
 
-面向正式生产、团队和组织的商业 Self-hosted 产品。
+未来 Modelry 云服务首先解决：
 
-PostgreSQL、Organization / Team Governance、Enterprise Identity、Advanced RBAC、Backup / Restore、Production Observability、HA / Scale、Fleet Operations、Compliance 与 Support 属于这一阶段。
+- 托管运行；
+- 域名 / HTTPS；
+- 持久化存储；
+- 备份；
+- 监控；
+- 邮件发送；
+- 版本升级；
+- 资源限制和用量；
+- 运行维护。
 
-### Modelry Cloud
+## 技术基线
 
-官方 Managed SaaS。
-
-Cloud 使用独立 Cloud Control Plane 管理 Organization、Team、Project、Environment、Region、Usage、Billing、Backup 和托管运维。
-
-Project Backend Plane 的核心产品语义继续与 Self-hosted Modelry 共用。
-
-## V0.1 Community 固定基线
-
-- Go Runtime
-- SQLite Only
+- Go
+- SQLite
 - React + TypeScript + Vite
-- Modular Monolith
-- Contract First
-- Zero-config-first
-- 简单 Self-hosted Delivery
-- 一个 Runtime 服务一个 Project
+- 模块化单体
+- 契约优先
+- 零配置优先
+- 自托管优先
+- 单运行时 / 单项目
 
-## V0.1 产品范围原则
+SQLite 是当前正式数据库架构，不是等待 PostgreSQL 替换的临时实现。
 
-必须优先完成：
+单运行时 / 单项目也是有意的产品模型：
 
 ~~~text
-Model
-→ Data
-→ Security
-→ API
-→ Observe
-→ Evolve
+一个项目
+=
+一个后端
+=
+一个运行时
+=
+一个独立部署单元
 ~~~
 
-V0.1 保留：
+未来数据库、多项目运行时或分布式架构必须由真实瓶颈和用户需求驱动，并通过新的产品决策和 ADR 进入路线。
 
-- Collections / Fields / Relations / Basic Index / Validation / Defaults
-- Records
-- Durable Pending Schema Changes / Apply / Recovery / Applied History
-- REST API / OpenAPI / Runner / Request Logs
-- Auth Collection / Email + Password / Sessions
-- Access Rules
-- Local Single-file Field
-- Owner + Service Account / API Key
-- Minimal Audit
-- Runtime / Storage Diagnostics
-- Minimal CLI
-- Core MCP
+## 核心产品域
 
-Community V0.1.x 已交付（当前权威语义）：
+- 集合 / 记录；
+- 结构 / 变更；
+- 应用 API / OpenAPI / SDK；
+- 应用认证；
+- 访问规则；
+- 文件；
+- 实时订阅；
+- 扩展 / 钩子；
+- 密钥配置；
+- Webhook / 定时任务；
+- 请求日志 / 审计 / 诊断；
+- 导入 / 导出；
+- 备份 / 恢复；
+- Admin；
+- CLI；
+- MCP。
 
-- Realtime
-- Lifecycle Hooks
-- Secrets UI
-- Event Hooks / Webhooks
-- Policy Simulation
-- Additional Administrator Management
-- Full Activity Timeline
-- Drift Product
-- Editable Runtime Settings
-- Multiple File Values
-- S3-compatible Storage
+活动记录、漂移检测、策略模拟和运行时设置继续保留，但属于渐进式高级能力，不作为新用户的第一心智。
 
-## Policy, Activity, Drift, and Runtime Settings
+## 三类主要接口
 
-**Policy Simulation**：针对已应用 Access Rules 的非权威预演，使用与真实请求相同的 evaluator。它不写 RequestRecord、不写 Audit、不改变规则。
-_Avoid_：Dry Run、Policy Test、Rule Preview
+~~~text
+开发者
+→ Admin
 
-**Activity**：由各子系统产品事实构成的有界运维时间线（Model 变更、Automation 投递、Extension Run、Mail Delivery、Storage Migration、App User 恢复）。
-_Avoid_：Audit Log、Request Log、Event Stream、Debug Log
+应用
+→ SDK / HTTP API / OpenAPI
 
-**Drift**：Applied Model、物理 SQLite 投影与 runtime-managed state 三者之间的不一致。
-_Avoid_：Corruption、Migration Failure、Schema Mismatch
+编码智能体
+→ MCP
+~~~
 
-**Expected Pending Change**：已保存但尚未 Apply 的变更。它以信息项呈现，不是 Drift。
-_Avoid_：Pending Drift、Unapplied Drift
+CLI 主要用于启动、状态、诊断和开发自动化。
 
-**Reconcile**：只重建 Applied Model 的物理投影（表、列、索引）的修复动作。它不 Apply Pending Change、不删除 Record、不删除列或表。
-_Avoid_：Repair Migration、Reapply、Reset Schema
+MCP 必须继续遵守：
 
-**Runtime Setting**：带 value source、validation 与 restart requirement 的 durable Runtime 配置项。
-_Avoid_：Env Var、Config File、Flag
+- 后端模型；
+- 变更生命周期；
+- 权限；
+- 访问规则；
+- 审计。
+
+编码智能体不能直接修改 SQLite 绕过正常生命周期。
+
 ## 架构不变量
 
-- Backend Model 定义 Modelry 产品语义，SQLite 不能反过来定义产品。
-- V0.1 只实现 SQLite，但未来 PostgreSQL 不应要求重写 Domain Model、Admin 或 Contract。
-- Application Data Plane 与 Modelry Control Plane 分离。
-- Admin Identity 与 Application User Identity 分离。
-- Principal 与 Credential 在 Domain 中分离，但 UI 使用 Administrator、Service Account、App User、Password、API Key、Session 等自然术语。
-- 受管 Backend Model Mutation 统一经过显式 Change Lifecycle。
-- Admin、HTTP、CLI 与 MCP 操作同一套 Backend Semantics。
-- Go 是 Runtime 实现语言，不是用户必须面对的扩展语言。
-- Domain Language 不等于 UI Language。
+- 后端模型定义 Modelry 产品语义，SQLite 物理结构不能反向定义产品。
+- 应用数据面与 Modelry 管理面分离。
+- Admin 身份与应用用户身份分离。
+- 主体与凭证在领域模型中分离，界面使用自然产品术语。
+- 受管后端模型变更统一经过显式变更生命周期。
+- 结构待应用变更必须耐久保存。
+- Admin、HTTP、SDK、CLI 和 MCP 操作同一套后端语义。
+- Go 是运行时核心，不是用户必须使用的扩展语言。
+- JavaScript / TypeScript 是面向扩展的语言。
+- 外部副作用不能伪装成可随 SQLite 事务回滚。
 
-## Record Events and Realtime
+## 近期路线
 
-**Record Event**：一个已提交的 Collection Record 创建、更新或删除事实。它属于 Project 内该 Collection 的数据变更历史，与 API 请求遥测和管理审计分别建模。
-_Avoid_：Audit Event、Request Event、Activity Event
+### 首次公开发布
 
-**Event ID**：标识一个 Record Event，并确定它在所属 Collection 事件序列中的位置。ID 使用 `evt_<Collection ID 的 UTF-8 字节之无填充 Base64 URL-safe 编码>_<非零 20 位序号>`，因此在同一 Project 内唯一；它可作为从该 Event 之后恢复接收的游标值。零序号只表示首次订阅的 Event Cursor 边界，不代表 Event。
-_Avoid_：SQLite Row ID、Request ID
+- 发布打包；
+- Apache-2.0 LICENSE；
+- 可下载二进制；
+- 安装 / 快速开始；
+- 示例应用；
+- 5 分钟完成首个可用后端。
 
-**Event Cursor**：标识订阅者从一个 Collection 事件序列继续接收的位置。它通常取最近已接收 Event 的 Event ID；首次订阅时使用独立的 Collection-scoped cursor 表示建立订阅时的序列边界。不同 Collection 之间不承诺一个可观察的全序。
-_Avoid_：Page Cursor、Request ID
+### V0.2
 
-## Extensions, Lifecycle Hooks, and Secrets
+高优先级：
 
-**Extension**：Project 中由 Owner 管理的一份可版本化脚本资源，可为 Collection Record 生命周期绑定受控处理函数。Extension 不是普通 Record、Go Plugin 或可访问 Runtime 内部状态的通道。
-_Avoid_：Plugin（容易暗示任意进程能力）、Script File（未表达受控边界）
+- GitHub / Google 应用 OAuth / OIDC；
+- SDK 接入示例和使用体验；
+- MCP / 编码智能体接入；
+- 智能体安全的模型演进；
+- 示例应用 / 模板；
+- 部署指引；
+- 邮件配置体验。
 
-**Lifecycle Hook**：Extension 在一个 Collection 的 Record Create、Update 或 Delete 流程中收到的明确调用。Pre-commit Hook 可以验证或修改本次待提交 Record；Post-commit Hook 在耐久提交后运行，可执行外部副作用，但其失败不撤销该变更。
-_Avoid_：SQLite Trigger、Database Hook（泄漏实现细节）、Transactional Hook（容易误示外部副作用可回滚）
+### 后续
 
-**Secret**：Project 中供获准 Extension 使用的敏感配置值。它与 Record、RequestRecord、AuditRecord 分开管理；Owner 写入后不能再次读取原值。
-_Avoid_：Secret Record、Credential（与身份认证凭证混淆）、Environment Variable（隐去归属与访问范围）
+根据真实用户反馈增强：
 
-### Extension Product Semantics
+- 扩展编写体验；
+- 钩子调试 / 测试体验；
+- 实时订阅客户端体验；
+- 定时任务 / Webhook 体验；
+- 可复用后端模板；
+- 本地开发流程；
+- 云端托管。
 
-Extension 是 Project 中的一份 JavaScript 或 TypeScript 程序。每次激活都会形成一个不可变 Revision；Collection 绑定指向明确的活动 Revision。Owner 可停用 Extension 或替换为新 Revision。V0.1.x 不支持从磁盘、npm 或网络导入代码。
+PostgreSQL、组织 / 团队治理、企业单点登录、HA、集群、Kubernetes、合规体系均不在当前承诺路线中。
 
-Lifecycle Hook 分为 `beforeCreate`、`beforeUpdate`、`beforeDelete` 与 `afterCommitCreate`、`afterCommitUpdate`、`afterCommitDelete`。每个 Collection 操作的每个阶段至多有一个启用的绑定，因此执行顺序明确。Before Hook 只接收本次待变更 Record 和 Applied Model 上下文，可以拒绝或返回 Record 修改；它不访问 Secret 或网络。验证与 Hook 均成功后，Runtime 才提交 Record 与 Record Event。Hook 拒绝、执行失败、超时或修改后验证失败时，Record 与 Event 均不改变。
-
-After-commit Hook 消费事务中记录的不可变提交事实，只运行一次；它不能修改或撤销已提交 Record，失败也不改变 Record mutation 的成功结果。意图与 Record Event 同事务耐久写入，并固定当时的 Extension Revision、Binding、Secret 别名映射、Origin 授权和 Event ID；重启后未完成项标记为中断，不自动重试。停用、撤销或删除依赖项会取消尚未开始的对应意图；运行中取消尽力而为。仅此阶段可读取明确绑定给该 Extension 的 Secret 别名，并可使用 Owner 明确授予的 HTTPS Origin；请求有时限、并发数和字节上限，不能访问本机或私有网络地址。
-
-Secret 的原值只在创建或替换时由 Owner 输入。管理列表、详情、Audit、RequestRecord、普通 Record、Hook Run 与运行时错误只显示元数据或配置状态。加密密钥缺失、无效或无法通过本机文件权限检查时，依赖 Secret 的 Hook 失败关闭；不得生成新密钥继续运行。
-
-Hook Run 记录阶段、Extension Revision、绑定、开始/结束时间和安全错误类别，不记录源异常、Guest 自定义消息、脚本 stdout、HTTP 请求/响应内容或 Secret。Extension 配置的绑定槽位冲突会在启用时原子拒绝，Extension 保持停用。
-
-**Realtime Subscription**：应用通过 Collection 订阅已授权的 Record Event，并在连接恢复后从 Event Cursor 继续接收。
-_Avoid_：Record polling、Activity Timeline
-
-## File Values and Storage Providers
-
-**File value**：Collection Field 上的文件能力取值。`file` Field 保存单个 File value，`files` Field 保存有序列表；两者只保存 Runtime 生成的不透明对象引用，不保存文件名、路径或桶名。
-_Avoid_：File path、Bucket key、Filename
-
-**File object**：Runtime 写入 Storage Provider 的一份不可变字节内容。对象写入后永不覆盖；替换文件产生新对象，旧对象在宽限期后由 reconcile 回收。
-_Avoid_：Mutable file、Blob row
-
-**Storage provider**：实际存放 File object 的实现，当前为 `Local` 与 `S3-compatible`。Provider 是运行实现，不是 Backend Model 语义；切换 Provider 不修改任何 Record 值。
-_Avoid_：Backend、Bucket（作为产品术语）
-
-**Provider migration**：把所有 Durable Record 引用的 File object 复制到目标 Provider，并在全部校验通过后才切换 Provider 的耐久操作。它 bounded、可取消、restart-aware，且不删除源对象。
-_Avoid_：Sync、Replication、Copy job
-## Change UX 不变量
-
-底层继续保留：
-
-~~~text
-ChangeSet
-→ Structured Diff
-→ Risk / Preconditions / Impact
-→ Apply Attempt
-→ Migration / Ledger
-~~~
-
-用户主界面优先使用：
-
-~~~text
-Pending
-Needs review
-Failed
-Applied
-~~~
-
-Schema 的 Pending Changes 必须耐久保存。用户离开 Collection、刷新页面或切换 Fields / Relations / Indexes 时不应丢失。
-
-Policy 与 Auth Configuration 不与 Schema 共用一个隐形 Collection-wide Draft。
-
-## 权威文档阅读顺序
+## 权威文档顺序
 
 1. docs/00-product-vision.md
 2. docs/01-product-roadmap.md
@@ -222,19 +238,6 @@ Policy 与 Auth Configuration 不与 Schema 共用一个隐形 Collection-wide D
 6. docs/05-product-experience-and-acceptance.md
 7. docs/06-product-architecture.md
 8. docs/specs/0001-admin-product-ux-spec.md
-9. 后续 Accepted ADR
-10. 后续 Accepted Spec
-11. 后续 Accepted Contract
+9. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
 
-历史文档不具备当前权威性。
-
-## 当前实施 Gate
-
-Admin Product UX Spec 已完成本轮范围和 UX 收敛。
-
-在大范围生产实现前仍需建立并接受：
-
-- Runtime / Storage ADR
-- Foundation Spec
-- HTTP Contract / OpenAPI
-- Browser Acceptance Spec
+文件名中的 community / editions 为保持历史链接稳定而保留，不表示仍采用旧的社区版 → 企业版路线。

@@ -1,185 +1,208 @@
-# Modelry Community / Commercial / Cloud 产品策略
+# Modelry 自托管 / 云服务策略
 
-## 产品体系
+> 文件名继续保留 editions-and-cloud，是为了保持历史链接稳定。本文件已经废止旧的“社区版 → 商业 / 企业版 → 云服务”路线。
 
-Modelry 是同一个 Backend Platform 的不同运行与商业形态，不是三套互不兼容的产品。
+## 产品形态
 
-## Community Edition
+Modelry 当前只定义两种产品形态：
+
+~~~text
+Modelry
+开源 / 自托管
+
+Modelry 云服务
+未来官方托管
+~~~
+
+不再规划独立商业版 / 企业版。
+
+企业开发者和小团队可以使用开源 Modelry 或未来 Modelry 云服务，但产品能力不围绕企业治理进行切割。
+
+## 1. 自托管 Modelry
 
 ### 定位
 
-开源、自托管、简单、完整。
+开源、本地优先、自托管、简单、完整。
 
-### Database
+### 目标用户
 
-**SQLite Only**
+- 个人开发者；
+- 独立开发者；
+- 小型应用开发者；
+- 使用编码智能体辅助开发的开发者。
+
+### 数据库与拓扑
+
+- SQLite；
+- 单运行时 / 单项目。
+
+这是当前正式产品架构，不是等待商业版替换的低配模式。
 
 ### 产品承诺
 
-Community 长期围绕以下 Project Backend Product Semantics 成长：
+自托管 Modelry 可以持续拥有完整的应用开发能力：
 
-- Collections / Schema / Records
-- Changes / Applied History
-- REST API / OpenAPI
-- Application Auth
-- Access Rules
-- Files
-- Realtime
-- Extensions / Hooks
-- Secrets
-- Request Observability
-- Audit / Diagnostics
-- CLI
-- MCP
+- 集合 / 结构 / 记录；
+- 变更 / 应用历史；
+- REST API / OpenAPI / SDK；
+- 应用认证；
+- 应用 OAuth；
+- 访问规则；
+- 文件；
+- 实时订阅；
+- 扩展 / 钩子；
+- 密钥配置；
+- Webhook / 定时任务；
+- 请求日志；
+- 审计 / 活动记录 / 诊断；
+- 导入 / 导出；
+- 备份 / 恢复；
+- CLI；
+- MCP。
 
-“Community 完整”不表示这些能力全部进入 V0.1。
+商业化不得通过人为移除这些核心开发能力制造付费点。
 
-V0.1 先完成：
-
-~~~text
-Model
-→ Data
-→ Secure
-→ API
-→ Observe
-→ Evolve
-~~~
-
-Realtime、Hooks、Secrets 等在 V0.1.x 继续扩展。
-
-Community 不能被设计成 Demo Edition，也不应为了追求 Feature Checklist 把第一个版本做成不可发布的大工程。
-
-## Commercial / Enterprise Edition
+## 2. Modelry 云服务
 
 ### 定位
 
-面向正式生产、团队和组织的商业 Self-hosted 产品。
+面向“不想自己部署和维护 Modelry”的开发者提供官方托管服务。
 
-### Database
+第一目标仍然是个人开发者和小型应用开发者，而不是企业采购场景。
 
-**PostgreSQL**
+### 云服务价值
 
-### 商业价值来源
+优先解决：
 
-- Enterprise Identity / SSO
-- Organization / Team Governance
-- Advanced RBAC
-- Centralized Audit / Retention
-- Enterprise Secrets / KMS
-- Advanced Backup / Restore / DR
-- Production Observability
-- HA / Scaling
-- Fleet Management
-- Compliance Integration
-- Support / SLA
+- 自动创建运行实例；
+- 域名 / HTTPS；
+- 托管运行时；
+- 持久化存储；
+- 备份；
+- 监控；
+- 邮件发送；
+- 升级和生命周期管理；
+- 基础用量 / 配额；
+- 必要时增加计费。
 
-商业价值来自组织和生产复杂度，而不是切断 Community 的基础开发闭环。
+### 云端控制台
 
-## Modelry Cloud
+只管理托管真正需要的资源。
 
-### 定位
+初期可能包括：
 
-官方 Managed SaaS。
+- 账号；
+- 托管后端；
+- 运行状态；
+- 域名；
+- 存储；
+- 备份；
+- 用量；
+- 计费；
+- 运行健康。
 
-### Database
+不要为了“云服务看起来完整”提前加入组织、团队、环境、区域、批量实例等层级。
 
-**PostgreSQL**
+## 3. 云账号身份与应用身份
 
-### Cloud Control Plane
-
-Cloud 新增：
-
-- Account
-- Organization
-- Team / Member
-- Project
-- Environment
-- Region
-- Plan
-- Usage / Quota
-- Billing
-- Backup / Restore
-- Runtime Health
-- Support
-- Operational Lifecycle
-
-## Cloud Console 与 Project Admin
-
-Cloud Console 管：
-
-- Organizations
-- Projects
-- Members
-- Environments
-- Usage
-- Billing
-- Managed Operations
-
-Project Admin 管 Project Backend。
-
-Project Admin 的 Exact IA 由 Admin Product UX Spec 定义，不在本文件重复冻结 Sidebar。
-
-## Identity 分离
-
-必须区分：
+必须继续区分：
 
 ~~~text
-Cloud / Enterprise User
-→ Organization / Project Permission
+Modelry 云账号
+→ 管理托管的 Modelry 后端
 ~~~
 
 和：
 
 ~~~text
-Application User
-→ Auth Collection
-→ Application Credential / Session
-→ Access Rule
+应用用户
+→ 认证集合
+→ 应用凭证 / OAuth / 会话
+→ 访问规则
 ~~~
 
-Enterprise SSO 保护 Modelry 管理面，不能替代 Application Auth。
+云账号登录不能替代用户应用自己的认证。
 
-## Project / Environment Model
+同样，应用 OAuth 不等于 Modelry Admin 企业单点登录。
 
-V0.1 Community：
+## 4. 项目模型
+
+自托管：
 
 ~~~text
-One Runtime
-→ One implicit Project
+一个运行时
+→ 一个隐式项目
 → SQLite
+→ Admin
 ~~~
 
-长期：
+云服务：
 
 ~~~text
-Organization
-→ Project
-→ Environment
-→ Project Backend
+云账号
+→ 一个或多个托管后端
+→ 每个后端保持独立 Modelry 项目语义
 ~~~
 
-Environment 只在 Commercial / Cloud 真正需要 Development / Staging / Production 时显示。
+云服务在外层管理多个后端，不要求自托管运行时先变成多项目服务器。
 
-## 成长路径
+## 5. 数据库策略
+
+不再定义：
 
 ~~~text
-Community SQLite Project
-→ Commercial / Enterprise PostgreSQL
+社区版 = SQLite
+商业 / 云服务 = PostgreSQL
+~~~
+
+当前 Modelry 正式数据库是 SQLite，未来云服务验证也默认从现有架构开始。
+
+如果真实云端负载证明 SQLite 不满足明确需求，再单独评估 PostgreSQL 或其它存储架构。
+
+这个决定必须基于实际瓶颈，而不是版本划分假设。
+
+## 6. 开源与商业化原则
+
+- 自托管版本必须真正完整；
+- 云服务出售托管和运维价值；
+- 核心后端语义不按 Provider 人为拆包；
+- 应用 OAuth、SDK、实时订阅、钩子、MCP 等开发能力默认属于 Modelry 本身；
+- 不通过故意削弱开源版迫使用户购买云服务。
+
+公开发布已确认采用 Apache License 2.0。实际发布前必须在仓库根目录落地标准 LICENSE，并完成发布打包验收。
+
+## 7. 不再自动归入“企业版”的能力
+
+以下能力不再自动视为一个未来企业版的必做项：
+
+- PostgreSQL；
+- 企业身份 / SSO；
+- 组织 / 团队治理；
+- 复杂 RBAC；
+- 集中审计平台；
+- 企业 KMS；
+- HA / 扩展；
+- 批量实例管理；
+- 合规集成；
+- SLA 商业方案。
+
+如果未来真实用户需要其中某项，重新做产品决策，而不是从旧版本策略自动恢复。
+
+## 8. 成长路径
+
+当前预期：
+
+~~~text
+本地自托管 Modelry
+→ 自托管生产环境
 ~~~
 
 或：
 
 ~~~text
-Community SQLite Project
-→ Modelry Cloud
-→ Managed PostgreSQL Project
+本地自托管 Modelry
+→ Modelry 云服务
+→ 官方托管后端
 ~~~
 
-迁移本身可以成为重要产品能力。
-
-## Packaging / Licensing 原则
-
-- Edition Boundary 简单清晰；
-- Open-source Community 真正可用；
-- Commercial / Cloud 不破坏 Backend Core Semantics；
-- Community 的版本收敛不等于人为阉割。
+核心是应用和后端语义连续，而不是从“免费版”升级成“企业平台”。
