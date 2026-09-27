@@ -2,104 +2,146 @@
 
 ## 一句话定义
 
-**Modelry 是一个产品化 Backend Platform，让开发者与 Coding Agent 通过统一产品创建、运行并安全演进应用后端。**
+**Modelry 是面向个人开发者与编码智能体的本地优先后端工作台，让人和智能体使用同一套安全、可理解、可审计的产品语义创建、运行并持续演进应用后端。**
+
+## 核心用户
+
+Modelry 优先服务：
+
+1. 个人开发者；
+2. 独立开发者和小型应用开发者；
+3. 使用 AI 编程工具进行开发的开发者。
+
+小团队和企业开发者可以自然使用 Modelry，但产品不以企业后端平台为默认目标。
 
 ## 要解决的问题
 
-应用后端通常需要组合：
+个人开发者做一个真实应用，通常需要组合：
 
-- Database
-- Schema / Migration
-- API
-- Auth
-- Authorization
-- Files
-- Realtime
-- Extension
-- Secrets
-- Observability
-- Admin Tooling
-- Deployment Convention
+- 数据库；
+- 数据模型和迁移；
+- API；
+- 认证和授权；
+- 文件；
+- 实时订阅；
+- 扩展与自动化；
+- 密钥配置；
+- 可观测性；
+- 管理界面；
+- 部署约定。
 
-问题不只是缺少某项能力，而是这些能力经常形成多套配置、多套状态和割裂的运维体验。
+问题不只是缺少某项后端能力，而是：
 
-Modelry 的目标，是把它们组织成一套一致的 Backend Product Semantics。
+- 需要自己搭很多基础设施；
+- 不同能力拥有多套配置和状态；
+- 数据模型演进容易变成手工迁移；
+- 本地开发、API、管理面和智能体操作容易割裂；
+- 编码智能体可以生成代码，却常通过不透明脚本直接修改底层状态；
+- 一个人需要承担原本属于后端团队和运维团队的工作。
 
-## V0.1 产品承诺
+Modelry 的目标是把这些通用能力组织成一套一致的后端产品语义，让开发者把精力放回自己的应用。
 
-第一个版本不追求一次实现最终 Backend Platform 的全部能力。
+## 核心差异
 
-它必须先让开发者顺畅完成：
+Modelry 不以“比谁拥有更多后端功能”为差异。
+
+核心差异是：
+
+> **开发者与编码智能体共同、安全地演进同一个后端。**
+
+两者都通过受控产品接口工作：
 
 ~~~text
-First Run
-→ Create Backend Model
-→ Manage Data
-→ Secure
-→ Use API
-→ Observe
-→ Evolve
+检查
+→ 理解
+→ 提出变更
+→ 查看差异与风险
+→ 应用
+→ 验证
+→ 审计
 ~~~
 
-这条主路径必须具备：
+编码智能体不应通过直接修改 SQLite、隐式迁移或隐藏管理接口绕过产品语义。
 
-- 明确入口；
-- 合理默认值；
-- 最少无意义步骤；
-- 原地 Durable Result；
-- 可行动 Error；
-- 安全变更；
-- Reload / Restart 后仍可验证；
-- Admin 与 API / MCP 结果一致。
+## 产品承诺
+
+开发者应该可以从一个空目录开始：
+
+~~~text
+启动
+→ 建模
+→ 管理数据
+→ 配置安全
+→ 使用 API / SDK
+→ 观察
+→ 安全演进
+~~~
+
+并且：
+
+- 入口明确；
+- 默认值合理；
+- 无意义步骤尽量少；
+- 成功结果耐久并可再次查看；
+- 错误可行动、可恢复；
+- 变更安全且可恢复；
+- 刷新 / 重启后仍可验证；
+- Admin、API、SDK、MCP 结果一致。
 
 ## 产品原则
 
-### 1. 产品化优先
+### 1. 个人开发者优先
+
+默认优化一个开发者构建一个应用后端。
+
+不要为了未来可能出现的组织、团队、企业 SSO、HA 或批量实例管理需求，给当前用户增加复杂度。
+
+### 2. 产品化优先
 
 架构服务产品，不为了内部模型漂亮而增加用户步骤。
 
-### 2. 完整工作流优先于 Feature Checklist
-
-一个 Endpoint 或页面存在，不代表能力完成。
+### 3. 完整工作流优先于功能数量
 
 完整能力至少包括：
 
 ~~~text
-Configure
-→ Execute
-→ Result
-→ Feedback
-→ Error
-→ Recover
-→ Verify
+配置
+→ 执行
+→ 结果
+→ 反馈
+→ 错误
+→ 恢复
+→ 验证
 ~~~
 
-### 3. Default Simple, Progressive Advanced
+一个页面或接口存在，不代表能力已经完成。
+
+### 4. 默认简单，高级能力渐进暴露
 
 常用任务使用安全合理的默认值。
 
-高级表达式、Risk Details、Migration Internals、Runtime Diagnostics 等只在用户需要时暴露。
+风险详情、迁移内部细节、漂移检测、策略模拟、运行时诊断等高级能力在需要时出现，不主导新用户心智。
 
-### 4. Product Concept 优先
+### 5. 产品概念优先
 
 普通用户首先面对：
 
-- Collection
-- Field
-- Relation
-- Access Rule
-- Pending Change
-- API
-- App User
-- Service Account
+- 集合；
+- 字段；
+- 关系；
+- 访问规则；
+- 待应用变更；
+- API；
+- 应用用户；
+- 服务账号。
 
 而不是数据库和安全实现内部术语。
 
-### 5. Explicit Change，不做不可解释的 Magic
+### 6. 显式变更，不做不可解释的魔法
 
-Backend Model 的变化必须可理解、可审查、可恢复。
+后端模型变化必须可理解、可审查、可恢复。
 
-底层保持：
+底层继续保留：
 
 ~~~text
 Propose
@@ -110,87 +152,101 @@ Propose
 → Migration / History
 ~~~
 
-但 UI 不要求用户先学习这些对象。
+这些是内部稳定语义，界面不要求普通用户先学习。
 
-### 6. Human 与 Agent 操作同一 Backend Semantics
+### 7. 开发者与智能体使用同一套后端语义
 
-Admin、HTTP、CLI、MCP 不得形成互相绕开的业务规则。
+Admin、HTTP、SDK、CLI、MCP 不得形成互相绕开的业务规则。
 
-### 7. AI Native, Not AI Dependent
+### 8. AI 友好，但不依赖 AI
 
-Coding Agent 是一等客户端。
+编码智能体是一等客户端，但没有任何 AI Provider 时，Modelry 仍必须是完整可用的后端工作台。
 
-没有任何 AI Provider 时，Modelry 仍必须是完整可用的 Backend Platform。
+AI 友好不等于在界面里堆 AI 功能，重点是智能体能通过稳定、受控、可审计的接口完成真实后端工作。
 
-### 8. Safe by Default
+### 9. 默认安全
 
-Auth、Access Rule、Secret、危险 Model Change 与 External Side Effect 默认采用安全边界。
+认证、访问规则、密钥、危险模型变更和外部副作用默认采用安全边界。
 
-安全默认不意味着强迫用户理解所有治理对象。
+### 10. 复杂度由证据驱动
+
+数据库、拓扑和云端架构只有在真实需求证明现有边界成为瓶颈时才升级。
+
+不因为“企业以后可能需要”提前实现 PostgreSQL、多项目运行时、HA、Kubernetes 或复杂控制面。
 
 ## 核心产品域
 
-长期 Modelry 包括：
+- 集合 / 记录；
+- 结构 / 变更；
+- 应用 API / OpenAPI / SDK；
+- 应用认证；
+- 访问规则；
+- 文件；
+- 实时订阅；
+- 扩展 / 钩子；
+- 密钥配置；
+- Webhook / 定时任务；
+- 请求日志 / 审计 / 诊断；
+- 导入 / 导出；
+- 备份 / 恢复；
+- Admin；
+- CLI；
+- MCP。
 
-- Collections / Records
-- Schema / Changes
-- Application API / OpenAPI
-- Application Auth
-- Access Rules
-- Files
-- Realtime
-- Extensions / Hooks
-- Secrets
-- Requests / Audit / Diagnostics
-- CLI
-- MCP
+## 产品形态
 
-这些是长期产品域，不等于全部必须进入 V0.1。
+~~~text
+Modelry
+开源 / 自托管
+        ↓
+开发者体验 + 编码智能体体验
+        ↓
+Modelry 云服务
+~~~
+
+自托管 Modelry 是完整产品，不是云服务试用版。
+
+未来云服务首先解决托管、HTTPS、存储、备份、监控、邮件和运维。
 
 ## Modelry 不是什么
 
 Modelry 不是：
 
-- Visual SQL Client
-- 通用数据库管理器
-- Workflow / DAG Platform
-- Kubernetes Management Product
-- PocketBase Compatibility Layer
-- 没有 AI 就不能运行的 AI Tool
+- 可视化 SQL 客户端；
+- 通用数据库管理器；
+- 工作流 / DAG 平台；
+- Kubernetes 管理产品；
+- 企业治理套件；
+- PocketBase 兼容层；
+- 没有 AI 就不能运行的 AI 工具；
+- 为未来企业需求提前构建的分布式基础设施框架。
 
 ## 北极星体验
 
-Human：
+开发者：
 
 ~~~text
-start
-→ model
-→ data
-→ secure
-→ API
-→ observe
-→ evolve
+下载 / 启动
+→ 创建后端
+→ 建模
+→ 管理数据
+→ 配置安全
+→ API / SDK
+→ 运行应用
+→ 安全演进
 ~~~
 
-Optional expansion：
+编码智能体：
 
 ~~~text
-extend
-→ realtime
-→ hooks
-→ advanced operations
+连接
+→ 检查
+→ 提出变更
+→ 查看差异
+→ 必要时由开发者复核
+→ 应用
+→ 验证
+→ 审计
 ~~~
 
-Coding Agent：
-
-~~~text
-inspect
-→ understand
-→ propose
-→ diff
-→ apply
-→ verify
-→ audit
-~~~
-
-两者操作同一 Backend Model 与 Runtime。
+产品最终衡量的是：开发者多快能得到第一个真正可调用、可演进的后端，而不是支持了多少企业基础设施名词。

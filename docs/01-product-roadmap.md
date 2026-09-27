@@ -2,179 +2,336 @@
 
 ## 路线原则
 
-Modelry 不以“不断堆功能”作为路线。
+旧路线：
 
-每一阶段都应该明显改善：
+~~~text
+社区版
+→ 商业 / 企业版
+→ 云服务
+~~~
 
-- 上手速度；
-- 核心 Backend 工作流完整性；
+已经废止。
+
+当前路线：
+
+~~~text
+自托管 Modelry
+→ 首次公开发布 / 开发者启用
+→ V0.2 开发者与编码智能体体验
+→ 基于真实反馈持续演进
+→ 条件成熟时进入 Modelry 云服务
+~~~
+
+每一阶段都必须明显改善至少一项：
+
+- 首次获得可用后端的时间；
+- 完成真实应用的速度；
+- 开发者与编码智能体协作效率；
 - 安全演进；
-- 长期 Self-hosted 使用；
-- 团队 / Enterprise / Cloud 生产体验。
+- 自托管运维成本；
+- 从本地到托管运行的连续体验。
 
-## Phase A — 产品与架构基础
+不要把“继续堆功能”当作路线，也不要为了假设中的企业需求提前增加复杂度。
 
-目标：冻结产品语义、V0.1 范围和交互基线。
+## 阶段 A — 产品与架构基础（已完成）
 
-主要产物：
+已完成：
 
-- Product Vision
-- Product Architecture
-- V0.1 Community Scope
-- Admin Product UX
-- Runtime / Storage ADR
-- Foundation Spec
-- HTTP Contract
-- Browser Acceptance Spec
+- 产品愿景；
+- 产品架构；
+- V0.1 产品范围；
+- Admin 产品 UX；
+- 运行时 / 存储 ADR；
+- 基础领域 Spec；
+- HTTP 契约 / OpenAPI；
+- 浏览器验收；
+- Go + SQLite 运行时；
+- React Admin；
+- 契约优先研发基线。
 
-关键结论：
+## 阶段 B — V0.1 核心闭环（已完成）
 
-> Community、Commercial / Enterprise 与 Modelry Cloud 共享 Project Backend Product Semantics，但可以拥有不同数据库、部署模式和 Control Plane。
-
-## Phase B — V0.1 Community
-
-目标：交付第一个真正好用、完整、可发布的 Community Backend Platform。
-
-核心用户路径：
+目标：证明第一个完整后端工作流。
 
 ~~~text
-Start Modelry
-→ Bootstrap Owner
-→ Create Normal / Auth Collection
-→ Define Initial Schema
-→ Create / Edit Records
-→ Configure Access Rules
-→ Create / Login Application User when needed
-→ Discover / Run Application API
-→ Inspect Requests / Audit
-→ Evolve Schema with Pending Changes
-→ Apply / Recover
-→ Restart
-→ Verify Durable State
+首次运行
+→ 建模
+→ 数据
+→ 安全
+→ API
+→ 观察
+→ 演进
+→ 重启
+→ 验证
 ~~~
 
-V0.1 只支持 SQLite。
+已交付：
 
-V0.1 必须保留：
+- 集合 / 结构 / 记录；
+- 待应用变更 / 应用 / 恢复 / 历史；
+- REST API / OpenAPI / API 调试；
+- 认证 / 会话；
+- 访问规则；
+- 文件；
+- 所有者 / 服务账号 / API Key；
+- 审计 / 诊断；
+- CLI；
+- MCP。
 
-- Model / Records / Auth / Access Rules
-- REST API / OpenAPI / Runner / Request Logs
-- Local Single-file Field
-- Safe Schema Evolution
-- Owner + Service Account / API Key
-- Minimal Audit / Runtime Diagnostics
-- Minimal CLI
-- Core MCP
+## 阶段 C — V0.1.x 产品成熟化（已完成）
 
-V0.1 不以 Realtime、Hooks 或完整 Extension Runtime 证明产品成立。
+Goal #22 已完成并合入 main。
 
-## Phase C — Community V0.1.x / Mature（已交付）
+已交付：
 
-目标：在核心闭环稳定之后扩展长期 Community 能力。
+- SSE 实时订阅；
+- JavaScript / TypeScript 扩展运行时；
+- 生命周期钩子和密钥配置；
+- 事件钩子 / Webhook；
+- 定时任务 / Cron；
+- 多文件；
+- S3 兼容存储；
+- 多管理员；
+- 密码重置 / 邮箱验证；
+- 策略模拟；
+- 活动记录；
+- 漂移检测；
+- 可编辑运行时设置；
+- 类型化应用 API；
+- SDK 生成；
+- 导入 / 导出；
+- 完整备份 / 恢复；
+- Admin 中英文；
+- 命令面板；
+- 明暗主题；
+- 升级 / 重启 / 恢复 / 浏览器闭环。
 
-状态：以下方向已全部交付并通过真实 Runtime / SQLite / HTTP / Chromium 验收（详见 ADR-0002 ~ ADR-0008 与 Spec 0004 ~ 0010）：
+这一阶段完成后，Modelry 已经具备完整后端基础，不需要再靠增加大型基础设施功能证明产品成立。
 
-已交付方向：
+## 阶段 D — 首次公开发布 / 开发者启用（当前）
 
-- SSE Realtime
-- Lifecycle Hooks
-- Secrets UI
-- Policy Simulation
-- Additional Administrator Management
-- Event Hooks / Webhooks
-- S3-compatible Files
-- Multiple File Values
-- Simple Jobs / Cron
-- Better Backup / Restore UX
-- Import / Export
-- SDK Generation
-- More complete Activity / Diagnostics
-- Drift Detection
-- Editable Runtime Settings
-- Migration Ergonomics
-- Local → Production growth path
+目标：让真实个人开发者可以安装、理解，并在几分钟内完成第一个可用后端。
 
-Community 默认继续围绕 SQLite 保持简单产品定位。
+### 发布
 
-## Phase D — Commercial / Enterprise
+- 可重复构建；
+- 可下载二进制；
+- 明确版本语义；
+- SHA-256 校验；
+- Apache-2.0 LICENSE；
+- 安装文档；
+- 发布说明；
+- 跨平台启动验证。
 
-目标：解决团队、治理和正式生产问题，而不是通过削弱 Community 制造付费点。
+### 快速开始
 
-主要方向：
-
-- PostgreSQL Runtime
-- Organization / Team Governance
-- Enterprise Identity / SSO
-- Advanced RBAC
-- Centralized Audit / Retention
-- Enterprise Secrets / KMS
-- Backup / Restore / Disaster Recovery
-- Production Observability
-- HA / Scale
-- Fleet / Multi-instance Operations
-- Compliance Integration
-- Support / SLA
-
-Enterprise 继续使用与 Community 相同的 Project Backend Model 和 Project Admin Semantics。
-
-## Phase E — Modelry Cloud
-
-Cloud 是 Managed Backend Platform，而不是简单托管 Community Binary。
+目标路径：
 
 ~~~text
-Cloud Control Plane
-→ Organization
-→ Team
-→ Project
-→ Environment
-→ Region
-→ Usage
-→ Billing
-→ Backup
-→ Support
-
-Project Backend Plane
-→ Shared Modelry Backend Semantics
-
-Developer Interfaces
-→ Admin
-→ HTTP
-→ OpenAPI
-→ SDK
-→ CLI
-→ MCP
+下载
+→ 启动 Modelry
+→ 创建后端
+→ 创建集合
+→ 按需配置认证
+→ 使用 SDK / API
+→ 运行应用
 ~~~
 
-Cloud Console 管“Modelry 资源”。
+### 开发者资料
 
-Project Admin 管“用户构建的 Backend”。
+- 快速开始；
+- 最小示例应用；
+- 常见后端场景示例；
+- 部署指南；
+- 自托管指南；
+- 从用户任务出发的故障排查。
 
-## Environment 演进
+### 重点衡量
 
-V0.1 Community 不实现 Development / Staging / Production Environment Complexity。
+- 首次获得可用后端的时间；
+- 首次成功调用应用 API 的时间；
+- 初始化过程中用户最容易放弃的步骤；
+- 必须手工配置的步骤数量。
 
-未来 Changes 可以演进为：
+## 阶段 E — V0.2 开发者与编码智能体体验
+
+主题：**更快完成应用开发。**
+
+### 1. 应用 OAuth / OIDC
+
+优先：
+
+- GitHub；
+- Google。
+
+这是应用用户登录能力，不是 Modelry Admin 企业单点登录。
+
+要求：
+
+- 复用现有认证集合、应用用户、会话和访问规则；
+- Provider 配置简单；
+- 不按 Provider 人为拆分免费 / 付费能力；
+- 回调、密钥和错误体验完整；
+- 本地开发与部署文档闭环。
+
+其它 Provider 根据真实用户需求增加。
+
+### 2. SDK 接入体验
+
+现有 SDK 生成从“能生成”升级为“容易使用”：
+
+- 清晰安装说明；
+- 可直接复制的首个请求；
+- 登录示例；
+- 文件示例；
+- 实时订阅示例；
+- 类型化错误；
+- 生成产物易于发现；
+- 版本与兼容性说明。
+
+### 3. MCP / 编码智能体接入
+
+MCP 从普通开发接口提升为核心产品入口。
+
+目标：
 
 ~~~text
-Development Change
-→ Review
-→ Promote
-→ Staging
-→ Verify
-→ Promote
-→ Production
+连接编码智能体
+→ 检查当前后端
+→ 提出模型变更
+→ 复核差异 / 风险
+→ 应用
+→ 验证 API
+→ 审计结果
 ~~~
 
-因此 Project Identity、Change Artifact 与 Applied History 的定义不能阻断未来 Promotion。
+重点：
 
-## Guardrails
+- 智能体容易理解的上下文；
+- 安全变更工具；
+- 稳定工具契约；
+- 可行动错误；
+- 不存在隐藏旁路；
+- 高风险操作保留开发者复核；
+- 主流编码智能体工作流示例。
+
+### 4. 示例应用 / 模板
+
+用少量高质量示例覆盖真实场景，例如：
+
+- 博客 / 内容应用；
+- 简单 SaaS / 仪表盘；
+- 文件型应用；
+- 实时通知或协作示例。
+
+暂不建设大型模板市场。
+
+### 5. 自托管生产体验
+
+补齐：
+
+- 反向代理 / HTTPS；
+- 持久化项目目录；
+- S3；
+- 邮件发送；
+- 备份策略；
+- 升级流程。
+
+## 阶段 F — V0.3 基于真实反馈更快构建
+
+不提前冻结大功能清单。
+
+根据 V0.1 / V0.2 真实使用反馈，优先增强最常用路径：
+
+- 扩展编写体验；
+- 钩子调试 / 测试；
+- 实时订阅客户端体验；
+- 定时任务 / Webhook；
+- 可复用后端模板；
+- 本地开发流程；
+- SDK 生态；
+- 编码智能体工作流；
+- 迁移体验。
+
+进入这一阶段的功能必须证明它能缩短应用开发时间或明显降低维护成本。
+
+## 阶段 G — Modelry 云服务（未来）
+
+第一目标用户仍然是个人开发者和小型应用开发者。
+
+核心价值：
+
+> 不想自己运维 Modelry，就使用官方托管服务。
+
+初期重点：
+
+- 创建托管后端；
+- 域名 / HTTPS；
+- 托管运行时；
+- 存储；
+- 备份；
+- 监控；
+- 邮件；
+- 自动升级；
+- 基础用量 / 配额；
+- 必要时增加计费。
+
+云端控制台只引入托管真正需要的资源模型。
+
+暂不预设必须拥有：
+
+- 组织层级；
+- 团队治理；
+- 企业 RBAC；
+- SAML / SCIM；
+- 批量实例管理；
+- 合规套件；
+- 开发 / 预发布 / 生产环境晋级体系。
+
+## 基于证据决定的未来能力
+
+以下不在当前承诺路线中：
+
+- PostgreSQL；
+- 多项目运行时；
+- 组织 / 团队治理；
+- 企业 Admin SSO；
+- 复杂企业 RBAC；
+- HA / 集群；
+- 批量实例管理；
+- Kubernetes 优先部署；
+- 合规平台；
+- 分布式队列；
+- 微服务拆分。
+
+进入路线必须同时满足：
+
+1. 有明确真实用户场景；
+2. 当前架构形成可测量瓶颈；
+3. 不能通过更简单方案解决；
+4. 有独立产品决策 / ADR；
+5. 不破坏个人开发者优先的默认体验。
+
+## 约束
 
 不要：
 
-- 把 Cloud-only 概念提前塞进 Community；
-- 把 Community 做成残缺 Trial Edition；
-- 把 PostgreSQL 变成 V0.1 前置条件；
-- 把 SQLite 变成永久 Modelry 语义；
-- 为了“完整”把所有长期能力一次塞进 V0.1；
-- 提前拆 Microservices / Distributed System；
-- 让内部 Change / Security Object Model 主导用户操作路径。
+- 把自托管版做成云服务试用版；
+- 为收费切断认证、OAuth、实时订阅、钩子、SDK、MCP 等核心开发能力；
+- 为未来数据库兼容制造没有当前产品价值的抽象；
+- 把云端概念提前塞进自托管 Admin；
+- 让内部领域对象数量决定页面数量；
+- 让高级运维页面主导新用户心智；
+- 让编码智能体通过隐藏通道绕过变更、授权和审计；
+- 因为 0.1.x 已有很多能力就继续机械扩充功能清单。
+
+## 当前优先顺序
+
+~~~text
+V0.1.x 已完成
+→ 首次公开发布
+→ 开发者启用体验
+→ V0.2 OAuth / SDK / 编码智能体体验
+→ 基于真实反馈推进 V0.3
+→ 条件成熟时进入 Modelry 云服务
+~~~

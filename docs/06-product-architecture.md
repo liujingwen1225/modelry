@@ -2,36 +2,45 @@
 
 ## 架构目标
 
-Modelry 架构必须同时支持：
+Modelry 架构首先支持：
 
-- Community V0.1 足够简单；
-- Community 可以持续增加 Realtime / Extension 能力；
-- Commercial / Enterprise 可以升级 PostgreSQL 与组织治理；
-- Cloud 可以增加独立 Control Plane；
-- 各形态共享 Project Backend Product Semantics。
+- 一个开发者能够简单运行和维护一个应用后端；
+- 开发者与编码智能体操作同一套后端语义；
+- 后端模型能够安全、显式、可恢复地演进；
+- 自托管保持低运维成本；
+- 未来云服务可以托管 Modelry，而不把云端复杂度提前泄漏进本地产品。
 
-本文件定义 Domain / Plane / Boundary。
+本文件不再以商业 / 企业版、PostgreSQL、组织治理作为架构必达终点。
 
-Exact Project Admin IA 由 Admin Product UX Spec 定义。
+Admin 精确信息架构由 Admin Product UX Spec 定义。
 
-# 1. Developer Interfaces
+# 1. 接口架构
 
-- Project Admin
+## 开发者接口
+
+- Admin
+
+## 应用接口
+
 - Application HTTP API
 - OpenAPI
-- CLI
+- Generated SDK
+
+## 编码智能体接口
+
 - MCP
-- Future SDK
 
-所有 Interface 共享同一 Backend Semantics。
+## 运维接口
 
-不得拥有绕过 Authorization、Changes 或 Audit 的隐藏通道。
+- CLI
 
-# 2. Project Backend Plane
+所有接口共享同一套后端语义。
 
-Community、Enterprise 与 Cloud 共享这一层。
+不得拥有绕过权限、变更、校验或审计的隐藏通道。
 
-## Backend Model
+# 2. 项目后端
+
+## 后端模型
 
 包含：
 
@@ -45,18 +54,25 @@ Community、Enterprise 与 Cloud 共享这一层。
 - Auth Capability
 - File Capability
 
-Backend Model 是 Canonical Product Semantic Layer。
+这些英文名称是内部稳定 Domain 标识。
 
-## Runtime Data
+后端模型是规范产品语义层。
 
-- Records
-- Files
-- Application Sessions
-- Runtime Metadata
+SQLite 物理结构是运行时投影，不能反向定义产品语义。
 
-## Change Domain
+## 运行时数据
 
-底层对象：
+- 记录；
+- 文件；
+- 应用会话；
+- 运行时元数据；
+- Record Event；
+- 投递 / 自动化状态；
+- 运维记录。
+
+## 变更域
+
+底层保留：
 
 - ChangeSet
 - Structured Diff
@@ -67,257 +83,305 @@ Backend Model 是 Canonical Product Semantic Layer。
 - Migration History / Ledger
 - Recovery
 
-产品 UI 不需要直接以这些对象作为一级心智。
-
-Mapping：
+产品界面映射为：
 
 ~~~text
-ChangeSet       -> Pending change
-Apply Attempt   -> Apply details
-Migration       -> Applied change / Technical details
+ChangeSet       → 待应用变更
+Apply Attempt   → 应用详情
+Migration       → 已应用变更 / 技术详情
 ~~~
 
-## Application Platform
+开发者与编码智能体对后端模型的受管修改都必须经过这一生命周期。
 
-V0.1：
+# 3. 应用平台
 
-- REST API
-- OpenAPI
-- Auth
-- Access Rules
-- Files
+当前已交付：
 
-V0.1.x：
+- REST API；
+- OpenAPI；
+- 生成的 SDK；
+- 认证；
+- 访问规则；
+- 文件；
+- 实时订阅。
 
-- Realtime
+V0.2 优先增加应用 OAuth / OIDC，并继续复用认证集合、应用用户、会话和访问规则。
 
-## Extension Platform
+# 4. 扩展 / 自动化平台
 
-V0.1.x 以后：
+当前已交付：
 
-- Lifecycle Hooks
-- Secrets
-- Future Event Hooks
-- Future Webhooks
-- Future Jobs
-- Future Typed Custom API
+- JavaScript / TypeScript 扩展；
+- 生命周期钩子；
+- 密钥配置；
+- 事件钩子；
+- Webhook；
+- 定时任务 / Cron。
 
-Extension Platform 属于长期产品架构，但不进入 V0.1 Release Gate。
+Go 核心不要求用户编写 Go 插件。
 
-## Observability
+默认不暴露：
 
-V0.1：
+- 不受限制的原始数据库句柄；
+- 任意文件系统；
+- 任意进程控制；
+- 原始环境变量直接访问；
+- 没有明确安全边界的私网访问。
 
-- API Requests
-- Audit
-- Health / Contextual Diagnostics
+外部副作用不能被描述为可随 SQLite 事务自动回滚。
 
-V0.1.x：
+# 5. 可观测性 / 运维
 
-- richer Activity / Diagnostics
+当前包括：
 
-# 3. Control Plane / Identity
+- API 请求日志；
+- 审计；
+- 活动记录；
+- 运行时 / 存储诊断；
+- 漂移检测 / 校准；
+- 运行时设置；
+- 应用 / 恢复历史；
+- 自动化 / 扩展运行事实。
 
-## Modelry Control Plane
+产品层级原则：
+
+- 请求日志和可行动问题服务日常开发；
+- 审计服务安全和编码智能体可追踪；
+- 活动记录、漂移和运行时内部信息属于渐进式高级能力；
+- 不让高级运维心智压过“快速构建应用”的主路径。
+
+# 6. 管理面 / 身份
+
+## Modelry 管理面
 
 包含：
 
-- Owner Authentication
-- Backend Model Management
-- Changes
-- Runtime / Storage Diagnostics
-- Service Accounts
-- API Keys
-- Audit
-- MCP Management Operations
+- 所有者 / 管理员认证；
+- 后端模型管理；
+- 变更；
+- 运行时 / 存储；
+- 服务账号；
+- API Key；
+- 扩展 / 密钥 / 自动化配置；
+- 审计 / 活动记录；
+- 可迁移能力；
+- MCP 管理操作。
 
-## Identity Domain
+这里的管理面是当前单项目产品边界，不暗示未来必须发展成企业控制面。
+
+## 身份域
 
 至少区分：
 
-- Cloud / Enterprise Identity
-- Modelry Owner / Administrator Principal
-- Service / Agent Principal
-- Application Principal
+- Modelry 所有者 / 管理员主体；
+- 服务账号 / 编码智能体主体；
+- 应用用户主体。
 
-Domain：
+内部保持：
 
 ~~~text
 Principal != Credential
 ~~~
 
-UI：
+界面使用：
+
+- 所有者 / 管理员；
+- 服务账号；
+- 应用用户；
+- 密码；
+- API Key；
+- 会话；
+- 权限。
+
+普通用户无需先理解 Principal / Credential / Capability。
+
+## 认证集合
 
 ~~~text
-Owner / Administrator
-Service account
-App user
-Password
-API key
-Session
-Permission
-~~~
-
-不要让普通用户为了正确使用产品先理解 Principal / Credential / Capability。
-
-## Auth Collection
-
-Auth Collection Record 与 Credential 分离。
-
-~~~text
-App User
+应用用户
 ├─ Profile Record
-└─ Password Credential
+└─ Credential / Identity Binding
 ~~~
 
-Admin Create User 是一个产品动作，可以内部原子协调 Record + Credential，而不是要求用户分两页初始化。
+这些英文名称代表底层既有 Domain 对象。
 
-# 4. Schema Pending Changes Architecture
+当前 Credential 包括密码；V0.2 应用 OAuth 可以增加 Provider Identity，但不改变应用用户、会话和访问规则的核心语义。
 
-Schema Editor 的 UX Scope 固定为单 Collection：
+# 7. 结构待应用变更
+
+结构工作区：
 
 ~~~text
-Fields
+字段
 +
-Relations
+关系
 +
-Indexes
-→ one durable pending schema draft
+索引
+→ 一个耐久结构待应用草稿
 ~~~
 
-Policy 与 Auth Configuration 不进入同一个 Draft。
+策略与认证配置不进入同一个草稿。
 
-保存 Field / Relation / Index Editor 后：
+保存字段 / 关系 / 索引编辑后：
 
 ~~~text
-operation becomes durable pending change
+操作成为耐久待应用变更
 ~~~
 
 因此：
 
-- Refresh 不丢失；
-- 切换 Schema View 不丢失；
-- 离开 Collection 不需要 Save for Later；
-- local editor 尚未保存的表单仍需要 Leave Protection。
+- 刷新不丢失；
+- 切换结构视图不丢失；
+- 离开集合不需要额外“暂存”；
+- 尚未提交的本地表单仍需要离开保护。
 
-Apply 时 Runtime 生成 canonical Diff / Risk / Preconditions。
+应用时由运行时生成规范差异、风险和前置条件。
 
-# 5. Storage Architecture
+# 8. 数据库 / 存储架构
 
-~~~text
-Backend Model / Query / Change Semantics
-→ Storage + Migration Boundary
-→ SQLite in Community
-→ PostgreSQL in Commercial / Cloud
-~~~
-
-V0.1 不做 Generic Arbitrary Database Plugin。
-
-# 6. Files Architecture
-
-V0.1：
-
-- Local Storage
-- Single File Field
-
-V0.1.x：
-
-- Multiple File Values
-- S3-compatible provider
-
-File 仍是 Collection Field Capability，不成为独立 DAM Product。
-
-# 7. Realtime / Extension Architecture
-
-Realtime 与 Extension Runtime 在 V0.1.x 通过独立 ADR 冻结。
-
-Go Core 不要求用户编写 Go Plugin。
-
-长期目标继续保持 JavaScript / TypeScript-facing Extension Boundary。
-
-默认不暴露：
-
-- Raw unrestricted DB Handle
-- Arbitrary Filesystem
-- Arbitrary Process Control
-- Raw Environment Access
-
-# 8. Cloud Control Plane
-
-V0.1 Community 不实现。
-
-未来包含：
-
-- Account
-- Organization
-- Team / Member
-- Project
-- Environment
-- Region
-- Deployment
-- Plan
-- Usage / Quota
-- Billing
-- Backup
-- Support / Lifecycle
-
-Cloud Control Plane 管 Modelry Resource，不替代 Project Backend Plane。
-
-# Product Topology
-
-## Community V0.1
+当前：
 
 ~~~text
-One Runtime
-→ One implicit Project
+后端模型 / 查询 / 变更语义
+→ 存储 / 迁移边界
 → SQLite
-→ Project Admin
 ~~~
 
-## Commercial / Enterprise
+存储边界的意义：
+
+- 产品语义与 SQLite 物理结构分离；
+- 迁移 / 恢复拥有清晰边界；
+- 测试产品语义，而不是依赖偶然表结构。
+
+它不再承担“未来必须无缝切换 PostgreSQL”的战略承诺。
+
+PostgreSQL 或其它数据库只有在真实需求证明 SQLite 成为明确瓶颈时才重新评估。
+
+# 9. 文件 / 存储提供方
+
+当前支持：
+
+- 本地存储；
+- S3 兼容存储；
+- 单文件 / 多文件；
+- 存储提供方迁移。
+
+文件是集合字段能力，不发展成独立数字资产管理产品。
+
+存储提供方属于运行实现，不泄漏进记录产品语义。
+
+# 10. 自托管拓扑
 
 ~~~text
-Organization / Fleet
-→ Project Runtime
-→ PostgreSQL
-→ Project Admin
+一个运行时
+→ 一个隐式项目
+→ SQLite
+→ 项目 Admin
 ~~~
 
-## Modelry Cloud
+这是自托管 Modelry 当前有意选择的架构。
+
+可以理解为：
 
 ~~~text
-Cloud Control Plane
-→ Organization
-→ Project
-→ Environment
-→ Managed Project Backend Plane
-→ PostgreSQL
+一个项目
+=
+一个后端
+=
+一个独立部署单元
 ~~~
 
-One Instance / One Project 只是 Community V0.1 Runtime Topology。
+多个应用默认运行多个独立后端。
 
-# Environment Architecture
+不为了未来云服务先把运行时改造成多项目服务器。
 
-V0.1 Community UI 不展示 Environment。
+# 11. 编码智能体架构
 
-未来复用同一 Change Artifact / Applied History 形成 Promotion：
+编码智能体是一等客户端，但不是特权旁路。
 
 ~~~text
-Development
-→ Review / Promote
-→ Staging
-→ Verify / Promote
-→ Production
+MCP
+→ 检查规范后端状态
+→ 提出受控变更
+→ 查看差异 / 风险
+→ 通过正常生命周期应用
+→ 通过 API / 状态验证
+→ 写入耐久审计
 ~~~
 
-不要为 Environment Deployment 再创造第二套 Schema Change Product。
+编码智能体接口必须：
 
-# 设计原则
+- 感知权限；
+- 感知当前上下文；
+- 有明确边界；
+- 在可行范围内保持确定性；
+- 返回可行动错误；
+- 危险变更保留开发者复核；
+- 提供足够验证上下文；
+- 不泄露原始密钥。
 
-当未来复杂度与 Community 简洁性冲突时：
+# 12. 未来 Modelry 云服务边界
 
-1. Community UI 保持简单；
-2. Shared Domain Boundary 保留在底层；
-3. Advanced / Cloud Complexity 只在需要的 Surface 暴露；
-4. 不让未来能力迫使 V0.1 提前实现低价值页面；
-5. 不让 Domain Object 数量决定页面数量。
+云服务首先作为官方托管层：
+
+~~~text
+云端生命周期
+→ 创建隔离 Modelry 后端
+→ 域名 / TLS
+→ 存储
+→ 备份
+→ 监控
+→ 升级
+→ 邮件 / 外部服务配置
+~~~
+
+云服务管理托管后端生命周期。
+
+项目 Admin 继续管理用户自己的后端模型、数据、安全、API、自动化和变更。
+
+初期云服务架构不得默认要求：
+
+- 组织层级；
+- 团队治理；
+- 多环境晋级；
+- PostgreSQL；
+- Kubernetes；
+- 批量实例管理；
+- HA 集群。
+
+如果真实云端负载需要，再单独设计。
+
+# 13. 产品拓扑
+
+## 自托管
+
+~~~text
+开发者
+→ Modelry Runtime
+→ 项目
+→ SQLite
+→ Admin / API / SDK / MCP
+~~~
+
+## 未来云服务
+
+~~~text
+云账号
+→ 一个或多个托管后端
+→ 每个后端保持独立 Modelry 项目语义
+~~~
+
+云端在外层管理多个后端，不等于运行时内部多项目。
+
+# 14. 设计原则
+
+1. **个人开发者优先**：默认优化一个开发者构建一个应用后端；
+2. **本地优先**：本地开发是一等体验；
+3. **开发者 / 智能体一致**：两者操作同一语义与安全边界；
+4. **简单拓扑**：没有真实证据不增加分布式复杂度；
+5. **产品概念优先**：不让数据库实现对象决定界面；
+6. **高级能力渐进暴露**：活动记录、漂移、运行时内部信息不主导核心路径；
+7. **架构升级由证据驱动**：PostgreSQL、HA、Kubernetes、组织治理等不自动进入未来路线；
+8. **云端复杂度留在外层**：托管复杂度不提前污染自托管产品；
+9. **契约优先**：语义先于传输实现；
+10. **耐久且可恢复**：重要状态必须可验证、可恢复。

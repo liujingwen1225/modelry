@@ -1,93 +1,144 @@
 # Modelry
 
-Modelry 是一个面向开发者与 Coding Agent 的产品化 Backend Platform，用统一的可视化 Admin、稳定 Application API 和机器接口，完成应用后端的创建、运行与持续演进。
+Modelry 是一个面向个人开发者、独立开发者和 AI 辅助开发场景的**本地优先后端工作台**。
 
-Modelry 不把数据库内部能力直接暴露成“管理工具”。它把建模、真实数据、认证授权、API、文件、变更和运行诊断组织成一个完整产品。
+它把数据模型、数据管理、认证授权、API、文件、实时订阅、自动化、可观测性和安全变更组织成一个统一产品，让一个人也能从本地开始完成应用后端，而不必先搭建一整套基础设施。
 
-## 产品方向
+> 让开发者与编码智能体基于同一套后端模型，共同创建并安全演进应用后端。
 
-Modelry 作为一个统一产品体系发展：
+## 产品定位
 
-- **Modelry Community**：开源、自托管、SQLite Only、零配置优先。
-- **Modelry Commercial / Enterprise**：面向正式生产与组织级场景的商业自托管版本，采用 PostgreSQL，并增加团队、治理、运维与规模能力。
-- **Modelry Cloud**：官方托管 SaaS，采用 PostgreSQL，并拥有独立 Cloud Control Plane。
+Modelry 优先服务：
 
-Community 必须完整可用，但“完整”不等于第一个版本一次实现所有长期能力。V0.1 优先把核心开发闭环做到真正好用，再通过 V0.1.x 持续扩展 Realtime、Hooks、Secrets 等能力。
+- 个人开发者；
+- 独立开发者和小型应用开发者；
+- 使用 Codex、Claude Code、Cursor 等工具进行 AI 辅助开发的开发者。
 
-## V0.1 Community 产品闭环
+Modelry 不以企业后端平台为当前目标。企业开发者当然可以使用 Modelry，但组织体系、复杂 RBAC、企业单点登录、HA、集群、Kubernetes、合规治理等能力，不会因为“未来可能需要”而提前进入产品路线。
+
+当前产品路线：
 
 ~~~text
-First Run
-→ Create Backend Model
-→ Manage Data
-→ Secure
-→ Use API
-→ Observe
-→ Evolve
+开源 / 自托管 Modelry
+        ↓
+开发者体验 + 编码智能体体验
+        ↓
+Modelry 云服务
 ~~~
 
-V0.1 的发布标准不是 Feature Checklist，而是这条路径是否易用、可恢复、可验证。
+未来云服务首先解决免部署、HTTPS、存储、备份、监控、邮件和运行维护，而不是把开源版做成残缺版本。
 
-## V0.1 Community 技术基线
+## 核心体验
 
-- Backend Runtime：**Go**
-- Database：**SQLite**
+开发者：
+
+~~~text
+启动
+→ 建模
+→ 管理数据
+→ 配置安全
+→ 使用 API / SDK
+→ 观察运行状态
+→ 安全演进
+~~~
+
+编码智能体：
+
+~~~text
+检查现状
+→ 理解模型
+→ 提出变更
+→ 查看差异与风险
+→ 应用
+→ 验证
+→ 审计
+~~~
+
+Admin、HTTP API、SDK、CLI 和 MCP 必须操作同一套后端语义。编码智能体不能绕过变更生命周期、权限校验或审计直接修改底层状态。
+
+## 当前能力
+
+当前 main 已完成 V0.1 核心闭环和 V0.1.x 产品成熟化，主要能力包括：
+
+- 集合、字段、关系、索引和记录；
+- 耐久待应用变更、差异、风险、应用、恢复和历史；
+- REST API、OpenAPI、API 调试工作区和请求日志；
+- 认证集合、邮箱密码登录、会话和账号恢复；
+- 访问规则和策略模拟；
+- 单文件 / 多文件、本地存储和 S3 兼容存储；
+- SSE 实时订阅；
+- JavaScript / TypeScript 扩展；
+- 生命周期钩子、事件钩子、Webhook；
+- 密钥配置；
+- 定时任务 / Cron；
+- 活动记录、漂移检测和运行时设置；
+- 管理员、服务账号和 API Key；
+- 审计；
+- 导入 / 导出；
+- 备份 / 恢复；
+- 类型化应用 API 和 SDK 生成；
+- CLI；
+- MCP；
+- 中英文 Admin；
+- 全局命令面板和明暗主题。
+
+尚未交付的主要应用开发能力是 OAuth / OIDC 登录。按新路线，GitHub / Google 应用登录将作为 V0.2 的高优先级能力。
+
+## 技术基线
+
+- 后端运行时：**Go**
+- 数据库：**SQLite**
 - Admin：**React + TypeScript + Vite**
-- Architecture：**Modular Monolith**
-- Product Discipline：**Contract First**
-- Delivery：简单、自托管、Zero-config-first
-- Runtime Topology：V0.1 中一个 Runtime 服务一个 Project
+- 架构：**模块化单体**
+- 研发原则：**契约优先**
+- 交付方式：**自托管、零配置优先**
+- 运行拓扑：**单运行时 / 单项目**
 
-Single Binary 与 One Instance / One Project 是 V0.1 Community 的交付与拓扑选择，不是 Modelry 永久产品约束。
+SQLite 和单运行时 / 单项目不再被视为等待 PostgreSQL 或企业版替换的临时限制，而是当前自托管 Modelry 有意选择的简单架构。
+
+只有在真实用户、真实云端负载或真实规模数据证明现有边界成为明确瓶颈时，才重新评估数据库、运行拓扑或分布式架构。
 
 ## 快速开始
 
 从源码构建并启动 Modelry（需要 Go 1.25 或更新版本）：
 
-```bash
+~~~bash
 mkdir my-modelry-project
 go build -o modelry ./cmd/modelry
 ./modelry start --project-root ./my-modelry-project
-```
+~~~
 
-Windows 可先运行 `mkdir my-modelry-project`，再将输出文件名改为 `modelry.exe`，并运行 `modelry.exe start --project-root .\my-modelry-project`。Project Root 必须是已存在的空目录；首次启动会在其中创建 `.modelry/` 状态目录。打开终端输出的本地地址，在 Admin 中创建 Owner、Collection 和第一条 Record。默认监听地址是 `127.0.0.1:8080`，可用 `--listen` 覆盖。按 `Ctrl+C` 优雅停止 Runtime。
+Windows：
 
-查看项目持久状态：
+~~~powershell
+mkdir my-modelry-project
+modelry.exe start --project-root .\my-modelry-project
+~~~
 
-```bash
+项目目录必须是已存在的空目录。首次启动会创建 .modelry/ 状态目录。打开终端输出的本地地址，在 Admin 中创建所有者、集合和第一条记录。
+
+查看项目状态：
+
+~~~bash
 ./modelry status --project-root ./my-modelry-project
-```
-
-## V0.1 重点能力
-
-V0.1 聚焦：
-
-- Collections / Schema / Records
-- Pending Changes / Apply / Recovery / History
-- REST API / OpenAPI / API Runner / Request Logs
-- Auth Collection / Email + Password / Sessions
-- Access Rules
-- Local Single-file Field
-- Service Account / API Key
-- Minimal Audit
-- Runtime / Storage Diagnostics
-- Minimal CLI
-- Core MCP
-
-Realtime、Lifecycle Hooks、Secrets UI、独立 Activity、Policy Simulation 等进入 V0.1.x。
-
-## 文档
-
-当前唯一权威入口：
-
-- docs/README.md
-
-历史 Pre-Reboot / Legacy 文档不属于当前权威体系。需要追溯时可查看 Git History 或旧仓库 modelry-bf，但历史内容不能覆盖当前决策。
+~~~
 
 ## 当前阶段
 
-**V0.1 Community Product Closure 已实现完整候选产品路径**：空 Project Root 首次启动、Owner 管理、Collections / Schema / Records、认证与 Access Rules、Application API、API Runner、Requests、Service Accounts / API Keys、Audit、CLI 与 Core MCP 均使用同一 Runtime 与产品语义。
+V0.1.x 产品成熟化已经完成。下一阶段优先解决：
 
-候选版本以真实 Go Runtime、SQLite、HTTP、嵌入式 Admin 和 Chromium 完成 FLOW-001 至 FLOW-010 验收，覆盖待处理变更、Apply / Recovery / History、凭据撤销、文件与同一 Project Root 重启持久性。Realtime、Lifecycle Hooks、Secrets UI、Standalone Activity 与 Policy Simulation 仍属于 V0.1.x 范围。
+1. 首次公开发布、打包和安装文档；
+2. 5 分钟完成首个可用后端；
+3. GitHub / Google 应用 OAuth；
+4. SDK 接入体验；
+5. MCP / 编码智能体接入与安全变更体验；
+6. 示例应用、模板和部署指引；
+7. 邮件配置和自托管生产环境体验。
 
-产品、架构、Domain、HTTP Contract 和 Browser Acceptance 的权威入口见 [docs/README.md](docs/README.md)。
+## 文档
+
+当前权威入口：
+
+- [docs/README.md](docs/README.md)
+
+历史重构前文档和旧仓库内容仅用于追溯，不能覆盖当前产品决策。

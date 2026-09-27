@@ -2,77 +2,111 @@
 
 ## 目标
 
-技术路线服务产品路线：
+技术路线服务当前产品方向：
 
 ~~~text
-V0.1 Community Core
-→ Community V0.1.x / Mature
-→ Commercial / Enterprise
-→ Modelry Cloud
+自托管 Modelry
+→ 首次公开发布 / 开发者启用
+→ 开发者与编码智能体体验
+→ 基于真实反馈持续演进
+→ 条件成熟时进入 Modelry 云服务
 ~~~
 
-V0.1 应保持实现简单，同时确保未来 PostgreSQL、Extension Runtime、Enterprise 与 Cloud 不需要推翻 Product Semantics。
+技术架构不再以“未来企业版必须无缝接入 PostgreSQL”为前提。
 
-## Runtime Core：Go
+核心原则：
 
-Go 作为 Runtime Core，用于：
+> 先把一个开发者构建一个应用后端这件事做到简单、可靠、可维护；只有真实证据证明当前边界成为瓶颈时，才增加数据库、拓扑和分布式复杂度。
 
-- HTTP / Networking
-- Concurrency
-- Long-running Runtime
-- Cross-platform Distribution
-- SQLite Runtime
-- Future PostgreSQL Runtime
-- Admin / API / MCP shared semantics
+## 1. 后端运行时：Go
+
+Go 继续作为后端运行时核心，负责：
+
+- HTTP / 网络；
+- 并发；
+- 长时间运行的服务；
+- 跨平台分发；
+- SQLite 运行；
+- Admin / API / SDK / MCP 共享语义；
+- 后台任务、投递和存储协调。
 
 Go 是内部实现语言，不是用户扩展语言。
 
-## Community Database：SQLite
+## 2. 数据库：SQLite
 
-SQLite 是 Community 的正式数据库边界。
+SQLite 是当前 Modelry 的正式数据库架构。
 
-它支持：
+它服务于：
 
-- Zero-config-first
-- Local / Self-hosted
-- 简单备份与迁移
-- 低运维成本
-- 小型和中小项目
-
-V0.1 只实现 SQLite。
-
-## Commercial / Enterprise / Cloud Database：PostgreSQL
-
-PostgreSQL 是明确的后续 Target。
+- 零配置优先；
+- 本地优先；
+- 简单自托管；
+- 单项目后端；
+- 简单备份 / 恢复；
+- 低运维成本；
+- 清晰可预测的单运行时语义。
 
 正确关系：
 
 ~~~text
-Modelry Product Semantics
-→ Storage / Migration Boundary
-→ SQLite
-→ future PostgreSQL
+Modelry 产品语义
+→ 存储 / 迁移边界
+→ SQLite 物理实现
 ~~~
 
-错误关系：
+后端模型不能退化成 SQLite 内部模型。
+
+这条边界的目的，是保持产品语义清晰，而不是承诺未来一定实现第二种数据库。
+
+### PostgreSQL 策略
+
+PostgreSQL 当前不在既定路线中。
+
+只有在真实使用证明 SQLite 对明确目标场景形成不可接受瓶颈时，才重新评估，例如：
+
+- 云端负载需要 SQLite 当前拓扑无法合理支持的并发或运维能力；
+- 用户数据规模出现可重复、可测量的实际限制；
+- 明确需求无法通过更简单的部署或产品方案解决。
+
+届时必须单独建立产品决策和 ADR，不能自动继承旧“企业版必须 PostgreSQL”的假设。
+
+## 3. 运行拓扑：单运行时 / 单项目
+
+自托管 Modelry 当前有意保持：
 
 ~~~text
-SQLite private semantics
-→ Product Model
+一个后端项目
+→ 一个运行时
+→ 一个项目目录
+→ 一个 SQLite 数据库
+→ 一个 Admin 工作区
 ~~~
 
-V0.1 不做任意数据库 Adapter Marketplace。
+这不是 V0.1 临时限制。
 
-## Admin：React + TypeScript + Vite
+优点：
 
-Admin 是核心产品，不是内部管理工具。
+- 心智模型简单；
+- 部署简单；
+- 备份简单；
+- 故障边界清晰；
+- 编码智能体上下文清晰；
+- 没有项目切换和组织层级复杂度。
 
-固定前端基础：
+如果开发者有多个应用，默认运行多个独立 Modelry 后端。
+
+未来云服务可以在外层管理多个独立后端，不要求先把自托管运行时改造成多项目服务器。
+
+## 4. Admin：React + TypeScript + Vite
+
+Admin 是核心产品工作台，不是内部数据库管理器。
+
+前端基础保持：
 
 ~~~text
-Modelry Product UI
+Modelry 产品界面
         ↓
-Modelry Design System
+Modelry 设计系统
         ↓
 shadcn/ui
         ↓
@@ -81,74 +115,78 @@ Base UI
 Tailwind CSS v4
 ~~~
 
-业务 UI 基础：
+业务状态继续使用：
 
-- TanStack Query
-- TanStack Table
-- React Hook Form
-- Zod
-- URL State
-- React Local State
+- TanStack Query；
+- TanStack Table；
+- React Hook Form；
+- Zod；
+- URL 状态；
+- React 局部状态。
 
-Modelry Design System 决定真实产品视觉与交互。禁止把 shadcn/ui Demo 当作最终设计。
+设计系统继续统一：
 
-## Design System 必须先固定的 Contract
+- 语义色；
+- 字体和间距；
+- 表单 / 表格；
+- 侧边面板 / 工作区 / 对话框边界；
+- 加载 / 空状态 / 错误 / 部分可用 / 恢复；
+- 键盘和焦点；
+- WCAG 2.2 AA 目标；
+- 明暗主题；
+- 国际化；
+- 结构化数据查看；
+- URL / 深链接上下文。
 
-至少覆盖：
+## 5. 模块化单体
 
-- semantic color tokens
-- typography
-- spacing
-- radius / elevation
-- standard / compact density
-- button hierarchy
-- form pattern
-- table pattern
-- standard sheet / wide sheet / focused workspace / split pane boundary
-- dialog behavior
-- loading / empty / error / partial state
-- inline validation
-- durable success feedback
-- copy interaction
-- keyboard / focus
-- WCAG 2.2 AA target
-- dark mode
-- structured JSON viewer
-- URL / deep-link behavior
+继续坚持模块化单体。
 
-## Modular Monolith
+当前核心模块已经覆盖：
 
-V0.1 从 Modular Monolith 开始。
+- 后端模型 / 结构；
+- 变更 / 迁移；
+- 记录 / 查询；
+- 应用 API；
+- 认证；
+- 访问规则 / 策略；
+- 文件 / 存储；
+- 实时订阅；
+- 扩展运行时；
+- 生命周期钩子；
+- 密钥配置；
+- Webhook / 定时任务；
+- 管理员；
+- 请求 / 审计 / 活动记录；
+- 漂移 / 运行时设置；
+- 导入导出 / 备份恢复；
+- SDK 生成；
+- MCP；
+- CLI。
 
-V0.1 核心模块：
+不要因为未来云服务就提前拆微服务。
 
-- Backend Model / Schema
-- Changes / Migration
-- Records / Query
-- Application API
-- Auth
-- Access Rules / Policy
-- Files
-- Admin Control Plane
-- Request Observability
-- Audit
-- Access / Service Account
-- MCP
-- CLI
+只有在部署、隔离、扩展或故障域出现真实需要时，才建立网络服务边界。
 
-V0.1.x 再增加：
+## 6. 契约优先
 
-- Realtime
-- Extension Runtime
-- Lifecycle Hooks
-- Secrets UI
-- richer Diagnostics / Activity
+标准实施顺序继续是：
 
-不要因为未来 Cloud 就提前为模块创建网络服务边界。
+~~~text
+产品模型
+→ 必要时先做 ADR
+→ 领域 Spec
+→ HTTP 契约 / OpenAPI
+→ Go 实现
+→ React / SDK / MCP
+→ 浏览器 / 集成验收
+~~~
 
-## Schema Evolution
+不是每一个小 UX 变更都机械增加 ADR。只有真正的架构或语义决策才使用 ADR。
 
-底层统一：
+## 7. 结构演进
+
+底层继续统一：
 
 ~~~text
 Backend Model
@@ -161,208 +199,224 @@ Backend Model
 → Generated Projection
 ~~~
 
+这些内部名称继续作为稳定 Domain 标识。
+
 重要规则：
 
-- Applied Migration 是 Immutable Fact。
-- Risk / Preconditions 由 Runtime 计算。
-- Retry 创建新的 Apply Attempt。
-- Destructive / Irreversible Change 必须有明确确认与恢复策略。
+- 已应用迁移是不可变事实；
+- 风险和前置条件由运行时计算；
+- 重试创建新的 Apply Attempt；
+- 危险变更必须有明确复核和恢复机制；
+- 编码智能体发起的模型变更也必须经过同一生命周期。
 
-### Pending Changes UX
-
-Schema Editor 中保存一个 Field / Relation / Index 修改时，先形成耐久 Pending Operation，而不是立即修改已应用 Backend Model。
+界面路径：
 
 ~~~text
-Edit field
-→ save pending operation
-→ pending count increases
-→ continue modeling
-→ apply once
+编辑字段 / 关系 / 索引
+→ 保存耐久待应用操作
+→ 继续建模
+→ 一次复核
+→ 一次应用
 ~~~
 
-Pending Schema Changes：
+结构待应用变更：
 
-- 单 Collection scope；
-- Fields / Relations / Indexes 共用；
-- refresh / navigate 后保留；
-- 不要求 Save for Later；
-- 不与 Policy / Auth Configuration 合并成 Collection-wide transaction。
+- 以单个集合为范围；
+- 字段 / 关系 / 索引共用；
+- 刷新和跳转后保留；
+- 不与策略 / 认证配置合并成一个隐式大事务。
 
-## Data Plane 与 Control Plane
+## 8. 接口架构
 
-### Application Data Plane
+### 开发者接口
 
-- Application Auth
-- Records
-- Files
-- Public Application API
+- Admin
 
-V0.1.x 增加 Realtime。
+### 应用接口
 
-### Modelry Control Plane
+- HTTP API
+- OpenAPI
+- 生成的 SDK
 
-- Admin Authentication
-- Backend Model / Changes
-- Runtime / Storage Diagnostics
-- Access Management
-- Service Account / API Key
-- Audit
-- Administrative Data Access
-- MCP Management Operation
+### 编码智能体接口
 
-## Identity Model
+- MCP
 
-Domain 保持：
+### 运维接口
+
+- CLI
+
+所有接口共享：
+
+- 后端模型；
+- 校验；
+- 权限；
+- 变更生命周期；
+- 审计；
+- 错误语义。
+
+MCP 不得拥有直接数据库旁路。
+
+## 9. 应用数据面与管理面
+
+### 应用数据面
+
+- 应用认证；
+- 记录；
+- 文件；
+- 实时订阅；
+- 对外应用 API。
+
+### Modelry 管理面
+
+- Admin 认证；
+- 后端模型 / 变更；
+- 运行时 / 存储；
+- 管理员 / 服务账号 / API Key；
+- 扩展 / 密钥 / 自动化配置；
+- 请求 / 审计 / 活动记录；
+- 漂移 / 恢复；
+- MCP 管理操作。
+
+这里的“管理面”只是当前单项目产品边界，不表示未来必须发展成企业控制面。
+
+## 10. 身份模型
+
+继续保持：
 
 ~~~text
-Principal != Credential
+主体 != 凭证
 ~~~
 
 至少区分：
 
-- Modelry Owner / Administrator Principal
-- Service / Agent Principal
-- Application Principal
+- Modelry 所有者 / 管理员；
+- 服务账号 / 编码智能体主体；
+- 应用用户主体。
 
-UI 不要求普通用户学习 Principal / Capability / Credential。
+界面使用自然产品术语，不要求普通用户先理解 Principal / Credential。
 
-UI 使用：
+### 应用 OAuth
 
-- Owner / Administrator
-- Service Account
-- App User
-- Permission
-- Password
-- API Key
-- Session
+V0.2 优先增加 GitHub / Google 应用登录。
 
-## Auth Collection
+它必须：
 
-email 是 Auth Identifier Field。
+- 复用认证集合；
+- 产生标准应用用户和会话；
+- 复用访问规则；
+- Provider 密钥使用现有安全边界；
+- 与 Admin 身份分离。
 
-password 是 Application Credential，不是普通 Field。
+不要借应用 OAuth 引入企业单点登录或组织身份。
 
-Admin 创建 Auth User 时，产品上一次完成：
+## 11. 扩展与自动化
 
-~~~text
-Profile record
-+
-Credential creation
-~~~
+JavaScript / TypeScript 继续作为扩展语言。
 
-底层仍保持 Record 与 Credential 分离。
+Go 核心默认不暴露：
 
-## Query / Access Rules
+- 不受限制的原始数据库句柄；
+- 任意文件系统；
+- 任意进程控制；
+- 直接访问原始环境变量。
 
-底层可以使用统一 Declarative Expression Model。
+现有生命周期钩子、事件钩子、Webhook、定时任务的安全和持久语义继续由已接受 ADR / Spec 定义。
 
-产品 UI 优先提供：
+下一阶段技术重点是**编写、测试和可观测性体验**，而不是扩大任意执行权限。
 
-- No access
-- Anyone
-- Signed-in users
-- Record owner
-- Custom rule
+## 12. SDK 与 MCP
 
-高级用户再进入 Expression。
+### SDK
 
-默认 Fail Closed。
+V0.2 重点：
 
-Relation Expand 必须重新检查 Target Collection View Rule。
+- 可重复生成；
+- 明确版本 / 兼容性元数据；
+- 简洁安装方式；
+- 可运行示例；
+- 登录 / 文件 / 实时订阅示例；
+- 类型化错误。
 
-## Files
+### MCP
 
-V0.1：
+重点：
 
-- Local Storage
-- Single File Field
-- size constraint
-- MIME constraint
-- upload lifecycle
-- temporary cleanup
+- 稳定工具契约；
+- 紧凑的项目上下文；
+- 提案 / 差异 / 应用语义；
+- 可行动错误；
+- 安全复核边界；
+- 验证工具；
+- 审计可追踪。
 
-V0.1.x：
+编码智能体能力优先复用现有后端语义，不建立第二套智能体专用 Domain。
 
-- Multiple File Values
-- S3-compatible Storage
+## 13. 发布工程
 
-File 不独立演变成 DAM Product。
+当前优先补齐：
 
-## Realtime / Extensions
+- 版本注入；
+- 跨平台发布构建；
+- 嵌入式 Admin 生产构建；
+- 压缩包；
+- SHA-256 校验；
+- 发布启动验证；
+- 安装文档；
+- Apache-2.0 LICENSE；
+- 精确提交可追溯。
 
-Realtime 与 Lifecycle Hook 都是长期 Community 能力，但不进入 V0.1 Release Gate。
+发布流程不夹带新的后端功能。
 
-V0.1.x 再通过独立 ADR + Spike 确定：
+## 14. 云端技术方向
 
-- SSE Realtime subscription semantics
-- JS / TS-facing Extension Runtime
-- isolation / timeout
-- controlled Runtime API
-- secrets
-- failure semantics
-- delivery semantics
-
-不可回滚外部副作用不得伪装成同步 Pre-commit Hook。
-
-## Observability
-
-V0.1 明确：
-
-- **API Requests**：Application HTTP operational telemetry
-- **Audit**：Security / Governance durable fact
-- **Overview / contextual diagnostics**：需要用户处理的 runtime 状态
-
-Standalone Generic Activity Timeline 已由 Community V0.1.x 交付（[ADR-0007](adr/0007-policy-activity-drift-and-settings.md)）：
-它是由各子系统拥有的事实构成的读模型，明确不读取 RequestRecord 或 AuditRecord。
-
-同批交付的还有 Policy Simulation、Drift Detection、Editable Runtime Settings（#27），
-以及 Backup / Restore、Import / Export、Typed Application API 与可复现的 SDK 生成（#28）。
-
-统一 requestId 连接：
-
-- Runtime Error
-- API Runner
-- Request Log
-- Diagnostic Surface
-
-## Contract First
-
-标准实施顺序：
+未来 Modelry 云服务首先是自托管 Modelry 的官方托管层：
 
 ~~~text
-Product Model
-→ ADR
-→ Domain Spec
-→ HTTP Contract / OpenAPI
-→ Go Implementation
-→ React Client
-→ Browser Acceptance
+托管生命周期
+→ 创建隔离 Modelry 后端
+→ 管理域名 / TLS
+→ 持久化存储
+→ 备份
+→ 监控
+→ 升级
+→ 邮件 / 外部服务配置
 ~~~
+
+暂不提前冻结：
+
+- 组织层级；
+- 多环境晋级；
+- PostgreSQL；
+- Kubernetes；
+- 分布式队列；
+- 批量实例架构。
+
+云端验证应先回答真实负载和运维问题，再决定底层基础设施。
+
+## 15. 基于证据决定架构升级
+
+以下默认不做：
+
+- PostgreSQL；
+- 多项目运行时；
+- 微服务拆分；
+- 分布式队列；
+- HA / 集群；
+- Kubernetes 优先；
+- 通用数据库适配器市场；
+- 企业 KMS；
+- 企业 SSO / SAML / SCIM；
+- 组织 / 团队权限图。
+
+如果未来需要，必须基于测量和真实产品需求重新设计，而不是从旧路线自动继承。
 
 ## 技术阶段
 
-1. Domain + Contract Foundation
-2. Go Runtime Skeleton + SQLite
-3. Schema / Pending Changes / Records
-4. Auth / Access Rules / Files
-5. Application API / Requests / Audit
-6. Admin Product Closure
-7. MCP / CLI Closure
-8. V0.1 Hardening
-9. Community Realtime / Extensions
-10. PostgreSQL Runtime
-11. Enterprise / Cloud Control Plane
-
-## V0.1 明确不做
-
-- PostgreSQL
-- Realtime
-- Lifecycle Hooks
-- Secrets UI
-- Distributed Queue
-- Microservices
-- Kubernetes-first
-- Generic Database Plugin Marketplace
-- HA Cluster
-- Multi-project Community Runtime
-- Hostile-code Serverless Sandbox
+1. **已完成** — Go / SQLite / Admin / 契约基础；
+2. **已完成** — 核心后端闭环；
+3. **已完成** — 实时订阅 / 扩展 / 自动化 / 可迁移能力成熟化；
+4. **当前** — 发布工程 + 安装 / 快速开始；
+5. **下一步** — 应用 OAuth + SDK 接入 + MCP / 编码智能体体验；
+6. **随后** — 基于真实反馈改进开发工作流；
+7. **未来** — 产品采用情况足够明确后验证 Modelry 云服务。
