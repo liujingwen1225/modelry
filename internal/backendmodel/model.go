@@ -30,6 +30,7 @@ const (
 	FieldTypeJSON     FieldType = "json"
 	FieldTypeRelation FieldType = "relation"
 	FieldTypeFile     FieldType = "file"
+	FieldTypeFiles    FieldType = "files"
 )
 
 type OperationKind string
@@ -324,7 +325,7 @@ func validateField(field Field) error {
 		return fmt.Errorf("%w: password is a Credential and cannot be a Field", ErrInvalidArgument)
 	}
 	switch field.Type {
-	case FieldTypeText, FieldTypeNumber, FieldTypeBoolean, FieldTypeDateTime, FieldTypeJSON, FieldTypeRelation, FieldTypeFile:
+	case FieldTypeText, FieldTypeNumber, FieldTypeBoolean, FieldTypeDateTime, FieldTypeJSON, FieldTypeRelation, FieldTypeFile, FieldTypeFiles:
 	default:
 		return fmt.Errorf("%w: unsupported field type %q", ErrInvalidArgument, field.Type)
 	}
@@ -346,6 +347,11 @@ func validateField(field Field) error {
 		}
 	} else if field.Relation != nil {
 		return fmt.Errorf("%w: only relation fields can define a relation", ErrInvalidArgument)
+	}
+	if field.Type == FieldTypeFile || field.Type == FieldTypeFiles {
+		if err := validateFileFieldConstraints(field); err != nil {
+			return err
+		}
 	}
 	if len(field.Default) > 0 {
 		var value any
@@ -450,6 +456,20 @@ func validateFieldValue(field Field, value any, enforceRequired bool) error {
 			}
 		} else if _, ok := value.(string); !ok {
 			return &RecordValueError{Field: field.Name, Code: "type", Message: "must be a record ID"}
+		}
+	case FieldTypeFiles:
+		values, ok := value.([]any)
+		if !ok {
+			return &RecordValueError{Field: field.Name, Code: "type", Message: "must be a list of file references"}
+		}
+		if len(values) > MaximumFileCount {
+			return &RecordValueError{Field: field.Name, Code: "maxFiles", Message: fmt.Sprintf("must contain at most %d files", MaximumFileCount)}
+		}
+		for _, item := range values {
+			text, ok := item.(string)
+			if !ok || text == "" {
+				return &RecordValueError{Field: field.Name, Code: "type", Message: "must contain only file references"}
+			}
 		}
 	default:
 		return &RecordValueError{Field: field.Name, Code: "type", Message: "has an unsupported field type"}

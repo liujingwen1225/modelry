@@ -31,6 +31,7 @@ type Store struct {
 	database    string
 	sqliteVer   string
 	projectID   string
+	readOnly    bool
 	closeOnce   sync.Once
 	closeErr    error
 	closedMutex sync.RWMutex
@@ -101,12 +102,87 @@ func Open(databasePath string) (*Store, error) {
 	return store, nil
 }
 
+// OpenReadOnly 打开一个已存在的项目数据库，只用于一致性读取。
+// 它绝不执行迁移、不启用 WAL、不检查点、不改变文件字节，因此可以安全地指向
+// 一个已经落盘的 SQLite 快照：Backup 依靠它从同一个快照重建 Applied Model、
+// Record 计数与 File 引用，而不是从仍在变化的 live Runtime 读取。
+func OpenReadOnly(databasePath string) (*Store, error) {
+	dsn, err := readOnlyDataSourceName(databasePath)
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open SQLite snapshot: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(0)
+
+	store := &Store{db: db, database: databasePath, readOnly: true}
+	ctx, cancel := context.WithTimeout(context.Background(), connectionOpenWindow)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("cannot read the SQLite snapshot: %w", err)
+	}
+	version, err := sqliteVersion(ctx, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if !sqliteVersionSupported(version) {
+		_ = db.Close()
+		return nil, fmt.Errorf("SQLite %s is unsupported; Modelry requires SQLite 3.51.3 or newer", version)
+	}
+	store.sqliteVer = version
+	projectID, err := readProjectIDFrom(ctx, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	store.projectID = projectID
+	return store, nil
+}
+
+// readOnlyDataSourceName 只做读取：禁止写入，并且不设置任何会写文件的 PRAGMA。
+func readOnlyDataSourceName(databasePath string) (string, error) {
+	absolutePath, err := filepath.Abs(filepath.Clean(databasePath))
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve SQLite snapshot path: %w", err)
+	}
+	uriPath := filepath.ToSlash(absolutePath)
+	if filepath.VolumeName(absolutePath) != "" {
+		uriPath = "/" + uriPath
+	}
+	databaseURL := url.URL{Scheme: "file", Path: uriPath}
+	query := url.Values{}
+	query.Set("mode", "ro")
+	query.Add("_pragma", "query_only(1)")
+	query.Add("_pragma", "busy_timeout(5000)")
+	databaseURL.RawQuery = query.Encode()
+	return databaseURL.String(), nil
+}
+
+func readProjectIDFrom(ctx context.Context, query Executor) (string, error) {
+	var projectID string
+	if err := query.QueryRowContext(ctx, "SELECT value FROM modelry_runtime_metadata WHERE key = 'project_id'").Scan(&projectID); err != nil {
+		return "", fmt.Errorf("cannot read the durable project ID: %w", err)
+	}
+	return projectID, nil
+}
+
 func (store *Store) ProjectID() string {
 	return store.projectID
 }
 
 // WithTransaction 在一个短事务中执行模块操作。
+// 只读 Store 上它退化为只读快照，因此复用 Runtime 读取路径的模块无需分支。
 func (store *Store) WithTransaction(ctx context.Context, work func(Executor) error) error {
+	if store != nil && store.readOnly {
+		return store.WithReadSnapshot(ctx, work)
+	}
 	if store == nil || store.db == nil || store.IsClosed() {
 		return errors.New("SQLite store is not open")
 	}
@@ -204,12 +280,15 @@ func (store *Store) Close() error {
 		store.closed = true
 		store.closedMutex.Unlock()
 
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownCheckpoint)
-		defer cancel()
-		var busy, logFrames, checkpointed int64
-		checkpointErr := store.db.QueryRowContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)").Scan(&busy, &logFrames, &checkpointed)
-		if checkpointErr == nil && busy != 0 {
-			checkpointErr = fmt.Errorf("SQLite WAL checkpoint remained busy (%d frames, %d checkpointed)", logFrames, checkpointed)
+		var checkpointErr error
+		if !store.readOnly {
+			ctx, cancel := context.WithTimeout(context.Background(), shutdownCheckpoint)
+			defer cancel()
+			var busy, logFrames, checkpointed int64
+			checkpointErr = store.db.QueryRowContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)").Scan(&busy, &logFrames, &checkpointed)
+			if checkpointErr == nil && busy != 0 {
+				checkpointErr = fmt.Errorf("SQLite WAL checkpoint remained busy (%d frames, %d checkpointed)", logFrames, checkpointed)
+			}
 		}
 		dbErr := store.db.Close()
 		store.closeErr = errors.Join(checkpointErr, dbErr)
@@ -251,11 +330,7 @@ func ReadProjectID(databasePath string) (string, error) {
 	if settings.ForeignKeys != 1 || settings.BusyTimeout != 5000 || settings.Synchronous != 2 || !strings.EqualFold(settings.JournalMode, "wal") {
 		return "", fmt.Errorf("project SQLite database has unsupported connection settings: foreign_keys=%d busy_timeout=%d synchronous=%d journal_mode=%s", settings.ForeignKeys, settings.BusyTimeout, settings.Synchronous, settings.JournalMode)
 	}
-	var projectID string
-	if err := conn.QueryRowContext(ctx, "SELECT value FROM modelry_runtime_metadata WHERE key = 'project_id'").Scan(&projectID); err != nil {
-		return "", fmt.Errorf("cannot read the durable project ID: %w", err)
-	}
-	return projectID, nil
+	return readProjectIDFrom(ctx, conn)
 }
 
 func dataSourceName(databasePath string, readOnly bool) (string, error) {

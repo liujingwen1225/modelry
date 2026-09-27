@@ -35,10 +35,11 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 1. 每个到达 HTTP Runtime 的请求由入口生成一个全新的 canonical Request ID，格式为 `req_<opaque>`。不信任调用方传入的 `X-Request-Id` 作为权威值；如实现保留上游追踪值，必须与本 ID 分开存放。
 2. Runtime 在**所有** HTTP 响应（含成功、错误和 204）设置 `X-Request-Id` 响应头；结构化错误的 `error.requestId` 必须与该头完全一致。每次重试是新 HTTP 请求，获得新 ID。
 3. 每个 `/api/v1` 响应还设置 `X-Request-Record-Persisted: true|false`。`true` 表示脱敏 RequestRecord 已在提交响应 Header 前耐久写入；`false` 表示初始写入失败。流式响应在传输结束后补齐 Duration 和响应字节数，但响应正文永不持久化。
-4. 每次 Application HTTP 请求（成功或失败）在可持久化时形成一个 RequestRecord。至少保存 RequestID、时间、Endpoint、Method、Status、Duration、响应字节数，以及安全范围内的 Authentication / Authorization outcome 和 Error Code。响应大小只保存字节计数，不保存响应正文；升级前的旧 RequestRecord 因无法回溯精确大小而省略该值。RequestRecord 不记录 Raw Credential、Authorization Header、完整敏感 Body 或无限制 Raw Header / Query。
+4. 每次 Application HTTP 请求（成功或失败）在可持久化时形成一个 RequestRecord。至少保存 RequestID、时间、安全路由模板 Endpoint、Method、Status、Duration、响应字节数，以及安全范围内的 Authentication / Authorization outcome 和 Error Code。Endpoint 以路由模板中的参数占位符表示 Collection、Record、字段和 Session ID，不保存调用方提供的动态路径段。响应大小只保存字节计数，不保存响应正文；升级前的旧 RequestRecord 因无法回溯精确大小而省略该值。RequestRecord 不记录 Raw Credential、Authorization Header、完整敏感 Body 或无限制 Raw Header / Query。
 5. API Runner 从响应读取 `X-Request-Id`，显示给用户，并仅在 `X-Request-Record-Persisted` 为 `true` 时以该值直接打开 Control Plane 的 `GET /admin/api/v1/requests/{requestId}`。错误详情、列表与 Request Detail 使用同一 ID，不要求复制后搜索。
 6. Control Plane 请求也有 canonical `X-Request-Id` 和同形错误关联；只有 Domain 认定适用时，其 AuditRecord 才关联该 ID。RequestRecord 是 Application HTTP 操作遥测，AuditRecord 是 Control Plane 安全 / 治理事实，二者不可合并。
 7. 如果存储故障导致 RequestRecord 无法持久化，HTTP 错误仍携带同一 Request ID，并通过 `X-Request-Record-Persisted: false` 表明详情不可用；Runtime 不伪称该请求已有可打开的耐久 Request Detail，也不泄露请求秘密。
+8. Realtime SSE 是一个长生命周期 `/api/v1` HTTP 请求，只形成一条 RequestRecord。Runtime 在提交 `200` 响应头前尝试持久化初始记录，并以同一 Header 声明结果；连接结束后更新该行的 Duration 与响应字节数。`true` 表示初始记录在 Header 前已耐久写入，不表示流已经结束。Event 帧、`Last-Event-ID`、Credential 与请求 / 响应正文均不得进入 RequestRecord。初始记录写入失败时 Header 为 `false`，流不得伪称有可打开的 Request Detail。
 
 ## 4. Structured Error Envelope
 
@@ -128,7 +129,7 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 
 ## 6. Schema 兼容性约束
 
-- OpenAPI 是唯一 canonical HTTP DTO 描述；本文件说明契约语义，不复制 Schema 字段定义。
+- OpenAPI 是唯一 canonical HTTP DTO 描述；本文件说明契约语义，不复制 Schema 字段定义。text/event-stream 的传输帧使用 OpenAPI 的 x-modelry-sse-events 映射到 canonical JSON payload Schema。
 - `operationId` 全文唯一且稳定。移除、重命名路径或字段必须按兼容变更评估。
 - 错误 envelope、requestId、平面前缀和安全边界适用于当前 V0.1 HTTP Contract。OpenAPI 中的操作构成候选版本的 canonical API 面；不在契约中的产品能力不应通过私有旁路暴露。
 - 查询分页采用 opaque cursor；分页大小有界。Search / Filter / Sort 语法以本契约中的稳定字段为限，不能接受任意 SQL。后续扩展不得让 Application API 穿过 AccessRule。

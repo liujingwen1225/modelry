@@ -17,6 +17,12 @@ var (
 	ErrInvalidArgument = backendmodel.ErrInvalidArgument
 	ErrNotFound        = backendmodel.ErrNotFound
 	ErrConflict        = backendmodel.ErrConflict
+	// ErrStorage 表示 Access Rule 存储或模拟输入不可用。
+	ErrStorage = errors.New("access rule storage unavailable")
+	// ErrRecordNotFound 表示模拟引用的 Record 不存在。
+	ErrRecordNotFound = errors.New("simulation record not found")
+	// ErrCollectionNotFound 表示模拟引用的 Collection 不存在。
+	ErrCollectionNotFound = errors.New("simulation collection not found")
 )
 
 type transactionalStore interface {
@@ -28,6 +34,8 @@ type Service struct {
 	store  transactionalStore
 	models *backendmodel.Service
 	now    func() time.Time
+	// simulationRecords 由 Runtime 注入，供非权威 Policy Simulation 读取已提交 Record。
+	simulationRecords SimulationRecordLookup
 }
 
 // NewService 初始化耐久化的 Access Rule 边界，并为模块启动前创建的 Collection 补齐安全的 noAccess 状态。
@@ -262,26 +270,34 @@ func (service *Service) Discard(ctx context.Context, collectionID string, expect
 func (service *Service) Evaluate(ctx context.Context, collectionID string, operation authorization.Operation, principal authorization.Principal, record *authorization.Record) (authorization.Decision, error) {
 	var decision authorization.Decision
 	err := service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
-		collection, err := loadCollection(ctx, snapshot, collectionID)
-		if err != nil {
-			return err
-		}
-		state, _, err := readState(ctx, snapshot, collection)
-		if err != nil {
-			return err
-		}
-		applied, err := normalizeRules(ctx, snapshot, collection, state.Applied)
-		if err != nil {
-			decision = deniedDecision(operation, "ACCESS_RULE_INVALID", "The applied Access Rules could not be validated and access was denied.")
-			return nil
-		}
-		decision = evaluateRule(ctx, snapshot, collection, applied, operation, principal, record)
-		return nil
+		var err error
+		decision, err = service.EvaluateInTransaction(ctx, snapshot, collectionID, operation, principal, record)
+		return err
 	})
 	if err != nil {
 		return authorization.Decision{}, err
 	}
 	return decision, nil
+}
+
+// EvaluateInTransaction 在调用方的 SQLite 事务快照中校验已应用的 Access Rule。
+func (service *Service) EvaluateInTransaction(ctx context.Context, snapshot storage.Executor, collectionID string, operation authorization.Operation, principal authorization.Principal, record *authorization.Record) (authorization.Decision, error) {
+	if snapshot == nil {
+		return authorization.Decision{}, fmt.Errorf("Access Rule snapshot is required")
+	}
+	collection, err := loadCollection(ctx, snapshot, collectionID)
+	if err != nil {
+		return authorization.Decision{}, err
+	}
+	state, _, err := readState(ctx, snapshot, collection)
+	if err != nil {
+		return authorization.Decision{}, err
+	}
+	applied, err := normalizeRules(ctx, snapshot, collection, state.Applied)
+	if err != nil {
+		return deniedDecision(operation, "ACCESS_RULE_INVALID", "The applied Access Rules could not be validated and access was denied."), nil
+	}
+	return evaluateRule(ctx, snapshot, collection, applied, operation, principal, record), nil
 }
 
 func evaluateRule(ctx context.Context, query storage.Executor, collection backendmodel.Collection, rules []Rule, operation authorization.Operation, principal authorization.Principal, record *authorization.Record) authorization.Decision {

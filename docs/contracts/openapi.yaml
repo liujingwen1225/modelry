@@ -21,7 +21,7 @@ x-modelry-request-record:
   values:
     'true': the redacted RequestRecord was durably written before response headers were committed
     'false': the RequestRecord could not be durably written before response headers were committed
-  streaming: response byte count and duration are finalized after the response body is written
+  streaming: response byte count and duration are finalized after the response closes; an SSE RequestRecord is initially written before response headers
 tags:
   - name: Bootstrap
     description: Read first-run state and establish the initial Owner on a locally authorized Runtime.
@@ -47,7 +47,345 @@ tags:
     description: Create, list, read, update, and delete records through the Application Data Plane.
   - name: ApplicationAuth
     description: Register and authenticate App Users and manage their Application Sessions.
+  - name: Realtime
+    description: Subscribe to authorized, committed Collection Record Events over Server-Sent Events.
+  - name: Extensions
+    description: Manage Owner-authored lifecycle Extensions and safe Hook Run history.
+  - name: Secrets
+    description: Manage write-only Project Secrets for explicitly authorized Extensions.
+  - name: FileStorage
+    description: Configure the File Storage Provider, migrate immutable File objects between Providers, and read File values through Runtime-authorized routes.
+  - name: Administrators
+    description: Create and manage additional Control Plane Administrators, their Permissions, and their sessions.
+  - name: Mail
+    description: Configure the Project Mail Provider and inspect durable verification and password reset delivery.
+  - name: Automation
+    description: Manage signed Webhooks, durable Record Event Hooks, UTC Jobs, and safe Delivery history. Outbound Webhook requests use the stable Delivery ID as Idempotency-Key; Record Event requests also repeat the body Event ID in X-Modelry-Event-Id.
+  - name: Activity
+    description: Read the curated operational Activity timeline built from product facts owned by each Runtime subsystem.
+  - name: Drift
+    description: Compare the applied model, its physical SQLite projection, and runtime-managed state, and reconcile a Collection's projection.
+  - name: RuntimeSettings
+    description: Read and save durable Project Runtime Settings with explicit value sources and restart requirements.
+  - name: Portability
+    description: Produce and validate Backup bundles, export and import Collection Records, and read the typed Application API contract.
 paths:
+  '/admin/api/v1/extensions':
+    get:
+      tags: [Extensions]
+      operationId: listExtensions
+      summary: List Project Extensions
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension metadata; source is available only from the detail endpoint.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Extensions]
+      operationId: createExtension
+      summary: Create a disabled Extension
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionCreateRequest'
+      responses:
+        '201':
+          description: Created Extension and first active Revision. It is disabled by default.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+    get:
+      tags: [Extensions]
+      operationId: getExtension
+      summary: Read Extension configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension source and configuration without Secret values.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Extensions]
+      operationId: replaceExtension
+      summary: Replace and validate Extension configuration
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionReplaceRequest'
+      responses:
+        '200':
+          description: Validated configuration and newly activated immutable Revision.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionDetailResponse'
+        '409':
+          $ref: '#/components/responses/ExtensionBindingConflict'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+    post:
+      tags: [Extensions]
+      operationId: enableExtension
+      summary: Enable future Extension invocations
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension is enabled. No past events are replayed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionStatusResponse'
+        '409':
+          $ref: '#/components/responses/ExtensionBindingConflict'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+    post:
+      tags: [Extensions]
+      operationId: disableExtension
+      summary: Disable new Extension invocations
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Extension is disabled and unstarted matching intents are cancelled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/runs':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    get:
+      tags: [Extensions]
+      operationId: listExtensionRuns
+      summary: List safe Hook Run history
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Hook Run metadata without inputs, outputs, exceptions, HTTP content or Secrets.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionRunListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/extensions/{extensionId}/runs/{runId}':
+    parameters:
+      - $ref: '#/components/parameters/ExtensionId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Extensions]
+      operationId: getExtensionRun
+      summary: Read safe Hook Run details
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Safe Hook Run metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionRunResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/secrets':
+    get:
+      tags: [Secrets]
+      operationId: listSecrets
+      summary: List Secret metadata
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Secret names and configured state only.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Secrets]
+      operationId: createSecret
+      summary: Create a write-only Secret
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretCreateRequest'
+      responses:
+        '201':
+          description: Secret metadata only. The value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/secrets/{secretId}':
+    parameters:
+      - $ref: '#/components/parameters/SecretId'
+    patch:
+      tags: [Secrets]
+      operationId: renameSecret
+      summary: Rename a Secret without reading or replacing its value
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretRenameRequest'
+      responses:
+        '200':
+          description: Updated Secret metadata only.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [Secrets]
+      operationId: deleteSecret
+      summary: Revoke and delete a Secret
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Secret deleted; referencing Webhooks retain its unavailable ID but become disabled, pending Deliveries are cancelled with secretRevoked, and active request cancellation is best effort. Value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/secrets/{secretId}/value':
+    parameters:
+      - $ref: '#/components/parameters/SecretId'
+    put:
+      tags: [Secrets]
+      operationId: replaceSecretValue
+      summary: Replace a write-only Secret value
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretWriteValueRequest'
+      responses:
+        '200':
+          description: Secret metadata only. The value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
   '/admin/api/v1/bootstrap/status':
     get:
       tags: [Bootstrap]
@@ -195,6 +533,560 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RuntimeStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators':
+    get:
+      tags: [Administrators]
+      operationId: listAdministrators
+      summary: List Control Plane Administrators
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded Administrator list.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Administrators]
+      operationId: createAdministrator
+      summary: Create a Control Plane Administrator
+      description: Owner-only. The new Administrator can sign in immediately with the supplied password and holds exactly the supplied Permission.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministratorCreateInput'
+      responses:
+        '201':
+          description: Administrator created.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    get:
+      tags: [Administrators]
+      operationId: getAdministrator
+      summary: Read one Administrator
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Administrator metadata without credential material.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    patch:
+      tags: [Administrators]
+      operationId: updateAdministrator
+      summary: Update an Administrator email or Permission
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministratorUpdateInput'
+      responses:
+        '200':
+          description: Administrator updated.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [Administrators]
+      operationId: deleteAdministrator
+      summary: Delete an Administrator and revoke its sessions
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Administrator deleted.
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: enableAdministrator
+      summary: Enable an Administrator
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Administrator enabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: disableAdministrator
+      summary: Disable an Administrator and revoke its sessions
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Administrator disabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/password':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: setAdministratorPassword
+      summary: Set an Administrator password and revoke its sessions
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministratorPasswordInput'
+      responses:
+        '204':
+          description: Password set; existing Administrator sessions were revoked.
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/sessions':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    get:
+      tags: [Administrators]
+      operationId: listAdministratorSessions
+      summary: List Administrator sessions
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded session list without tokens.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministratorSessionListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/administrators/{administratorId}/sessions/revoke-all':
+    parameters:
+      - $ref: '#/components/parameters/AdministratorId'
+    post:
+      tags: [Administrators]
+      operationId: revokeAdministratorSessions
+      summary: Revoke every session of an Administrator
+      security:
+        - OwnerSession: []
+      responses:
+        '204':
+          description: Sessions revoked.
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail':
+    get:
+      tags: [Mail]
+      operationId: getMailProvider
+      summary: Read the Project Mail Provider configuration
+      description: Owner-only. Credentials are Project Secrets and are never returned as values.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Mail Provider configuration with Secret metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailProviderResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Mail]
+      operationId: configureMailProvider
+      summary: Configure the Project Mail Provider
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailProviderInput'
+      responses:
+        '200':
+          description: Mail Provider configuration saved; the response reports the new revision.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailProviderResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail/test':
+    post:
+      tags: [Mail]
+      operationId: testMailProvider
+      summary: Send a test message through the Mail Provider
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailTestInput'
+      responses:
+        '200':
+          description: Safe delivery result; SMTP response text and credentials are never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailTestResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail/deliveries':
+    get:
+      tags: [Mail]
+      operationId: listMailDeliveries
+      summary: List retained Mail Deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded delivery history without message bodies or tokens.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailDeliveryListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/mail/deliveries/{deliveryId}/retry':
+    parameters:
+      - $ref: '#/components/parameters/MailDeliveryId'
+    post:
+      tags: [Mail]
+      operationId: retryMailDelivery
+      summary: Retry a failed Mail Delivery
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Delivery queued for another bounded attempt.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailDeliveryResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files':
+    get:
+      tags: [FileStorage]
+      operationId: getFileStorage
+      summary: Read the File Storage Provider configuration and health
+      description: Owner-only Control Plane snapshot. It reports the active Provider, safe configuration metadata, bounded health, referenced object count, and the current migration summary. Credential values are never returned.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Safe File Storage snapshot for the Owner session.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileStorageStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/provider':
+    put:
+      tags: [FileStorage]
+      operationId: configureFileStorageProvider
+      summary: Configure the File Storage Provider
+      description: Owner-only Control Plane write guarded by expectedRevision. Moving the active Provider, or changing the S3 object location while Durable Records reference File objects, requires an explicit migration and returns MIGRATION_REQUIRED. Object references stored in Records never change.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileStorageProviderInput'
+      responses:
+        '200':
+          description: Provider configuration saved; the response reports the new revision.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileStorageStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/provider/test':
+    post:
+      tags: [FileStorage]
+      operationId: testFileStorageProvider
+      summary: Test an S3-compatible Provider configuration
+      description: Owner-only bounded connectivity probe. It validates the endpoint, credentials, bucket, and key prefix without saving configuration and without creating or deleting objects.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileStorageProviderTestInput'
+      responses:
+        '200':
+          description: Safe probe result; an unreachable Provider reports state unavailable with an actionable hint.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileStorageProviderTestResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/migrations':
+    get:
+      tags: [FileStorage]
+      operationId: listFileStorageMigrations
+      summary: List recent File Storage migrations
+      description: Owner-only history of Provider migrations, newest first. At most twenty summaries are returned.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Bounded migration history.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [FileStorage]
+      operationId: startFileStorageMigration
+      summary: Start a File Storage migration
+      description: Copies every File object referenced by a Durable Record to the requested target Provider and switches the active Provider only after all copies are verified. Only one migration may be active; the source objects are never deleted.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileMigrationInput'
+      responses:
+        '202':
+          description: Migration accepted and durably recorded.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/migrations/{migrationId}':
+    parameters:
+      - $ref: '#/components/parameters/MigrationId'
+    get:
+      tags: [FileStorage]
+      operationId: getFileStorageMigration
+      summary: Read one File Storage migration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Migration state, bounded progress, and safe error code.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/storage/files/migrations/{migrationId}/cancel':
+    parameters:
+      - $ref: '#/components/parameters/MigrationId'
+    post:
+      tags: [FileStorage]
+      operationId: cancelFileStorageMigration
+      summary: Cancel a File Storage migration
+      description: Requests cancellation of a pending or running migration. The active Provider is unchanged and already copied objects stay in the target Provider.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Migration cancelled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileMigrationResponse'
         '4XX':
           $ref: '#/components/responses/StructuredError'
         '5XX':
@@ -531,6 +1423,65 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/records/{recordId}/files/{fieldName}/{fileIndex}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionId'
+      - $ref: '#/components/parameters/RecordId'
+      - name: fieldName
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - $ref: '#/components/parameters/FileIndex'
+    get:
+      tags: [Collections]
+      operationId: readRecordFileByIndex
+      summary: Read one File value of an ordered files Field
+      description: Resolves the zero-based position inside the ordered files Field of this Record and streams that immutable object. A single file Field uses the non-indexed route. Response bytes are attachment-only and never cached.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/RecordId'
+        - name: fieldName
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/FileIndex'
+      responses:
+        '200':
+          description: Bound file content with the server-detected safe MIME type.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Always attachment; user supplied filenames are not used as paths.
+              schema:
+                type: string
+            X-Content-Type-Options:
+              description: Always nosniff.
+              schema:
+                const: nosniff
+            Cache-Control:
+              description: Always private, no-store.
+              schema:
+                const: private, no-store
+            Content-Length:
+              schema:
+                type: integer
+                minimum: 0
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
   '/api/v1/{collectionName}':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -593,6 +1544,135 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordResponse'
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/{collectionName}/events':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    get:
+      tags: [Realtime]
+      operationId: subscribeToCollectionRecordEvents
+      summary: Subscribe to Collection Record Events
+      description: >-
+        Opens a long-lived Server-Sent Events response for one Collection. A supplied Application Session and
+        current Collection-level List admission are revalidated before each Event and at each heartbeat; the
+        current per-Record List rule is enforced for every Event. Without Last-Event-ID, stream.ready establishes
+        a current baseline;
+        with a retained cursor, Events resume strictly after it. A cursor outside the bounded retention window
+        returns EVENT_CURSOR_EXPIRED so the client can reload current Records and open a fresh stream.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/LastEventID'
+      security:
+        - ApplicationSession: []
+        - {}
+      x-modelry-access-rule:
+        operation: list
+        evaluation: collection-on-open-event-and-heartbeat; each-event-record
+        appliedRulesOnly: true
+        reevaluateOnDelivery: true
+      x-modelry-realtime:
+        eventIdFormat: evt_ followed by the Collection ID UTF-8 bytes in unpadded Base64 URL-safe encoding, an underscore, and a nonzero 20-digit zero-padded decimal sequence
+        cursorFormat: cur_ followed by the Collection ID UTF-8 bytes in unpadded Base64 URL-safe encoding, an underscore, and the 20-digit zero-padded Collection sequence position; zero is the empty stream boundary
+        cursorScope: the Collection resolved from collectionName in the request path
+        ordering: Record mutation commit order within the requested Collection; no cross-Collection total order is exposed
+        retention:
+          scope: project
+          maximumEvents: 10000
+          maximumBytes: 67108864
+          maximumSingleEventBytes: 1048576
+          maximumReplayPageBytes: 1048576
+          maximumConcurrentReplayPages: 8
+          crossCollectionRetentionPressure: accepted; events in another Collection may shorten this replay window and reveal retention pressure only
+        heartbeatSeconds: 15
+        maximumConnections: 64
+        writeDeadlineSeconds: 5
+        eventNames: [stream.ready, record.created, record.updated, record.deleted, record.removed]
+      responses:
+        '200':
+          description: >-
+            Long-lived SSE stream. `record.created` and `record.updated` carry an authorized Record snapshot;
+            `record.deleted` and `record.removed` carry only identity and event metadata. SSE comments are heartbeats.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+            Cache-Control:
+              description: Realtime stream responses are not stored by clients or shared caches.
+              schema:
+                const: no-store
+                type: string
+          content:
+            text/event-stream:
+              schema:
+                description: Complete response body encoded as Server-Sent Events text. Each named event's JSON data payload is defined by the matching entry in x-modelry-sse-events.
+                type: string
+              x-modelry-sse-events:
+                stream.ready:
+                  idField: cursor
+                  payload:
+                    $ref: '#/components/schemas/RealtimeStreamReadyEvent'
+                record.created:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordWithSnapshotEvent'
+                record.updated:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordWithSnapshotEvent'
+                record.deleted:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordEvent'
+                record.removed:
+                  idField: eventId
+                  payload:
+                    $ref: '#/components/schemas/RealtimeRecordEvent'
+                heartbeat:
+                  frame: comment
+                  id: omitted
+                  payload: none
+              example: |+
+                event: stream.ready
+                id: cur_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000042
+                data: {"cursor":"cur_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000042","collectionId":"col_0123456789abcdef0123456789abcdef"}
+
+                event: record.created
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000043
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000043","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:30:00Z","schemaVersion":3,"record":{"id":"rec_8k1m4p2x","createdAt":"2026-09-25T08:30:00Z","updatedAt":"2026-09-25T08:30:00Z","title":"Hello"}}
+
+                event: record.updated
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000044
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000044","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:31:00Z","schemaVersion":3,"record":{"id":"rec_8k1m4p2x","createdAt":"2026-09-25T08:30:00Z","updatedAt":"2026-09-25T08:31:00Z","title":"Updated"}}
+
+                event: record.deleted
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000045
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000045","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:32:00Z","schemaVersion":3}
+
+                event: record.removed
+                id: evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000046
+                data: {"eventId":"evt_Y29sXzAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm_00000000000000000046","collectionId":"col_0123456789abcdef0123456789abcdef","recordId":"rec_8k1m4p2x","occurredAt":"2026-09-25T08:33:00Z","schemaVersion":3}
+
+                : heartbeat
+
+
+        '400':
+          $ref: '#/components/responses/ApplicationError'
+        '401':
+          $ref: '#/components/responses/ApplicationError'
+        '403':
+          $ref: '#/components/responses/ApplicationError'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '410':
+          $ref: '#/components/responses/ApplicationError'
+        '429':
+          $ref: '#/components/responses/RealtimeCapacityReached'
         '4XX':
           $ref: '#/components/responses/ApplicationError'
         '5XX':
@@ -714,6 +1794,72 @@ paths:
           schema:
             type: string
             minLength: 1
+      security:
+        - ApplicationSession: []
+        - {}
+      x-modelry-access-rule:
+        operation: view
+      responses:
+        '200':
+          description: Bound file content with the server-detected safe MIME type.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Always attachment; user supplied filenames are not used as paths.
+              schema:
+                const: attachment
+            X-Content-Type-Options:
+              description: Always nosniff.
+              schema:
+                const: nosniff
+            Cache-Control:
+              description: Always private, no-store.
+              schema:
+                const: private, no-store
+            Content-Length:
+              schema:
+                type: integer
+                minimum: 0
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+      - $ref: '#/components/parameters/RecordId'
+      - name: fieldName
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - $ref: '#/components/parameters/FileIndex'
+    get:
+      tags: [ApplicationRecords]
+      operationId: readApplicationRecordFileByIndex
+      summary: Read one File value of an ordered files Field through the Application API
+      description: The Applied Collection view Access Rule is enforced for the owning Record. The Runtime resolves the ordered position, streams the immutable object as a private, no-store attachment with nosniff, and never exposes a provider path, bucket, or credential.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+        - $ref: '#/components/parameters/RecordId'
+        - name: fieldName
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/FileIndex'
       security:
         - ApplicationSession: []
         - {}
@@ -1418,6 +2564,130 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/api/v1/auth/{collectionName}/password-reset/request':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: requestApplicationPasswordReset
+      summary: Request a password reset link for an App User
+      description: Always answers with the same accepted response so the flow cannot enumerate App Users. A durable mail intent is created only when the App User exists, the Auth Collection allows the flow, and the Mail Provider is configured.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryRequestInput'
+      security:
+        - {}
+      responses:
+        '202':
+          description: The request was accepted.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryAcceptedResponse'
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/auth/{collectionName}/password-reset/confirm':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: confirmApplicationPasswordReset
+      summary: Complete a password reset with a single-use link token
+      description: Sets the new password, consumes the token, and revokes every Application session of that App User in one transaction.
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmInput'
+      security:
+        - {}
+      responses:
+        '204':
+          description: Password reset completed and existing App User sessions were revoked.
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/auth/{collectionName}/email-verification/request':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: requestApplicationEmailVerification
+      summary: Request an email verification link for an App User
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryRequestInput'
+      security:
+        - {}
+      responses:
+        '202':
+          description: The request was accepted.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Request-Record-Persisted:
+              $ref: '#/components/headers/RequestRecordPersisted'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryAcceptedResponse'
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
+  '/api/v1/auth/{collectionName}/email-verification/confirm':
+    parameters:
+      - $ref: '#/components/parameters/CollectionName'
+    post:
+      tags: [ApplicationAuth]
+      operationId: confirmApplicationEmailVerification
+      summary: Confirm an App User email address with a single-use link token
+      parameters:
+        - $ref: '#/components/parameters/CollectionName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailVerificationConfirmInput'
+      security:
+        - {}
+      responses:
+        '204':
+          description: Email address verified.
+        '4XX':
+          $ref: '#/components/responses/ApplicationError'
+        '5XX':
+          $ref: '#/components/responses/ApplicationError'
+        default:
+          $ref: '#/components/responses/ApplicationError'
   '/api/v1/auth/{collectionName}/register':
     parameters:
       - $ref: '#/components/parameters/CollectionName'
@@ -1990,6 +3260,908 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks':
+    get:
+      tags: [Automation]
+      operationId: listWebhooks
+      summary: List Project Webhooks
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook endpoint metadata without Secret values.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Automation]
+      operationId: createWebhook
+      summary: Create a disabled signed Webhook
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+      responses:
+        '201':
+          description: Disabled Webhook metadata; the signing Secret value is never returned.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    get:
+      tags: [Automation]
+      operationId: getWebhook
+      summary: Read Webhook configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook URL and Secret metadata without Secret values.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Automation]
+      operationId: replaceWebhook
+      summary: Replace Webhook destination and signing Secret reference
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+      responses:
+        '200':
+          description: Updated Webhook configuration. Existing automatic retry rounds retain their captured URL; a manual redrive snapshots this current enabled configuration.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    post:
+      tags: [Automation]
+      operationId: enableWebhook
+      summary: Enable future Webhook Deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook is enabled for future triggers. Its signing Secret must exist and be configured; missed triggers are not replayed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    post:
+      tags: [Automation]
+      operationId: disableWebhook
+      summary: Disable a Webhook and cancel unstarted Deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Webhook is disabled; pending Event Hook and Job Deliveries are cancelled, request cancellation is best effort, future Event Hook triggers are skipped, and due slots consumed by enabled Jobs are skipped. A disabled Job retains its due slot and consumes it after it is enabled according to the Webhook state at that time.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/webhooks/{webhookId}/test':
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    post:
+      tags: [Automation]
+      operationId: testWebhook
+      summary: Send a signed synthetic test Delivery
+      security:
+        - OwnerSession: []
+      responses:
+        '202':
+          description: Test Delivery was persisted for bounded asynchronous processing. If capacity is exhausted, this returns a terminal capacityExceeded Delivery without a payload or network request. It may send while the Webhook is disabled if the signing Secret is available; Secret revocation cancels it.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks':
+    get:
+      tags: [Automation]
+      operationId: listEventHooks
+      summary: List Project Event Hooks
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Automation]
+      operationId: createEventHook
+      summary: Create a disabled Event Hook
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHookRequest'
+      responses:
+        '201':
+          description: Event Hook was created disabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks/{eventHookId}':
+    parameters:
+      - $ref: '#/components/parameters/EventHookId'
+    get:
+      tags: [Automation]
+      operationId: getEventHook
+      summary: Read Event Hook configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook configuration metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Automation]
+      operationId: replaceEventHook
+      summary: Replace Event Hook configuration
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHookRequest'
+      responses:
+        '200':
+          description: Updated Event Hook configuration. Existing Deliveries are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks/{eventHookId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/EventHookId'
+    post:
+      tags: [Automation]
+      operationId: enableEventHook
+      summary: Enable future Record Event deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook is enabled. Deliveries are created only while its Webhook is also enabled.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/event-hooks/{eventHookId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/EventHookId'
+    post:
+      tags: [Automation]
+      operationId: disableEventHook
+      summary: Stop future Record Event deliveries
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Event Hook is disabled; accepted Deliveries are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHookStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs':
+    get:
+      tags: [Automation]
+      operationId: listJobs
+      summary: List UTC Cron Jobs
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job schedule and persisted next-run metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    post:
+      tags: [Automation]
+      operationId: createJob
+      summary: Create a disabled UTC Cron Job
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '201':
+          description: Job was created disabled with a persisted next-run time.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Automation]
+      operationId: getJob
+      summary: Read Job configuration
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job schedule and next-run metadata.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [Automation]
+      operationId: replaceJob
+      summary: Replace Job schedule and Webhook
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '200':
+          description: Updated UTC schedule and recalculated next-run time.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}/enable':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Automation]
+      operationId: enableJob
+      summary: Enable future Job schedule slots
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job is enabled with a persisted next-run time. A due slot preserved while the Job was disabled creates one catch-up only if the Webhook is enabled when the scheduler consumes it; otherwise it is skipped and advanced.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}/disable':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Automation]
+      operationId: disableJob
+      summary: Stop future Job schedule slots
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Job is disabled; an overdue slot is preserved for at most one catch-up after re-enable. Accepted Deliveries are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/deliveries':
+    get:
+      tags: [Automation]
+      operationId: listDeliveries
+      summary: List safe Webhook Delivery history
+      security:
+        - OwnerSession: []
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: sourceType
+          in: query
+          schema:
+            type: string
+            enum: [eventHook, job, test]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, succeeded, failed, cancelled]
+      responses:
+        '200':
+          description: Bounded Delivery metadata without payload or HTTP content.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryListResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/deliveries/{deliveryId}':
+    parameters:
+      - $ref: '#/components/parameters/DeliveryId'
+    get:
+      tags: [Automation]
+      operationId: getDelivery
+      summary: Read safe Delivery and Attempt history
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Safe Delivery metadata and bounded Attempt history without payload.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetailResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/deliveries/{deliveryId}/retry':
+    parameters:
+      - $ref: '#/components/parameters/DeliveryId'
+    post:
+      tags: [Automation]
+      operationId: retryDelivery
+      summary: Start a bounded manual Delivery retry round
+      security:
+        - OwnerSession: []
+      responses:
+        '202':
+          description: The same Delivery and idempotency key were queued for a new attempt round.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '409':
+          description: Delivery is not failed, has no payload to redrive, its retry budget is exhausted, or its Webhook is disabled or has no configured signing Secret.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: The pending Delivery limit is full. The Delivery and manual redrive count are unchanged.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/access-rules/simulate':
+    post:
+      tags: [AccessRules]
+      operationId: simulateCollectionAccessRule
+      summary: Preview one Access Rule decision against the applied rules
+      description: >-
+        Non-authoritative preview. The decision comes from the same evaluator the Application API uses, but the
+        response never replaces a real request: it writes no RequestRecord, no Audit fact, and no Access Rule change.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySimulationInput'
+      responses:
+        '200':
+          description: Non-authoritative Access Rule decision with its deciding rule.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicySimulationResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/activity':
+    get:
+      tags: [Activity]
+      operationId: listActivity
+      summary: Read the bounded Activity timeline
+      description: >-
+        Curated operational product facts from the owning modules. Activity is not the Request log and not the Audit
+        trail, and it never returns payloads, message bodies, tokens, credentials, or App User email addresses.
+      parameters:
+        - $ref: '#/components/parameters/ActivityLimit'
+        - $ref: '#/components/parameters/ActivityCursor'
+        - $ref: '#/components/parameters/ActivityKinds'
+        - $ref: '#/components/parameters/ActivityCollectionId'
+      responses:
+        '200':
+          description: One page of structured Activity facts.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPageResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/drift':
+    get:
+      tags: [Drift]
+      operationId: getDriftReport
+      summary: Read the Runtime Drift report
+      description: >-
+        Compares the applied model, its physical SQLite projection, and runtime-managed state. A saved but unapplied
+        pending change is reported as an expected pending change, never as drift.
+      parameters:
+        - $ref: '#/components/parameters/DriftCollectionId'
+      responses:
+        '200':
+          description: Drift findings with expected values, observed values, remedies, and deep links.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriftReportResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/drift/reconcile':
+    post:
+      tags: [Drift]
+      operationId: reconcileCollectionProjection
+      summary: Reconcile one Collection's physical projection with the applied model
+      description: >-
+        Owner-only. Re-creates a missing Record table, missing columns, and missing indexes for the applied model.
+        It never applies a pending change, never changes the applied model, never deletes Records, and never drops a
+        column or table. The repair and its Audit fact commit in the same transaction.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriftReconcileInput'
+      responses:
+        '200':
+          description: The repaired Collection and the Drift report observed after the repair.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriftReportResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/settings':
+    get:
+      tags: [RuntimeSettings]
+      operationId: getRuntimeSettings
+      summary: Read the durable Project Runtime Settings
+      description: Every setting reports its value, its source, and whether a restart is required.
+      responses:
+        '200':
+          description: Runtime Settings with value sources and restart requirements.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSettingsResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+    put:
+      tags: [RuntimeSettings]
+      operationId: updateRuntimeSettings
+      summary: Save durable Project Runtime Settings
+      description: >-
+        Owner-only. A restart-required value is persisted and reported as requiring a restart; the running Runtime is
+        never silently reconfigured.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeSettingsInput'
+      responses:
+        '200':
+          description: Saved Runtime Settings; restart-required values report their requirement.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSettingsResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/backup':
+    post:
+      tags: [Portability]
+      operationId: createProjectBackup
+      summary: Create a consistent Backup bundle of this project
+      description: >-
+        Owner-only. The Runtime snapshots the live database with SQLite VACUUM INTO and reads the referenced file
+        objects, counts, and applied model hash from that same snapshot, so the bundle stays self-consistent while the
+        project keeps serving requests. The streamed tar archive's manifest records the format version, project
+        identity, Runtime version, and the byte length and SHA-256 of every payload.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Backup bundle streamed as a tar archive.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              description: Suggested bundle file name.
+              schema:
+                type: string
+          content:
+            application/x-tar:
+              schema:
+                type: string
+                format: binary
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/restore/preflight':
+    post:
+      tags: [Portability]
+      operationId: preflightProjectRestore
+      summary: Validate a Backup bundle without writing anything
+      description: >-
+        Owner-only and read-only. Validates format version, the byte length and digest of every payload, archive
+        entries, and database compatibility, then reports structured findings. Applying a restore in place stays a CLI
+        operation on a stopped project so a live Runtime is never overwritten. Bounds are per object, never per
+        bundle: the manifest is limited to 64 MiB, one file object payload to 128 MiB (the product's single-file
+        limit), and one bundle to 4 GiB of declared payload.
+      security:
+        - OwnerSession: []
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Structured preflight findings; nothing was written.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupPreflightResponse'
+        '413':
+          description: >-
+            The bundle declares more payload than the Runtime accepts, or the upload exceeds the absolute upload
+            bound. Nothing was written.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/export':
+    get:
+      tags: [Portability]
+      operationId: exportCollectionRecords
+      summary: Export one Collection as NDJSON
+      description: >-
+        Streams a Collection header line followed by one line per committed Record. File values are exported as
+        object keys, never bytes. Credentials, sessions, and Secret values are never exported.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: NDJSON stream of one Collection header and its Records.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/collections/{collectionId}/import':
+    post:
+      tags: [Portability]
+      operationId: importCollectionRecords
+      summary: Import NDJSON Records into one Collection
+      description: >-
+        Owner-only. The body is NDJSON: a collection header line followed by one {"kind":"record","values":…} line per
+        Record. Every Record is created through the same Record creation path the Application API uses, so Validation,
+        Required, Unique, Relation, and File rules behave identically. The header must carry a non-empty
+        appliedModelHash: a missing or empty hash is INVALID_ARGUMENT, and a hash that does not match the applied
+        model is MODEL_MISMATCH, so omitting the hash can never bypass the model compatibility gate. The request body
+        is limited to 8 MiB and 1,000 Records; a request-level failure is reported as a structured error rather than a
+        partial success, and because each Record keeps its own transaction the error's details report the created and
+        failed counts that were already committed.
+      security:
+        - OwnerSession: []
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/x-ndjson:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Per-record import results.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordImportResponse'
+        '413':
+          description: The import body exceeds the 8 MiB request limit.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/developer/contract':
+    get:
+      tags: [Portability]
+      operationId: getApplicationAPIContract
+      summary: Read the typed Application API contract for this project
+      description: >-
+        Owner-only. The contract is a projection of the applied Backend Model with the Runtime version and a content
+        hash. Generated clients call the existing Application API routes, so Access Rules, Sessions, Secrets, and
+        Audit semantics are unchanged.
+      security:
+        - OwnerSession: []
+      responses:
+        '200':
+          description: Canonical Application API contract with its content hash.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationAPIContractResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
 components:
   securitySchemes:
     OwnerSession:
@@ -2017,6 +4189,75 @@ components:
         type: string
         enum: ['true', 'false']
   parameters:
+    ActivityLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of Activity facts to return. Defaults to 20 and never exceeds 50.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+    ActivityCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor returned by the previous Activity page.
+      schema:
+        type: string
+        maxLength: 512
+    ActivityKinds:
+      name: kinds
+      in: query
+      required: false
+      description: Comma-separated Activity kinds to include. Omit for every supported kind.
+      schema:
+        type: string
+        maxLength: 256
+    ActivityCollectionId:
+      name: collectionId
+      in: query
+      required: false
+      description: Restrict Activity facts to one Collection.
+      schema:
+        $ref: '#/components/schemas/Id'
+    DriftCollectionId:
+      name: collectionId
+      in: query
+      required: false
+      description: Restrict the Drift report to one Collection.
+      schema:
+        $ref: '#/components/schemas/Id'
+    AdministratorId:
+      name: administratorId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^adm_[0-9a-f]{32}$'
+    MailDeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^mail_[0-9a-f]{32}$'
+    FileIndex:
+      name: fileIndex
+      in: path
+      required: true
+      description: Zero-based position of a File value inside an ordered files Field.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 31
+    MigrationId:
+      name: migrationId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^fmig_[0-9a-f]{32}$'
     CollectionId:
       name: collectionId
       in: path
@@ -2048,6 +4289,15 @@ components:
       schema:
         type: string
         minLength: 1
+    LastEventID:
+      name: Last-Event-ID
+      in: header
+      required: false
+      description: >-
+        Resume strictly after this Collection-scoped cursor or Event ID. The Collection ID is encoded as unpadded Base64 URL-safe UTF-8 bytes. A cur_ zero position means before the
+        first Event; omission starts at the current stream baseline.
+      schema:
+        $ref: '#/components/schemas/RealtimeResumePosition'
     SessionId:
       name: sessionId
       in: path
@@ -2062,6 +4312,49 @@ components:
         $ref: '#/components/schemas/Id'
     APIKeyId:
       name: apiKeyId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ExtensionId:
+      name: extensionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    SecretId:
+      name: secretId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    WebhookId:
+      name: webhookId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    EventHookId:
+      name: eventHookId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    DeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^dlv_[a-f0-9]{36}$'
+    RunId:
+      name: runId
       in: path
       required: true
       schema:
@@ -2137,6 +4430,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    ExtensionBindingConflict:
+      description: A configured binding is occupied. Details identify the Collection, operation, and phase. The Extension stays disabled or its prior configuration remains active.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     ApplicationError:
       description: Structured Application error response with the canonical request ID and RequestRecord persistence status.
       headers:
@@ -2144,6 +4446,23 @@ components:
           $ref: '#/components/headers/RequestId'
         X-Request-Record-Persisted:
           $ref: '#/components/headers/RequestRecordPersisted'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RealtimeCapacityReached:
+      description: The Runtime has reached its bounded active Realtime connection limit.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        X-Request-Record-Persisted:
+          $ref: '#/components/headers/RequestRecordPersisted'
+        Retry-After:
+          description: Retry after five seconds.
+          required: true
+          schema:
+            type: string
+            const: '5'
       content:
         application/json:
           schema:
@@ -2157,6 +4476,62 @@ components:
       type: string
       pattern: '^req_[A-Za-z0-9_-]{8,}$'
       description: Canonical server-generated ID shared by response header, Error and RequestRecord.
+    ExtensionCorrelationId:
+      type: string
+      pattern: '^cor_[a-f0-9]{36}$'
+      description: Server-generated correlation identity shared by related Extension Hook Runs.
+    RealtimeEventID:
+      type: string
+      pattern: '^evt_[A-Za-z0-9_-]+_(?!0{20}$)[0-9]{20}$'
+      description: Stable Event identity and Collection-scoped order position; the Collection ID is UTF-8 encoded as unpadded Base64 URL-safe text. A nonzero sequence identifies a Record Event. Event IDs are sent only for Events authorized to the subscriber.
+    RealtimeEventCursor:
+      type: string
+      pattern: '^cur_[A-Za-z0-9_-]+_[0-9]{20}$'
+      description: Collection-scoped baseline position emitted by stream.ready; the Collection ID is UTF-8 encoded as unpadded Base64 URL-safe text and a zero sequence is the empty boundary before the first Event.
+    RealtimeResumePosition:
+      description: Last-Event-ID accepts either the current baseline cursor or the most recently received Event ID for the same Collection.
+      oneOf:
+        - $ref: '#/components/schemas/RealtimeEventCursor'
+        - $ref: '#/components/schemas/RealtimeEventID'
+    RealtimeStreamReadyEvent:
+      type: object
+      required: [cursor, collectionId]
+      properties:
+        cursor:
+          $ref: '#/components/schemas/RealtimeEventCursor'
+        collectionId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    RealtimeRecordEventBase:
+      type: object
+      required: [eventId, collectionId, recordId, occurredAt, schemaVersion]
+      properties:
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        recordId:
+          $ref: '#/components/schemas/Id'
+        occurredAt:
+          type: string
+          format: date-time
+          description: UTC mutation timestamp sampled while the Record transaction is active; the Collection Event sequence is authoritative for delivery order.
+        schemaVersion:
+          type: integer
+          minimum: 1
+    RealtimeRecordEvent:
+      allOf:
+        - $ref: '#/components/schemas/RealtimeRecordEventBase'
+      unevaluatedProperties: false
+    RealtimeRecordWithSnapshotEvent:
+      allOf:
+        - $ref: '#/components/schemas/RealtimeRecordEventBase'
+        - type: object
+          required: [record]
+          properties:
+            record:
+              $ref: '#/components/schemas/Record'
+      unevaluatedProperties: false
     ErrorResponse:
       type: object
       required: [error]
@@ -2171,7 +4546,7 @@ components:
       properties:
         code:
           type: string
-          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, INTERNAL_ERROR]
+          enum: [INVALID_ARGUMENT, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, MODEL_MISMATCH, PROJECT_IN_USE, PROJECT_NOT_EMPTY, BOOTSTRAP_CLOSED, CHANGE_CONFIRMATION_REQUIRED, PAYLOAD_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, REGISTRATION_DISABLED, RATE_LIMITED, EVENT_CURSOR_INVALID, EVENT_CURSOR_EXPIRED, STREAM_CAPACITY_REACHED, STREAM_UNAVAILABLE, ACCESS_RULE_UNAVAILABLE, STORAGE_UNAVAILABLE, STORAGE_BUSY, RUNTIME_NOT_READY, EXTENSION_RUNTIME_UNAVAILABLE, CHANGE_REJECTED_BY_EXTENSION, EXTENSION_BUDGET_EXCEEDED, BINDING_CONFLICT, SECRET_KEY_UNAVAILABLE, SECRET_NOT_AVAILABLE, ORIGIN_NOT_ALLOWED, INTERNAL_ERROR]
         message:
           type: string
           description: Human-readable message without stack traces, SQL, credentials, sensitive body content, or anonymous diagnostic paths.
@@ -2187,10 +4562,28 @@ components:
       type: object
       description: Structured details; anonymous diagnostic error details must omit absolute Project Root paths and secrets.
       properties:
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        operation:
+          type: string
+          enum: [create, update, delete]
+          description: Occupied Extension Binding operation.
+        phase:
+          type: string
+          enum: [before, afterCommit]
+          description: Occupied Extension Binding phase.
         violations:
           type: array
           items:
             $ref: '#/components/schemas/Violation'
+        created:
+          type: integer
+          minimum: 0
+          description: Records already committed when a request-level Import failure was reported.
+        failed:
+          type: integer
+          minimum: 0
+          description: Records already reported as failed when a request-level Import failure was reported.
       additionalProperties: true
     Violation:
       type: object
@@ -2267,6 +4660,11 @@ components:
         expiresAt:
           type: string
           format: date-time
+        role:
+          type: string
+          enum: [owner, administrator]
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
     OwnerSession:
       type: object
       required: [expiresAt]
@@ -2298,12 +4696,14 @@ components:
     StorageStatusResponse:
       type: object
       description: Safe storage snapshot; the localStorage path is omitted unless the request has valid diagnostic authorization.
-      required: [database, localStorage]
+      required: [database, localStorage, fileStorage]
       properties:
         database:
           $ref: '#/components/schemas/Health'
         localStorage:
           $ref: '#/components/schemas/LocalStorageHealth'
+        fileStorage:
+          $ref: '#/components/schemas/FileStorageHealth'
       additionalProperties: false
     LocalStorageHealth:
       type: object
@@ -2372,7 +4772,7 @@ components:
           type: string
         type:
           type: string
-          enum: [text, number, boolean, dateTime, json, relation, file]
+          enum: [text, number, boolean, dateTime, json, relation, file, files]
         required:
           type: boolean
         unique:
@@ -2497,6 +4897,294 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Record'
+    FileStorageHealth:
+      type: object
+      description: Provider-neutral File Storage health reported in the Runtime status snapshot.
+      required: [state, provider, activeProvider]
+      properties:
+        state:
+          type: string
+          enum: [ready, degraded, unavailable, unknown]
+        provider:
+          type: string
+          enum: [Local, S3-compatible]
+        activeProvider:
+          type: string
+          enum: [local, s3]
+        message:
+          type: string
+          description: Safe diagnostic text; never contains credentials, object references, or an absolute path.
+        hint:
+          type: string
+          description: Safe actionable guidance; never contains credentials.
+      additionalProperties: false
+    StorageSecretReference:
+      type: object
+      description: Write-only Project Secret reference metadata. The Secret value is never returned by any File Storage response.
+      required: [secretId, name, configured]
+      properties:
+        secretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+        name:
+          type: string
+        configured:
+          type: boolean
+      additionalProperties: false
+    LocalFileStorageConfiguration:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: Owner-only absolute staging directory and Local object directory. Omitted from every non-Owner response.
+      additionalProperties: false
+    S3FileStorageInput:
+      type: object
+      description: S3-compatible Provider settings supplied by the Owner. Credentials are Project Secret references, never values.
+      required: [endpoint, region, bucket, accessKeySecretId, secretKeySecretId]
+      properties:
+        endpoint:
+          type: string
+          description: HTTPS endpoint, or HTTP only for a loopback, private, or link-local host. Must not contain user information, a query, or a fragment.
+        region:
+          type: string
+          minLength: 1
+          maxLength: 64
+        bucket:
+          type: string
+          minLength: 1
+          maxLength: 63
+        keyPrefix:
+          type: string
+          maxLength: 128
+        pathStyle:
+          type: boolean
+          default: true
+        accessKeySecretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+        secretKeySecretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+        sessionTokenSecretId:
+          type: string
+          pattern: '^sec_[0-9a-f]{32}$'
+      additionalProperties: false
+    S3FileStorageConfiguration:
+      type: object
+      description: S3-compatible Provider settings without credential values.
+      required: [endpoint, region, bucket, keyPrefix, pathStyle, configured]
+      properties:
+        endpoint:
+          type: string
+        region:
+          type: string
+        bucket:
+          type: string
+        keyPrefix:
+          type: string
+        pathStyle:
+          type: boolean
+        configured:
+          type: boolean
+        accessKey:
+          $ref: '#/components/schemas/StorageSecretReference'
+        secretKey:
+          $ref: '#/components/schemas/StorageSecretReference'
+        sessionToken:
+          $ref: '#/components/schemas/StorageSecretReference'
+      additionalProperties: false
+    FileStorageConfiguration:
+      type: object
+      required: [provider, local]
+      properties:
+        provider:
+          type: string
+          enum: [local, s3]
+        local:
+          $ref: '#/components/schemas/LocalFileStorageConfiguration'
+        s3:
+          oneOf:
+            - $ref: '#/components/schemas/S3FileStorageConfiguration'
+            - type: 'null'
+      additionalProperties: false
+    FileMigration:
+      type: object
+      description: Durable Provider migration state. Object references are never listed individually.
+      required: [id, sourceProvider, targetProvider, status, totalObjects, copiedObjects, startedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^fmig_[0-9a-f]{32}$'
+        sourceProvider:
+          type: string
+          enum: [local, s3]
+        targetProvider:
+          type: string
+          enum: [local, s3]
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled, interrupted]
+        totalObjects:
+          type: integer
+          minimum: 0
+        copiedObjects:
+          type: integer
+          minimum: 0
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        errorCode:
+          type: string
+          enum: [providerUnavailable, credentialUnavailable, objectWriteFailed, verificationFailed, cancelled, interrupted]
+        message:
+          type: string
+          description: Safe actionable text; never contains credentials or object content.
+        targetEndpointHost:
+          type: string
+        targetBucket:
+          type: string
+        targetKeyPrefix:
+          type: string
+      additionalProperties: false
+    FileStorageStatus:
+      type: object
+      required: [activeProvider, provider, revision, providerState, configuration, health]
+      properties:
+        activeProvider:
+          type: string
+          enum: [local, s3]
+        provider:
+          type: string
+          enum: [Local, S3-compatible]
+        revision:
+          type: integer
+          minimum: 1
+        providerState:
+          type: string
+          enum: [ready, degraded, unavailable, unknown]
+        providerMessage:
+          type: string
+        providerHint:
+          type: string
+        configuration:
+          $ref: '#/components/schemas/FileStorageConfiguration'
+        health:
+          type: object
+          required: [state, observedAt]
+          properties:
+            state:
+              type: string
+              enum: [ready, degraded, unavailable, unknown]
+            message:
+              type: string
+            hint:
+              type: string
+            observedAt:
+              type: string
+              format: date-time
+            referencedObjects:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+        migration:
+          type: object
+          required: [active]
+          properties:
+            active:
+              type: boolean
+            latest:
+              oneOf:
+                - $ref: '#/components/schemas/FileMigration'
+                - type: 'null'
+          additionalProperties: false
+      additionalProperties: false
+    FileStorageStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FileStorageStatus'
+      additionalProperties: false
+    FileStorageProviderInput:
+      type: object
+      required: [expectedRevision, provider]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        provider:
+          type: string
+          enum: [local, s3]
+        s3:
+          $ref: '#/components/schemas/S3FileStorageInput'
+      additionalProperties: false
+    FileStorageProviderTestInput:
+      type: object
+      required: [s3]
+      properties:
+        s3:
+          $ref: '#/components/schemas/S3FileStorageInput'
+      additionalProperties: false
+    FileStorageProviderTestResult:
+      type: object
+      required: [state, message]
+      properties:
+        state:
+          type: string
+          enum: [ready, unavailable]
+        message:
+          type: string
+        hint:
+          type: string
+        endpointHost:
+          type: string
+        bucket:
+          type: string
+        objectCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    FileStorageProviderTestResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FileStorageProviderTestResult'
+      additionalProperties: false
+    FileMigrationInput:
+      type: object
+      required: [targetProvider]
+      properties:
+        targetProvider:
+          type: string
+          enum: [local, s3]
+        s3:
+          $ref: '#/components/schemas/S3FileStorageInput'
+      additionalProperties: false
+    FileMigrationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/FileMigration'
+      additionalProperties: false
+    FileMigrationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/FileMigration'
+      additionalProperties: false
     FileUploadResponse:
       type: object
       required: [data]
@@ -2837,7 +5525,7 @@ components:
       additionalProperties: false
     AuthenticationConfiguration:
       type: object
-      required: [emailPasswordEnabled, selfRegistration, sessionDurationDays]
+      required: [emailPasswordEnabled, selfRegistration, sessionDurationDays, emailVerification]
       properties:
         emailPasswordEnabled:
           type: boolean
@@ -2846,6 +5534,10 @@ components:
         sessionDurationDays:
           type: integer
           minimum: 1
+        emailVerification:
+          type: string
+          enum: [off, optional, required]
+          description: off keeps V0.1 behaviour; optional never blocks sign-in; required blocks sign-in until the App User verifies the address.
     AuthenticationConfigurationRequest:
       type: object
       required: [expectedVersion, configuration]
@@ -3058,10 +5750,324 @@ components:
           type: string
           format: date-time
       additionalProperties: false
+    AdministratorPermission:
+      type: object
+      description: Control Plane Permission. It uses the same operation vocabulary as Service Accounts.
+      required: [preset]
+      properties:
+        preset:
+          type: string
+          enum: [fullAccess, readOnly, custom]
+        customPermissionVersion:
+          type: integer
+        customOperations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAccountOperation'
+      additionalProperties: false
+    Administrator:
+      type: object
+      required: [id, email, status, permission, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^adm_[0-9a-f]{32}$'
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [active, disabled]
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      additionalProperties: false
+    AdministratorCreateInput:
+      type: object
+      required: [email, password, permission]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          description: Write-only initial credential, 12 to 1024 bytes.
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
+      additionalProperties: false
+    AdministratorUpdateInput:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        permission:
+          $ref: '#/components/schemas/AdministratorPermission'
+      additionalProperties: false
+    AdministratorPasswordInput:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: Write-only replacement credential, 12 to 1024 bytes.
+      additionalProperties: false
+    AdministratorSession:
+      type: object
+      required: [id, createdAt, expiresAt, current, status]
+      properties:
+        id:
+          type: string
+          pattern: '^ses_[0-9a-f]{32}$'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        revokedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        current:
+          type: boolean
+      additionalProperties: false
+    AdministratorResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Administrator'
+      additionalProperties: false
+    AdministratorListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/Administrator'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    AdministratorSessionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministratorSession'
+      additionalProperties: false
+    RecoveryRequestInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+      additionalProperties: false
+    RecoveryAcceptedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accepted]
+          properties:
+            accepted:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    PasswordResetConfirmInput:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          description: Write-only replacement credential, 12 to 1024 bytes.
+      additionalProperties: false
+    EmailVerificationConfirmInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+      additionalProperties: false
+    MailProviderSecurity:
+      type: string
+      description: STARTTLS or implicit TLS for any host. Plaintext is accepted only for a loopback host such as a local Mailpit or MailHog.
+      enum: [startTLS, tls, plaintext]
+    MailProvider:
+      type: object
+      required: [enabled, host, port, security, fromAddress, fromName, revision, updatedAt]
+      properties:
+        enabled:
+          type: boolean
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        security:
+          $ref: '#/components/schemas/MailProviderSecurity'
+        fromAddress:
+          type: string
+          format: email
+        fromName:
+          type: string
+        username:
+          oneOf:
+            - $ref: '#/components/schemas/StorageSecretReference'
+            - type: 'null'
+        password:
+          oneOf:
+            - $ref: '#/components/schemas/StorageSecretReference'
+            - type: 'null'
+        revision:
+          type: integer
+          minimum: 1
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    MailProviderInput:
+      type: object
+      required: [expectedRevision, enabled, host, port, security, fromAddress]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        security:
+          $ref: '#/components/schemas/MailProviderSecurity'
+        fromAddress:
+          type: string
+          format: email
+        fromName:
+          type: string
+        usernameSecretId:
+          type: string
+        passwordSecretId:
+          type: string
+      additionalProperties: false
+    MailProviderResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MailProvider'
+      additionalProperties: false
+    MailTestInput:
+      type: object
+      required: [recipient]
+      properties:
+        recipient:
+          type: string
+          format: email
+      additionalProperties: false
+    MailTestResult:
+      type: object
+      required: [state, message]
+      properties:
+        state:
+          type: string
+          enum: [delivered, unavailable]
+        message:
+          type: string
+      additionalProperties: false
+    MailTestResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MailTestResult'
+      additionalProperties: false
+    MailDelivery:
+      type: object
+      required: [id, kind, recipient, status, attempts, createdAt]
+      properties:
+        id:
+          type: string
+          pattern: '^mail_[0-9a-f]{32}$'
+        kind:
+          type: string
+          enum: [test, verification, passwordReset]
+        recipient:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled, interrupted]
+        attempts:
+          type: integer
+          minimum: 0
+        nextAttemptAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        errorCode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+      additionalProperties: false
+    MailDeliveryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MailDelivery'
+      additionalProperties: false
+    MailDeliveryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MailDelivery'
+      additionalProperties: false
     ServiceAccountOperation:
       type: string
       description: Version 1 fixed Control Plane allowlist; application data-plane operations use their corresponding explicit grants.
-      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read]
+      enum: [runtime.read, storage.read, collections.read, collections.create, records.read, records.create, records.update, records.delete, files.read, files.write, schema.read, schema.write, schema.apply, accessRules.read, accessRules.write, accessRules.apply, authentication.read, authentication.write, authentication.apply, users.read, users.create, users.managePassword, sessions.read, sessions.revoke, serviceAccounts.read, serviceAccounts.manage, apiKeys.read, apiKeys.create, apiKeys.revoke, requests.read, audit.read, administrators.read, administrators.manage, mail.read, mail.manage, activity.read, drift.read, drift.reconcile, policy.simulate, settings.read, settings.write, backup.create, restore.preflight, records.export, records.import, developer.read]
     ServiceAccountResponse:
       type: object
       required: [data]
@@ -3248,3 +6254,1137 @@ components:
             $ref: '#/components/schemas/AuditRecord'
         nextCursor:
           type: string
+    ExtensionSummary:
+      type: object
+      required: [id, name, language, activeRevision, enabled, bindingCount, secretBindingCount, originGrantCount, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        language:
+          type: string
+          enum: [javascript, typescript]
+        activeRevision:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        bindingCount:
+          type: integer
+          minimum: 0
+        secretBindingCount:
+          type: integer
+          minimum: 0
+        originGrantCount:
+          type: integer
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    ExtensionBinding:
+      type: object
+      required: [collectionId, operation, phase]
+      properties:
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        operation:
+          type: string
+          enum: [create, update, delete]
+        phase:
+          type: string
+          enum: [before, afterCommit]
+      additionalProperties: false
+    ExtensionSecretBinding:
+      type: object
+      required: [alias, secretId, secretName, configured]
+      properties:
+        alias:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$'
+        secretId:
+          $ref: '#/components/schemas/Id'
+        secretName:
+          type: string
+        configured:
+          type: boolean
+      additionalProperties: false
+    ExtensionDetail:
+      type: object
+      required: [id, name, language, activeRevision, enabled, bindingCount, secretBindingCount, originGrantCount, source, bindings, secretBindings, allowedOrigins, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        language:
+          type: string
+          enum: [javascript, typescript]
+        activeRevision:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        bindingCount:
+          type: integer
+          minimum: 0
+        secretBindingCount:
+          type: integer
+          minimum: 0
+        originGrantCount:
+          type: integer
+          minimum: 0
+        source:
+          type: string
+          maxLength: 262144
+        bindings:
+          type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ExtensionBinding'
+        secretBindings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionSecretBinding'
+        allowedOrigins:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            format: uri
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    ExtensionCreateRequest:
+      type: object
+      required: [name, language, source]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        language:
+          type: string
+          enum: [javascript, typescript]
+        source:
+          type: string
+          minLength: 1
+          maxLength: 262144
+          x-max-utf8-bytes: 262144
+          description: Standalone source, limited by UTF-8 encoded byte length.
+      additionalProperties: false
+    ExtensionReplaceRequest:
+      type: object
+      required: [name, language, source, bindings, secretBindings, allowedOrigins]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        language:
+          type: string
+          enum: [javascript, typescript]
+        source:
+          type: string
+          minLength: 1
+          maxLength: 262144
+          x-max-utf8-bytes: 262144
+          description: Standalone source, limited by UTF-8 encoded byte length.
+        bindings:
+          type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ExtensionBinding'
+        secretBindings:
+          type: array
+          items:
+            type: object
+            required: [alias, secretId]
+            properties:
+              alias:
+                type: string
+                pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$'
+              secretId:
+                $ref: '#/components/schemas/Id'
+            additionalProperties: false
+        allowedOrigins:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            format: uri
+      additionalProperties: false
+    ExtensionDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ExtensionDetail'
+      additionalProperties: false
+    ExtensionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionSummary'
+      additionalProperties: false
+    ExtensionStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    ExtensionRun:
+      type: object
+      required: [runId, extensionId, revision, collectionId, operation, phase, status, startedAt, errorCode, correlationId]
+      properties:
+        runId:
+          $ref: '#/components/schemas/Id'
+        extensionId:
+          $ref: '#/components/schemas/Id'
+        revision:
+          type: integer
+          minimum: 1
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        recordId:
+          $ref: '#/components/schemas/Id'
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        operation:
+          type: string
+          enum: [create, update, delete]
+        phase:
+          type: string
+          enum: [before, afterCommit]
+        status:
+          type: string
+          enum: [pending, running, succeeded, rejected, failed, interrupted, cancelled]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: string
+          enum: [none, extensionDisabled, bindingOrGrantRevoked, secretRevoked, invocationCancelled, extensionRuntimeUnavailable, budgetExceeded, capacityExceeded, changeRejected, invalidOutput, secretNotAvailable, secretKeyUnavailable, originNotAllowed, externalRequestFailed, runtimeRestarted, hookFailed]
+        correlationId:
+          $ref: '#/components/schemas/ExtensionCorrelationId'
+      additionalProperties: false
+    ExtensionRunResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ExtensionRun'
+      additionalProperties: false
+    ExtensionRunListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ExtensionRun'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    SecretMetadata:
+      type: object
+      required: [id, name, configured, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        configured:
+          type: boolean
+          const: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    SecretCreateRequest:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        value:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          x-max-utf8-bytes: 16384
+          description: Write-only Secret value, limited by UTF-8 encoded byte length.
+          writeOnly: true
+      additionalProperties: false
+    SecretWriteValueRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          x-max-utf8-bytes: 16384
+          description: Write-only Secret value, limited by UTF-8 encoded byte length.
+          writeOnly: true
+      additionalProperties: false
+    SecretRenameRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+      additionalProperties: false
+    SecretResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/SecretMetadata'
+      additionalProperties: false
+    SecretListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecretMetadata'
+      additionalProperties: false
+    WebhookRequest:
+      type: object
+      required: [name, targetUrl, signingSecretId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        targetUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: HTTPS URL with DNS host and path only; user info, query, fragment and IP literals are rejected.
+        signingSecretId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    WebhookSummary:
+      type: object
+      required: [id, name, targetUrl, signingSecretId, signingSecretName, signingConfigured, enabled, revision, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        targetUrl:
+          type: string
+          format: uri
+        signingSecretId:
+          $ref: '#/components/schemas/Id'
+          description: Selected Secret ID. It remains visible if the Secret is later deleted.
+        signingSecretName:
+          type: string
+          description: Empty when the selected Secret has been deleted.
+        signingConfigured:
+          type: boolean
+          description: False when the selected Secret has been deleted or has no configured value.
+        enabled:
+          type: boolean
+        revision:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    WebhookResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookSummary'
+      additionalProperties: false
+    WebhookListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/WebhookSummary'
+      additionalProperties: false
+    WebhookStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    EventHookRequest:
+      type: object
+      required: [name, collectionId, eventType, webhookId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted]
+        webhookId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    EventHookSummary:
+      type: object
+      required: [id, name, collectionId, collectionName, eventType, webhookId, webhookName, enabled, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        collectionId:
+          $ref: '#/components/schemas/Id'
+        collectionName:
+          type: string
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted]
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    EventHookResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/EventHookSummary'
+      additionalProperties: false
+    EventHookListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/EventHookSummary'
+      additionalProperties: false
+    EventHookStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+          additionalProperties: false
+      additionalProperties: false
+    JobRequest:
+      type: object
+      required: [name, webhookId, cron]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        cron:
+          type: string
+          minLength: 9
+          maxLength: 128
+          description: Five-field standard Cron expression, evaluated in UTC with minute precision.
+      additionalProperties: false
+    JobSummary:
+      type: object
+      required: [id, name, webhookId, webhookName, cron, enabled, nextRunAt, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        cron:
+          type: string
+          minLength: 9
+          maxLength: 128
+        enabled:
+          type: boolean
+        nextRunAt:
+          type: string
+          format: date-time
+        lastRunAt:
+          type: string
+          format: date-time
+        lastStatus:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled]
+        lastErrorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    JobResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/JobSummary'
+      additionalProperties: false
+    JobListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/JobSummary'
+      additionalProperties: false
+    JobStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, enabled, nextRunAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            enabled:
+              type: boolean
+            nextRunAt:
+              type: string
+              format: date-time
+          additionalProperties: false
+      additionalProperties: false
+    DeliveryAttempt:
+      type: object
+      required: [round, attempt, webhookRevision, status, startedAt, durationMs, errorCode]
+      properties:
+        round:
+          type: integer
+          minimum: 1
+          maximum: 4
+        attempt:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: Bounded worker-processing attempt number within the round. One attempt issues zero or one HTTP request; preflight may fail before a request.
+        webhookRevision:
+          type: integer
+          minimum: 1
+          description: Webhook configuration revision pinned for this attempt round.
+        status:
+          type: string
+          enum: [running, succeeded, retryScheduled, rejected, failed, interrupted, cancelled]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+          minimum: 0
+        httpStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+          description: Present only when an HTTP response was received. A preflight failure issues no HTTP request.
+        errorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+      additionalProperties: false
+    DeliverySummary:
+      type: object
+      required: [id, sourceType, sourceId, webhookId, webhookName, webhookRevision, eventType, status, createdAt, attemptCount, manualRedriveCount, errorCode]
+      properties:
+        id:
+          type: string
+          pattern: '^dlv_[a-f0-9]{36}$'
+        sourceType:
+          type: string
+          enum: [eventHook, job, test]
+        sourceId:
+          $ref: '#/components/schemas/Id'
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        webhookRevision:
+          type: integer
+          minimum: 1
+          description: Webhook configuration revision used when the Delivery intent was first created.
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted, job.scheduled, webhook.test]
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        attemptCount:
+          type: integer
+          minimum: 0
+          maximum: 32
+        manualRedriveCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        lastHttpStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        errorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+      additionalProperties: false
+    DeliveryDetail:
+      type: object
+      required: [id, sourceType, sourceId, webhookId, webhookName, webhookRevision, eventType, status, createdAt, attemptCount, manualRedriveCount, errorCode, attempts]
+      properties:
+        id:
+          type: string
+          pattern: '^dlv_[a-f0-9]{36}$'
+        sourceType:
+          type: string
+          enum: [eventHook, job, test]
+        sourceId:
+          $ref: '#/components/schemas/Id'
+        webhookId:
+          $ref: '#/components/schemas/Id'
+        webhookName:
+          type: string
+        webhookRevision:
+          type: integer
+          minimum: 1
+        eventId:
+          $ref: '#/components/schemas/RealtimeEventID'
+        eventType:
+          type: string
+          enum: [record.created, record.updated, record.deleted, job.scheduled, webhook.test]
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        attemptCount:
+          type: integer
+          minimum: 0
+          maximum: 32
+        manualRedriveCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        lastHttpStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        errorCode:
+          type: string
+          enum: [none, capacityExceeded, secretNotAvailable, secretKeyUnavailable, secretRevoked, webhookDisabled, originNotAllowed, externalRequestFailed, deliveryRejected, attemptInterrupted, hookFailed]
+        attempts:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/DeliveryAttempt'
+      additionalProperties: false
+    DeliveryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DeliverySummary'
+      additionalProperties: false
+    DeliveryDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DeliveryDetail'
+      additionalProperties: false
+    DeliveryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/DeliverySummary'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    PolicySimulationPrincipal:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [anonymous, owner, applicationUser, serviceAccount]
+        id:
+          type: string
+          maxLength: 128
+      additionalProperties: false
+    PolicySimulationRecordSource:
+      type: object
+      description: Exactly one of recordId or payload must be supplied.
+      properties:
+        recordId:
+          $ref: '#/components/schemas/Id'
+        payload:
+          type: object
+          description: Inline field values evaluated as supplied; never persisted and never validated against the applied model.
+          additionalProperties: true
+      additionalProperties: false
+    PolicySimulationInput:
+      type: object
+      required: [operation, principal]
+      properties:
+        operation:
+          type: string
+          enum: [list, view, create, update, delete]
+        principal:
+          $ref: '#/components/schemas/PolicySimulationPrincipal'
+        record:
+          $ref: '#/components/schemas/PolicySimulationRecordSource'
+      additionalProperties: false
+    PolicySimulationDecision:
+      type: object
+      required: [allowed, authoritative, notice]
+      properties:
+        allowed:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+        reason:
+          description: Structured evaluator reason for the decision.
+        decidingOperation:
+          type: string
+          enum: [list, view, create, update, delete]
+        decidingMode:
+          type: string
+          enum: [noAccess, anyone, signedInUsers, recordOwner, custom]
+        authoritative:
+          type: boolean
+          enum: [false]
+        notice:
+          type: string
+      additionalProperties: false
+    PolicySimulationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PolicySimulationDecision'
+      additionalProperties: false
+    ActivityFact:
+      type: object
+      required: [id, kind, status, occurredAt, resource, deepLink]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [change.applied, change.pending, change.failed, webhook.delivery, job.run, extension.run, mail.delivery, storage.migration, auth.recovery]
+        status:
+          type: string
+          maxLength: 64
+        occurredAt:
+          type: string
+          format: date-time
+        resource:
+          type: object
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              maxLength: 64
+            id:
+              type: string
+              maxLength: 128
+          additionalProperties: false
+        collectionId:
+          type: string
+        title:
+          type: string
+          maxLength: 128
+        deepLink:
+          type: string
+          maxLength: 512
+      additionalProperties: false
+    ActivityPageResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ActivityFact'
+        nextCursor:
+          type: string
+      additionalProperties: false
+    DriftFinding:
+      type: object
+      required: [id, class, severity, code, expected, actual, expectedPendingChange, remedy, deepLink, detectedAt]
+      properties:
+        id:
+          type: string
+        class:
+          type: string
+          enum: [appliedModel, physicalProjection, runtimeState]
+        severity:
+          type: string
+          enum: [info, warning, error]
+        code:
+          type: string
+          maxLength: 64
+        collectionId:
+          type: string
+        collectionName:
+          type: string
+          maxLength: 128
+        expected:
+          type: string
+          maxLength: 512
+        actual:
+          type: string
+          maxLength: 512
+        expectedPendingChange:
+          type: boolean
+        remedy:
+          type: string
+          enum: [none, manual, reconcile]
+        deepLink:
+          type: string
+          maxLength: 512
+        detectedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    DriftReport:
+      type: object
+      required: [state, findings, detectedAt]
+      properties:
+        state:
+          type: string
+          enum: [healthy, attention, degraded]
+        findings:
+          type: array
+          maxItems: 2048
+          items:
+            $ref: '#/components/schemas/DriftFinding'
+        detectedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    DriftReportResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DriftReport'
+      additionalProperties: false
+    DriftReconcileInput:
+      type: object
+      required: [collectionId]
+      properties:
+        collectionId:
+          $ref: '#/components/schemas/Id'
+      additionalProperties: false
+    RuntimeSetting:
+      type: object
+      required: [value, source, restartRequired]
+      properties:
+        value:
+          type: string
+          maxLength: 256
+        source:
+          type: string
+          enum: [flag, project, default]
+        restartRequired:
+          type: boolean
+        bounds:
+          type: string
+          maxLength: 256
+      additionalProperties: false
+    RuntimeSettings:
+      type: object
+      required: [listenAddress, requestRetentionDays, revision, updatedAt]
+      properties:
+        listenAddress:
+          $ref: '#/components/schemas/RuntimeSetting'
+        requestRetentionDays:
+          $ref: '#/components/schemas/RuntimeSetting'
+        revision:
+          type: integer
+          minimum: 1
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    RuntimeSettingsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/RuntimeSettings'
+      additionalProperties: false
+    RuntimeSettingsInput:
+      type: object
+      required: [expectedRevision, listenAddress, requestRetentionDays]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        listenAddress:
+          type: string
+          maxLength: 256
+        requestRetentionDays:
+          type: integer
+          minimum: 1
+          maximum: 3650
+      additionalProperties: false
+    BackupDatabaseEntry:
+      type: object
+      required: [path, bytes, sha256, sqliteVersion]
+      properties:
+        path: { type: string }
+        bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sqliteVersion: { type: string }
+      additionalProperties: false
+    BackupObjectEntry:
+      type: object
+      required: [key, bytes, sha256]
+      properties:
+        key: { type: string }
+        bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      additionalProperties: false
+    BackupCounts:
+      type: object
+      required: [collections, records, objects]
+      properties:
+        collections: { type: integer, minimum: 0 }
+        records: { type: integer, minimum: 0 }
+        objects: { type: integer, minimum: 0 }
+      additionalProperties: false
+    BackupManifest:
+      type: object
+      required: [format, formatVersion, projectId, runtimeVersion, createdAt, appliedModelHash, database, objects, counts]
+      properties:
+        format: { type: string, enum: [modelry.community.backup] }
+        formatVersion: { type: integer, enum: [1] }
+        projectId: { type: string }
+        runtimeVersion: { type: string }
+        createdAt: { type: string, format: date-time }
+        appliedModelHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        database: { $ref: '#/components/schemas/BackupDatabaseEntry' }
+        objects:
+          type: array
+          maxItems: 100000
+          items: { $ref: '#/components/schemas/BackupObjectEntry' }
+        counts: { $ref: '#/components/schemas/BackupCounts' }
+      additionalProperties: false
+    BackupFinding:
+      type: object
+      required: [code, severity, message]
+      properties:
+        code: { type: string, maxLength: 64 }
+        severity: { type: string, enum: [info, warning, error] }
+        message: { type: string, maxLength: 512 }
+      additionalProperties: false
+    BackupPreflight:
+      type: object
+      required: [compatible, findings]
+      properties:
+        compatible: { type: boolean }
+        projectId: { type: string }
+        runtimeVersion: { type: string }
+        formatVersion: { type: integer }
+        createdAt: { type: string, format: date-time }
+        appliedModelHash: { type: string }
+        counts: { $ref: '#/components/schemas/BackupCounts' }
+        findings:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/BackupFinding' }
+      additionalProperties: false
+    BackupPreflightResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/BackupPreflight' }
+      additionalProperties: false
+    RecordImportResult:
+      type: object
+      required: [index, status]
+      properties:
+        index: { type: integer, minimum: 0 }
+        status: { type: string, enum: [created, failed] }
+        recordId: { type: string }
+        code: { type: string, maxLength: 64 }
+      additionalProperties: false
+    RecordImportSummary:
+      type: object
+      required: [created, failed, results]
+      properties:
+        created: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        results:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/RecordImportResult' }
+      additionalProperties: false
+    RecordImportResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/RecordImportSummary' }
+      additionalProperties: false
+    ApplicationAPIField:
+      type: object
+      required: [id, name, type, required, unique]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        required: { type: boolean }
+        unique: { type: boolean }
+        relationTargetCollectionId: { type: string }
+        relationCardinality: { type: string }
+        fileMaxBytes: { type: integer, minimum: 0 }
+        fileAllowedTypes:
+          type: array
+          items: { type: string }
+        fileMaxFiles: { type: integer, minimum: 0 }
+      additionalProperties: false
+    ApplicationAPICollection:
+      type: object
+      required: [id, name, type, schemaVersion, fields, endpoints, accessRules]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [Normal, Auth] }
+        schemaVersion: { type: integer, minimum: 1 }
+        fields:
+          type: array
+          maxItems: 4096
+          items: { $ref: '#/components/schemas/ApplicationAPIField' }
+        endpoints:
+          type: array
+          items: { type: string }
+        accessRules:
+          type: array
+          items:
+            type: object
+            required: [operation, mode]
+            properties:
+              operation: { type: string }
+              mode: { type: string }
+            additionalProperties: false
+      additionalProperties: false
+    ApplicationAPIContract:
+      type: object
+      required: [version, contentHash, apiBasePath, collections]
+      properties:
+        version: { type: string }
+        contentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        apiBasePath: { type: string, enum: [/api/v1] }
+        collections:
+          type: array
+          maxItems: 512
+          items: { $ref: '#/components/schemas/ApplicationAPICollection' }
+      additionalProperties: false
+    ApplicationAPIContractResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/ApplicationAPIContract' }
+      additionalProperties: false

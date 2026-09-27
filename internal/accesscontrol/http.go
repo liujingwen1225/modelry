@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/liujingwen1225/modelry/internal/authorization"
+
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 )
 
@@ -27,9 +29,72 @@ func (module *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/v1/collections/{collectionId}/access-rules", module.get)
 	mux.HandleFunc("PUT /admin/api/v1/collections/{collectionId}/access-rules", module.save)
 	mux.HandleFunc("POST /admin/api/v1/collections/{collectionId}/access-rules/apply", module.apply)
+	mux.HandleFunc("POST /admin/api/v1/collections/{collectionId}/access-rules/simulate", module.simulate)
 	mux.HandleFunc("POST /admin/api/v1/collections/{collectionId}/access-rules/discard", module.discard)
 }
 
+type simulationPrincipalInput struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
+}
+
+type simulationRecordInput struct {
+	RecordID string         `json:"recordId"`
+	Payload  map[string]any `json:"payload"`
+}
+
+type simulationInput struct {
+	Operation string                  `json:"operation"`
+	Principal simulationPrincipalInput `json:"principal"`
+	Record    *simulationRecordInput  `json:"record"`
+}
+
+func (module *Module) simulate(w http.ResponseWriter, request *http.Request) {
+	if !module.ready(w, request) {
+		return
+	}
+	var input simulationInput
+	if err := decodeRequest(w, request, &input); err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	principalType, ok := simulationPrincipalType(input.Principal.Kind)
+	if !ok {
+		module.writeError(w, request, ErrInvalidArgument)
+		return
+	}
+	simulation := SimulationInput{
+		Operation: authorization.Operation(input.Operation),
+		Principal: authorization.Principal{Type: principalType, ID: input.Principal.ID},
+	}
+	if input.Record != nil {
+		simulation.RecordID = input.Record.RecordID
+		simulation.Payload = input.Record.Payload
+	}
+	result, err := module.service.Simulate(request.Context(), request.PathValue("collectionId"), simulation)
+	if err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	httpapi.WriteAPIJSON(w, http.StatusOK, struct {
+		Data SimulationResult `json:"data"`
+	}{Data: result})
+}
+
+func simulationPrincipalType(kind string) (authorization.PrincipalType, bool) {
+	switch strings.TrimSpace(kind) {
+	case "anonymous":
+		return authorization.PrincipalAnonymous, true
+	case "owner":
+		return authorization.PrincipalOwner, true
+	case "applicationUser":
+		return authorization.PrincipalApplication, true
+	case "serviceAccount":
+		return authorization.PrincipalServiceAccount, true
+	default:
+		return "", false
+	}
+}
 func (module *Module) get(w http.ResponseWriter, request *http.Request) {
 	if !module.ready(w, request) {
 		return

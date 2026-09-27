@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Collection } from './client';
 import { CollectionWorkspacePage } from './pages';
 import { CollectionSchemaPage } from './schema';
+import { CommandRegistryProvider } from '../components/command-registry';
+import { LocaleProvider } from '../i18n/i18n';
 
 const collection: Collection = {
   id: 'col_posts', name: 'posts', type: 'Normal', schemaVersion: 1,
@@ -17,13 +19,13 @@ const collection: Collection = {
 };
 
 function renderSchema() {
-  return render(<MemoryRouter initialEntries={['/collections/col_posts/schema']}>
+  return render(<LocaleProvider><CommandRegistryProvider><MemoryRouter initialEntries={['/collections/col_posts/schema']}>
     <Routes>
       <Route element={<CollectionWorkspacePage />} path="/collections/:collectionId">
         <Route element={<CollectionSchemaPage />} path="schema" />
       </Route>
     </Routes>
-  </MemoryRouter>);
+  </MemoryRouter></CommandRegistryProvider></LocaleProvider>);
 }
 
 describe('Collection schema workflow', () => {
@@ -105,5 +107,38 @@ describe('Collection schema workflow', () => {
     expect(screen.getAllByText('The projection needs a retry.')).toHaveLength(1);
     expect(await screen.findByRole('link', { name: 'Open recovery details' })).toHaveAttribute('href', '/changes?changeSet=chg_saved');
     expect(screen.getByRole('button', { name: 'Review and retry' })).toBeInTheDocument();
+  });
+
+  it('renders the whole Schema surface in Simplified Chinese without translating Collection data', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith('/schema/pending-change')) return Promise.resolve(Response.json({ data: null }));
+      if (path.includes('/schema/history')) return Promise.resolve(Response.json({ data: [{
+        id: 'mig_1', changeSetId: 'chg_1', collectionId: 'col_posts', applyAttemptId: 'attempt_1',
+        appliedAt: '2026-09-24T10:00:00Z', diff: [{ kind: 'field', action: 'add', name: 'subtitle' }],
+      }] }));
+      return Promise.resolve(Response.json({ data: collection }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderSchema();
+
+    expect(await screen.findByRole('heading', { name: '结构' })).toBeInTheDocument();
+    expect(screen.getByText('定义该集合可以承载的数据。保存的编辑会保留在这里，直到你应用它们。')).toBeInTheDocument();
+    // 导航与面板必须整体中文化，不能残留英文产品术语。
+    expect(screen.getByRole('button', { name: '关系' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '索引' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '已应用历史' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加字段' })).toBeInTheDocument();
+    expect(screen.queryByText('Add field')).not.toBeInTheDocument();
+    expect(screen.queryByText('Applied history')).not.toBeInTheDocument();
+    expect(screen.getAllByText('系统 · 锁定')).toHaveLength(3);
+    // 字段名、Collection 名与系统标识属于领域数据，必须保持原样。
+    expect(screen.getByRole('rowheader', { name: 'title' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '字段' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '已应用历史' }));
+    expect(await screen.findByText('结构变更已应用')).toBeInTheDocument();
+    expect(screen.getByText('技术细节')).toBeInTheDocument();
   });
 });

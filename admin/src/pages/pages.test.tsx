@@ -12,6 +12,8 @@ function setupOverview(collections: unknown[], failCollections = false) {
     if (path.endsWith('/auth/session')) return Promise.resolve(json({
       owner: { id: 'own_test', email: 'owner@example.test' },
       expiresAt: '2026-09-25T09:00:00Z',
+      role: 'owner',
+      permission: { preset: 'fullAccess' },
     }));
     if (path.endsWith('/runtime/status')) return Promise.resolve(json({
       state: 'ready', observedAt: '2026-09-24T09:00:00Z',

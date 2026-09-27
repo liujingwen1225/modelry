@@ -1,0 +1,11 @@
+.runtime-settings-page { gap: 18px; }
+.runtime-settings__heading { display: flex; align-items: center; gap: 12px; }
+.runtime-settings__heading h2 { margin: 0; }
+.runtime-settings__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 14px 0 0; }
+.runtime-settings__facts div { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-soft); padding: 10px 12px; }
+.runtime-settings__facts dt { color: var(--color-ink-muted); font-size: 11px; }
+.runtime-settings__facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0; }
+.runtime-settings__facts code { overflow-wrap: anywhere; }
+.runtime-settings__form { display: grid; gap: 12px; margin-top: 12px; }
+.runtime-settings__actions { display: flex; justify-content: flex-end; }
+.runtime-settings__hint { color: var(--color-ink-muted); font-size: 11px; }

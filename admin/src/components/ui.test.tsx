@@ -34,10 +34,10 @@ describe('Admin interface primitives', () => {
   it('keeps concurrent dialog titles uniquely associated for screen readers', () => {
     render(
       <>
-        <Dialog open onClose={() => undefined} title="Record">
+        <Dialog closeLabel="Close dialog" open onClose={() => undefined} title="Record">
           <p>Record details</p>
         </Dialog>
-        <Dialog open onClose={() => undefined} title="Delete this record?">
+        <Dialog closeLabel="Close dialog" open onClose={() => undefined} title="Delete this record?">
           <button type="button">Delete record</button>
         </Dialog>
       </>,

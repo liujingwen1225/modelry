@@ -17,12 +17,14 @@ import (
 )
 
 type credential struct {
-	Salt      []byte
-	Hash      []byte
-	UserID    string
-	EmailKey  string
-	CreatedAt string
-	UpdatedAt string
+	Salt       []byte
+	Hash       []byte
+	UserID     string
+	EmailKey   string
+	Verified   bool
+	VerifiedAt sql.NullString
+	CreatedAt  string
+	UpdatedAt  string
 }
 
 type sessionRecord struct {
@@ -75,6 +77,9 @@ func (service *Service) Login(ctx context.Context, collectionName, email, passwo
 	if !passwordValid || !configuration.Applied.EmailPasswordEnabled || validateAuthConfig(configuration.Applied) != nil {
 		return LoginResult{}, ErrUnauthenticated
 	}
+	if configuration.Applied.EmailVerification == EmailVerificationRequired && !stored.Verified {
+		return LoginResult{}, ErrEmailNotVerified
+	}
 	projection, err := service.models.GetRecordProjection(ctx, collection.ID)
 	if err != nil {
 		return LoginResult{}, ErrUnauthenticated
@@ -112,6 +117,9 @@ func (service *Service) Login(ctx context.Context, collectionName, email, passwo
 		currentCredential, err := readCredential(ctx, tx, currentCollection.ID, emailKey)
 		if err != nil || currentCredential.UserID != stored.UserID || subtle.ConstantTimeCompare(currentCredential.Salt, stored.Salt) != 1 || subtle.ConstantTimeCompare(currentCredential.Hash, stored.Hash) != 1 {
 			return ErrUnauthenticated
+		}
+		if currentConfig.Applied.EmailVerification == EmailVerificationRequired && !currentCredential.Verified {
+			return ErrEmailNotVerified
 		}
 		var profileID string
 		if err := tx.QueryRowContext(ctx, `SELECT "id" FROM `+table+` WHERE "id" = ?`, stored.UserID).Scan(&profileID); err != nil {
@@ -438,16 +446,20 @@ func collectionByName(ctx context.Context, query storage.Executor, name string) 
 
 func readCredential(ctx context.Context, query storage.Executor, collectionID, emailKey string) (credential, error) {
 	var value credential
-	err := query.QueryRowContext(ctx, `SELECT user_record_id, email_key, password_salt, password_hash, created_at, updated_at FROM modelry_app_password_credentials WHERE collection_id = ? AND email_key = ?`, collectionID, emailKey).Scan(&value.UserID, &value.EmailKey, &value.Salt, &value.Hash, &value.CreatedAt, &value.UpdatedAt)
+	var verified int
+	err := query.QueryRowContext(ctx, `SELECT user_record_id, email_key, password_salt, password_hash, email_verified, verified_at, created_at, updated_at FROM modelry_app_password_credentials WHERE collection_id = ? AND email_key = ?`, collectionID, emailKey).Scan(&value.UserID, &value.EmailKey, &value.Salt, &value.Hash, &verified, &value.VerifiedAt, &value.CreatedAt, &value.UpdatedAt)
 	if err != nil {
 		return credential{}, err
 	}
+	value.Verified = verified == 1
 	return value, nil
 }
 
 func readCredentialByUser(ctx context.Context, query storage.Executor, collectionID, userID string) (credential, error) {
 	var value credential
-	err := query.QueryRowContext(ctx, `SELECT user_record_id, email_key, password_salt, password_hash, created_at, updated_at FROM modelry_app_password_credentials WHERE collection_id = ? AND user_record_id = ?`, collectionID, userID).Scan(&value.UserID, &value.EmailKey, &value.Salt, &value.Hash, &value.CreatedAt, &value.UpdatedAt)
+	var verified int
+	err := query.QueryRowContext(ctx, `SELECT user_record_id, email_key, password_salt, password_hash, email_verified, verified_at, created_at, updated_at FROM modelry_app_password_credentials WHERE collection_id = ? AND user_record_id = ?`, collectionID, userID).Scan(&value.UserID, &value.EmailKey, &value.Salt, &value.Hash, &verified, &value.VerifiedAt, &value.CreatedAt, &value.UpdatedAt)
+	value.Verified = verified == 1
 	return value, err
 }
 

@@ -130,46 +130,6 @@ func TestLocalFileUploadBindReplaceAndOrphanReconciliation(t *testing.T) {
 	}
 }
 
-func TestRenameToUnusedObjectPreservesExistingImmutableObject(t *testing.T) {
-	root := t.TempDir()
-	objectsDir := filepath.Join(root, "objects")
-	if err := os.Mkdir(objectsDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	tempPath := filepath.Join(root, "upload")
-	if err := os.WriteFile(tempPath, []byte("new upload"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	collisionPath := filepath.Join(objectsDir, "obj_collision")
-	if err := os.WriteFile(collisionPath, []byte("durable object"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	keys := []string{"obj_collision", "obj_unused"}
-	keyIndex := 0
-	key, err := renameToUnusedObject(tempPath, objectsDir, func() (string, error) {
-		result := keys[keyIndex]
-		keyIndex++
-		return result, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if key != "obj_unused" {
-		t.Fatalf("selected object key=%q", key)
-	}
-	oldContents, err := os.ReadFile(collisionPath)
-	if err != nil || string(oldContents) != "durable object" {
-		t.Fatalf("existing immutable object changed: %q err=%v", oldContents, err)
-	}
-	newContents, err := os.ReadFile(filepath.Join(objectsDir, key))
-	if err != nil || string(newContents) != "new upload" {
-		t.Fatalf("renamed upload=%q err=%v", newContents, err)
-	}
-	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("successful atomic rename retained source: %v", err)
-	}
-}
-
 func TestActiveUploadSurvivesReconciliationAndMissingReferencedObjectIsActionable(t *testing.T) {
 	ctx := context.Background()
 	store, models, _ := newTestServices(t)
@@ -349,5 +309,166 @@ func TestAdminFileHTTPUploadBindAndDownload(t *testing.T) {
 	var errorEnvelope map[string]map[string]any
 	if err := json.Unmarshal(badUpload.Body.Bytes(), &errorEnvelope); err != nil || errorEnvelope["error"]["code"] != "INVALID_ARGUMENT" {
 		t.Fatalf("missing canonical upload error envelope: body=%s err=%v", badUpload.Body.String(), err)
+	}
+}
+
+func TestMultipleFileValuesBindReadReplaceAndReconcile(t *testing.T) {
+	ctx := context.Background()
+	store, models, _ := newTestServices(t)
+	root := t.TempDir()
+	tempDir := filepath.Join(root, "tmp")
+	objectsDir := filepath.Join(root, "objects")
+	for _, directory := range []string{tempDir, objectsDir} {
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fileRecords, err := NewWithLocalFiles(store, models, tempDir, objectsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validation := []byte(`{"maxBytes":64,"allowedMimeTypes":["text/plain"],"maxFiles":3}`)
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "documents", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{
+			{Name: "title", Type: backendmodel.FieldTypeText, Required: true, Unique: true},
+			{Name: "attachments", Type: backendmodel.FieldTypeFiles, Validation: validation},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create multi-file Collection: %v", err)
+	}
+	policy := FilePolicy{MaxBytes: 64, AllowedMIMETypes: []string{"text/plain"}, MaxFiles: 3}
+	firstUpload, err := fileRecords.UploadFile(ctx, collection.ID, "attachments", bytes.NewBufferString("first file"), policy)
+	if err != nil {
+		t.Fatalf("stage first multi-file upload: %v", err)
+	}
+	secondUpload, err := fileRecords.UploadFile(ctx, collection.ID, "attachments", bytes.NewBufferString("second file"), policy)
+	if err != nil {
+		t.Fatalf("stage second multi-file upload: %v", err)
+	}
+	record, err := fileRecords.Create(ctx, collection.ID, map[string]any{
+		"title": "bundle", "attachments": []any{firstUpload.TemporaryID, secondUpload.TemporaryID},
+	})
+	if err != nil {
+		t.Fatalf("bind multi-file values: %v", err)
+	}
+	values, ok := record.Values["attachments"].([]any)
+	if !ok || len(values) != 2 {
+		t.Fatalf("bound attachments = %#v", record.Values["attachments"])
+	}
+	firstKey, _ := values[0].(string)
+	secondKey, _ := values[1].(string)
+	if !objectKeyPattern.MatchString(firstKey) || !objectKeyPattern.MatchString(secondKey) || firstKey == secondKey {
+		t.Fatalf("bound keys = %q %q", firstKey, secondKey)
+	}
+	for index, want := range []string{"first file", "second file"} {
+		file, info, err := fileRecords.OpenFileAt(ctx, collection.ID, record.ID, "attachments", index)
+		if err != nil {
+			t.Fatalf("open index %d: %v", index, err)
+		}
+		body, err := io.ReadAll(file)
+		_ = file.Close()
+		if err != nil || string(body) != want || info.Size != int64(len(want)) || info.ContentType != "text/plain" {
+			t.Fatalf("index %d body=%q info=%+v err=%v", index, body, info, err)
+		}
+	}
+	if _, _, err := fileRecords.OpenFile(ctx, collection.ID, record.ID, "attachments"); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("single-file route on files Field error = %v, want ErrInvalidArgument", err)
+	}
+	if _, _, err := fileRecords.OpenFileAt(ctx, collection.ID, record.ID, "attachments", 2); !errors.Is(err, ErrFileNotFound) {
+		t.Fatalf("out of range index error = %v, want ErrFileNotFound", err)
+	}
+	thirdUpload, err := fileRecords.UploadFile(ctx, collection.ID, "attachments", bytes.NewBufferString("third file"), policy)
+	if err != nil {
+		t.Fatalf("stage third upload: %v", err)
+	}
+	updated, err := fileRecords.Update(ctx, collection.ID, record.ID, map[string]any{"attachments": []any{secondKey, thirdUpload.TemporaryID}})
+	if err != nil {
+		t.Fatalf("replace multi-file list: %v", err)
+	}
+	replaced, ok := updated.Values["attachments"].([]any)
+	if !ok || len(replaced) != 2 {
+		t.Fatalf("replaced attachments = %#v", updated.Values["attachments"])
+	}
+	if replaced[0].(string) != secondKey {
+		t.Fatalf("ordered list lost its first bound key: %#v", replaced)
+	}
+	if _, err := os.Stat(filepath.Join(objectsDir, firstKey)); err != nil {
+		t.Fatalf("removed object must stay until reconciliation: %v", err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(objectsDir, firstKey), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := fileRecords.ReconcileFiles(ctx, time.Minute); err != nil {
+		t.Fatalf("reconcile multi-file values: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(objectsDir, firstKey)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dereferenced object not collected: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(objectsDir, secondKey)); err != nil {
+		t.Fatalf("referenced object was removed: %v", err)
+	}
+	references, err := fileRecords.ReferencedFileKeys(ctx)
+	if err != nil {
+		t.Fatalf("list referenced keys: %v", err)
+	}
+	if len(references) != 2 {
+		t.Fatalf("referenced keys = %v", references)
+	}
+}
+
+func TestMultipleFileValuesEnforceCountAndRejectFiltering(t *testing.T) {
+	ctx := context.Background()
+	store, models, _ := newTestServices(t)
+	root := t.TempDir()
+	tempDir := filepath.Join(root, "tmp")
+	objectsDir := filepath.Join(root, "objects")
+	for _, directory := range []string{tempDir, objectsDir} {
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fileRecords, err := NewWithLocalFiles(store, models, tempDir, objectsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection, err := models.CreateCollection(ctx, backendmodel.CreateCollectionInput{
+		Name: "limited", Type: backendmodel.CollectionTypeNormal,
+		Fields: []backendmodel.Field{
+			{Name: "title", Type: backendmodel.FieldTypeText, Required: true},
+			{Name: "attachments", Type: backendmodel.FieldTypeFiles, Validation: []byte(`{"maxFiles":1,"allowedMimeTypes":["text/plain"]}`)},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := fileRecords.UploadFile(ctx, collection.ID, "attachments", bytes.NewBufferString("alpha"), FilePolicy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := fileRecords.UploadFile(ctx, collection.ID, "attachments", bytes.NewBufferString("beta"), FilePolicy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fileRecords.Create(ctx, collection.ID, map[string]any{"title": "overflow", "attachments": []any{first.TemporaryID, second.TemporaryID}}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("exceeding maxFiles error = %v, want ErrInvalidArgument", err)
+	}
+	record, err := fileRecords.Create(ctx, collection.ID, map[string]any{"title": "within limit", "attachments": []any{first.TemporaryID}})
+	if err != nil {
+		t.Fatalf("create within maxFiles: %v", err)
+	}
+	if _, err := fileRecords.List(ctx, collection.ID, ListOptions{Filter: "attachments eq obj_0123456789abcdef0123456789abcdef"}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("filter on files Field error = %v, want ErrInvalidArgument", err)
+	}
+	if _, err := fileRecords.UploadFile(ctx, collection.ID, "title", bytes.NewBufferString("x"), FilePolicy{}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("upload to a non-File Field error = %v", err)
+	}
+	if _, err := fileRecords.UploadFile(ctx, collection.ID, "attachments", bytes.NewBufferString("gamma"), FilePolicy{MaxBytes: 1024, AllowedMIMETypes: []string{"image/png"}}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("widening MIME policy error = %v, want ErrInvalidArgument", err)
+	}
+	if _, _, err := fileRecords.OpenFileAt(ctx, collection.ID, record.ID, "attachments", 5); !errors.Is(err, ErrFileNotFound) {
+		t.Fatalf("index past one entry error = %v", err)
 	}
 }

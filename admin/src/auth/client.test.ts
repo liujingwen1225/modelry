@@ -14,9 +14,9 @@ describe('Admin authentication API client', () => {
   it('uses the canonical Control Plane paths and same-origin Owner cookies', async () => {
     const responses = [
       { state: 'required' },
-      { owner: { id: 'owner_1', email: 'owner@example.com' }, session: { expiresAt: '2026-09-25T10:00:00Z' } },
-      { owner: { id: 'owner_1', email: 'owner@example.com' }, session: { expiresAt: '2026-09-25T10:00:00Z' } },
-      { owner: { id: 'owner_1', email: 'owner@example.com' }, expiresAt: '2026-09-25T10:00:00Z' },
+      { owner: { id: 'owner_1', email: 'owner@example.com' }, session: { expiresAt: '2026-09-25T10:00:00Z', role: 'owner', permission: { preset: 'fullAccess' } } },
+      { owner: { id: 'owner_1', email: 'owner@example.com' }, session: { expiresAt: '2026-09-25T10:00:00Z', role: 'owner', permission: { preset: 'fullAccess' } } },
+      { owner: { id: 'owner_1', email: 'owner@example.com' }, expiresAt: '2026-09-25T10:00:00Z', role: 'owner', permission: { preset: 'fullAccess' } },
     ];
     const fetchMock = vi.fn()
       .mockImplementationOnce(() => Promise.resolve(Response.json(responses[0])))

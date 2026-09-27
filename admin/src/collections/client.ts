@@ -1,7 +1,7 @@
 import { ApiClientError, type ApiError } from '../api/client';
 
 export type CollectionType = 'Normal' | 'Auth';
-export type FieldType = 'text' | 'number' | 'boolean' | 'dateTime' | 'json' | 'relation' | 'file';
+export type FieldType = 'text' | 'number' | 'boolean' | 'dateTime' | 'json' | 'relation' | 'file' | 'files';
 
 export type RelationDefinition = { targetCollectionId: string; cardinality: string };
 
@@ -43,10 +43,12 @@ export type CollectionCreateRequest = {
   authentication?: AuthenticationConfiguration;
   accessRules?: Array<Record<string, unknown>>;
 };
+export type EmailVerificationMode = 'off' | 'optional' | 'required';
 export type AuthenticationConfiguration = {
   emailPasswordEnabled: boolean;
   selfRegistration: boolean;
   sessionDurationDays: number;
+  emailVerification?: EmailVerificationMode;
 };
 export type Page<T> = { data: T[]; nextCursor?: string };
 export type OperationKind = 'field' | 'relation' | 'index';
@@ -257,6 +259,13 @@ export async function uploadCollectionFile(collectionId: string, fieldName: stri
   return unwrap<UploadedCollectionFile>(await readResponse(response));
 }
 
+export async function downloadRecordFileAt(collectionId: string, recordId: string, fieldName: string, index: number, signal?: AbortSignal): Promise<Blob> {
+  const path = `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records/${encodeURIComponent(recordId)}/files/${encodeURIComponent(fieldName)}/${index}`;
+  const response = await fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', signal });
+  if (!response.ok) await readResponse(response);
+  return response.blob();
+}
+
 export async function downloadRecordFile(collectionId: string, recordId: string, fieldName: string, signal?: AbortSignal): Promise<Blob> {
   const path = `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records/${encodeURIComponent(recordId)}/files/${encodeURIComponent(fieldName)}`;
   const response = await fetch(path, { method: 'GET', credentials: 'include', mode: 'same-origin', cache: 'no-store', signal });
@@ -264,6 +273,27 @@ export async function downloadRecordFile(collectionId: string, recordId: string,
   return response.blob();
 }
 
+export type PolicySimulationPrincipalKind = 'anonymous' | 'owner' | 'applicationUser' | 'serviceAccount';
+export type PolicySimulationInput = {
+  operation: string;
+  principal: { kind: PolicySimulationPrincipalKind; id?: string };
+  record?: { recordId?: string; payload?: Record<string, unknown> };
+};
+export type PolicySimulationResult = {
+  allowed: boolean;
+  code?: string;
+  message?: string;
+  decidingOperation?: string;
+  decidingMode?: string;
+  authoritative: boolean;
+  notice: string;
+};
+
+// simulateAccessRule 只做非权威预演：它使用 Runtime 的同一个 evaluator，不写入任何状态。
+export async function simulateAccessRule(collectionId: string, input: PolicySimulationInput, signal?: AbortSignal): Promise<PolicySimulationResult> {
+  const path = `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/access-rules/simulate`;
+  return unwrap<PolicySimulationResult>(await request(path, { method: 'POST', body: JSON.stringify(input), signal }));
+}
 export async function getAccessRules(collectionId: string, signal?: AbortSignal): Promise<AccessRulesState> {
   return unwrap<AccessRulesState>(await request(`/admin/api/v1/collections/${encodeURIComponent(collectionId)}/access-rules`, { method: 'GET', signal }));
 }

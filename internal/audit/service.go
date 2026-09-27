@@ -47,18 +47,8 @@ func NewService(ctx context.Context, store transactionalStore) (*Service, error)
 	}
 	service := &Service{store: store, now: func() time.Time { return time.Now().UTC() }}
 	err := store.WithTransaction(ctx, func(tx storage.Executor) error {
-		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS modelry_audit_records (
-			id TEXT PRIMARY KEY NOT NULL,
-			request_id TEXT NOT NULL,
-			occurred_at TEXT NOT NULL,
-			occurred_unix_nano INTEGER NOT NULL,
-			actor_kind TEXT NOT NULL CHECK (actor_kind IN ('owner', 'serviceAccount')),
-			actor_id TEXT NOT NULL,
-			action TEXT NOT NULL,
-			resource_json TEXT NOT NULL,
-			result TEXT NOT NULL
-		)`); err != nil {
-			return fmt.Errorf("create AuditRecord table: %w", err)
+		if err := ensureAuditSchema(ctx, tx); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS modelry_audit_records_by_time ON modelry_audit_records (occurred_unix_nano DESC, id DESC)`); err != nil {
 			return fmt.Errorf("create AuditRecord time index: %w", err)
@@ -79,6 +69,60 @@ func NewService(ctx context.Context, store transactionalStore) (*Service, error)
 	return service, nil
 }
 
+// auditActorKindConstraint 是 Actor 种类的权威集合；Administrator 与 App User 也会出现在审计事实中。
+const auditActorKindConstraint = "('owner', 'administrator', 'serviceAccount', 'appUser')"
+
+// ensureAuditSchema 创建或就地迁移 AuditRecord 表。
+// 旧项目可能仍带有只允许 owner / serviceAccount 的 CHECK 约束，SQLite 无法直接修改约束，
+// 因此在同一事务内重建表并复制历史记录，保证既有审计事实不丢失、更新与删除仍然被禁止。
+func ensureAuditSchema(ctx context.Context, tx storage.Executor) error {
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS modelry_audit_records (
+			id TEXT PRIMARY KEY NOT NULL,
+			request_id TEXT NOT NULL,
+			occurred_at TEXT NOT NULL,
+			occurred_unix_nano INTEGER NOT NULL,
+			actor_kind TEXT NOT NULL CHECK (actor_kind IN `+auditActorKindConstraint+`),
+			actor_id TEXT NOT NULL,
+			action TEXT NOT NULL,
+			resource_json TEXT NOT NULL,
+			result TEXT NOT NULL
+		)`); err != nil {
+		return fmt.Errorf("create AuditRecord table: %w", err)
+	}
+	var definition string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(sql, '') FROM sqlite_master WHERE type = 'table' AND name = 'modelry_audit_records'`).Scan(&definition); err != nil {
+		return fmt.Errorf("inspect AuditRecord table: %w", err)
+	}
+	if strings.Contains(definition, "'appUser'") {
+		return nil
+	}
+	statements := []string{
+		`DROP TRIGGER IF EXISTS modelry_audit_records_no_update`,
+		`DROP TRIGGER IF EXISTS modelry_audit_records_no_delete`,
+		`DROP INDEX IF EXISTS modelry_audit_records_by_time`,
+		`CREATE TABLE modelry_audit_records_migrated (
+			id TEXT PRIMARY KEY NOT NULL,
+			request_id TEXT NOT NULL,
+			occurred_at TEXT NOT NULL,
+			occurred_unix_nano INTEGER NOT NULL,
+			actor_kind TEXT NOT NULL CHECK (actor_kind IN ` + auditActorKindConstraint + `),
+			actor_id TEXT NOT NULL,
+			action TEXT NOT NULL,
+			resource_json TEXT NOT NULL,
+			result TEXT NOT NULL
+		)`,
+		`INSERT INTO modelry_audit_records_migrated (id, request_id, occurred_at, occurred_unix_nano, actor_kind, actor_id, action, resource_json, result)
+			SELECT id, request_id, occurred_at, occurred_unix_nano, actor_kind, actor_id, action, resource_json, result FROM modelry_audit_records`,
+		`DROP TABLE modelry_audit_records`,
+		`ALTER TABLE modelry_audit_records_migrated RENAME TO modelry_audit_records`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("migrate AuditRecord actor kinds: %w", err)
+		}
+	}
+	return nil
+}
 // ActorFromContext 返回已通过 Owner 或 Service Account 认证边界建立的 Actor。
 func ActorFromContext(ctx context.Context) (Actor, bool) {
 	if actor, ok := ctx.Value(contextActorKey{}).(Actor); ok && validActor(actor) {
@@ -92,6 +136,16 @@ func ActorFromContext(ctx context.Context) (Actor, bool) {
 		case authorization.PrincipalServiceAccount:
 			actor := Actor{Kind: ActorServiceAccount, ID: principal.ID}
 			return actor, validActor(actor)
+		}
+	}
+	if principal, ok := adminauth.PrincipalFromContext(ctx); ok {
+		kind := ActorOwner
+		if principal.Kind == adminauth.PrincipalAdministrator {
+			kind = ActorAdministrator
+		}
+		actor := Actor{Kind: kind, ID: principal.ID}
+		if validActor(actor) {
+			return actor, true
 		}
 	}
 	if owner, ok := adminauth.OwnerFromContext(ctx); ok {
@@ -258,7 +312,12 @@ func validateAppendInput(input AppendInput, when time.Time) error {
 }
 
 func validActor(actor Actor) bool {
-	return (actor.Kind == ActorOwner || actor.Kind == ActorServiceAccount) && actorIDPattern.MatchString(actor.ID)
+	switch actor.Kind {
+	case ActorOwner, ActorAdministrator, ActorServiceAccount, ActorAppUser:
+		return actorIDPattern.MatchString(actor.ID)
+	default:
+		return false
+	}
 }
 
 func validResult(result string) bool {
@@ -275,7 +334,7 @@ func normalizeListOptions(options ListOptions) (ListOptions, error) {
 	if !utf8.ValidString(options.Search) || len(options.Search) > 128 {
 		return ListOptions{}, fmt.Errorf("%w: search must be 128 UTF-8 bytes or fewer", ErrInvalidArgument)
 	}
-	if options.ActorKind != "" && options.ActorKind != ActorOwner && options.ActorKind != ActorServiceAccount {
+	if options.ActorKind != "" && options.ActorKind != ActorOwner && options.ActorKind != ActorAdministrator && options.ActorKind != ActorServiceAccount && options.ActorKind != ActorAppUser {
 		return ListOptions{}, fmt.Errorf("%w: actorKind is unsupported", ErrInvalidArgument)
 	}
 	if (options.ActorID != "" && !actorIDPattern.MatchString(options.ActorID)) ||

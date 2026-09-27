@@ -31,6 +31,9 @@ type Service struct {
 	models   *backendmodel.Service
 	profiles ProfileWriter
 	now      func() time.Time
+	mail     MailEnqueuer
+	cipher   ValueCipher
+	audits   AuditSink
 }
 
 // NewService 初始化独立的 Auth Configuration、Password Credential 与 Session 持久化边界。
@@ -74,11 +77,28 @@ func NewService(ctx context.Context, store transactionalStore, models *backendmo
 			)`,
 			`CREATE INDEX IF NOT EXISTS modelry_app_sessions_user_idx ON modelry_app_sessions (collection_id, user_record_id, created_at DESC, id DESC)`,
 			`CREATE INDEX IF NOT EXISTS modelry_app_sessions_expiry_idx ON modelry_app_sessions (expires_at)`,
+			`CREATE TABLE IF NOT EXISTS modelry_app_recovery_tokens (
+				id TEXT PRIMARY KEY NOT NULL,
+				collection_id TEXT NOT NULL,
+				user_record_id TEXT NOT NULL,
+				email_key TEXT NOT NULL,
+				purpose TEXT NOT NULL CHECK (purpose IN ('passwordReset','emailVerification')),
+				token_hash BLOB NOT NULL UNIQUE CHECK (length(token_hash) = 32),
+				token_cipher BLOB NOT NULL,
+				origin TEXT NOT NULL DEFAULT '',
+				expires_at TEXT NOT NULL,
+				used_at TEXT,
+				created_at TEXT NOT NULL
+			)`,
+			`CREATE INDEX IF NOT EXISTS modelry_app_recovery_tokens_pending_idx ON modelry_app_recovery_tokens (collection_id, email_key, purpose, created_at DESC)`,
 		}
 		for _, statement := range statements {
 			if _, err := tx.ExecContext(ctx, statement); err != nil {
 				return fmt.Errorf("initialize application authentication storage: %w", err)
 			}
+		}
+		if err := ensureCredentialVerificationColumns(ctx, tx); err != nil {
+			return err
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT c.model_json FROM modelry_backend_collections c
 			LEFT JOIN modelry_auth_configurations a ON a.collection_id = c.id
@@ -305,15 +325,67 @@ func (service *Service) DiscardConfiguration(ctx context.Context, collectionID s
 	return state, err
 }
 
+
+// ensureCredentialVerificationColumns 为既有项目补齐验证状态列；既有 App User 视为已验证以保持 V0.1 兼容。
+func ensureCredentialVerificationColumns(ctx context.Context, tx storage.Executor) error {
+	columns := map[string]string{}
+	rows, err := tx.QueryContext(ctx, `PRAGMA table_info(modelry_app_password_credentials)`)
+	if err != nil {
+		return fmt.Errorf("inspect Password Credential columns: %w", err)
+	}
+	for rows.Next() {
+		var index, notNull, primaryKey int
+		var name, dataType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&index, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
+			return err
+		}
+		columns[name] = dataType
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if _, exists := columns["email_verified"]; !exists {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE modelry_app_password_credentials ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`); err != nil {
+			return fmt.Errorf("add Password Credential verification column: %w", err)
+		}
+	}
+	if _, exists := columns["verified_at"]; !exists {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE modelry_app_password_credentials ADD COLUMN verified_at TEXT`); err != nil {
+			return fmt.Errorf("add Password Credential verification timestamp: %w", err)
+		}
+	}
+	return nil
+}
 func defaultAuthConfig() AuthConfig {
-	return AuthConfig{EmailPasswordEnabled: true, SelfRegistration: false, SessionDurationDays: 7}
+	return AuthConfig{EmailPasswordEnabled: true, SelfRegistration: false, SessionDurationDays: 7, EmailVerification: EmailVerificationOff}
+}
+
+// normalizeEmailVerification 让既有项目（没有该字段）继续按 off 行为运行。
+func normalizeEmailVerification(mode EmailVerificationMode) EmailVerificationMode {
+	switch mode {
+	case EmailVerificationOptional, EmailVerificationRequired:
+		return mode
+	default:
+		return EmailVerificationOff
+	}
 }
 
 func validateAuthConfig(configuration AuthConfig) error {
 	if configuration.SessionDurationDays < 1 {
 		return &ValidationFailure{Violation: Violation{Path: "/configuration/sessionDurationDays", Code: "MINIMUM", Message: "Session duration must be at least one day."}}
 	}
-	return nil
+	switch configuration.EmailVerification {
+	case "", EmailVerificationOff, EmailVerificationOptional, EmailVerificationRequired:
+		return nil
+	default:
+		return &ValidationFailure{Violation: Violation{Path: "/configuration/emailVerification", Code: "UNSUPPORTED_VALUE", Message: "Choose Off, Optional, or Required for email verification."}}
+	}
 }
 
 func validationError(path, code, message string) error {
@@ -343,11 +415,13 @@ func readConfig(ctx context.Context, query storage.Executor, collection backendm
 	if err := json.Unmarshal([]byte(appliedJSON), &applied); err != nil {
 		return AuthConfigState{}, false, fmt.Errorf("decode applied Auth Configuration: %w", err)
 	}
+	applied.EmailVerification = normalizeEmailVerification(applied.EmailVerification)
 	state := AuthConfigState{Applied: applied, Pending: applied, Version: version}
 	if pendingJSON.Valid {
 		if err := json.Unmarshal([]byte(pendingJSON.String), &state.Pending); err != nil {
 			return AuthConfigState{}, false, fmt.Errorf("decode pending Auth Configuration: %w", err)
 		}
+		state.Pending.EmailVerification = normalizeEmailVerification(state.Pending.EmailVerification)
 		state.HasPending = true
 	}
 	return state, true, nil

@@ -37,9 +37,18 @@ type LocalStorageHealth struct {
 	Path     string `json:"path,omitempty"`
 }
 
+type FileStorageHealth struct {
+	State          string `json:"state"`
+	Provider       string `json:"provider"`
+	ActiveProvider string `json:"activeProvider"`
+	Message        string `json:"message,omitempty"`
+	Hint           string `json:"hint,omitempty"`
+}
+
 type StorageStatusResponse struct {
 	Database     Health             `json:"database"`
 	LocalStorage LocalStorageHealth `json:"localStorage"`
+	FileStorage  FileStorageHealth  `json:"fileStorage"`
 }
 
 type Diagnostics interface {
@@ -135,6 +144,13 @@ func storageStatusResponse(status diagnostics.StorageStatus) StorageStatusRespon
 			Hint:     status.LocalStorage.Hint,
 			Provider: status.LocalStorage.Provider,
 			Path:     status.LocalStorage.Path,
+		},
+		FileStorage: FileStorageHealth{
+			State:          status.FileStorage.State,
+			Provider:       status.FileStorage.Provider,
+			ActiveProvider: status.FileStorage.ActiveProvider,
+			Message:        status.FileStorage.Message,
+			Hint:           status.FileStorage.Hint,
 		},
 	}
 }

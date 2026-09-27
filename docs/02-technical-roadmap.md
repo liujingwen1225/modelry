@@ -312,7 +312,11 @@ V0.1 明确：
 - **Audit**：Security / Governance durable fact
 - **Overview / contextual diagnostics**：需要用户处理的 runtime 状态
 
-Standalone Generic Activity Timeline 延后。
+Standalone Generic Activity Timeline 已由 Community V0.1.x 交付（[ADR-0007](adr/0007-policy-activity-drift-and-settings.md)）：
+它是由各子系统拥有的事实构成的读模型，明确不读取 RequestRecord 或 AuditRecord。
+
+同批交付的还有 Policy Simulation、Drift Detection、Editable Runtime Settings（#27），
+以及 Backup / Restore、Import / Export、Typed Application API 与可复现的 SDK 生成（#28）。
 
 统一 requestId 连接：
 

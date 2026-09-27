@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LocaleProvider } from '../i18n/i18n';
 import { AccessPage, AuditPage } from './pages';
 
 const mocks = vi.hoisted(() => ({
@@ -21,11 +22,11 @@ const audit = { id: 'audit_1', requestId: 'req_1', time: '2026-09-24T10:00:00Z',
 function CurrentLocation() { const location = useLocation(); return <output data-testid="current-location">{location.pathname}{location.search}</output>; }
 
 function renderAccess(path = '/access') {
-  return render(<MemoryRouter initialEntries={[path]}><CurrentLocation /><Routes>
+  return render(<LocaleProvider><MemoryRouter initialEntries={[path]}><CurrentLocation /><Routes>
     <Route element={<AccessPage />} path="/access" />
     <Route element={<AuditPage />} path="/access/audit" />
     <Route element={<AuditPage />} path="/access/audit/:auditRecordId" />
-  </Routes></MemoryRouter>);
+  </Routes></MemoryRouter></LocaleProvider>);
 }
 
 describe('Access and Audit pages', () => {
@@ -49,7 +50,7 @@ describe('Access and Audit pages', () => {
     renderAccess();
 
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
-    expect(screen.getByText('No Service Accounts yet')).toBeInTheDocument();
+    expect(await screen.findByText('No Service Accounts yet')).toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: 'Create Service Account' })[0]!);
     const createForm = document.querySelector<HTMLFormElement>('form.access-form')!;
     await user.type(createForm.querySelector('#account-name')!, 'ci-readonly');
@@ -108,5 +109,27 @@ describe('Access and Audit pages', () => {
     expect(screen.getByRole('link', { name: 'Back to Audit' })).toHaveAttribute('href', '/access/audit?action=serviceAccount.created');
     expect(document.body.textContent).toContain('[redacted]');
     expect(document.body.textContent).not.toContain('do-not-render');
+  });
+
+  it('renders Access and Audit in Simplified Chinese while keeping Actor, Action and Permission identifiers intact', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    mocks.listServiceAccounts.mockResolvedValue({ data: [account] });
+    renderAccess();
+
+    expect(await screen.findByRole('heading', { name: '访问' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '服务账号' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '创建服务账号' })).toBeInTheDocument();
+    expect(screen.getByText('只读')).toBeInTheDocument();
+    // 领域数据与标识不得翻译。
+    expect(screen.getByRole('link', { name: 'ci-readonly' })).toBeInTheDocument();
+    expect(document.body.textContent).toContain('active');
+
+    await user.click(screen.getByRole('link', { name: '审计' }));
+    expect(await screen.findByRole('heading', { name: '审计' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /2026/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '应用筛选' })).toBeInTheDocument();
+    expect(document.body.textContent).toContain('serviceAccount.created');
+    expect(screen.queryByText('Apply filters')).not.toBeInTheDocument();
   });
 });

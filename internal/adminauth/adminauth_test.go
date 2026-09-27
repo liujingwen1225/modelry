@@ -337,8 +337,8 @@ func TestOnlyTheRuntimeOwnerSchemaIsCreated(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if tableCount != 3 {
-		t.Fatalf("admin-auth created %d tables, want owner/bootstrap/session only", tableCount)
+	if tableCount != 5 {
+		t.Fatalf("admin-auth created %d tables, want owner/bootstrap/session plus administrator identity and sessions", tableCount)
 	}
 }
 

@@ -1,7 +1,15 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as renderRTL, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { BootstrapPage, LoginPage, resolveOwnerReturnTo } from './pages';
+import { LocaleProvider } from '../i18n/i18n';
+
+async function render(ui: ReactNode) {
+  const result = renderRTL(<LocaleProvider>{ui}</LocaleProvider>);
+  await waitFor(() => expect(document.querySelector('.locale-load-state')).toBeNull());
+  return result;
+}
 
 describe('Owner bootstrap page', () => {
   it('shows loading before exposing the setup form for a required project', async () => {
@@ -9,7 +17,7 @@ describe('Owner bootstrap page', () => {
     const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveStatus = resolve; }));
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<BootstrapPage />);
+    await render(<BootstrapPage />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Checking project setup');
     resolveStatus?.(Response.json({ state: 'required' }));
@@ -35,7 +43,7 @@ describe('Owner bootstrap page', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const onAuthenticated = vi.fn();
-    render(<BootstrapPage onAuthenticated={onAuthenticated} />);
+    await render(<BootstrapPage onAuthenticated={onAuthenticated} />);
 
     await user.type(await screen.findByRole('textbox', { name: 'Email' }), 'dev@example.com');
     await user.type(screen.getByLabelText('Password'), 'long-secret-value');
@@ -77,7 +85,7 @@ describe('Owner bootstrap page', () => {
       }, { status: 422, headers: { 'X-Request-Id': 'req_bootstrap_validation' } }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<BootstrapPage />);
+    await render(<BootstrapPage />);
 
     await user.type(await screen.findByRole('textbox', { name: 'Email' }), 'dev@example.com');
     await user.type(screen.getByLabelText('Password'), 'secret-value');
@@ -101,7 +109,7 @@ describe('Owner bootstrap page', () => {
       return new Promise<Response>((resolve) => { resolveCreate = resolve; });
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<BootstrapPage />);
+    await render(<BootstrapPage />);
 
     await user.type(await screen.findByRole('textbox', { name: 'Email' }), 'dev@example.com');
     await user.type(screen.getByLabelText('Password'), 'secret-value');
@@ -119,8 +127,8 @@ describe('Owner bootstrap page', () => {
 });
 
 describe('Owner sign-in page', () => {
-  it('explains expired sessions on the sign-in surface', () => {
-    render(<LoginPage sessionExpired />);
+  it('explains expired sessions on the sign-in surface', async () => {
+    await render(<LoginPage sessionExpired />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Your session expired. Sign in to continue.');
   });
@@ -140,7 +148,7 @@ describe('Owner sign-in page', () => {
     })));
     vi.stubGlobal('fetch', fetchMock);
     const onAuthenticated = vi.fn();
-    render(<LoginPage onAuthenticated={onAuthenticated} returnTo="/collections/c_42?tab=records#row-7" />);
+    await render(<LoginPage onAuthenticated={onAuthenticated} returnTo="/collections/c_42?tab=records#row-7" />);
 
     await user.type(screen.getByRole('textbox', { name: 'Email' }), 'dev@example.com');
     await user.type(screen.getByLabelText('Password'), 'owner-password');
@@ -176,7 +184,7 @@ describe('Owner sign-in page', () => {
       },
     }, { status: 401, headers: { 'X-Request-Id': 'req_sign_in_failed' } }))));
     const onAuthenticated = vi.fn();
-    render(<LoginPage onAuthenticated={onAuthenticated} />);
+    await render(<LoginPage onAuthenticated={onAuthenticated} />);
 
     await user.type(screen.getByRole('textbox', { name: 'Email' }), 'dev@example.com');
     await user.type(screen.getByLabelText('Password'), 'incorrect-password');

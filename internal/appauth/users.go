@@ -26,14 +26,34 @@ const (
 	passwordMaxBytes   = 1024
 )
 
+type preparedProfileWriter interface {
+	PrepareCreate(context.Context, string, map[string]any) (*records.PreparedCreate, error)
+	SetPreparedCreateValues(*records.PreparedCreate, map[string]any) error
+	CreatePreparedInTransaction(context.Context, storage.Executor, *records.PreparedCreate) (records.Record, error)
+	CompletePreparedCommit(context.Context, *records.PreparedCreate)
+}
+
 func (service *Service) CreateUser(ctx context.Context, collectionID string, profile map[string]any, password string) (records.Record, error) {
 	prepared, email, err := prepareProfile(profile)
 	if err != nil {
 		return records.Record{}, err
 	}
+	if err := service.preflightAuthCollection(ctx, collectionID); err != nil {
+		return records.Record{}, err
+	}
 	salt, passwordHash, err := derivePassword(password)
 	if err != nil {
 		return records.Record{}, err
+	}
+	profileChange, err := service.prepareProfileChange(ctx, collectionID, prepared)
+	if err != nil {
+		return records.Record{}, fmt.Errorf("prepare App User Profile: %w", mapProfileError(err))
+	}
+	if profileChange != nil {
+		email, err = service.normalizePreparedProfile(profileChange, profileChange.Values())
+		if err != nil {
+			return records.Record{}, err
+		}
 	}
 	var created records.Record
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
@@ -44,7 +64,7 @@ func (service *Service) CreateUser(ctx context.Context, collectionID string, pro
 		if err := requireAuthCollection(collection); err != nil {
 			return err
 		}
-		created, err = service.profiles.CreateInTransaction(ctx, tx, collection.ID, prepared)
+		created, err = service.createPreparedProfile(ctx, tx, collection.ID, prepared, profileChange)
 		if err != nil {
 			return fmt.Errorf("create App User Profile: %w", mapProfileError(err))
 		}
@@ -56,11 +76,39 @@ func (service *Service) CreateUser(ctx context.Context, collectionID string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
+	service.completeProfileCommit(ctx, collectionID, profileChange)
 	return created, nil
 }
 
 func (service *Service) Register(ctx context.Context, collectionName string, profile map[string]any, password string) (records.Record, error) {
+	return service.RegisterWithOrigin(ctx, collectionName, profile, password, "")
+}
+
+// RegisterWithOrigin 在注册时按 Collection 的验证模式创建凭据，并在 required 模式下发验证邮件。
+func (service *Service) RegisterWithOrigin(ctx context.Context, collectionName string, profile map[string]any, password, origin string) (records.Record, error) {
 	prepared, email, err := prepareProfile(profile)
+	if err != nil {
+		return records.Record{}, err
+	}
+	var preflightCollection backendmodel.Collection
+	err = service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		collection, err := collectionByName(ctx, snapshot, collectionName)
+		if err != nil {
+			return err
+		}
+		if err := requireAuthCollection(collection); err != nil {
+			return err
+		}
+		configuration, _, err := readConfig(ctx, snapshot, collection)
+		if err != nil {
+			return err
+		}
+		if err := validateAuthConfig(configuration.Applied); err != nil || !configuration.Applied.EmailPasswordEnabled || !configuration.Applied.SelfRegistration {
+			return ErrRegistrationDisabled
+		}
+		preflightCollection = collection
+		return nil
+	})
 	if err != nil {
 		return records.Record{}, err
 	}
@@ -68,7 +116,18 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 	if err != nil {
 		return records.Record{}, err
 	}
+	profileChange, err := service.prepareProfileChange(ctx, preflightCollection.ID, prepared)
+	if err != nil {
+		return records.Record{}, fmt.Errorf("prepare registered App User Profile: %w", mapProfileError(err))
+	}
+	if profileChange != nil {
+		email, err = service.normalizePreparedProfile(profileChange, profileChange.Values())
+		if err != nil {
+			return records.Record{}, err
+		}
+	}
 	var created records.Record
+	var createdCollectionID string
 	err = service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		collection, err := collectionByName(ctx, tx, collectionName)
 		if err != nil {
@@ -77,6 +136,7 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 		if err := requireAuthCollection(collection); err != nil {
 			return err
 		}
+		createdCollectionID = collection.ID
 		configuration, _, err := readConfig(ctx, tx, collection)
 		if err != nil {
 			return err
@@ -87,19 +147,87 @@ func (service *Service) Register(ctx context.Context, collectionName string, pro
 		if !configuration.Applied.SelfRegistration {
 			return ErrRegistrationDisabled
 		}
-		created, err = service.profiles.CreateInTransaction(ctx, tx, collection.ID, prepared)
+		created, err = service.createPreparedProfile(ctx, tx, collection.ID, prepared, profileChange)
 		if err != nil {
 			return fmt.Errorf("create registered App User Profile: %w", mapProfileError(err))
 		}
-		if err := insertCredential(ctx, tx, collection.ID, created.ID, email, salt, passwordHash, timestamp(service.now())); err != nil {
+		verified := normalizeEmailVerification(configuration.Applied.EmailVerification) != EmailVerificationRequired
+		if err := insertCredentialWithVerification(ctx, tx, collection.ID, created.ID, email, salt, passwordHash, timestamp(service.now()), verified); err != nil {
 			return err
+		}
+		if !verified {
+			// required 验证模式下注册必须能发出验证邮件，否则用户永远无法登录。
+			if _, err := service.issueRecoveryToken(ctx, tx, collection.ID, created.ID, email, origin, purposeEmailVerification); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		return records.Record{}, err
 	}
+	service.completeProfileCommit(ctx, createdCollectionID, profileChange)
 	return created, nil
+}
+
+func (service *Service) preflightAuthCollection(ctx context.Context, collectionID string) error {
+	return service.store.WithReadSnapshot(ctx, func(snapshot storage.Executor) error {
+		collection, err := loadCollection(ctx, snapshot, collectionID)
+		if err != nil {
+			return err
+		}
+		return requireAuthCollection(collection)
+	})
+}
+
+func (service *Service) prepareProfileChange(ctx context.Context, collectionID string, values map[string]any) (*records.PreparedCreate, error) {
+	writer, ok := service.profiles.(preparedProfileWriter)
+	if !ok {
+		return nil, nil
+	}
+	return writer.PrepareCreate(ctx, collectionID, values)
+}
+
+func (service *Service) normalizePreparedProfile(prepared *records.PreparedCreate, values map[string]any) (string, error) {
+	normalized, email, err := prepareProfile(values)
+	if err != nil {
+		return "", err
+	}
+	writer, ok := service.profiles.(preparedProfileWriter)
+	if !ok {
+		return "", ErrInvalidArgument
+	}
+	if err := writer.SetPreparedCreateValues(prepared, normalized); err != nil {
+		return "", fmt.Errorf("validate prepared App User Profile: %w", mapProfileError(err))
+	}
+	return email, nil
+}
+
+func (service *Service) createPreparedProfile(ctx context.Context, tx storage.Executor, collectionID string, values map[string]any, prepared *records.PreparedCreate) (records.Record, error) {
+	if prepared != nil {
+		writer, ok := service.profiles.(preparedProfileWriter)
+		if !ok {
+			return records.Record{}, ErrInvalidArgument
+		}
+		return writer.CreatePreparedInTransaction(ctx, tx, prepared)
+	}
+	return service.profiles.CreateInTransaction(ctx, tx, collectionID, values)
+}
+
+func (service *Service) completeProfileCommit(ctx context.Context, collectionID string, prepared *records.PreparedCreate) {
+	if prepared != nil {
+		if writer, ok := service.profiles.(preparedProfileWriter); ok {
+			writer.CompletePreparedCommit(ctx, prepared)
+			return
+		}
+	}
+	publishProfileRecordEvents(service.profiles, collectionID)
+}
+
+func publishProfileRecordEvents(profiles ProfileWriter, collectionID string) {
+	if notifier, ok := profiles.(interface{ PublishRecordEventsCommitted(string) }); ok {
+		notifier.PublishRecordEventsCommitted(collectionID)
+	}
 }
 
 func (service *Service) ListUsers(ctx context.Context, collectionID string, options records.ListOptions) (ApplicationUserPage, error) {
@@ -251,7 +379,18 @@ func verifyPassword(password string, salt, expected []byte) bool {
 }
 
 func insertCredential(ctx context.Context, tx storage.Executor, collectionID, userID, email string, salt, passwordHash []byte, now string) error {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO modelry_app_password_credentials (collection_id, user_record_id, email_key, password_salt, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, collectionID, userID, email, salt, passwordHash, now, now); err != nil {
+	return insertCredentialWithVerification(ctx, tx, collectionID, userID, email, salt, passwordHash, now, true)
+}
+
+// insertCredentialWithVerification 允许注册流程按 Collection 的验证模式创建未验证凭据。
+func insertCredentialWithVerification(ctx context.Context, tx storage.Executor, collectionID, userID, email string, salt, passwordHash []byte, now string, verified bool) error {
+	verifiedValue := 0
+	var verifiedAt any
+	if verified {
+		verifiedValue = 1
+		verifiedAt = now
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO modelry_app_password_credentials (collection_id, user_record_id, email_key, password_salt, password_hash, email_verified, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, collectionID, userID, email, salt, passwordHash, verifiedValue, verifiedAt, now, now); err != nil {
 		return mapCredentialWriteError(err)
 	}
 	return nil

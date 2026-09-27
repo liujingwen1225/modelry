@@ -2,6 +2,11 @@ package backendmodel
 
 import "github.com/liujingwen1225/modelry/internal/storage"
 
+// StorageRecordProjection 暴露 Applied Collection 的存储投影，供 Drift Detection 与修复使用。
+func StorageRecordProjection(collection Collection) storage.RecordCollectionProjection {
+	return storageProjection(collection)
+}
+
 func storageProjection(collection Collection) storage.RecordCollectionProjection {
 	projection := storage.RecordCollectionProjection{
 		ID:      collection.ID,

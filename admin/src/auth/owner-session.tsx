@@ -16,6 +16,8 @@ export type OwnerSessionContextValue = {
 
 const OwnerSessionContext = createContext<OwnerSessionContextValue | null>(null);
 const SESSION_MARKER = 'modelry-owner-session-active';
+// maximumSessionTimerDelay 保持在 32 位有符号整数上限之内（约 24.8 天）。
+const maximumSessionTimerDelay = 2_147_000_000;
 
 function sessionWasActive(): boolean {
   try {
@@ -66,7 +68,9 @@ export function OwnerSessionProvider({ children }: { children: ReactNode }) {
     const expiry = Date.parse(state.session.expiresAt);
     if (!Number.isFinite(expiry)) return;
     const delay = Math.max(0, expiry - Date.now() + 250);
-    const timer = window.setTimeout(() => { void refresh().catch(() => undefined); }, delay);
+    // 浏览器把 setTimeout 的延迟当作 32 位整数：超过上限会溢出并立即触发，
+    // 因此长会话（例如 30 天的 Administrator 会话）必须分段等待。
+    const timer = window.setTimeout(() => { void refresh().catch(() => undefined); }, Math.min(delay, maximumSessionTimerDelay));
     return () => window.clearTimeout(timer);
   }, [refresh, state]);
 

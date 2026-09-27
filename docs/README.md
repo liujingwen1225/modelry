@@ -14,8 +14,11 @@
 8. **specs/0001-admin-product-ux-spec.md** — Admin Exact IA、页面、交互与 Durable Result
 9. **adr/0001-runtime-storage-architecture.md** — V0.1 Runtime、Project Root、SQLite 与 Local Storage 决策
 10. **specs/0002-v0.1-foundation-spec.md** — Domain 对象、身份、生命周期与安全边界
-11. **contracts/core-http-contract.md**、**contracts/openapi.yaml** — HTTP 平面、资源、错误与 DTO
-12. **specs/0003-browser-acceptance-spec.md** — 十条 V0.1 产品流程及 Product Closure 验收门禁
+11. **adr/0002-durable-record-events.md** — Record Event 原子性、身份、保留窗口、授权与 Runtime 生命周期决策
+12. **contracts/core-http-contract.md**、**contracts/openapi.yaml** — HTTP 平面、资源、错误与 canonical DTO；OpenAPI 同时定义 SSE 命名事件 payload
+13. **specs/0004-realtime-event-domain-spec.md** — Record Event 产品语义、授权、提交与恢复规则
+14. **contracts/realtime-http-contract.md** — SSE 帧、连接生命周期、游标恢复、RequestRecord 与 API Workspace 示例
+15. **specs/0003-browser-acceptance-spec.md** — 十条 V0.1 产品流程及 Product Closure 验收门禁
 
 后续正式设计统一进入：
 
@@ -60,6 +63,15 @@ SPEC-0002 Domain Foundation
 
 Core HTTP Contract / OpenAPI
 → canonical API boundary / operations / DTO / errors
+
+ADR-0002 Durable Record Events
+→ event durability / ordering / retention / authorization / runtime delivery decisions
+
+SPEC-0004 Realtime Event Domain
+→ committed Record Event semantics / current authorization / replay and recovery
+
+Realtime HTTP Contract
+→ SSE framing / reconnect behavior / bounded connection lifecycle / safe client example
 
 SPEC-0003 Browser Acceptance
 → ten real-stack V0.1 product flows / browser health gate / Product Closure release gate

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/liujingwen1225/modelry/internal/storage"
@@ -42,6 +43,12 @@ type transactionalStore interface {
 type Service struct {
 	store transactionalStore
 	now   func() time.Time
+	interval time.Duration
+	retentionMu sync.Mutex
+	retentionStarted bool
+	retentionClosed bool
+	retentionCancel context.CancelFunc
+	retentionDone chan struct{}
 }
 
 type RequestRecord struct {

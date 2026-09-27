@@ -49,6 +49,18 @@ func NewService(ctx context.Context, store TransactionalStore) (*Service, error)
 	return service, nil
 }
 
+// NewReadOnlyService constructs a Service that only reads the Applied Model.
+// It runs no DDL, recovers no interrupted Apply, and writes no row, so it is safe
+// to point at a read-only SQLite snapshot. Backup uses it to rebuild the Applied
+// Model from the same snapshot that produced the database payload, instead of
+// reading the live Runtime that may already have moved on.
+func NewReadOnlyService(store TransactionalStore) (*Service, error) {
+	if store == nil {
+		return nil, fmt.Errorf("%w: storage is required", ErrInvalidArgument)
+	}
+	return &Service{store: store}, nil
+}
+
 var backendModelSchema = []string{
 	`CREATE TABLE IF NOT EXISTS modelry_backend_collections (
 		id TEXT PRIMARY KEY NOT NULL,

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/permissions"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -57,14 +58,43 @@ type ownerSession struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
+// permissionDTO 是 Permission 的 API 视图；它只包含 operation 名称，不含任何凭据。
+type permissionDTO struct {
+	Preset                  string   `json:"preset"`
+	CustomPermissionVersion int      `json:"customPermissionVersion,omitempty"`
+	CustomOperations        []string `json:"customOperations,omitempty"`
+}
+
+func permissionView(grant permissions.Grant) permissionDTO {
+	view := permissionDTO{Preset: string(grant.Preset), CustomPermissionVersion: grant.Version}
+	if len(grant.Operations) > 0 {
+		view.CustomOperations = make([]string, 0, len(grant.Operations))
+		for _, operation := range grant.Operations {
+			view.CustomOperations = append(view.CustomOperations, string(operation))
+		}
+	}
+	return view
+}
+
+func sessionResponse(principal Principal, session durableSession) ownerResponse {
+	return ownerResponse{
+		Owner: Owner{ID: principal.ID, Email: principal.Email}, Session: ownerSession{ExpiresAt: session.expiresAt},
+		Role: string(principal.Kind), Permission: permissionView(principal.Grant),
+	}
+}
+
 type ownerResponse struct {
-	Owner   Owner        `json:"owner"`
-	Session ownerSession `json:"session"`
+	Owner      Owner         `json:"owner"`
+	Session    ownerSession  `json:"session"`
+	Role       string        `json:"role"`
+	Permission permissionDTO `json:"permission"`
 }
 
 type currentOwnerSessionResponse struct {
-	Owner     Owner     `json:"owner"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	Owner      Owner         `json:"owner"`
+	ExpiresAt  time.Time     `json:"expiresAt"`
+	Role       string        `json:"role"`
+	Permission permissionDTO `json:"permission"`
 }
 
 func (service *Service) handleBootstrapStatus(w http.ResponseWriter, request *http.Request) {
@@ -133,13 +163,13 @@ func (service *Service) handleLogin(w http.ResponseWriter, request *http.Request
 		writeAuthError(w, request, err)
 		return
 	}
-	owner, session, token, err := service.login(request.Context(), input.Email, input.Password)
+	principal, session, token, err := service.login(request.Context(), input.Email, input.Password)
 	if err != nil {
 		writeAuthError(w, request, err)
 		return
 	}
 	setOwnerCookie(w, request, token, session.expiresAt)
-	httpapi.WriteAPIJSON(w, http.StatusOK, ownerResponse{Owner: owner, Session: ownerSession{ExpiresAt: session.expiresAt}})
+	httpapi.WriteAPIJSON(w, http.StatusOK, sessionResponse(principal, session))
 }
 
 func (service *Service) handleSession(w http.ResponseWriter, request *http.Request) {
@@ -157,7 +187,16 @@ func (service *Service) handleSession(w http.ResponseWriter, request *http.Reque
 		}
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	httpapi.WriteAPIJSON(w, http.StatusOK, currentOwnerSessionResponse{Owner: session.owner, ExpiresAt: session.expiresAt})
+	if session.principal.Kind == PrincipalAdministrator {
+		if _, err := service.GetAdministrator(request.Context(), session.principal.ID); err != nil {
+			writeAuthError(w, request, err)
+			return
+		}
+	}
+	httpapi.WriteAPIJSON(w, http.StatusOK, currentOwnerSessionResponse{
+		Owner: Owner{ID: session.principal.ID, Email: session.principal.Email}, ExpiresAt: session.expiresAt,
+		Role: string(session.principal.Kind), Permission: permissionView(session.principal.Grant),
+	})
 }
 
 func (service *Service) handleLogout(w http.ResponseWriter, request *http.Request) {
@@ -280,6 +319,24 @@ func writeAuthError(w http.ResponseWriter, request *http.Request, err error) {
 		httpapi.WriteAPIError(w, request, http.StatusUnauthorized, httpapi.APIError{
 			Code: "UNAUTHENTICATED", Message: "The supplied credentials could not be validated.",
 			Details: map[string]any{}, Hint: "Sign in again to continue.",
+		})
+		return
+	}
+	if errors.Is(err, ErrInvalidArgument) {
+		httpapi.WriteAPIError(w, request, http.StatusBadRequest, httpapi.APIError{
+			Code: "INVALID_ARGUMENT", Message: "The request contains an invalid value.", Details: map[string]any{}, Hint: "Review the values and try again.",
+		})
+		return
+	}
+	if errors.Is(err, ErrNotFound) {
+		httpapi.WriteAPIError(w, request, http.StatusNotFound, httpapi.APIError{
+			Code: "NOT_FOUND", Message: "The requested Administrator was not found.", Details: map[string]any{}, Hint: "Reload the Administrators list.",
+		})
+		return
+	}
+	if errors.Is(err, ErrConflict) {
+		httpapi.WriteAPIError(w, request, http.StatusConflict, httpapi.APIError{
+			Code: "CONFLICT", Message: "This change conflicts with the current Administrators state.", Details: map[string]any{}, Hint: "Reload the Administrators list and retry.",
 		})
 		return
 	}

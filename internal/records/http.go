@@ -7,10 +7,13 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/liujingwen1225/modelry/internal/backendmodel"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/recordevents"
+	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
 )
 
 type recordResponse struct {
@@ -39,6 +42,7 @@ func (service *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /admin/api/v1/collections/{collectionId}/records/{recordId}", service.handleDelete)
 	mux.HandleFunc("POST /admin/api/v1/collections/{collectionId}/files", service.handleFileUpload)
 	mux.HandleFunc("GET /admin/api/v1/collections/{collectionId}/records/{recordId}/files/{fieldName}", service.handleFileDownload)
+	mux.HandleFunc("GET /admin/api/v1/collections/{collectionId}/records/{recordId}/files/{fieldName}/{fileIndex}", service.handleFileDownloadAt)
 }
 
 func (service *Service) handleList(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +129,28 @@ func (service *Service) handleFileUpload(w http.ResponseWriter, r *http.Request)
 }
 
 func (service *Service) handleFileDownload(w http.ResponseWriter, r *http.Request) {
-	file, info, err := service.OpenFile(r.Context(), r.PathValue("collectionId"), r.PathValue("recordId"), r.PathValue("fieldName"))
+	service.writeFileDownload(w, r, nil)
+}
+
+// handleFileDownloadAt 读取 files Field 中的有序位置，越界与缺失都返回 NOT_FOUND。
+func (service *Service) handleFileDownloadAt(w http.ResponseWriter, r *http.Request) {
+	index, err := strconv.Atoi(r.PathValue("fileIndex"))
+	if err != nil || index < 0 || index > backendmodel.MaximumFileCount-1 {
+		writeRecordError(w, r, fmt.Errorf("%w: fileIndex must be an integer between 0 and %d", ErrInvalidArgument, backendmodel.MaximumFileCount-1))
+		return
+	}
+	service.writeFileDownload(w, r, &index)
+}
+
+func (service *Service) writeFileDownload(w http.ResponseWriter, r *http.Request, index *int) {
+	var file io.ReadCloser
+	var info FileInfo
+	var err error
+	if index == nil {
+		file, info, err = service.OpenFile(r.Context(), r.PathValue("collectionId"), r.PathValue("recordId"), r.PathValue("fieldName"))
+	} else {
+		file, info, err = service.OpenFileAt(r.Context(), r.PathValue("collectionId"), r.PathValue("recordId"), r.PathValue("fieldName"), *index)
+	}
 	if err != nil {
 		writeRecordError(w, r, err)
 		return
@@ -169,6 +194,18 @@ func writeRecordError(w http.ResponseWriter, r *http.Request, err error) {
 	problem := httpapi.APIError{Message: "Record request could not be completed", Details: map[string]any{}}
 	status := http.StatusInternalServerError
 	switch {
+	case errors.Is(err, recordlifecycle.ErrRuntimeUnavailable):
+		status, problem.Code, problem.Message = http.StatusServiceUnavailable, "EXTENSION_RUNTIME_UNAVAILABLE", "A required Record lifecycle Extension is unavailable; no Record change was committed."
+	case errors.Is(err, recordlifecycle.ErrRejected):
+		status, problem.Code, problem.Message = http.StatusUnprocessableEntity, "CHANGE_REJECTED_BY_EXTENSION", "A Record lifecycle Extension rejected this change."
+	case errors.Is(err, recordlifecycle.ErrBudgetExceeded):
+		status, problem.Code, problem.Message = http.StatusUnprocessableEntity, "EXTENSION_BUDGET_EXCEEDED", "A Record lifecycle Extension exceeded its execution budget; no Record change was committed."
+	case errors.Is(err, recordlifecycle.ErrInvalidOutput):
+		status, problem.Code, problem.Message = http.StatusUnprocessableEntity, "VALIDATION_FAILED", "A Record lifecycle Extension returned values that do not match the Applied Model."
+	case errors.Is(err, recordevents.ErrEventTooLarge):
+		status = http.StatusRequestEntityTooLarge
+		problem.Code = "PAYLOAD_TOO_LARGE"
+		problem.Message = "This Record change exceeds the 1 MiB durable Event limit. Reduce the changed values and retry."
 	case errors.Is(err, ErrAuthCollectionWriteRequiresAuthAPI):
 		status = http.StatusForbidden
 		problem.Code = "AUTH_COLLECTION_WRITE_REQUIRES_AUTH_API"
@@ -201,10 +238,16 @@ func writeRecordError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusConflict
 		problem.Code = "CONFLICT"
 		problem.Message = "Record conflicts with durable data"
-	case errors.Is(err, ErrFileStorageUnavailable), errors.Is(err, ErrFileNotFound):
+	case errors.Is(err, ErrFileNotFound):
+		status = http.StatusNotFound
+		problem.Code = "NOT_FOUND"
+		problem.Message = "The referenced File object is not available"
+		problem.Hint = "Reload the Record. If the object stays missing, restore the Project storage or run reconciliation."
+	case errors.Is(err, ErrFileStorageUnavailable):
 		status = http.StatusServiceUnavailable
 		problem.Code = "STORAGE_UNAVAILABLE"
-		problem.Message = "Local File Storage is unavailable; check the project storage and retry"
+		problem.Message = "The File Storage Provider is unavailable; check the Provider settings and retry"
+		problem.Hint = "Open Settings, review Provider health, and retry."
 	default:
 		// 不向客户端返回原始 SQLite 错误、查询细节或存储路径。
 		if strings.Contains(strings.ToLower(err.Error()), "busy") || strings.Contains(strings.ToLower(err.Error()), "locked") {
