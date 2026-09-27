@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Command, Search, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useOwnerSession } from '../auth/owner-session';
@@ -94,7 +95,7 @@ function CommandPaletteDialog({
     if (event.target === event.currentTarget) onClose();
   }
 
-  return (
+  return createPortal(
     <div className="command-palette-overlay" onMouseDown={dismissOutside}>
       <section
         aria-label={t('commands.paletteTitle')}
@@ -148,7 +149,8 @@ function CommandPaletteDialog({
           <span><kbd>{shortcut}</kbd></span>
         </footer>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

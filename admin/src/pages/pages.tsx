@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Bot, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, Network, RefreshCw, Webhook } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, Network, Puzzle, RefreshCw, Webhook } from 'lucide-react';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { DiagnosticsCards } from '../components/runtime-status';
 import { Button, CopyButton, PartialState, StatusChip, Surface } from '../components/ui';
@@ -152,6 +152,7 @@ export function OverviewPage() {
       <section aria-label={t('navigation.build')} className="overview-build-links">
         <Link className="overview-build-link" to="/collections"><Layers3 aria-hidden="true" size={17} /><span>{t('navigation.collections')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
         <Link className="overview-build-link" to="/api"><Network aria-hidden="true" size={17} /><span>{t('navigation.api')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+        <Link className="overview-build-link" to="/extensions"><Puzzle aria-hidden="true" size={17} /><span>{t('navigation.hooks')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
         <Link className="overview-build-link" to="/automations"><Webhook aria-hidden="true" size={17} /><span>{t('navigation.automation')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
       </section>
       {pendingCollections.length > 0 && <div className="overview-pending-summary" role="status">

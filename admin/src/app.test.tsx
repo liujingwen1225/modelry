@@ -76,6 +76,7 @@ describe('Modelry Admin shell', () => {
 
   it('renders the shared sidebar and reads runtime health through the diagnostics client', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
+    const user = userEvent.setup();
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
       if (path.startsWith('/admin/api/v1/collections?')) return Promise.resolve(Response.json({ data: [] }));
@@ -86,14 +87,23 @@ describe('Modelry Admin shell', () => {
 
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
-    expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Overview', 'Collections', 'API', 'Automation', 'Changes', 'Access', 'Settings',
-    ]);
+    const primaryNavigationLabels = ['Overview', 'Collections', 'API', 'Hooks', 'Automation', 'Changes', 'Access', 'Settings'];
+    const primaryNavigationLinks = within(navigation).getAllByRole('link');
+    expect(primaryNavigationLinks.map((link) => link.textContent)).toEqual(primaryNavigationLabels);
+    expect(primaryNavigationLinks.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);
+    expect(primaryNavigationLinks.map((link) => link.getAttribute('title'))).toEqual(primaryNavigationLabels);
     expect(await screen.findByRole('heading', { name: 'Your backend is ready' })).toBeInTheDocument();
     const buildLinks = document.querySelector('.overview-build-links');
     expect(buildLinks).not.toBeNull();
     expect(within(buildLinks as HTMLElement).getByRole('link', { name: 'API' })).toHaveAttribute('href', '/api');
+    expect(within(buildLinks as HTMLElement).getByRole('link', { name: 'Hooks' })).toHaveAttribute('href', '/extensions');
     expect(screen.getByRole('heading', { name: 'Connect a coding agent' })).toBeInTheDocument();
+    const englishAgentGuidance = 'Model Context Protocol (MCP) lets your coding agent connect to Modelry through a Service Account API Key. The agent can perform only operations granted to that account. Start with Read only; if the task needs more, grant only its required custom operations. Application data remains governed by each Collection’s Access Rules.';
+    const chineseAgentGuidance = '模型上下文协议（MCP）让编码智能体通过服务账号 API Key 连接 Modelry。智能体只能执行该账号获准的操作。建议从“只读”开始；若任务需要更多权限，只授予其必需的自定义操作。应用数据仍由各集合的访问规则管控。';
+    expect(screen.getByText(englishAgentGuidance)).toBeInTheDocument();
+    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'zh-CN');
+    expect(await screen.findByText(chineseAgentGuidance)).toBeInTheDocument();
+    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'en');
     expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
     expect(screen.getByRole('region', { name: 'Runtime & storage' })).toHaveTextContent('Runtime');
@@ -116,8 +126,9 @@ describe('Modelry Admin shell', () => {
     render(<App />);
 
     const automationNavigation = await screen.findByRole('navigation', { name: 'Automation' });
-    expect(within(automationNavigation).getByRole('link', { name: 'Extensions' })).toHaveAttribute('href', '/extensions');
-    expect(within(automationNavigation).getByRole('link', { name: 'Secrets' })).toHaveAttribute('href', '/secrets');
+    expect(within(automationNavigation).queryByRole('link', { name: 'Hooks' })).not.toBeInTheDocument();
+    expect(within(automationNavigation).queryByRole('link', { name: 'Extensions' })).not.toBeInTheDocument();
+    expect(within(automationNavigation).queryByRole('link', { name: 'Secrets' })).not.toBeInTheDocument();
     await user.click(within(automationNavigation).getByRole('link', { name: 'Event Hooks' }));
     expect(window.location.pathname + window.location.search).toBe('/automations?tab=eventHooks&q=mail');
 
@@ -132,6 +143,7 @@ describe('Modelry Admin shell', () => {
     expect(within(settingsNavigation).getByRole('link', { name: 'Drift' })).toHaveAttribute('href', '/settings/drift');
     await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'zh-CN');
     expect(await screen.findByRole('heading', { name: '设置' })).toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole('link', { name: '生命周期 Hooks' })).toHaveAttribute('href', '/extensions');
     expect(screen.getByText(/移动已有文件/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('迁移');
     await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'en');

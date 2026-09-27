@@ -164,7 +164,7 @@ function ExtensionList() {
   }
 
   return <div className="page-stack extension-page">
-    <PageHeading eyebrow={t('extensions.eyebrow')} title={t('extensions.title')} description={t('extensions.description')} />
+    <PageHeading eyebrow={t('extensions.eyebrow')} title={t('extensions.title')} description={t('extensions.description')} action={<Link className="text-link" to="/secrets">{t('extensions.manageSecrets')}</Link>} />
     <Surface className="extension-toolbar">
       <label className="extension-search"><span className="sr-only">{t('extensions.search')}</span><input aria-label={t('extensions.search')} onChange={(event) => updateQuery(event.target.value)} placeholder={t('extensions.searchPlaceholder')} type="search" value={search} /></label>
       <span className="extension-count">{t('extensions.count', { count: visible.length })}</span>

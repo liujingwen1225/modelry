@@ -273,7 +273,9 @@ export function FileStoragePage() {
               {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
             </select>
           </FormField>
-          {secrets.length === 0 && <p className="storage-hint">{t('storage.provider.noSecrets')} <Link to="/secrets">{t('storage.provider.createSecret')}</Link></p>}
+          {secrets.length === 0
+            ? <p className="storage-hint">{t('storage.provider.noSecrets')} <Link to="/secrets">{t('storage.provider.createSecret')}</Link></p>
+            : <p className="storage-hint"><Link to="/secrets">{t('storage.provider.manageSecrets')}</Link></p>}
         </div>}
         <div className="storage-actions">
           {provider === 's3' && <Button disabled={busy !== null} onClick={() => void testConnection()} size="small" type="button" variant="secondary">{t('storage.provider.test')}</Button>}

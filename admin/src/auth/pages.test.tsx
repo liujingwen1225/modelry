@@ -20,6 +20,7 @@ describe('Owner bootstrap page', () => {
     await render(<BootstrapPage />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Checking project setup');
+    await waitFor(() => expect(resolveStatus).toBeTypeOf('function'));
     resolveStatus?.(Response.json({ state: 'required' }));
 
     expect(await screen.findByRole('heading', { name: 'Create your Modelry owner' })).toBeInTheDocument();

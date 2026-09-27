@@ -14,6 +14,7 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
+  Puzzle,
   Settings2,
   ShieldCheck,
   Sun,
@@ -46,6 +47,7 @@ const groups: Array<{
     items: [
       { label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read' },
       { label: 'navigation.api', to: '/api', icon: Network, operation: 'collections.read' },
+      { label: 'navigation.hooks', to: '/extensions', icon: Puzzle },
       { label: 'navigation.automation', to: '/automations', icon: Webhook },
     ],
   },
@@ -68,7 +70,7 @@ type ProductAreaNavigation = {
 };
 
 function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
-  if (pathname === '/automations' || pathname.startsWith('/extensions') || pathname.startsWith('/secrets')) {
+  if (pathname === '/automations') {
     return {
       id: 'automation',
       label: 'navigation.automation',
@@ -77,8 +79,6 @@ function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
         { label: 'automation.tabs.eventHooks', to: '/automations?tab=eventHooks' },
         { label: 'automation.tabs.jobs', to: '/automations?tab=jobs' },
         { label: 'automation.tabs.deliveries', to: '/automations?tab=deliveries' },
-        { label: 'navigation.extensions', to: '/extensions' },
-        { label: 'navigation.secrets', to: '/secrets' },
       ] }],
     };
   }
@@ -130,7 +130,7 @@ function isAreaLinkActive(link: AreaLink, pathname: string, search: string): boo
 }
 
 function isPrimaryLinkActive(pathname: string, to: string): boolean {
-  if (to === '/automations') return pathname === '/automations' || pathname.startsWith('/extensions') || pathname.startsWith('/secrets');
+  if (to === '/automations') return pathname === '/automations';
   if (to === '/access') return pathname.startsWith('/access') || pathname === '/administrators';
   if (to === '/settings') return pathname.startsWith('/settings') || pathname === '/activity';
   return pathname === to || pathname.startsWith(`${to}/`);
@@ -207,12 +207,12 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
             {group.label && <p className="nav-group__label">{t(group.label)}</p>}
             {group.items.map(({ label, to, icon: Icon }) => (
               <NavLink
-                aria-label={collapsed ? t(label) : undefined}
+                aria-label={t(label)}
                 aria-current={isPrimaryLinkActive(pathname, to) ? 'page' : undefined}
                 className={() => `nav-link${isPrimaryLinkActive(pathname, to) ? ' nav-link--active' : ''}`}
                 end={to === '/'}
                 key={to}
-                title={collapsed ? t(label) : undefined}
+                title={t(label)}
                 to={to}
               >
                 <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
@@ -374,7 +374,7 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
       go('navigate.changes', 'commands.changes', '/changes'),
       go('navigate.access', 'commands.access', '/access'),
       go('navigate.automations', 'commands.automations', '/automations', ['webhook', 'event hook', 'cron', 'delivery']),
-      go('navigate.extensions', 'commands.extensions', '/extensions', ['hooks', 'lifecycle', 'runtime']),
+      go('navigate.extensions', 'commands.extensions', '/extensions', ['hooks', 'lifecycle', 'runtime', 'extension', '扩展']),
       go('navigate.secrets', 'commands.secrets', '/secrets', ['write-only', 'secret']),
       go('navigate.settings', 'commands.settings', '/settings'),
       ...(allowsOperation(role, permission, 'activity.read') ? [go('navigate.activity', 'commands.activity', '/activity', ['timeline', 'operations'])] : []),

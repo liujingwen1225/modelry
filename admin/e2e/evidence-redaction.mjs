@@ -2,57 +2,46 @@ import { appendFile } from 'node:fs/promises';
 
 const sensitiveValues = new Set();
 
-const sensitiveKey = (key) => {
+const sensitiveFieldPolicy = Object.freeze({
+  exact: Object.freeze([
+    'password', 'passwd', 'passphrase', 'credential', 'credentials', 'authorization', 'bearer',
+    'proxyauthorization', 'cookie', 'setcookie', 'secret', 'secrets', 'apikey', 'accesstoken',
+    'refreshtoken', 'idtoken', 'token', 'sessiontoken', 'sessionid', 'sessioncookie', 'session',
+    'resetcode', 'resettoken', 'verificationcode', 'verificationtoken', 'onetimecode', 'otp',
+    'signingsecret', 'secretvalue', 'secretkey',
+  ]),
+  suffixes: Object.freeze([
+    'password', 'passphrase', 'credential', 'authorization', 'secret', 'token', 'apikey',
+    'session', 'sessionid', 'cookie', 'resetcode', 'verificationcode', 'onetimecode', 'otp',
+  ]),
+  fragments: Object.freeze([
+    'password', 'passwd', 'passphrase', 'credential', 'authorization', 'bearer', 'cookie',
+    'secret', 'apikey', 'token', 'session', 'resetcode', 'resettoken', 'verificationcode',
+    'verificationtoken', 'onetimecode', 'otp',
+  ]),
+});
+
+function matchesSensitiveFieldName(key, policy = sensitiveFieldPolicy) {
   const normalized = String(key).replace(/[^a-z0-9]/gi, '').toLowerCase();
-  return normalized === 'password'
-    || normalized === 'passwd'
-    || normalized === 'passphrase'
-    || normalized === 'credential'
-    || normalized === 'credentials'
-    || normalized === 'authorization'
-    || normalized === 'bearer'
-    || normalized === 'proxyauthorization'
-    || normalized === 'cookie'
-    || normalized === 'setcookie'
-    || normalized === 'secret'
-    || normalized === 'secrets'
-    || normalized === 'apikey'
-    || normalized === 'accesstoken'
-    || normalized === 'refreshtoken'
-    || normalized === 'idtoken'
-    || normalized === 'token'
-    || normalized === 'sessiontoken'
-    || normalized === 'sessionid'
-    || normalized === 'sessioncookie'
-    || normalized === 'session'
-    || normalized === 'resetcode'
-    || normalized === 'resettoken'
-    || normalized === 'verificationcode'
-    || normalized === 'verificationtoken'
-    || normalized === 'onetimecode'
-    || normalized === 'signingsecret'
-    || normalized === 'secretvalue'
-    || normalized === 'secretkey'
-    || normalized.endsWith('password')
-    || normalized.endsWith('passphrase')
-    || normalized.endsWith('credential')
-    || normalized.endsWith('authorization')
-    || normalized.endsWith('secret')
-    || normalized.endsWith('token')
-    || normalized.endsWith('apikey');
-};
+  return policy.exact.includes(normalized)
+    || policy.suffixes.some((suffix) => normalized.endsWith(suffix))
+    || policy.fragments.some((fragment) => normalized.includes(fragment));
+}
+
+const sensitiveKey = (key) => matchesSensitiveFieldName(key);
 
 function addSensitiveValue(value) {
   if (typeof value === 'string' && value.length >= 4) sensitiveValues.add(value);
 }
 
-function collectNamedValues(value, key = '') {
+function collectNamedValues(value, key = '', inheritedSensitive = false) {
+  const sensitive = inheritedSensitive || sensitiveKey(key);
   if (typeof value === 'string') {
-    if (sensitiveKey(key)) addSensitiveValue(value);
+    if (sensitive) addSensitiveValue(value);
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) collectNamedValues(item);
+    for (const item of value) collectNamedValues(item, key, sensitive);
     if (key.toLowerCase().includes('header')) {
       for (const item of value) {
         if (!item || typeof item !== 'object') continue;
@@ -63,7 +52,7 @@ function collectNamedValues(value, key = '') {
     return;
   }
   if (!value || typeof value !== 'object') return;
-  for (const [childKey, child] of Object.entries(value)) collectNamedValues(child, childKey);
+  for (const [childKey, child] of Object.entries(value)) collectNamedValues(child, childKey, sensitive);
 }
 
 export function registerSensitiveValue(value) {
@@ -78,7 +67,7 @@ export function currentSensitiveValues() {
   return [...sensitiveValues];
 }
 
-const sensitiveKeyPattern = '(?:password|passwd|passphrase|credentials?|authorization|proxy[-_]?authorization|bearer|set[-_]?cookie|cookie|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|session(?:[-_]?(?:id|token|cookie))?|token|secret(?:[-_]?(?:key|value))?|signing[-_]?secret|(?:reset|verification|one[-_]?time)[-_]?(?:code|token)|otp)';
+const sensitiveKeyPattern = `(?:[a-z0-9_.-]*(?:${sensitiveFieldPolicy.fragments.join('|')})[a-z0-9_.-]*)`;
 const sensitiveAssignment = new RegExp(`((?:\\\\?["']?)${sensitiveKeyPattern}(?:\\\\?["']?)\\s*[:=]\\s*)("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*')`, 'gi');
 const unquotedSensitiveAssignment = new RegExp(`((?:\\\\?["']?)${sensitiveKeyPattern}(?:\\\\?["']?)\\s*[:=]\\s*)(?!\\\\?["'])[^\\r\\n]+`, 'gi');
 
@@ -88,11 +77,49 @@ function replaceLiteral(text, value) {
     variants.add(encodeURIComponent(value));
     variants.add(Buffer.from(value, 'utf8').toString('base64'));
     variants.add(Buffer.from(value, 'utf8').toString('base64url'));
+    variants.add(value.replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[character]));
+    variants.add([...value].map((character) => `&#${character.codePointAt(0) ?? 0};`).join(''));
+    variants.add([...value].map((character) => `&#x${(character.codePointAt(0) ?? 0).toString(16)};`).join(''));
   } catch { /* Keep the plain value if an alternate representation cannot be made. */ }
   for (const candidate of variants) {
     if (candidate.length >= 4 && text.includes(candidate)) text = text.split(candidate).join('[REDACTED]');
   }
   return text;
+}
+
+function decodeHtmlEntities(value) {
+  return String(value).replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, reference) => {
+    const normalized = reference.toLowerCase();
+    if (normalized.startsWith('#')) {
+      const codePoint = normalized.startsWith('#x')
+        ? Number.parseInt(normalized.slice(2), 16)
+        : Number.parseInt(normalized.slice(1), 10);
+      if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) return entity;
+      return String.fromCodePoint(codePoint);
+    }
+    return ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' })[normalized] ?? entity;
+  });
+}
+
+function hasSensitiveEvidenceKey(value) {
+  if (Array.isArray(value)) return value.some(hasSensitiveEvidenceKey);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, child]) => sensitiveKey(key) || hasSensitiveEvidenceKey(child));
+}
+
+function hasSensitiveHtmlFieldName(tag) {
+  const attributes = [...tag.matchAll(/\b(?:name|id|autocomplete|aria-label)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)];
+  return attributes.some((attribute) => sensitiveKey(decodeHtmlEntities(attribute[1] ?? attribute[2] ?? attribute[3] ?? '')));
+}
+
+function hasSensitiveTextareaPayload(value) {
+  const decoded = decodeHtmlEntities(value);
+  try {
+    if (hasSensitiveEvidenceKey(JSON.parse(decoded))) return true;
+  } catch { /* Inspect non-JSON text with a conservative key/value pattern below. */ }
+  return new RegExp(`\\b${sensitiveKeyPattern}\\b\\s*[:=]`, 'i').test(decoded);
 }
 
 export function redactEvidenceText(value, extraSensitiveValues = []) {
@@ -116,9 +143,13 @@ export function redactEvidenceText(value, extraSensitiveValues = []) {
     .replace(sensitiveAssignment, (_match, prefix, quotedValue) => `${prefix}${quotedValue[0]}[REDACTED]${quotedValue[0]}`)
     .replace(unquotedSensitiveAssignment, (_match, prefix) => `${prefix}[REDACTED]`)
     .replace(/(^|\n)(\s*(?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*)[^\r\n]*/gim, '$1$2[REDACTED]')
+    .replace(/(<textarea\b[^>]*>)([\s\S]*?)(<\/textarea\s*>)/gi, (_match, opening, body, closing) => {
+      const sensitive = hasSensitiveHtmlFieldName(opening) || hasSensitiveTextareaPayload(body);
+      return sensitive ? `${opening}[REDACTED]${closing}` : `${opening}${body}${closing}`;
+    })
     .replace(/<input\b[^>]*>/gi, (tag) => {
       const sensitive = /\btype\s*=\s*["']?password["']?/i.test(tag)
-        || /\b(?:name|id|autocomplete)\s*=\s*(?:"[^"]*(?:password|secret|token|credential|api[-_ ]?key|session|reset|verification)[^"]*"|'[^']*(?:password|secret|token|credential|api[-_ ]?key|session|reset|verification)[^']*'|[^\s>]*(?:password|secret|token|credential|api[-_ ]?key|session|reset|verification)[^\s>]*)/i.test(tag);
+        || hasSensitiveHtmlFieldName(tag);
       return sensitive ? tag.replace(/(\bvalue\s*=\s*)("[^"]*"|'[^']*'|[^\s>]+)/i, '$1"[REDACTED]"') : tag;
     });
 
@@ -141,8 +172,8 @@ export function redactStructuredEvidence(value, extraSensitiveValues = []) {
 
   const output = {};
   for (const [key, child] of Object.entries(value)) {
-    if (sensitiveKey(key) && (typeof child === 'string' || typeof child === 'number')) {
-      output[key] = '[REDACTED]';
+    if (sensitiveKey(key)) {
+      output[key] = redactValueTree(child);
     } else if ((key === 'headers' || key === 'requestHeaders' || key === 'responseHeaders') && Array.isArray(child)) {
       output[key] = child.map((header) => {
         if (!header || typeof header !== 'object') return redactStructuredEvidence(header, extraSensitiveValues);
@@ -191,12 +222,22 @@ export async function persistSensitiveValues(filePath) {
   sensitiveValues.clear();
 }
 
-export function evidenceMaskInitScript() {
+export function evidenceMaskInitScript(policy) {
+  const isSensitiveFieldName = (key) => {
+    const normalized = String(key).replace(/[^a-z0-9]/gi, '').toLowerCase();
+    return policy.exact.includes(normalized)
+      || policy.suffixes.some((suffix) => normalized.endsWith(suffix))
+      || policy.fragments.some((fragment) => normalized.includes(fragment));
+  };
+  const sensitiveTextAssignment = new RegExp(
+    `(?:^|[^a-z0-9_.-])(?:[a-z0-9_.-]*?(?:${policy.fragments.join('|')})[a-z0-9_.-]*)["']?\\s*[:=]`,
+    'i',
+  );
   if (!document.documentElement) {
     const observer = new MutationObserver(() => {
       if (!document.documentElement) return;
       observer.disconnect();
-      evidenceMaskInitScript();
+      evidenceMaskInitScript(policy);
     });
     observer.observe(document, { childList: true });
     return;
@@ -228,19 +269,20 @@ export function evidenceMaskInitScript() {
 
   const fieldHasSensitivePayload = (target) => {
     const labels = target.labels ? [...target.labels].map((label) => label.textContent ?? '').join(' ') : '';
-    const attributes = [target.name, target.id, target.getAttribute('autocomplete'), target.getAttribute('aria-label'), labels].join(' ');
-    if (/(?:password|passwd|passphrase|secret|token|api[-_ ]?key|authorization|credential|verification|reset)/i.test(attributes)) return true;
+    const attributes = [target.name, target.id, target.getAttribute('autocomplete'), target.getAttribute('aria-label'), labels];
+    if (attributes.some(isSensitiveFieldName)) return true;
     try {
       const value = JSON.parse(target.value);
       const inspect = (item) => {
+        if (Array.isArray(item)) return item.some(inspect);
         if (!item || typeof item !== 'object') return false;
         return Object.entries(item).some(([key, child]) => {
-          const named = /(?:password|passwd|passphrase|secret|token|api[-_ ]?key|authorization|credential|verification|reset|otp)/i.test(key);
-          return (named && typeof child === 'string') || inspect(child);
+          return isSensitiveFieldName(key) || inspect(child);
         });
       };
-      return inspect(value);
-    } catch { return false; }
+      if (inspect(value)) return true;
+    } catch { /* Also inspect key/value text payloads that are not JSON. */ }
+    return sensitiveTextAssignment.test(String(target.value ?? ''));
   };
   const collectField = (target) => {
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
@@ -294,7 +336,7 @@ export async function installEvidenceProtection(context) {
   await context.exposeBinding('__modelryRecordEvidenceSecret', (_source, value) => {
     if (typeof value === 'string') registerSensitiveValue(value);
   });
-  await context.addInitScript(evidenceMaskInitScript);
+  await context.addInitScript(evidenceMaskInitScript, sensitiveFieldPolicy);
 }
 
 export function observeEvidencePage(page) {

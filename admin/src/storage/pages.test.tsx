@@ -75,6 +75,7 @@ describe('File Storage Admin surface', () => {
     render(<App />);
     await screen.findByRole('heading', { name: 'Files & storage' });
     await userEvent.selectOptions(screen.getByLabelText('Provider'), 's3');
+    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/secrets');
     await userEvent.type(screen.getByLabelText('Endpoint'), 'https://s3.example.test');
     await userEvent.type(screen.getByLabelText('Region'), 'us-east-1');
     await userEvent.type(screen.getByLabelText('Bucket'), 'modelry');

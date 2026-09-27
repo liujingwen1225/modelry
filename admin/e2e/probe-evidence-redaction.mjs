@@ -48,7 +48,7 @@ const files = await listFiles(resultDirectory);
 const checkPath = files.find((file) => path.basename(file) === 'evidence-redaction-probe.json');
 if (!checkPath) throw new Error('The Playwright browser probe did not reach its evidence assertions.');
 const checks = JSON.parse(await readFile(checkPath, 'utf8'));
-if (!checks.textIsMasked || !checks.maskedPixelsStable || !checks.networkRoundTrip || !checks.runtimeLogRedacted) {
+if (!checks.textIsMasked || !checks.otpFieldSensitive || !checks.sessionIdFieldSensitive || !checks.oneTimeCodeFieldSensitive || !checks.appSessionFieldSensitive || !checks.emailVerificationCodeFieldSensitive || !checks.resetCodeFieldSensitive || !checks.verificationCodeFieldSensitive || !checks.appSessionCookieFieldSensitive || !checks.authSessionCookieFieldSensitive || !checks.otpFieldMasked || !checks.sessionIdFieldMasked || !checks.oneTimeCodeFieldMasked || !checks.appSessionFieldMasked || !checks.emailVerificationCodeFieldMasked || !checks.resetCodeFieldMasked || !checks.verificationCodeFieldMasked || !checks.appSessionCookieFieldMasked || !checks.authSessionCookieFieldMasked || !checks.maskedPixelsStable || !checks.networkRoundTrip || !checks.runtimeLogRedacted) {
   throw new Error('A browser, runtime log, or network redaction assertion failed.');
 }
 if (scan.archives < 1 || scan.visualFiles < 3 || scan.textFiles < 1 || !files.some((file) => path.basename(file) === 'video.webm') || !files.some((file) => path.basename(file).startsWith('test-failed-'))) {

@@ -384,13 +384,13 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.goto(`${runtimeURL}/`);
     await expect(activePage.getByRole('heading', { name: 'Overview' })).toBeVisible();
     const productNavigation = activePage.getByRole('navigation', { name: 'Project navigation' });
-    await expect(productNavigation.getByRole('link')).toHaveCount(7);
+    await expect(productNavigation.getByRole('link')).toHaveCount(8);
     expect(await productNavigation.getByRole('link').allTextContents()).toEqual([
-      'Overview', 'Collections', 'API', 'Automation', 'Changes', 'Access', 'Settings',
+      'Overview', 'Collections', 'API', 'Hooks', 'Automation', 'Changes', 'Access', 'Settings',
     ]);
     await expect(activePage.locator('.nav-group__label')).toHaveText(['Build', 'Manage', 'System']);
     await expect(activePage.locator('.overview-recent-work')).toContainText('authors');
-    await expect(activePage.locator('.overview-build-links').getByRole('link')).toHaveCount(3);
+    await expect(activePage.locator('.overview-build-links').getByRole('link')).toHaveCount(4);
     expect(await activePage.evaluate(() => {
       const recentWork = document.querySelector('.overview-recent-work');
       const buildLinks = document.querySelector('.overview-build-links');
@@ -406,10 +406,26 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByText('V0.1', { exact: true })).toHaveCount(0);
     await expect(activePage.locator('.brand-edition')).toHaveCount(0);
 
+    await productNavigation.getByRole('link', { name: 'Hooks' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/extensions`);
+    await expect(activePage.getByRole('heading', { name: 'Hooks', level: 1 })).toBeVisible();
+    await expect(productNavigation.getByRole('link', { name: 'Hooks' })).toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveClass(/nav-link--active/);
+    await activePage.getByRole('link', { name: 'Manage Secrets' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/secrets`);
+    await expect(activePage.getByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
+    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveClass(/nav-link--active/);
+
     await activePage.goto(`${runtimeURL}/automations?tab=jobs&q=mail`);
+    await expect(productNavigation.getByRole('link', { name: 'Automation' })).toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Automation' })).toHaveClass(/nav-link--active/);
     const automationNavigation = activePage.getByRole('navigation', { name: 'Automation' });
-    await expect(automationNavigation.getByRole('link', { name: 'Extensions' })).toHaveAttribute('href', '/extensions');
-    await expect(automationNavigation.getByRole('link', { name: 'Secrets' })).toHaveAttribute('href', '/secrets');
+    await expect(automationNavigation.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/automations?tab=webhooks&q=mail');
+    await expect(automationNavigation.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/automations?tab=jobs&q=mail');
+    await expect(automationNavigation.getByRole('link', { name: 'Extensions' })).toHaveCount(0);
+    await expect(automationNavigation.getByRole('link', { name: 'Secrets' })).toHaveCount(0);
     await automationNavigation.getByRole('link', { name: 'Event Hooks' }).click();
     await expect(activePage).toHaveURL(`${runtimeURL}/automations?tab=eventHooks&q=mail`);
 
@@ -509,6 +525,18 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.keyboard.press('Control+k');
       palette = activePage.getByRole('dialog', { name: '命令面板' });
       await expect(palette).toBeVisible();
+      const paletteBounds = await palette.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          mountedAtDocumentRoot: element.closest('.command-palette-overlay')?.parentElement === document.body,
+          top: bounds.top,
+          bottom: bounds.bottom,
+          viewportHeight: window.innerHeight,
+        };
+      });
+      expect(paletteBounds.mountedAtDocumentRoot).toBe(true);
+      expect(paletteBounds.top).toBeGreaterThanOrEqual(0);
+      expect(paletteBounds.bottom).toBeLessThanOrEqual(paletteBounds.viewportHeight);
       paletteInput = palette.getByRole('combobox', { name: '搜索命令' });
       await paletteInput.fill('创建记录');
       await expect(palette.getByRole('option', { name: '在 authors 中创建记录' })).toBeVisible();
@@ -1081,6 +1109,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('row').filter({ hasText: 'category' }).getByRole('button', { name: 'Edit', exact: true }).click();
     await activePage.getByLabel('Unique', { exact: true }).check();
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
+    await expect(activePage.getByRole('status').filter({ hasText: /^Saved to Pending Changes\.$/ })).toBeVisible();
     const pending = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/schema/pending-change`)).body);
     changeSetId = findString(pending, 'changeSetId') ?? '';
     expect(changeSetId).toBeTruthy();

@@ -44,7 +44,9 @@ describe('Overview action center', () => {
     expect(diagnostics).toHaveTextContent('Database');
     expect(diagnostics).toHaveTextContent('Local storage');
     expect(screen.getByRole('link', { name: 'Create Collection' })).toHaveAttribute('href', '/collections/new');
-    expect(screen.getByRole('region', { name: 'Build' }).querySelectorAll('a')).toHaveLength(3);
+    const build = screen.getByRole('region', { name: 'Build' });
+    expect(build.querySelectorAll('a')).toHaveLength(4);
+    expect(build.querySelector('a[href="/extensions"]')).toHaveTextContent('Hooks');
     expect(document.querySelector('.diagnostics-grid')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Continue recent work' })).not.toBeInTheDocument();

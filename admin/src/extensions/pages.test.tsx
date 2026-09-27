@@ -47,18 +47,32 @@ function setupFetch(extensionError?: { status: number; error: unknown }) {
 }
 
 describe('Extension and write-only Secret Admin surfaces', () => {
-  it('opens the Extensions surface from the shared command palette', async () => {
+  it('opens the Hooks surface from the shared command palette', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     setupFetch();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Project navigation' });
+    const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await userEvent.click(screen.getByRole('button', { name: /Search commands/ }));
     const palette = await screen.findByRole('dialog', { name: 'Command palette' });
     const input = within(palette).getByRole('combobox', { name: 'Search commands' });
-    await userEvent.type(input, 'Extensions');
+    await userEvent.type(input, 'Hooks');
     await userEvent.keyboard('{Enter}');
-    expect(await screen.findByRole('heading', { name: 'Extensions' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
+    const automationLink = within(navigation).getByRole('link', { name: 'Automation' });
+    expect(automationLink).not.toHaveAttribute('aria-current', 'page');
+    expect(automationLink).not.toHaveClass(/nav-link--active/);
+    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/secrets');
     expect(await screen.findByRole('link', { name: /Normalize Profile/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('link', { name: 'Manage Secrets' }));
+    expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeInTheDocument();
+    expect(automationLink).not.toHaveAttribute('aria-current', 'page');
+    expect(automationLink).not.toHaveClass(/nav-link--active/);
+
+    await userEvent.click(automationLink);
+    expect(await screen.findByRole('heading', { name: 'Automations' })).toBeInTheDocument();
+    expect(automationLink).toHaveAttribute('aria-current', 'page');
+    expect(automationLink).toHaveClass(/nav-link--active/);
   });
 
   it('loads, edits, and saves the complete Extension configuration', async () => {

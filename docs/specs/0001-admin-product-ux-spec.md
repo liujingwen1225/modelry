@@ -27,7 +27,7 @@ Modelry Admin 是 Developer Backend Workspace，不是传统企业后台，也�
 
 # 2. V0.1.x Current Information Architecture
 
-Modelry Admin 面向独立应用开发者，提供自托管后端工作区。Owner 可直接操作，也可通过受支持的 MCP / Service Account 路径连接编码智能体。当前 Shell 按用户任务组织已交付页面；下列 V0.1.x 能力均为真实产品表面，不是路线图占位项。
+Modelry Admin 是面向个人开发者、独立开发者和编码智能体的本地优先后端工作台。Owner 可直接操作，也可通过受支持的 MCP / Service Account 路径连接编码智能体。当前 Shell 按用户任务组织已交付页面；下列 V0.1.x 能力均为真实产品表面，不是路线图占位项。
 
 ## Sidebar
 
@@ -37,6 +37,7 @@ Overview                         <- ungrouped
 Build
   Collections
   API
+  Hooks
   Automation
 
 Manage
@@ -55,8 +56,6 @@ Automation
   Event Hooks
   Jobs
   Deliveries
-  Extensions
-  Secrets
 
 Access
   Service Accounts / API Keys
@@ -74,12 +73,13 @@ Settings
     Drift
 ~~~
 
-产品区域入口分别是 `/automations`、`/access` 与 `/settings`；contextual links 使用已实现的子页面和 query context。Activity、Drift、Extensions、Secrets、Administrators 与 Storage / Mail / Portability 等具体路由归入相应区域。Settings 的 General 页面集中展示 Runtime、Database 与 Storage 诊断；Runtime settings 页面可编辑已支持的运行时配置。
+Hooks 是独立的一级开发者能力，承载已交付的后端扩展与生命周期 Hooks，不归入 Automation；产品入口显示为 Hooks，并映射到既有 `/extensions` 路由。Hooks 页面可保留 Extension Runtime 技术细节。Secrets 是支撑能力，不固定归入 Automation；用户可从相关产品上下文中的 `Manage Secrets` 入口发现，既有 `/secrets` 路由和 Deep Link 继续可访问。
+
+Automation、Access 与 Settings 的产品区域入口分别是 `/automations`、`/access` 与 `/settings`；各区域的 contextual links 使用已实现的子页面和 query context。Activity 与 Drift 属于 Settings 的 Diagnostics；Administrators 与 Audit 属于 Access；Storage、Mail 与 Portability 通过 Settings 相关页面进入。Settings 的 General 页面集中展示 Runtime、Database 与 Storage 诊断；Runtime settings 页面可编辑已支持的运行时配置。
 
 不设独立一级入口：
 
-- Extensions
-- Secrets
+- Secrets（通过相关上下文入口发现；保留 `/secrets` Deep Link）
 - Activity
 - Administrators
 - Data
@@ -87,7 +87,7 @@ Settings
 - Auth
 - Requests
 
-Requests 属于 Global API；Audit 属于 Access；Activity 与 Drift 属于 Settings 的 Diagnostics；Extensions 与 Secrets 属于 Automation；Administrators 属于 Access。
+Requests 属于 Global API；Hooks 是独立一级入口并映射到 `/extensions`；Secrets 通过相关上下文入口发现，不设固定 Automation 子导航且保留 `/secrets` Deep Link；Activity 与 Drift 属于 Settings 的 Diagnostics；Administrators 与 Audit 属于 Access。
 
 Command Palette、English / Simplified Chinese 与 Light / Dark Theme 是当前全局产品操作，不是未来占位项。
 
@@ -135,6 +135,7 @@ Desktop：
 │ Build             ├──────────────────────────────────────────────────────┤
 │ Collections       │                                                      │
 │ API               │ Page content                                         │
+│ Hooks             │                                                      │
 │ Automation        │                                                      │
 │ Manage            │                                                      │
 │ Changes           │                                                      │
@@ -1291,7 +1292,7 @@ Admin 优先 Desktop Developer Tool。
 - 1280px：完整可用；
 - 1440px：主要设计基准；
 - 1920px：合理利用空间；
-- Tablet：Sidebar 可折叠；
+- Tablet（含 768px）：Sidebar 必须折叠或响应式适配，不遮挡 Workspace；
 - Mobile：只要求基础导航 / 只读不崩坏，不作为核心编辑场景。
 
 Density：
@@ -1437,7 +1438,7 @@ Admin V0.1 必须满足：
 以下能力已进入当前 Admin / Runtime 产品，不再按“未来能力”或 Placeholder 描述：
 
 - Realtime subscriptions；
-- Hooks / Extensions 与 Secrets；
+- 独立一级入口 Hooks（映射到既有 Extensions 路由）与上下文可发现的 Secrets；
 - Automation：Webhooks、Event Hooks、Jobs、Deliveries；
 - Activity 与 Drift；
 - Access 中的多管理员、Service Accounts 与 API Keys；
@@ -1446,7 +1447,7 @@ Admin V0.1 必须满足：
 - Import / Export 与 Backup / Restore；
 - Admin i18n（English / Simplified Chinese）、Theme 与 Command Palette。
 
-高级运维能力按 Automation、Access、Settings contextual navigation 渐进式进入，不把内部模块数等同于一级导航数量。UI 文案和入口不得改写底层稳定 Domain / Contract 语义。此清单描述当前已交付产品面，不承诺 Enterprise、PostgreSQL 或其它 Issue 未定义路线。
+Hooks 作为独立一级开发者能力进入；其他高级运维能力按 Automation、Access、Settings contextual navigation 渐进式暴露，不把内部模块数等同于一级导航数量。UI 文案和入口不得改写底层稳定 Domain / Contract 语义。此清单描述当前已交付产品面，不承诺 Enterprise、PostgreSQL 或其它 Issue 未定义路线。
 
 # 31. V0.1.x Admin Shell 与全局产品操作
 

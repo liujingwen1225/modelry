@@ -74,6 +74,7 @@ describe('Mail settings Admin surface', () => {
     const fetchMock = setupFetch();
     render(<App />);
     await screen.findByRole('heading', { name: 'Mail', level: 1 });
+    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/secrets');
 
     await userEvent.selectOptions(screen.getByLabelText('Enabled'), 'enabled');
     await userEvent.type(screen.getByLabelText('Host'), 'smtp.example.test');
