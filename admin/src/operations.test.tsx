@@ -88,12 +88,25 @@ describe('Operations surfaces', () => {
     const fetchMock = setupFetch({ drift: { state: 'degraded', findings: [driftFinding], detectedAt: '2026-09-25T09:00:00Z' } });
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Drift', level: 1 })).toBeInTheDocument();
-    expect(await screen.findByText('Record table is missing')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Storage consistency', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByText('Collection data is missing from storage')).toBeInTheDocument();
+    expect(screen.getByText('Collection data should be available in storage.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open corrective surface' })).toHaveAttribute('href', '/collections/col_posts/schema');
-    await userEvent.click(screen.getByRole('button', { name: /Reconcile projection/ }));
-    await waitFor(() => expect(screen.getByText('Projection reconciled with the applied model.')).toBeInTheDocument());
+    expect(document.body.textContent?.toLowerCase()).not.toContain('projection');
+    await userEvent.click(screen.getByRole('button', { name: /Repair storage/ }));
+    await waitFor(() => expect(screen.getByText('Stored data now matches the saved Collection model.')).toBeInTheDocument());
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === '/admin/api/v1/drift/reconcile' && (init as RequestInit | undefined)?.method === 'POST')).toBe(true);
+  });
+
+  it('describes a healthy Drift check as storage consistency in Simplified Chinese', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    window.history.pushState({}, '', '/settings/drift');
+    setupFetch();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: '存储一致性', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('集合定义、存储数据与当前运行时状态一致。')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/投影|SQLite/i);
   });
 
   it('shows where a Runtime setting comes from and reports the restart requirement', async () => {

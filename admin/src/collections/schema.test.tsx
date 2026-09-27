@@ -104,7 +104,8 @@ describe('Collection schema workflow', () => {
     renderSchema();
 
     expect(await screen.findByRole('region', { name: 'Pending schema changes' })).toHaveTextContent('1 pending change');
-    expect(screen.getAllByText('The projection needs a retry.')).toHaveLength(1);
+    expect(screen.getByText('Your pending changes are still saved. Review the preview and current model before retrying.')).toBeInTheDocument();
+    expect(screen.queryByText('The projection needs a retry.')).not.toBeInTheDocument();
     expect(await screen.findByRole('link', { name: 'Open recovery details' })).toHaveAttribute('href', '/changes?changeSet=chg_saved');
     expect(screen.getByRole('button', { name: 'Review and retry' })).toBeInTheDocument();
   });

@@ -51,6 +51,7 @@ describe('Access and Audit pages', () => {
 
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
     expect(await screen.findByText('No Service Accounts yet')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Control Plane');
     await user.click(screen.getAllByRole('button', { name: 'Create Service Account' })[0]!);
     const createForm = document.querySelector<HTMLFormElement>('form.access-form')!;
     await user.type(createForm.querySelector('#account-name')!, 'ci-readonly');
@@ -69,7 +70,7 @@ describe('Access and Audit pages', () => {
     const revokeDialog = screen.getByRole('dialog', { name: 'Revoke this API Key?' });
     revoked = true;
     await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke API Key' }));
-    expect(await screen.findByText('revoked')).toBeInTheDocument();
+    expect(await screen.findByText('Revoked')).toBeInTheDocument();
     expect(mocks.revokeAPIKey).toHaveBeenCalledWith('key_1');
     expect(document.body.textContent).not.toContain('once-secret-value');
   });
@@ -119,17 +120,22 @@ describe('Access and Audit pages', () => {
 
     expect(await screen.findByRole('heading', { name: '访问' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '服务账号' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
     expect(screen.getByRole('button', { name: '创建服务账号' })).toBeInTheDocument();
     expect(screen.getByText('只读')).toBeInTheDocument();
     // 领域数据与标识不得翻译。
     expect(screen.getByRole('link', { name: 'ci-readonly' })).toBeInTheDocument();
-    expect(document.body.textContent).toContain('active');
+    expect(document.body.textContent).toContain('有效');
+    expect(document.body.textContent).not.toContain('active');
 
     await user.click(screen.getByRole('link', { name: '审计' }));
     expect(await screen.findByRole('heading', { name: '审计' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /2026/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '应用筛选' })).toBeInTheDocument();
     expect(document.body.textContent).toContain('serviceAccount.created');
+    expect(document.body.textContent).toContain('所有者');
+    expect(document.body.textContent).toContain('成功');
+    expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
     expect(screen.queryByText('Apply filters')).not.toBeInTheDocument();
   });
 });

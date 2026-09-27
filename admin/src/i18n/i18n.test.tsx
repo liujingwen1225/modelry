@@ -1,13 +1,16 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import { LocaleProvider, loadLocaleBundle, translateMessage, useI18n, resolveInitialLocale, type Locale, type LocaleResources, type TranslationKey } from './i18n';
+import { getLocaleBootstrapCopy, LocaleProvider, loadLocaleBundle, translateMessage, useI18n, resolveInitialLocale, type Locale, type LocaleResources, type TranslationKey } from './i18n';
 import { en } from './locales/en';
 
 function LocaleProbe() {
   const { locale, setLocale, t, errorMessage, formatDate, formatNumber, formatRelativeTime, formatPlural } = useI18n();
+  const location = useLocation();
   return (
     <div>
+      <output aria-label="Deep link context">{location.pathname + location.search + location.hash}</output>
       <output aria-label="Current locale">{locale}</output>
       <output aria-label="Overview">{t('navigation.overview')}</output>
       <output aria-label="Unauthenticated error">{errorMessage('UNAUTHENTICATED')}</output>
@@ -21,6 +24,12 @@ function LocaleProbe() {
 }
 
 describe('Admin i18n foundation', () => {
+  it('shows loading and failure recovery in the selected bootstrap language', () => {
+    expect(getLocaleBootstrapCopy('en', 'loading')).toMatchObject({ message: 'Loading Admin…' });
+    expect(getLocaleBootstrapCopy('zh-CN', 'loading').message).toContain('正在加载');
+    expect(getLocaleBootstrapCopy('zh-CN', 'failed').message).toContain('请刷新后重试');
+  });
+
   it('uses a saved preference before the browser locale and uses the browser only for first default', () => {
     expect(resolveInitialLocale('en', 'zh-CN')).toBe('en');
     expect(resolveInitialLocale(undefined, 'zh-CN')).toBe('zh-CN');
@@ -49,13 +58,15 @@ describe('Admin i18n foundation', () => {
   it('switches immediately, persists the locale, and formats values with Intl', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     const user = userEvent.setup();
-    render(<LocaleProvider><LocaleProbe /></LocaleProvider>);
+    render(<MemoryRouter initialEntries={['/collections/col_abc?type=Normal&q=posts#records']}><LocaleProvider><LocaleProbe /></LocaleProvider></MemoryRouter>);
 
     expect(await screen.findByLabelText('Overview')).toHaveTextContent('Overview');
+    expect(screen.getByLabelText('Deep link context')).toHaveTextContent('/collections/col_abc?type=Normal&q=posts#records');
     expect(screen.getByLabelText('Unauthenticated error')).toHaveTextContent('Your session has expired.');
     expect(screen.getByLabelText('Number')).toHaveTextContent(new Intl.NumberFormat('en').format(1234.5));
     await user.click(screen.getByRole('button', { name: 'Change locale' }));
     expect(screen.getByLabelText('Overview')).toHaveTextContent('总览');
+    expect(screen.getByLabelText('Deep link context')).toHaveTextContent('/collections/col_abc?type=Normal&q=posts#records');
     expect(screen.getByLabelText('Number')).toHaveTextContent(new Intl.NumberFormat('zh-CN').format(1234.5));
     expect(screen.getByLabelText('Date')).toHaveTextContent(new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date('2026-01-02T03:04:05Z')));
     expect(screen.getByLabelText('Relative time')).toHaveTextContent(new Intl.RelativeTimeFormat('zh-CN').format(-1, 'day'));

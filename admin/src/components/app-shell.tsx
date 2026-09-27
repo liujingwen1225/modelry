@@ -1,28 +1,20 @@
 import {
   useMemo, useState } from 'react';
 import {
-  NavLink, Outlet, useLocation } from 'react-router-dom';
+  Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity as ActivityIcon,
   ChevronDown,
   Command,
   FileStack,
   GitBranch,
   Home,
-  KeyRound,
   LogOut,
-  Mail,
   Moon,
   Network,
-  Package,
-  Puzzle,
   Settings2,
-  SlidersHorizontal,
-  Stethoscope,
   ShieldCheck,
   Sun,
-  UserCog,
   Webhook,
 } from 'lucide-react';
 import type { TranslationKey } from '../i18n/i18n';
@@ -52,28 +44,105 @@ const groups: Array<{
     items: [
       { label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read' },
       { label: 'navigation.api', to: '/api', icon: Network, operation: 'collections.read' },
+      { label: 'navigation.automation', to: '/automations', icon: Webhook },
     ],
   },
   {
-    label: 'navigation.operate',
+    label: 'navigation.manage',
     items: [
       { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
       { label: 'navigation.access', to: '/access', icon: ShieldCheck, operation: 'accessRules.read' },
-      { label: 'navigation.activity', to: '/activity', icon: ActivityIcon, operation: 'activity.read' },
-      { label: 'navigation.automations', to: '/automations', icon: Webhook },
-      { label: 'navigation.extensions', to: '/extensions', icon: Puzzle },
-      { label: 'navigation.secrets', to: '/secrets', icon: KeyRound },
     ],
   },
-  { label: 'navigation.system', items: [
-    { label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' },
-    { label: 'navigation.drift', to: '/settings/drift', icon: Stethoscope, operation: 'drift.read' },
-    { label: 'navigation.runtimeSettings', to: '/settings/runtime', icon: SlidersHorizontal, operation: 'settings.read' },
-    { label: 'navigation.portability', to: '/settings/portability', icon: Package },
-    { label: 'navigation.administrators', to: '/administrators', icon: UserCog },
-    { label: 'navigation.mail', to: '/settings/mail', icon: Mail },
-  ] },
+  { label: 'navigation.system', items: [{ label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' }] },
 ];
+
+type AreaLink = { label: TranslationKey; to: string; operation?: string };
+type AreaSection = { label?: TranslationKey; links: AreaLink[] };
+type ProductAreaNavigation = {
+  id: 'automation' | 'access' | 'settings';
+  label: TranslationKey;
+  sections: AreaSection[];
+};
+
+function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
+  if (pathname === '/automations' || pathname.startsWith('/extensions') || pathname.startsWith('/secrets')) {
+    return {
+      id: 'automation',
+      label: 'navigation.automation',
+      sections: [{ links: [
+        { label: 'automation.tabs.webhooks', to: '/automations?tab=webhooks' },
+        { label: 'automation.tabs.eventHooks', to: '/automations?tab=eventHooks' },
+        { label: 'automation.tabs.jobs', to: '/automations?tab=jobs' },
+        { label: 'automation.tabs.deliveries', to: '/automations?tab=deliveries' },
+        { label: 'navigation.extensions', to: '/extensions' },
+        { label: 'navigation.secrets', to: '/secrets' },
+      ] }],
+    };
+  }
+  if (pathname.startsWith('/access') || pathname === '/administrators') {
+    return {
+      id: 'access',
+      label: 'navigation.access',
+      sections: [{ links: [
+        { label: 'access.tabs.serviceAccounts', to: '/access', operation: 'serviceAccounts.read' },
+        { label: 'navigation.administrators', to: '/administrators', operation: 'administrators.read' },
+        { label: 'access.tabs.audit', to: '/access/audit', operation: 'audit.read' },
+      ] }],
+    };
+  }
+  if (pathname.startsWith('/settings') || pathname === '/activity') {
+    return {
+      id: 'settings',
+      label: 'navigation.settings',
+      sections: [
+        { links: [
+          { label: 'settings.navigation.general', to: '/settings', operation: 'runtime.read' },
+          { label: 'settings.navigation.runtime', to: '/settings/runtime', operation: 'settings.read' },
+          { label: 'settings.navigation.filesStorage', to: '/settings/storage', operation: 'storage.read' },
+          { label: 'settings.navigation.mail', to: '/settings/mail', operation: 'mail.read' },
+          { label: 'settings.navigation.backupRestore', to: '/settings/portability' },
+        ] },
+        { label: 'settings.navigation.diagnostics', links: [
+          { label: 'navigation.activity', to: '/activity', operation: 'activity.read' },
+          { label: 'navigation.drift', to: '/settings/drift', operation: 'drift.read' },
+        ] },
+      ],
+    };
+  }
+  return null;
+}
+
+function isAreaLinkActive(link: AreaLink, pathname: string, search: string): boolean {
+  const [targetPath, targetSearch = ''] = link.to.split('?');
+  if (pathname !== targetPath) return false;
+  const current = new URLSearchParams(search);
+  const target = new URLSearchParams(targetSearch);
+  for (const [key, value] of target) {
+    if (current.get(key) !== value) return false;
+  }
+  if (targetPath === '/automations' && !target.has('tab')) {
+    return !current.has('tab') || current.get('tab') === 'webhooks';
+  }
+  return true;
+}
+
+function isPrimaryLinkActive(pathname: string, to: string): boolean {
+  if (to === '/automations') return pathname === '/automations' || pathname.startsWith('/extensions') || pathname.startsWith('/secrets');
+  if (to === '/access') return pathname.startsWith('/access') || pathname === '/administrators';
+  if (to === '/settings') return pathname.startsWith('/settings') || pathname === '/activity';
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+function areaLinkTarget(link: AreaLink, search: string, hash: string): string {
+  const [targetPath, targetSearch = ''] = link.to.split('?');
+  if (targetPath !== '/automations') return link.to;
+  const query = new URLSearchParams(search);
+  const target = new URLSearchParams(targetSearch);
+  for (const [key, item] of target) query.set(key, item);
+  const serialized = query.toString();
+  return `${targetPath}${serialized ? `?${serialized}` : ''}${hash}`;
+}
 
 const readOnlyControlPlaneOperations = new Set([
   'runtime.read', 'storage.read', 'collections.read', 'records.read', 'files.read', 'schema.read',
@@ -103,6 +172,7 @@ function canSeeNavigationItem(role: AppShellProps['role'], permission: ControlPl
 }
 function Sidebar({ role, permission }: { role?: AppShellProps['role']; permission?: ControlPlanePermission }) {
   const { t } = useI18n();
+  const { pathname } = useLocation();
   const visibleGroups = useMemo(
     () => groups
       .map((group) => ({ ...group, items: group.items.filter((item) => canSeeNavigationItem(role, permission, item)) }))
@@ -114,7 +184,6 @@ function Sidebar({ role, permission }: { role?: AppShellProps['role']; permissio
       <div className="sidebar__brand">
         <span className="brand-mark" aria-hidden="true"><Command size={17} strokeWidth={2.2} /></span>
         <span className="brand-word">modelry</span>
-        <span className="brand-edition">{t('shell.localEdition')}</span>
       </div>
       <nav aria-label={t('navigation.projectNavigation')} className="side-navigation">
         {visibleGroups.map((group, groupIndex) => (
@@ -122,7 +191,8 @@ function Sidebar({ role, permission }: { role?: AppShellProps['role']; permissio
             {group.label && <p className="nav-group__label">{t(group.label)}</p>}
             {group.items.map(({ label, to, icon: Icon }) => (
               <NavLink
-                className={({ isActive }) => `nav-link${isActive ? ' nav-link--active' : ''}`}
+                aria-current={isPrimaryLinkActive(pathname, to) ? 'page' : undefined}
+                className={() => `nav-link${isPrimaryLinkActive(pathname, to) ? ' nav-link--active' : ''}`}
                 end={to === '/'}
                 key={to}
                 to={to}
@@ -151,6 +221,38 @@ function ThemeButton() {
     <button aria-label={nextLabel} className="theme-button" onClick={toggleTheme} title={nextLabel} type="button">
       <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
     </button>
+  );
+}
+
+function ProductAreaNavigation({ area, role, permission, pathname, search, hash }: {
+  area: ProductAreaNavigation;
+  role?: AppShellProps['role'];
+  permission?: ControlPlanePermission;
+  pathname: string;
+  search: string;
+  hash: string;
+}) {
+  const { t } = useI18n();
+  const sections = area.sections
+    .map((section) => ({ ...section, links: section.links.filter((link) => canSeeNavigationItem(role, permission, link)) }))
+    .filter((section) => section.links.length > 0);
+
+  if (!sections.length) return null;
+  return (
+    <nav aria-label={t(area.label)} className={`area-navigation area-navigation--${area.id}`}>
+      {sections.map((section, index) => <div className="area-navigation__section" key={section.label ?? `section-${index}`}>
+        {section.label && <span className="area-navigation__label">{t(section.label)}</span>}
+        {section.links.map((link) => {
+          const active = isAreaLinkActive(link, pathname, search);
+          return <Link
+            aria-current={active ? 'page' : undefined}
+            className={`area-navigation__link${active ? ' area-navigation__link--active' : ''}`}
+            key={link.to}
+            to={areaLinkTarget(link, search, hash)}
+          >{t(link.label)}</Link>;
+        })}
+      </div>)}
+    </nav>
   );
 }
 
@@ -371,8 +473,10 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
 
 function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permission }: AppShellProps) {
   const { t } = useI18n();
+  const location = useLocation();
+  const area = productAreaNavigation(location.pathname);
   return (
-    <div className="app-frame">
+    <div className="app-frame" data-product-area={area?.id}>
       <a className="skip-link" href="#main-content">{t('shell.skipToMainContent')}</a>
       <Sidebar permission={permission} role={role} />
       <div className="workspace">
@@ -393,14 +497,10 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
             <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} role={role} sessionExpiresAt={sessionExpiresAt} />
           </div>
         </header>
+        {area && <ProductAreaNavigation area={area} hash={location.hash} pathname={location.pathname} permission={permission} role={role} search={location.search} />}
         <main className="page-area" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
-        <footer className="workspace-footer">
-          <span>{t('shell.community')}</span>
-          <span className="footer-dot" aria-hidden="true">·</span>
-          <span>{t('shell.version')}</span>
-        </footer>
       </div>
     </div>
   );

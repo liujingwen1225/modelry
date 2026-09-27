@@ -2,6 +2,23 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { en } from './locales/en';
 
 export type Locale = 'en' | 'zh-CN';
+export type LocaleBootstrapState = 'loading' | 'failed';
+export type LocaleBootstrapCopy = { label: string; message: string };
+const localeBootstrapCopy: Record<Locale, Record<LocaleBootstrapState, LocaleBootstrapCopy>> = {
+  en: {
+    loading: { label: 'Loading Admin language resources', message: 'Loading Admin…' },
+    failed: { label: 'Admin language resources unavailable', message: 'Admin language resources could not be loaded. Refresh to retry.' },
+  },
+  'zh-CN': {
+    loading: { label: '正在加载 Admin 语言资源', message: '正在加载 Admin…' },
+    failed: { label: 'Admin 语言资源不可用', message: '无法加载 Admin 语言资源。请刷新后重试。' },
+  },
+};
+
+export function getLocaleBootstrapCopy(locale: Locale, state: LocaleBootstrapState): LocaleBootstrapCopy {
+  return localeBootstrapCopy[locale][state];
+}
+
 type WidenResource<T> = T extends string ? string : { [Key in keyof T]: WidenResource<T[Key]> };
 export type LocaleResources = WidenResource<typeof en>;
 export type TranslationKey<T = LocaleResources> = T extends string
@@ -20,9 +37,39 @@ export type LoadedLocaleBundle = {
 const preferenceKey = 'modelry-admin-locale';
 const apiErrorKeys: Record<string, TranslationKey> = {
   UNAUTHENTICATED: 'errors.unauthenticated',
+  AUTHENTICATION_FAILED: 'ownerAuth.authenticationFailed',
   AUTHORIZATION_DENIED: 'errors.authorizationDenied',
+  FORBIDDEN: 'errors.authorizationDenied',
   NOT_FOUND: 'errors.notFound',
   VALIDATION_FAILED: 'errors.validationFailed',
+  INVALID_ARGUMENT: 'errors.invalidArgument',
+  CONFLICT: 'errors.conflict',
+  RUNTIME_NOT_READY: 'errors.runtimeUnavailable',
+  RUNTIME_UNAVAILABLE: 'errors.runtimeUnavailable',
+  STORAGE_UNAVAILABLE: 'errors.runtimeUnavailable',
+  NETWORK_ERROR: 'errors.runtimeUnavailable',
+  INTERNAL_ERROR: 'errors.requestFailed',
+};
+const validationErrorKeys: Record<string, TranslationKey> = {
+  INVALID_EMAIL: 'errors.validation.invalidEmail',
+  REQUIRED: 'errors.validation.required',
+  TOO_SHORT: 'errors.validation.tooShort',
+  TOO_LONG: 'errors.validation.tooLong',
+  MINIMUM: 'errors.validation.minimum',
+  UNSUPPORTED_VALUE: 'errors.validation.unsupportedValue',
+  required: 'records.validationMessages.required',
+  type: 'records.validationMessages.type',
+  format: 'records.validationMessages.format',
+  relation: 'records.validationMessages.relation',
+  maxFiles: 'records.validationMessages.maxFiles',
+  validation: 'records.validationMessages.validation',
+  minLength: 'records.validationMessages.minLength',
+  maxLength: 'records.validationMessages.maxLength',
+  enum: 'records.validationMessages.enum',
+  min: 'records.validationMessages.min',
+  max: 'records.validationMessages.max',
+  unknownField: 'records.validationMessages.unknownField',
+  systemField: 'records.validationMessages.systemField',
 };
 const resourceCache = new Map<Locale, Promise<LocaleResources>>();
 
@@ -120,6 +167,7 @@ type I18nContextValue = {
   setLocale: (locale: Locale) => void;
   t: (key: TranslationKey, values?: TranslationValues) => string;
   errorMessage: (canonicalCode: string) => string | undefined;
+  validationMessage: (canonicalCode: string) => string | undefined;
   formatDate: (value: Date | string | number, options?: Intl.DateTimeFormatOptions) => string;
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
   formatRelativeTime: (value: number, unit: Intl.RelativeTimeFormatUnit, options?: Intl.RelativeTimeFormatOptions) => string;
@@ -167,12 +215,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     const key = apiErrorKeys[canonicalCode];
     return key ? translate(key) : undefined;
   }, [translate]);
+  const validationMessage = useCallback((canonicalCode: string) => {
+    const key = validationErrorKeys[canonicalCode];
+    return key ? translate(key) : undefined;
+  }, [translate]);
 
   const value = useMemo<I18nContextValue>(() => ({
     locale,
     setLocale,
     t: translate,
     errorMessage,
+    validationMessage,
     formatDate: (input, options) => new Intl.DateTimeFormat(locale, options ?? { dateStyle: 'medium', timeStyle: 'short' }).format(input instanceof Date ? input : new Date(input)),
     formatNumber: (input, options) => new Intl.NumberFormat(locale, options).format(input),
     formatRelativeTime: (input, unit, options) => new Intl.RelativeTimeFormat(locale, options).format(input, unit),
@@ -181,11 +234,15 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       const phrase = forms[category] ?? forms.other ?? String(input);
       return interpolate(phrase, { count: input, ...values });
     },
-  }), [locale, setLocale, translate, errorMessage]);
+  }), [locale, setLocale, translate, errorMessage, validationMessage]);
 
-  if (!bundle) return <div aria-label="Loading Admin language resources" className="locale-load-state" role="status">Loading Admin…</div>;
+  if (!bundle) {
+    const copy = getLocaleBootstrapCopy(requestedLocale, 'loading');
+    return <div aria-label={copy.label} className="locale-load-state" role="status">{copy.message}</div>;
+  }
   if (bundle.failed) {
-    return <div className="locale-load-error" role="alert">Admin language resources could not be loaded. Refresh to retry.</div>;
+    const copy = getLocaleBootstrapCopy(requestedLocale, 'failed');
+    return <div aria-label={copy.label} className="locale-load-error" role="alert">{copy.message}</div>;
   }
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

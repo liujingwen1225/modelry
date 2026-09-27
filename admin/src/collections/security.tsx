@@ -43,11 +43,11 @@ type Translate = ReturnType<typeof useI18n>['t'];
 
 type ConditionDraft = { fieldId: string; operator: 'eq' | 'neq' | 'in'; value: string };
 
-function errorCopy(error: unknown, fallback: string, t: Translate) {
-  if (!(error instanceof ApiClientError)) return { title: fallback, message: error instanceof Error ? error.message : t('common.tryAgainWhenAvailable') };
+function errorCopy(error: unknown, fallback: string, t: Translate, errorMessage: ReturnType<typeof useI18n>['errorMessage']) {
+  if (!(error instanceof ApiClientError)) return { title: fallback, message: t('common.tryAgainWhenAvailable') };
   return {
-    title: error.apiError.message,
-    message: [error.apiError.code, error.apiError.hint, `${t('common.requestId')}: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+    title: errorMessage(error.apiError.code) ?? t('errors.requestFailed'),
+    message: [t('common.errorCode'), error.apiError.code, `${t('common.requestId')}: ${error.apiError.requestId}`, t('common.tryAgainWhenAvailable')].join(' · '),
   };
 }
 
@@ -120,7 +120,7 @@ function predicateValueControl(field: FieldDefinition, operator: string, value: 
 }
 
 export function CollectionSecurityPage() {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const { collection } = useCollectionWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const authTabs = collection.type === 'Auth';
@@ -235,11 +235,11 @@ export function CollectionSecurityPage() {
       {activePanel === 'rules' && <div aria-labelledby="security-tab-rules" className="page-stack security-panel" id="security-panel-rules" role="tabpanel">
       {loadState === 'ready' && <AccessRuleSimulation collectionId={collection.id} />}
       {loadState === 'loading' && <LoadingState label={t('security.loadingRules')} />}
-      {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.loadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+      {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.loadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {loadState === 'ready' && state && <>
         {referenceError && <div className="security-dependency-error" role="status">{t('security.referencesUnavailable')} <Button onClick={() => setReloadKey((value) => value + 1)} size="small">{t('common.retry')}</Button></div>}
         {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
-        {actionError && (() => { const copy = errorCopy(actionError, t('security.changeFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.reloadRules')}</Button></ErrorState>; })()}
+        {actionError && (() => { const copy = errorCopy(actionError, t('security.changeFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.reloadRules')}</Button></ErrorState>; })()}
         <Surface className="security-rules-card" variant="standard">
           <div className="security-rules-heading"><div><h2>{t('security.appliedTitle')}</h2><p>{t('security.appliedDescription')}</p></div><span className="security-version">{t('security.version', { version: state.version })}</span></div>
           <div className="security-rule-list" role="list">{OPERATIONS.map((operation) => {
@@ -377,7 +377,7 @@ function emailVerificationHint(mode: EmailVerificationMode | undefined, t: Trans
   }
 }
 function AuthenticationPanel({ collectionId }: { collectionId: string }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [state, setState] = useState<AuthenticationConfigurationState>();
   const [draft, setDraft] = useState<AuthenticationConfiguration>();
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -456,10 +456,10 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
 
   return <div aria-labelledby="security-tab-authentication" className="page-stack security-panel" id="security-panel-authentication" role="tabpanel">
     {loadState === 'loading' && <LoadingState label={t('security.authenticationLoading')} />}
-    {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.authenticationLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+    {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.authenticationLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
     {loadState === 'ready' && state && draft && <>
       {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
-      {actionError && (() => { const copy = errorCopy(actionError, t('security.authenticationChangeFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.authenticationReload')}</Button></ErrorState>; })()}
+      {actionError && (() => { const copy = errorCopy(actionError, t('security.authenticationChangeFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.authenticationReload')}</Button></ErrorState>; })()}
       <Surface className="security-auth-card" variant="standard">
         <div className="security-rules-heading"><div><h2>{t('security.authenticationTitle')}</h2><p>{t('security.authenticationDescription')}</p></div><span className="security-version">{t('security.version', { version: state.version })}</span></div>
         {!editing ? <dl className="security-auth-values">
@@ -484,7 +484,7 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
 }
 
 function ApplicationUsersPanel({ collection }: { collection: Collection }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const cursor = searchParams.get('usersCursor') ?? '';
   const cursorStack = parseCursorStack(searchParams.get('usersCursorStack'));
@@ -500,8 +500,9 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   const [profileError, setProfileError] = useState<unknown>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  // 这里既可能显示本地的校验文案，也可能显示 Runtime 返回的校验信息，因此保存已解析的字符串。
+  // 密码失败文案按稳定错误码本地化，辅助信息只保留错误码和请求 ID。
   const [passwordError, setPasswordError] = useState('');
+  const [passwordErrorDetails, setPasswordErrorDetails] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<TranslationKey | ''>('');
 
@@ -578,17 +579,22 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   async function changePassword(event: FormEvent) {
     event.preventDefault();
     if (!selectedUserId) return;
-    if (!password) { setPasswordError(t('security.passwordEmpty')); return; }
-    if (password !== confirmPassword) { setPasswordError(t('security.passwordMismatch')); return; }
+    if (!password) { setPasswordError(t('security.passwordEmpty')); setPasswordErrorDetails(''); return; }
+    if (password !== confirmPassword) { setPasswordError(t('security.passwordMismatch')); setPasswordErrorDetails(''); return; }
     setBusy(true);
     setPasswordError('');
+    setPasswordErrorDetails('');
     setMessage('');
     try {
       await setApplicationUserPassword(collection.id, selectedUserId, password);
       setPassword('');
       setConfirmPassword('');
       setMessage('security.passwordChanged');
-    } catch (reason) { setPasswordError(errorCopy(reason, t('security.passwordFailed'), t).title); }
+    } catch (reason) {
+      const copy = errorCopy(reason, t('security.passwordFailed'), t, errorMessage);
+      setPasswordError(copy.title);
+      setPasswordErrorDetails(copy.message);
+    }
     finally { setBusy(false); }
   }
 
@@ -599,23 +605,23 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
     <Surface className="security-users-toolbar" variant="standard"><div><h2>{t('security.usersTitle')}</h2><p>{t('security.usersDescription')}</p></div><Link className="button button--primary button--small" to={`/collections/${encodeURIComponent(collection.id)}?new=1`}><UserRound aria-hidden="true" size={14} />{t('security.createUser')}</Link></Surface>
     <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">{t('security.searchUsers')}</span><input aria-label={t('security.searchUsers')} onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUsersPlaceholder')} type="search" value={search} /></label>
     {loadState === 'loading' && <LoadingState label={t('security.usersLoading')} />}
-    {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.usersLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+    {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.usersLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
     {loadState === 'ready' && filtered.length === 0 && <EmptyState description={users.length ? t('security.usersNoMatchDescription') : t('security.usersEmptyDescription')} title={users.length ? t('security.usersNoMatchTitle') : t('security.usersEmptyTitle')}>{!users.length && <Link className="button button--primary" to={`/collections/${encodeURIComponent(collection.id)}?new=1`}>{t('security.createUser')}</Link>}</EmptyState>}
     {loadState === 'ready' && filtered.length > 0 && <Surface className="security-users-list" variant="standard"><div className="security-users-list-heading"><span>{t('security.usersPageSummary', { count: filtered.length })}</span><span>{t('security.usersSearchHint')}</span></div><div role="list">{filtered.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => selectUser(user.recordId)} size="small">{selectedUserId === user.recordId ? t('security.selected') : t('security.viewUser')}</Button><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', user.recordId); setSearchParams(next); }} size="small" variant="quiet">{t('security.sessions')}</Button></article>)}</div><div className="records-pagination"><span>{t('security.page', { page: cursorStack.length + 1 })}</span><div><Button disabled={!cursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!nextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div></Surface>}
     {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
     {selectedUserId && <Surface className="security-user-detail" variant="standard">
       <div className="security-rules-heading"><div><h2>{selectedEmail}</h2><p>{selectedUserId}</p></div><Button onClick={() => updateQuery({ user: undefined })} size="small" variant="quiet">{t('security.close')}</Button></div>
       {profileState === 'loading' && <LoadingState label={t('security.profileLoading')} />}
-      {profileState === 'error' && (() => { const copy = errorCopy(profileError, t('security.profileLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => selectUser(selectedUserId)} size="small">{t('common.retry')}</Button></ErrorState>; })()}
+      {profileState === 'error' && (() => { const copy = errorCopy(profileError, t('security.profileLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => selectUser(selectedUserId)} size="small">{t('common.retry')}</Button></ErrorState>; })()}
       {profileState === 'ready' && profile && <dl className="security-profile-values">{Object.entries(profile).filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key)).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{formatSecurityValue(value)}</dd></div>)}</dl>}
-      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>{t('security.changePassword')}</strong><span>{t('security.changePasswordHint')}</span></div><FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{passwordError}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div></form>
+      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>{t('security.changePassword')}</strong><span>{t('security.changePasswordHint')}</span></div><FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{passwordError}</span>}{passwordErrorDetails && <span className="field-hint">{passwordErrorDetails}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div></form>
       <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', selectedUserId); setSearchParams(next); }} size="small" variant="quiet">{t('security.viewSessions')}</Button>
     </Surface>}
   </div>;
 }
 
 function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedUserId = searchParams.get('user') ?? '';
   const search = searchParams.get('userSearch') ?? '';
@@ -728,7 +734,7 @@ function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
       <Surface className="security-users-toolbar" variant="standard"><div><h2>{t('security.sessions')}</h2><p>{t('security.sessionsDescription')}</p></div><button className="button button--quiet button--small" onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} type="button">{t('security.manageUsers')}</button></Surface>
       <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">{t('security.searchUser')}</span><input aria-label={t('security.searchUser')} onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUserPlaceholder')} type="search" value={search} /></label>
       {usersLoadState === 'loading' && <LoadingState label={t('security.usersLoading')} />}
-      {usersLoadState === 'error' && (() => { const copy = errorCopy(usersError, t('security.usersLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setUsersReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+      {usersLoadState === 'error' && (() => { const copy = errorCopy(usersError, t('security.usersLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setUsersReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {usersLoadState === 'ready' && <Surface className="security-users-list" variant="standard">
         {filteredUsers.length === 0 ? <EmptyState description={users.length ? t('security.sessionsNoUsersMatchDescription') : t('security.sessionsNoUsersDescription')} title={users.length ? t('security.sessionsNoUsersMatchTitle') : t('security.sessionsNoUsersTitle')} /> : <>
           <div className="security-users-list-heading"><span>{t('security.usersPageSummary', { count: filteredUsers.length })}</span><span>{t('security.sessionsSearchHint')}</span></div>
@@ -740,9 +746,9 @@ function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
       <Surface className="security-session-toolbar" variant="standard"><div><h2>{t('security.sessions')}</h2><p>{identity || selectedUserId}</p></div><div><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" variant="quiet">{t('security.changeUser')}</Button><Button disabled={busy} onClick={() => setConfirm('all')} size="small" variant="danger">{t('security.sessionRevokeAll')}</Button></div></Surface>
       {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
       {loadState === 'loading' && <LoadingState label={t('security.sessionsLoading')} />}
-      {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.sessionsLoadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
+      {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.sessionsLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {loadState === 'ready' && sessions.length === 0 && <EmptyState description={t('security.sessionsEmptyDescription')} title={t('security.sessionsEmptyTitle')} />}
-      {loadState === 'ready' && sessions.length > 0 && <Surface className="security-session-list" variant="standard"><div className="security-session-list-heading"><span>{t('security.sessionsActive', { count: sessions.filter((session) => session.status === 'active').length })}</span><span>{t('security.sessionsTotal', { count: sessions.length })}</span></div><div role="list">{sessions.map((session) => <article className="security-session-row" key={session.id} role="listitem"><div className={`security-session-status security-session-status--${session.status}`}><span aria-hidden="true" />{session.status}</div><dl><div><dt>{t('security.sessionCreated')}</dt><dd>{displaySecurityDate(session.createdAt, formatDate)}</dd></div><div><dt>{t('security.sessionLastUsed')}</dt><dd>{displaySecurityDate(session.lastUsedAt, formatDate)}</dd></div><div><dt>{t('security.sessionExpires')}</dt><dd>{displaySecurityDate(session.expiresAt, formatDate)}</dd></div></dl>{session.status === 'active' && <Button disabled={busy} onClick={() => setConfirm(session.id)} size="small" variant="danger">{t('security.sessionRevoke')}</Button>}</article>)}</div></Surface>}
+      {loadState === 'ready' && sessions.length > 0 && <Surface className="security-session-list" variant="standard"><div className="security-session-list-heading"><span>{t('security.sessionsActive', { count: sessions.filter((session) => session.status === 'active').length })}</span><span>{t('security.sessionsTotal', { count: sessions.length })}</span></div><div role="list">{sessions.map((session) => <article className="security-session-row" key={session.id} role="listitem"><div className={`security-session-status security-session-status--${session.status}`}><span aria-hidden="true" />{session.status === 'active' || session.status === 'revoked' || session.status === 'expired' ? t(`security.sessionStatuses.${session.status}` as TranslationKey) : session.status}</div><dl><div><dt>{t('security.sessionCreated')}</dt><dd>{displaySecurityDate(session.createdAt, formatDate)}</dd></div><div><dt>{t('security.sessionLastUsed')}</dt><dd>{displaySecurityDate(session.lastUsedAt, formatDate)}</dd></div><div><dt>{t('security.sessionExpires')}</dt><dd>{displaySecurityDate(session.expiresAt, formatDate)}</dd></div></dl>{session.status === 'active' && <Button disabled={busy} onClick={() => setConfirm(session.id)} size="small" variant="danger">{t('security.sessionRevoke')}</Button>}</article>)}</div></Surface>}
       {confirm && <div className="security-confirm-panel" role="alert"><strong>{confirm === 'all' ? t('security.sessionConfirmAllTitle') : t('security.sessionConfirmOneTitle')}</strong><span>{t('security.sessionConfirmBody')}</span><div><Button disabled={busy} onClick={() => setConfirm(undefined)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void revoke(confirm === 'all' ? undefined : confirm)} size="small" variant="danger">{busy ? t('security.sessionRevoking') : t('security.sessionConfirm')}</Button></div></div>}
     </>}
   </div>;

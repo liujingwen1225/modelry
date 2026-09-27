@@ -39,8 +39,13 @@ describe('Overview action center', () => {
     setupOverview([]);
 
     expect(await screen.findByRole('heading', { name: 'Your backend is ready' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Up to date' })).toBeInTheDocument();
+    const diagnostics = await screen.findByRole('region', { name: 'Runtime & storage' });
+    expect(diagnostics).toHaveTextContent('Runtime');
+    expect(diagnostics).toHaveTextContent('Database');
+    expect(diagnostics).toHaveTextContent('Local storage');
     expect(screen.getByRole('link', { name: 'Create Collection' })).toHaveAttribute('href', '/collections/new');
+    expect(screen.getByRole('region', { name: 'Build' }).querySelectorAll('a')).toHaveLength(3);
+    expect(document.querySelector('.diagnostics-grid')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Continue recent work' })).not.toBeInTheDocument();
   });
@@ -53,24 +58,27 @@ describe('Overview action center', () => {
 
     expect(await screen.findByRole('heading', { name: 'Needs attention' })).toBeInTheDocument();
     expect(screen.getByText('A schema change needs recovery in posts.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recovery needed' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/collections/col_posts/schema');
     expect(screen.getByRole('heading', { name: 'Continue recent work' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Edit security/ })).toHaveAttribute('href', '/collections/col_users/security');
     expect(screen.getByRole('link', { name: /Open records/ })).toHaveAttribute('href', '/collections/col_posts');
+    const recentWork = screen.getByRole('region', { name: 'Continue recent work' });
+    const buildLinks = screen.getByRole('region', { name: 'Build' });
+    expect(recentWork.compareDocumentPosition(buildLinks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('shows pending changes and their review path', async () => {
     setupOverview([{ id: 'col_posts', name: 'posts', type: 'Normal', fields: [], pendingChangeStatus: 'needsReview' }]);
 
-    expect(await screen.findByRole('heading', { name: 'Pending changes' })).toBeInTheDocument();
+    expect(await screen.findByText('1 Collection has changes to review.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Review changes/ })).toHaveAttribute('href', '/changes?view=pending');
   });
 
   it('shows unavailable schema health when the Collection summary cannot load', async () => {
     setupOverview([], true);
 
-    expect(await screen.findByRole('heading', { name: 'Unavailable' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Needs attention' })).toBeInTheDocument();
     expect(screen.getByText('Collection status is unavailable.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Collections' })).toHaveAttribute('href', '/collections');
   });
 });

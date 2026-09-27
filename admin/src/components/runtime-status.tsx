@@ -16,14 +16,14 @@ function stateLabel(value: string, translate: (key: TranslationKey, values?: Tra
 }
 
 function ErrorDetails({ error }: { error: ApiClientError }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   return (
     <div className="error-details">
       <div className="error-details__title">
         <code>{error.apiError.code}</code>
-        <span>{error.apiError.message}</span>
+        <span>{errorMessage(error.apiError.code) ?? t('errors.requestFailed')}</span>
       </div>
-      {error.apiError.hint && <p className="error-hint">{error.apiError.hint}</p>}
+      <p className="error-hint">{t('common.tryAgainWhenAvailable')}</p>
       <div className="request-id-line">
         <span>{t('diagnostics.requestId')}</span>
         <code>{error.apiError.requestId}</code>
@@ -119,7 +119,7 @@ export function DiagnosticsCards() {
                 <CopyButton label={t('diagnostics.copyLocalPath')} value={storage.value.localStorage.path} />
               </div>
             )}
-            {storage.state === 'ready' && storage.value.localStorage.message && <p className="diagnostic-note">{storage.value.localStorage.message}</p>}
+            {storage.state === 'ready' && storage.value.localStorage.message && <p className="diagnostic-note">{t('diagnostics.resourceReady')}</p>}
           </div>
         )}
       </Surface>
@@ -132,7 +132,7 @@ function ErrorDetailsPanel({ error, onRetry }: { error: Error; onRetry: () => vo
   return (
     <ErrorState
       className="resource-error"
-      description={error instanceof Error && 'apiError' in error ? t('diagnostics.structuredDetails') : error.message || t('diagnostics.requestFailed')}
+      description={error instanceof Error && 'apiError' in error ? t('diagnostics.structuredDetails') : t('diagnostics.requestFailed')}
       title={t('diagnostics.statusRequestFailed')}
     >
       {error instanceof Error && 'apiError' in error && <ErrorDetails error={error as ApiClientError} />}

@@ -21,7 +21,7 @@ const PRINCIPALS: Array<{ value: PolicySimulationPrincipalKind; key: Translation
 
 // AccessRuleSimulation 让 Owner 在应用规则不变的前提下预演一次假设请求。
 export function AccessRuleSimulation({ collectionId }: { collectionId: string }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [operation, setOperation] = useState<(typeof OPERATIONS)[number]>('list');
   const [principalKind, setPrincipalKind] = useState<PolicySimulationPrincipalKind>('anonymous');
   const [principalId, setPrincipalId] = useState('');
@@ -96,12 +96,13 @@ export function AccessRuleSimulation({ collectionId }: { collectionId: string })
           <StatusChip state={result.allowed ? 'ready' : 'unavailable'}>{result.allowed ? t('security.simulationAllowed') : t('security.simulationDenied')}</StatusChip>
           <span>{result.decidingMode ? t('security.simulationRule', { mode: decidingModeLabel ?? '' }) : ''}</span>
           {result.code && <code>{result.code}</code>}
-          <p>{result.notice}</p>
+          <p>{t('security.simulationNotice')}</p>
         </div>
       )}
       {error !== undefined && (
         <div className="security-dependency-error" role="alert">
-          {error instanceof ApiClientError ? error.apiError.message : t('security.simulationFailed')}
+          <strong>{error instanceof ApiClientError ? errorMessage(error.apiError.code) ?? t('errors.requestFailed') : t('security.simulationFailed')}</strong>
+          {error instanceof ApiClientError && <span>{t('common.errorCode')}: {error.apiError.code} · {t('common.requestId')}: {error.apiError.requestId} · {t('common.tryAgainWhenAvailable')}</span>}
         </div>
       )}
     </Surface>

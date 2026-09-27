@@ -175,6 +175,7 @@ describe('API Workspace', () => {
     expect(screen.getByText('方法与路由')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '返回请求上下文' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '打开集合 API' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看访问规则' })).toHaveAttribute('href', '/collections/col_posts/security');
     expect(screen.getByRole('button', { name: '在请求中查找' })).toBeInTheDocument();
   });
 
@@ -275,6 +276,17 @@ describe('API Workspace', () => {
     expect(screen.getByText('46 bytes')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/api?tab=requests');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=getApplicationRecord');
+  });
+
+  it('offers a direct Collection Access Rules recovery route after authorization is denied', async () => {
+    mocks.getRequestRecord.mockResolvedValue(requestRecord);
+    mocks.listAllCollections.mockResolvedValue([collection]);
+    render(<LocaleProvider><MemoryRouter initialEntries={['/requests/req_12345678?from=%2Fapi%3Ftab%3Drequests']}><Routes>
+      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
+    </Routes></MemoryRouter></LocaleProvider>);
+
+    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', '/collections/col_posts/security');
   });
 
   it('resolves Request Detail links when durable telemetry stores a route template', async () => {

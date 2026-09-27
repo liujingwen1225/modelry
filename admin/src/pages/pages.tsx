@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, Network, RefreshCw, Webhook } from 'lucide-react';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { DiagnosticsCards } from '../components/runtime-status';
-import { Button, PartialState, StatusChip, Surface } from '../components/ui';
+import { Button, CopyButton, PartialState, StatusChip, Surface } from '../components/ui';
 import { useI18n } from '../i18n/i18n';
+import type { TranslationKey } from '../i18n/i18n';
 import { listAllCollections, type CollectionSummary } from '../collections/client';
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
@@ -51,9 +52,43 @@ function HealthSummary() {
   );
 }
 
+function translatedHealthState(state: string, t: (key: TranslationKey) => string): string {
+  const known = ['ready', 'degraded', 'unavailable', 'unknown', 'loading'];
+  return known.includes(state) ? t(`diagnostics.states.${state}` as TranslationKey) : t('diagnostics.unknown');
+}
+
+function CompactDiagnostics() {
+  const { t } = useI18n();
+  const { runtime, storage } = useDiagnostics();
+  const runtimeState = runtime.state === 'ready' ? runtime.value.state : runtime.state === 'error' ? 'unavailable' : 'loading';
+  const databaseState = storage.state === 'ready' ? storage.value.database.state
+    : runtime.state === 'ready' ? runtime.value.database.state
+      : storage.state === 'error' || runtime.state === 'error' ? 'unavailable' : 'loading';
+  const fileState = storage.state === 'ready' ? storage.value.localStorage.state
+    : runtime.state === 'ready' ? runtime.value.localStorage.state
+      : storage.state === 'error' || runtime.state === 'error' ? 'unavailable' : 'loading';
+  const statuses = [
+    { label: t('diagnostics.runtime.eyebrow'), state: runtimeState },
+    { label: t('diagnostics.database'), state: databaseState },
+    { label: t('diagnostics.localStorage'), state: fileState },
+  ];
+
+  return (
+    <section aria-label={t('overview.diagnosticsTitle')} className="overview-diagnostics">
+      <span className="overview-diagnostics__label">{t('overview.diagnosticsEyebrow')}</span>
+      <div className="overview-diagnostics__statuses">
+        {statuses.map(({ label, state }) => <span className="overview-diagnostics__item" key={label}>
+          <span>{label}</span>
+          <StatusChip state={state}>{translatedHealthState(state, t)}</StatusChip>
+        </span>)}
+      </div>
+    </section>
+  );
+}
+
 export function OverviewPage() {
   const { t } = useI18n();
-  const { runtime, storage, refresh } = useDiagnostics();
+  const { runtime, storage } = useDiagnostics();
   const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
   const [overviewLoaded, setOverviewLoaded] = useState(false);
 
@@ -81,27 +116,14 @@ export function OverviewPage() {
   const emptyProject = collections?.length === 0;
   const failedCollections = (collections ?? []).filter((collection) => collection.pendingChangeStatus === 'failed');
   const pendingCollections = (collections ?? []).filter((collection) => collection.pendingChangeStatus === 'ready' || collection.pendingChangeStatus === 'needsReview');
-  const schemaHealth = !overviewLoaded ? 'loading' : collections === null ? 'unavailable' : failedCollections.length > 0 ? 'failed' : pendingCollections.length > 0 ? 'pending' : 'ready';
   const runtimeUnavailable = runtime.state === 'error' || (runtime.state === 'ready' && runtime.value.state !== 'ready');
   const storageUnavailable = storage.state === 'error' || (storage.state === 'ready' && storage.value.localStorage.state !== 'ready');
+  const databaseUnavailable = (runtime.state === 'ready' && runtime.value.database.state !== 'ready') || (storage.state === 'ready' && storage.value.database.state !== 'ready');
   const collectionsUnavailable = overviewLoaded && collections === null;
-  const needsAttention = runtimeUnavailable || storageUnavailable || collectionsUnavailable || failedCollections.length > 0;
-
-  const schemaTitle = schemaHealth === 'ready' ? t('overview.schemaReady')
-    : schemaHealth === 'pending' ? t('overview.schemaPending')
-      : schemaHealth === 'failed' ? t('overview.schemaFailed')
-        : schemaHealth === 'loading' ? t('overview.schemaLoading') : t('overview.schemaUnavailable');
-  const schemaDescription = schemaHealth === 'ready' ? t('overview.schemaReadyDescription')
-    : schemaHealth === 'pending' ? (pendingCollections.length === 1 ? t('overview.schemaPendingOne') : t('overview.schemaPendingMany', { count: pendingCollections.length }))
-      : schemaHealth === 'failed' ? (failedCollections.length === 1 ? t('overview.schemaFailedOne') : t('overview.schemaFailedMany', { count: failedCollections.length }))
-        : schemaHealth === 'loading' ? t('overview.schemaLoadingDescription') : t('overview.schemaUnavailableDescription');
-  const schemaChip = schemaHealth === 'ready' ? t('overview.schemaChipHealthy')
-    : schemaHealth === 'pending' ? t('overview.schemaChipReview')
-      : schemaHealth === 'failed' ? t('overview.schemaChipAction')
-        : schemaHealth === 'loading' ? t('overview.schemaChipChecking') : t('overview.schemaChipUnavailable');
+  const needsAttention = runtimeUnavailable || databaseUnavailable || storageUnavailable || collectionsUnavailable || failedCollections.length > 0;
 
   return (
-    <div className="page-stack">
+    <div className="page-stack overview-page">
       <PageHeading
         description={t('overview.description')}
         eyebrow={t('overview.eyebrow')}
@@ -111,42 +133,6 @@ export function OverviewPage() {
         <div><h2>{t('overview.emptyTitle')}</h2><p>{t('overview.emptyDescription')}</p></div>
         <Link className="button button--primary" to="/collections/new"><Layers3 aria-hidden="true" size={15} />{t('overview.createCollection')}</Link>
       </Surface>}
-      {needsAttention && <section aria-labelledby="overview-attention-heading" className="overview-attention">
-        <div><p className="eyebrow">{t('overview.attentionEyebrow')}</p><h2 id="overview-attention-heading">{t('overview.attentionTitle')}</h2></div>
-        <ul>
-          {failedCollections.map((collection) => <li key={collection.id}>
-            <AlertTriangle aria-hidden="true" size={16} />
-            <span>{t('overview.failedChange', { name: collection.name })}</span>
-            <Link to={`/collections/${encodeURIComponent(collection.id)}/schema`}>{t('overview.view')}</Link>
-          </li>)}
-          {collectionsUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.collectionsUnavailable')}</span><Link to="/collections">{t('overview.openCollections')}</Link></li>}
-          {runtimeUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.runtimeUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
-          {storageUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.storageUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
-        </ul>
-      </section>}
-      <section aria-labelledby="health-heading" className="health-section">
-        <div className="section-heading-row">
-          <div>
-            <p className="eyebrow">{t('overview.diagnosticsEyebrow')}</p>
-            <h2 id="health-heading">{t('overview.diagnosticsTitle')}</h2>
-            <p className="section-description">{t('overview.diagnosticsDescription')}</p>
-          </div>
-          <Button className="refresh-button" onClick={refresh} size="small" variant="secondary">
-            <RefreshCw aria-hidden="true" size={15} /> {t('overview.refresh')}
-          </Button>
-        </div>
-        <HealthSummary />
-        <DiagnosticsCards />
-        <Surface className={`overview-schema-health overview-schema-health--${schemaHealth}`} variant="standard">
-          <div>
-            <p className="eyebrow">{t('overview.schemaEyebrow')}</p>
-            <h3>{schemaTitle}</h3>
-            <p>{schemaDescription}</p>
-          </div>
-          <StatusChip state={schemaHealth === 'pending' ? 'degraded' : schemaHealth === 'failed' || schemaHealth === 'unavailable' ? 'unavailable' : schemaHealth}>{schemaChip}</StatusChip>
-          {schemaHealth === 'pending' && <Link to="/changes?view=pending">{t('overview.reviewChanges')}<ArrowRight aria-hidden="true" size={14} /></Link>}
-        </Surface>
-      </section>
       {recentCollections.length > 0 && <section aria-labelledby="recent-work-heading" className="overview-recent-work">
         <div className="section-heading-row">
           <div>
@@ -163,6 +149,40 @@ export function OverviewPage() {
           </Surface>)}
         </div>
       </section>}
+      <section aria-label={t('navigation.build')} className="overview-build-links">
+        <Link className="overview-build-link" to="/collections"><Layers3 aria-hidden="true" size={17} /><span>{t('navigation.collections')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+        <Link className="overview-build-link" to="/api"><Network aria-hidden="true" size={17} /><span>{t('navigation.api')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+        <Link className="overview-build-link" to="/automations"><Webhook aria-hidden="true" size={17} /><span>{t('navigation.automation')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+      </section>
+      {pendingCollections.length > 0 && <div className="overview-pending-summary" role="status">
+        <span>{pendingCollections.length === 1 ? t('overview.schemaPendingOne') : t('overview.schemaPendingMany', { count: pendingCollections.length })}</span>
+        <Link to="/changes?view=pending">{t('overview.reviewChanges')}<ArrowRight aria-hidden="true" size={14} /></Link>
+      </div>}
+      {needsAttention && <section aria-labelledby="overview-attention-heading" className="overview-attention">
+        <div><p className="eyebrow">{t('overview.attentionEyebrow')}</p><h2 id="overview-attention-heading">{t('overview.attentionTitle')}</h2></div>
+        <ul>
+          {failedCollections.map((collection) => <li key={collection.id}>
+            <AlertTriangle aria-hidden="true" size={16} />
+            <span>{t('overview.failedChange', { name: collection.name })}</span>
+            <Link to={`/collections/${encodeURIComponent(collection.id)}/schema`}>{t('overview.view')}</Link>
+          </li>)}
+          {collectionsUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.collectionsUnavailable')}</span><Link to="/collections">{t('overview.openCollections')}</Link></li>}
+          {runtimeUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.runtimeUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
+          {databaseUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.databaseUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
+          {storageUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.storageUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
+        </ul>
+      </section>}
+      <Surface className="overview-agent-card" variant="standard">
+        <span className="overview-agent-card__icon"><Bot aria-hidden="true" size={18} /></span>
+        <div className="overview-agent-card__content">
+          <h2>{t('overview.agentTitle')}</h2>
+          <p>{t('overview.agentDescription')}</p>
+          <p className="overview-agent-card__setup">{t('overview.agentInstruction')}</p>
+          <div className="overview-agent-card__command"><code>{t('overview.agentSetup')}</code><CopyButton label={t('common.copy')} value={t('overview.agentSetup')} /></div>
+          <Link className="text-link" to="/access">{t('overview.agentAccessLink')}<ArrowRight aria-hidden="true" size={14} /></Link>
+        </div>
+      </Surface>
+      <CompactDiagnostics />
     </div>
   );
 }

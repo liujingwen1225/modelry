@@ -4,7 +4,9 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type RuntimeProcess = ChildProcessWithoutNullStreams;
 type ReadyRecord = { state: string; url: string; projectId: string };
@@ -55,11 +57,12 @@ async function startRuntime(binary: string, root: string): Promise<ReadyRecord> 
   const runtimeArgs = ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const args = isWindows ? [binary, ...runtimeArgs] : runtimeArgs;
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'upgrade-ux-closure');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + stderr)), 60_000);
+    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + redactRuntimeText(stderr))), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -84,7 +87,7 @@ async function startRuntime(binary: string, root: string): Promise<ReadyRecord> 
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + stderr));
+      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + redactRuntimeText(stderr)));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error('Invalid READY record: ' + JSON.stringify(record));
@@ -122,6 +125,96 @@ async function requestJSON(page: Page, method: string, requestPath: string, body
   }, { method, path: requestPath, body });
 }
 
+async function expectNoHorizontalOverflow(page: Page, surface: string, width: number) {
+  const layout = await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const overflowingElements = Array.from(document.body.querySelectorAll<HTMLElement>('*'))
+      .map((element) => ({
+        element: element.tagName.toLowerCase() + (element.className && typeof element.className === 'string' ? `.${element.className.trim().replace(/\s+/g, '.')}` : ''),
+        right: Math.round(element.getBoundingClientRect().right),
+      }))
+      .filter((element) => element.right > viewportWidth + 1)
+      .sort((left, right) => right.right - left.right)
+      .slice(0, 5);
+    const diagnostics = document.documentElement.scrollWidth > viewportWidth ? [
+      '.topbar', '.topbar__identity', '.mobile-brand-mark', '.topbar__project', '.topbar__context',
+      '.topbar__actions', '.command-palette-trigger', '.command-palette-trigger__label',
+      '.command-palette-trigger kbd', '.runtime-badge', '.status-chip', '.locale-switcher',
+      '.locale-switcher select', '.theme-button', '.owner-menu', '.owner-menu > summary',
+      '.owner-menu__email', '.owner-menu__popover',
+      '.app-frame', '.workspace', '.page-area', '.page-stack', '.collection-workspace-header',
+      '.collection-workspace-identity', '.collection-workspace-title', '.api-page', '.api-page h1',
+      '.records-page .records-heading', '.records-page .records-heading > div',
+      '.records-page .records-heading .eyebrow', '.records-page .records-heading h1',
+      '.records-page .records-heading .page-description', '.records-page .records-heading > button',
+      '.records-page .records-heading .collection-heading__action',
+      '.api-endpoint-heading', '.api-endpoint-heading > div', '.api-heading-actions', '.api-openapi',
+      '.api-openapi summary', '.api-openapi pre', '.api-route', '.api-route code',
+    ].map((selector) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) return { selector, missing: true };
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        selector,
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        minWidth: style.minWidth,
+        flexBasis: style.flexBasis,
+        flexGrow: style.flexGrow,
+        flexShrink: style.flexShrink,
+        flexDirection: style.flexDirection,
+        gap: style.gap,
+        alignItems: style.alignItems,
+        overflowWrap: style.overflowWrap,
+        whiteSpace: style.whiteSpace,
+        display: style.display,
+        overflowX: style.overflowX,
+      };
+    }) : [];
+    const describeElement = (element: HTMLElement) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return {
+            element: element.tagName.toLowerCase() + (element.className && typeof element.className === 'string' ? `.${element.className.trim().replace(/\s+/g, '.')}` : ''),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            minWidth: style.minWidth,
+            flexBasis: style.flexBasis,
+            flexShrink: style.flexShrink,
+            gridTemplateColumns: style.gridTemplateColumns,
+            overflowX: style.overflowX,
+          };
+        };
+    const hasOverflow = document.documentElement.scrollWidth > viewportWidth;
+    const pageStackChildren = hasOverflow
+      ? Array.from(document.querySelectorAll<HTMLElement>('.page-stack > *')).map(describeElement)
+      : [];
+    const scrollAreas = hasOverflow
+      ? Array.from(document.querySelectorAll<HTMLElement>('body *'))
+        .filter((element) => getComputedStyle(element).overflowX !== 'visible')
+        .slice(0, 30)
+        .map(describeElement)
+      : [];
+    const scrollRoots = hasOverflow ? [
+      document.scrollingElement,
+      document.documentElement,
+      document.body,
+      document.querySelector<HTMLElement>('.page-area'),
+      document.querySelector<HTMLElement>('.page-stack'),
+      document.querySelector<HTMLElement>('.collection-workspace-tabs'),
+    ].filter((element): element is HTMLElement => element instanceof HTMLElement).map(describeElement) : [];
+    return { scrollWidth: document.documentElement.scrollWidth, bodyScrollWidth: document.body.scrollWidth, clientWidth: document.documentElement.clientWidth, overflowingElements, diagnostics, pageStackChildren, scrollAreas, scrollRoots };
+  });
+  expect(layout.scrollWidth, `${surface} at ${width}px: ${JSON.stringify(layout)}`).toBeLessThanOrEqual(width);
+}
+
 test.beforeAll(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), 'modelry-wp29-'));
   legacyRoot = path.join(workspace, 'legacy-project');
@@ -149,6 +242,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('upgrade-ux-closure');
   if (baselineWorktree) {
     try { runChecked('git', ['worktree', 'remove', '--force', baselineWorktree], repositoryRoot); }
     catch { /* 工作树清理失败不影响断言结果。 */ }
@@ -202,6 +296,7 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   expect(current.projectId).toBe(legacy.projectId);
   expectedHTTPFailures.add('401 ' + new URL('/admin/api/v1/auth/session', runtimeURL).toString());
   await page.goto(runtimeURL);
+  await expect.poll(async () => (await page.locator('.topbar').count()) + (await page.getByLabel('Email').count())).toBeGreaterThan(0);
   if (await page.locator('.topbar').count() === 0) {
     await page.getByLabel('Email').fill(ownerEmail);
     await page.getByLabel('Password').fill(ownerPassword);
@@ -270,11 +365,14 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   // 迁移到共享 i18n 的 V0.1 时代页面同样必须以中文渲染。
   await page.goto(runtimeURL + '/');
   await expect(page.getByRole('heading', { name: '总览', level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '运行时与存储' }).first()).toBeVisible();
+  await expect(page.getByRole('region', { name: '运行时与存储' })).toBeVisible();
+  await expect(page.locator('.overview-agent-card__command code')).toHaveText('modelry mcp --api-url "<API 源站地址>" --api-key "<服务账号 API Key>"');
   await page.goto(runtimeURL + '/settings');
   await expect(page.getByRole('heading', { name: '设置', level: 1 })).toBeVisible();
   await page.locator('.locale-switcher select').selectOption('en');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await page.goto(runtimeURL + '/');
+  await expect(page.locator('.overview-agent-card__command code')).toHaveText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>');
   await page.goto(runtimeURL + '/settings/runtime');
   await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Activity' })).toBeVisible();
@@ -282,7 +380,16 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   // 5b) V0.1 时代的四个产品面（Collection Schema / Collection Security / Access · Audit /
   //     Application API Workspace）必须在两种语言下都完整可用，且不得残留另一语言的界面文案。
   const collectionBase = runtimeURL + '/collections/' + collectionId;
+  const longCollectionName = 'orders_for_international_customer_support_and_regional_fulfillment_operations_26';
+  const longCollection = await requestJSON(page, 'POST', '/admin/api/v1/collections', {
+    name: longCollectionName, type: 'Normal', fields: [{ name: 'title', type: 'text', required: true }],
+  });
+  expect(longCollection.status).toBe(201);
+  expect((JSON.parse(longCollection.text) as { data: { name: string } }).data.name).toBe(longCollectionName);
+  const longCollectionId = (JSON.parse(longCollection.text) as { data: { id: string } }).data.id;
   await page.locator('.locale-switcher select').selectOption('zh-CN');
+  await expect(page.locator('.locale-switcher select')).toHaveValue('zh-CN');
+  await expect(page.getByRole('heading', { name: '运行时设置', level: 1 })).toBeVisible();
 
   await page.goto(collectionBase + '/schema?view=indexes');
   await expect(page.getByRole('heading', { name: '结构', level: 2 })).toBeVisible();
@@ -345,6 +452,91 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await page.locator('.locale-switcher select').selectOption('en');
   await expect(page.getByRole('heading', { name: 'API Workspace', level: 1 })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Application Request Records' })).toBeVisible();
+
+  // 5c) 真实 Collection 的长名称、语言 / 深链上下文和主题在桌面及窄屏视口下保持可读。
+  await page.locator('.locale-switcher select').selectOption('en');
+  await page.goto(runtimeURL + '/collections?q=orders&type=Normal&sort=name#selected');
+  await expect(page.getByRole('heading', { name: 'Collections', level: 1 })).toBeVisible();
+  await expect(page.getByText(longCollectionName, { exact: true })).toBeVisible();
+  await page.locator('.locale-switcher select').selectOption('zh-CN');
+  await expect(page.getByRole('heading', { name: '集合', level: 1 })).toBeVisible();
+  await expect(page.getByText(longCollectionName, { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/collections\?q=orders&type=Normal&sort=name#selected$/);
+  if (await page.locator('html').getAttribute('data-theme') !== 'dark') {
+    await page.getByRole('button', { name: '切换为深色主题' }).click();
+  }
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  for (const width of [1280, 1440, 1920, 1024, 768, 390]) {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+    await expect(page.getByText(longCollectionName, { exact: true })).toBeVisible();
+    const viewportLayout = await page.evaluate(() => {
+      const viewportWidth = document.documentElement.clientWidth;
+      const overflowingElements = Array.from(document.body.querySelectorAll<HTMLElement>('*'))
+        .map((element) => ({
+          element: element.tagName.toLowerCase() + (element.className && typeof element.className === 'string' ? `.${element.className.trim().replace(/\s+/g, '.')}` : ''),
+          right: Math.round(element.getBoundingClientRect().right),
+        }))
+        .filter((element) => element.right > viewportWidth + 1)
+        .sort((left, right) => right.right - left.right)
+        .slice(0, 5);
+      return { scrollWidth: document.documentElement.scrollWidth, overflowingElements };
+    });
+    expect(viewportLayout.scrollWidth, JSON.stringify(viewportLayout.overflowingElements)).toBeLessThanOrEqual(width);
+  }
+  if (await page.locator('html').getAttribute('data-theme') !== 'light') {
+    await page.getByRole('button', { name: '切换为浅色主题' }).click();
+  }
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  // 5d) 核心产品面在桌面、Tablet 和 Mobile 都能读到页面标题，且文档不横向溢出。
+  await page.locator('.locale-switcher select').selectOption('en');
+  const responsiveSurfaces = [
+    { label: 'Overview', path: '/', title: 'Overview' },
+    { label: 'Collections', path: '/collections?q=orders&type=Normal', title: 'Collections' },
+    { label: 'Collection Workspace', path: `/collections/${encodeURIComponent(longCollectionId)}`, title: longCollectionName },
+    { label: 'Schema', path: `/collections/${encodeURIComponent(longCollectionId)}/schema?view=indexes`, title: longCollectionName, section: 'Schema' },
+    { label: 'Collection API', path: `/collections/${encodeURIComponent(longCollectionId)}/api`, title: `${longCollectionName} API` },
+    { label: 'API Workspace', path: '/api', title: 'API Workspace' },
+    { label: 'Automation', path: '/automations?tab=webhooks', title: 'Automations' },
+    { label: 'Access', path: '/access', title: 'Access' },
+    { label: 'Settings', path: '/settings', title: 'Settings' },
+  ];
+  for (const surface of responsiveSurfaces) {
+    await page.goto(runtimeURL + surface.path);
+    for (const width of [1280, 1440, 1920, 768, 390]) {
+      await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+      await expect(page.getByRole('heading', { name: surface.title, level: 1 }), `${surface.label} title at ${width}px`).toBeVisible();
+      if (surface.section) await expect(page.getByRole('heading', { name: surface.section, level: 2 })).toBeVisible();
+      await expectNoHorizontalOverflow(page, surface.label, width);
+    }
+  }
+
+  // 长记录 ID 经真实 Application API 请求进入响应区；长 Request ID 错误路径验证恢复提示在 Mobile 可读。
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(collectionBase + '/api?endpoint=getApplicationRecord');
+  await expect(page.getByRole('heading', { name: 'posts API', level: 1 })).toBeVisible();
+  const longRecordId = 'rec_' + 'x'.repeat(160);
+  const longRecordPath = '/api/v1/posts/' + encodeURIComponent(longRecordId);
+  const longRecordURL = new URL(longRecordPath, runtimeURL).toString();
+  expectedHTTPFailures.add('403 ' + longRecordURL);
+  expectedHTTPFailures.add('404 ' + longRecordURL);
+  await page.getByLabel('Record ID').fill(longRecordId);
+  await page.getByRole('button', { name: 'Send GET request' }).click();
+  const apiResponse = page.getByRole('region', { name: 'Request response' });
+  await expect(apiResponse).toBeVisible();
+  await expect(apiResponse.getByText(/^req_[A-Za-z0-9_-]{12,}$/)).toBeVisible();
+  await expectNoHorizontalOverflow(page, 'Collection API response with long record ID', 390);
+
+  const longMissingRequestId = 'req_' + 'x'.repeat(160);
+  const missingRequestURL = new URL('/admin/api/v1/requests/' + encodeURIComponent(longMissingRequestId), runtimeURL).toString();
+  expectedHTTPFailures.add('404 ' + missingRequestURL);
+  await page.goto(runtimeURL + '/requests/' + encodeURIComponent(longMissingRequestId));
+  const requestDetailError = page.getByRole('alert');
+  await expect(requestDetailError).toBeVisible();
+  await expect(requestDetailError).toContainText('Try again when the project is available.');
+  expect((await requestDetailError.innerText()).length).toBeGreaterThan(80);
+  await expectNoHorizontalOverflow(page, 'Request detail error with long request ID', 390);
 
   // 6) 同 root 重启后新持久资源仍然可用（restart-aware）。
   await stopRuntime();

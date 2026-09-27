@@ -31,18 +31,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function errorCopy(error: unknown, fallback: string, translate: ReturnType<typeof useI18n>['t']) {
+function errorCopy(
+  error: unknown,
+  fallback: string,
+  translate: ReturnType<typeof useI18n>['t'],
+  errorMessage: ReturnType<typeof useI18n>['errorMessage'],
+  validationMessage: ReturnType<typeof useI18n>['validationMessage'],
+) {
   if (error instanceof ApiClientError) {
     const violations = Array.isArray(error.apiError.details.violations)
-      ? error.apiError.details.violations.filter(isRecord).map((item) => ({ path: String(item.path ?? ''), message: String(item.message ?? item.code ?? translate('records.reviewThisValue')) }))
+      ? error.apiError.details.violations.filter(isRecord).map((item) => ({
+        path: String(item.path ?? ''),
+        message: (typeof item.code === 'string' ? validationMessage(item.code) : undefined) ?? translate('records.reviewThisValue'),
+      }))
       : [];
     return {
-      title: error.apiError.message,
-      message: [error.apiError.code, error.apiError.hint, `Request ID: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+      title: errorMessage(error.apiError.code) ?? translate('errors.requestFailed'),
+      message: [translate('common.errorCode'), error.apiError.code, `${translate('common.requestId')}: ${error.apiError.requestId}`, translate('common.tryAgainWhenAvailable')].join(' · '),
       violations,
     };
   }
-  return { title: fallback, message: error instanceof Error ? error.message : translate('records.tryAgainWhenAvailable'), violations: [] as Violation[] };
+  return { title: fallback, message: translate('common.tryAgainWhenAvailable'), violations: [] as Violation[] };
 }
 
 function scalarFields(fields: FieldDefinition[]) {
@@ -108,7 +117,7 @@ function RecordPageTitle({ collection, onCreate }: { collection: Collection; onC
 }
 
 export function CollectionRecordsPage() {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, errorMessage, validationMessage } = useI18n();
   const { collection } = useCollectionWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState<Page<CollectionRecord>>({ data: [] });
@@ -334,7 +343,7 @@ export function CollectionRecordsPage() {
       </Surface>
 
       {state === 'loading' && <LoadingState label={t('records.loading')} />}
-      {state === 'error' && (() => { const copy = errorCopy(error, t('records.loadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
+      {state === 'error' && (() => { const copy = errorCopy(error, t('records.loadFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
       {state === 'ready' && page.data.length === 0 && !search && !filter && history.length === 0 && <EmptyState description={t('records.emptyDescription')} title={t('records.emptyTitle')}><Button onClick={openCreate} variant="primary"><Plus aria-hidden="true" size={14} />{t('records.createFirst')}</Button></EmptyState>}
       {state === 'ready' && page.data.length === 0 && (search || filter || history.length > 0) && <EmptyState description={t('records.noMatchDescription')} title={t('records.noMatchTitle')}><Button onClick={() => updateParams({ search: undefined, filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small">{t('records.clearSearchAndFilter')}</Button></EmptyState>}
       {state === 'ready' && page.data.length > 0 && <>
@@ -350,12 +359,12 @@ export function CollectionRecordsPage() {
       <Sheet closeLabel={t('records.close')} open={isCreating || Boolean(selectedId)} onClose={closeSheet} size="wide" title={isCreating ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : isEditing ? t('records.editRecord') : t('records.record')}>
         {isCreating && <RecordEditor collection={collection} fields={fields} key={`new-${collection.id}`} onCancel={closeSheet} onDelete={onRecordDeleted} onSaved={onRecordSaved} />}
         {!isCreating && selectedId && recordState === 'loading' && <LoadingState label={t('records.loadingRecord')} />}
-        {!isCreating && selectedId && recordState === 'error' && (() => { const copy = errorCopy(recordError, t('records.openFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => openRecord(selectedId, isEditing)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
+        {!isCreating && selectedId && recordState === 'error' && (() => { const copy = errorCopy(recordError, t('records.openFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => openRecord(selectedId, isEditing)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
         {!isCreating && selectedId && recordState === 'ready' && activeRecord && <RecordEditor collection={collection} expandedFields={expandFields} fields={fields} key={`${activeRecord.id}-${isEditing ? 'edit' : 'view'}`} mode={isEditing ? 'edit' : 'view'} onCancel={closeSheet} onDelete={onRecordDeleted} onEdit={() => openRecord(activeRecord.id, true)} onSaved={onRecordSaved} record={activeRecord} />}
       </Sheet>
       <Dialog closeLabel={t('records.cancel')} open={Boolean(rowDeleteTarget)} onClose={() => { if (!rowDeleting) { setRowDeleteTarget(undefined); setRowDeleteError(undefined); } }} title={t('records.deleteTitle')}>
         <p>{t('records.deleteBodyPrefix')}<code>{rowDeleteTarget?.id}</code>{t('records.deleteBodySuffix', { name: collection.name })}</p>
-        {rowDeleteError !== undefined && (() => { const copy = errorCopy(rowDeleteError, t('records.deleteFailed'), t); return <ErrorState description={copy.message} title={copy.title} />; })()}
+        {rowDeleteError !== undefined && (() => { const copy = errorCopy(rowDeleteError, t('records.deleteFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title} />; })()}
         <div className="record-editor-actions"><Button disabled={rowDeleting} onClick={() => { setRowDeleteTarget(undefined); setRowDeleteError(undefined); }} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={rowDeleting} onClick={() => void confirmRowDelete()} type="button" variant="danger">{rowDeleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div>
       </Dialog>
     </div>
@@ -426,7 +435,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
   onSaved: (record: CollectionRecord) => void;
   onDelete: () => void;
 }) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, errorMessage, validationMessage } = useI18n();
   const [values, setValues] = useState<Record<string, string>>(() => initialRecordValues(fields, record));
   const [uploaded, setUploaded] = useState<Record<string, UploadedCollectionFile>>({});
   const [fileLists, setFileLists] = useState<Record<string, string[]>>(() => initialFileLists(fields, record));
@@ -466,7 +475,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
         setValues((current) => ({ ...current, [field.name]: result.temporaryId }));
       }
     } catch (reason) {
-      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.uploadFailed'), t).title }));
+      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.uploadFailed'), t, errorMessage, validationMessage).title }));
     } finally { setUploading((current) => ({ ...current, [field.name]: false })); }
   }
 
@@ -486,7 +495,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (reason) {
-      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.downloadFailed'), t).title }));
+      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.downloadFailed'), t, errorMessage, validationMessage).title }));
     }
   }
   function buildValues() {
@@ -556,7 +565,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
         : await updateRecord(collection.id, record!.id, allValues);
       onSaved(saved);
     } catch (reason) {
-      const copy = errorCopy(reason, t('records.saveFailed'), t);
+      const copy = errorCopy(reason, t('records.saveFailed'), t, errorMessage, validationMessage);
       setFormError(reason);
       setFieldErrors(Object.fromEntries(copy.violations.flatMap((violation) => {
         const match = violation.path?.match(/(?:^|\/)values\/([^/]+)|(?:^|\/)([^/]+)$/);
@@ -587,7 +596,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
     } catch (reason) { setFormError(reason); }
   }
 
-  const formCopy = formError ? errorCopy(formError, t('records.saveFailed'), t) : undefined;
+  const formCopy = formError ? errorCopy(formError, t('records.saveFailed'), t, errorMessage, validationMessage) : undefined;
   return (
     <div className="record-editor">
       {mode === 'view' && record ? <>

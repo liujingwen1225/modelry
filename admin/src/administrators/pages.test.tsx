@@ -52,6 +52,18 @@ describe('Administrators Admin surface', () => {
     expect(within(table).getByText('colleague@example.test')).toBeInTheDocument();
     expect(within(table).getByText('Read only')).toBeInTheDocument();
     expect(within(table).getByText('Active')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Control Plane');
+  });
+
+  it('uses user-facing administrator access wording in Simplified Chinese', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    window.history.pushState({}, '', '/administrators');
+    setupFetch();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: '管理员' })).toBeInTheDocument();
+    expect(document.body.textContent).toContain('管理员访问');
+    expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
   });
 
   it('creates an Administrator with a normalised Custom Permission', async () => {

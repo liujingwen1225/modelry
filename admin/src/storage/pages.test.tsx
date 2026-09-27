@@ -88,7 +88,7 @@ describe('File Storage Admin surface', () => {
     expect(call).toBeDefined();
   });
 
-  it('explains that referenced files require a migration before switching Provider', async () => {
+  it('explains that referenced files must move before changing their storage location', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     window.history.pushState({}, '', '/settings/storage');
     setupFetch({ saveError: { status: 409, code: 'MIGRATION_REQUIRED' } });
@@ -96,16 +96,29 @@ describe('File Storage Admin surface', () => {
     await screen.findByRole('heading', { name: 'Files & storage' });
     await userEvent.selectOptions(screen.getByLabelText('Provider'), 's3');
     await userEvent.click(screen.getByRole('button', { name: 'Save provider' }));
-    expect(await screen.findByText(/Start a migration before changing the Provider/)).toBeInTheDocument();
+    expect(await screen.findByText(/Move the files before changing their storage location/)).toBeInTheDocument();
   });
 
-  it('starts a migration and reports progress', async () => {
+  it('starts moving files and does not expose migration terminology', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     window.history.pushState({}, '', '/settings/storage');
     const fetchMock = setupFetch();
     render(<App />);
     await screen.findByRole('heading', { name: 'Files & storage' });
-    await userEvent.click(screen.getByRole('button', { name: /Start migration/ }));
+    expect(screen.getByRole('heading', { name: 'Move files' })).toBeInTheDocument();
+    expect(document.body.textContent?.toLowerCase()).not.toContain('migration');
+    await userEvent.click(screen.getByRole('button', { name: /Move files/ }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/storage/files/migrations') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true));
+  });
+
+  it('uses understandable file movement wording in Simplified Chinese', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    window.history.pushState({}, '', '/settings/storage');
+    setupFetch();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: '移动文件' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /移动文件/ })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('迁移');
   });
 });

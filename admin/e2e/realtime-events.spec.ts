@@ -4,7 +4,9 @@ import { mkdtemp, mkdir, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type ReadyRecord = { state: string; url: string; projectId: string };
 type RuntimeProcess = ChildProcessWithoutNullStreams;
@@ -41,7 +43,6 @@ let runtimeDirectory = '';
 let projectRoot = '';
 let runtimeBinary = '';
 let runtimeLauncher = '';
-let retentionFixture = '';
 let runtimeProcess: RuntimeProcess | undefined;
 let runtimeProcessId: number | undefined;
 let runtimeURL = '';
@@ -80,11 +81,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
     ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0']
     : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'realtime-events');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${stderr}`)), 60_000);
+    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${redactRuntimeText(stderr)}`)), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -109,12 +111,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${stderr}`));
+      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${redactRuntimeText(stderr)}`));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error(`Invalid READY record: ${JSON.stringify(record)}`);
@@ -306,9 +308,7 @@ test.beforeAll(async () => {
   await mkdir(projectRoot);
   buildAdmin();
   runtimeBinary = path.join(runtimeDirectory, process.platform === 'win32' ? 'modelry.exe' : 'modelry');
-  retentionFixture = path.join(runtimeDirectory, process.platform === 'win32' ? 'retention-fixture.exe' : 'retention-fixture');
   runChecked(goCommand, ['build', '-o', runtimeBinary, './cmd/modelry'], repositoryRoot);
-  runChecked(goCommand, ['build', '-o', retentionFixture, './admin/e2e/retention-fixture'], repositoryRoot);
   if (process.platform === 'win32') {
     runtimeLauncher = path.join(runtimeDirectory, 'modelry-e2e-launcher.exe');
     runChecked(goCommand, ['build', '-o', runtimeLauncher, './admin/e2e/windows-runtime-launcher'], repositoryRoot);
@@ -325,6 +325,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('realtime-events');
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
 
@@ -467,7 +468,6 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   expect(restartStream?.persisted).toBe('true');
   const expiredCursor = reconnectId ?? '';
   expect(expiredCursor).toMatch(/^evt_/);
-  const expiredSequence = Number(expiredCursor.slice(-20));
   await stopStream(page);
 
   const unreadStreamURL = new URL('/api/v1/posts/events', runtimeURL).toString();
@@ -489,10 +489,13 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
     return unreadRequest.status === 200 && (data?.durationMs ?? 0) > 0 && (data?.responseSizeBytes ?? 0) > 64 * 1024;
   }, { timeout: 10_000 }).toBe(true);
 
-  await stopRuntime();
+  // Cross the Runtime's 64 MiB Event retention bound through authenticated Record writes.
+  const retentionTitle = `RETENTION_WINDOW_${'r'.repeat(600 * 1024)}`;
+  for (let index = 0; index < 120; index += 1) {
+    await createRecordOutsideBrowser(page, collectionId, `${index}_${retentionTitle}`, 'public');
+  }
 
-  const databasePath = path.join(projectRoot, '.modelry', 'project.sqlite');
-  execFileSync(retentionFixture, [databasePath, collectionId, String(expiredSequence + 1)], { cwd: repositoryRoot, stdio: 'inherit' });
+  await stopRuntime();
   const recoveredRuntime = await startRuntime(projectRoot);
   expect(recoveredRuntime.projectId).toBe(firstRuntime.projectId);
   await expectOwnerSessionAfterRestart(page);
@@ -510,12 +513,13 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await startStream(page);
   const recoveryBaseline = await waitForFrame(page, 'stream.ready');
   expect(recoveryBaseline?.id).toMatch(/^cur_/);
-  const currentRecords = await requestJSON(page, 'GET', '/api/v1/posts');
+  const currentRecords = await requestJSON(page, 'GET', '/api/v1/posts?search=MARKER');
   expect(currentRecords.status).toBe(200);
-  expect(JSON.stringify(currentRecords.body)).not.toContain('PRIVATE_MARKER');
-  expect(JSON.stringify(currentRecords.body)).toContain('PUBLIC_MARKER');
-  expect(JSON.stringify(currentRecords.body)).toContain(replayedTitle);
-  expect(JSON.stringify(currentRecords.body)).toContain(restartReplayTitle);
+  const visibleTitles = ((currentRecords.body as { data: Array<{ title: string }> }).data ?? []).map((record) => record.title);
+  expect(visibleTitles).not.toContain('PRIVATE_MARKER');
+  expect(visibleTitles).toContain('PUBLIC_MARKER');
+  expect(visibleTitles).toContain(replayedTitle);
+  expect(visibleTitles).toContain(restartReplayTitle);
   await stopStream(page);
   expect(issues).toEqual([]);
 });

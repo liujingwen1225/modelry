@@ -293,7 +293,7 @@ describe('Automation Admin surface', () => {
   });
 
   it('shows the complete Delivery ID with the Simplified Chinese label', async () => {
-    const delivery = { id: 'dly_zh_1234', sourceType: 'test', sourceId: 'whk_mail', webhookId: 'whk_mail', webhookName: '收件 Webhook', webhookRevision: 1, eventType: 'webhook.test', status: 'succeeded', createdAt: '2026-09-25T09:00:00Z', attemptCount: 0, manualRedriveCount: 0, errorCode: 'none' };
+    const delivery = { id: 'dly_zh_1234', sourceType: 'eventHook', sourceId: 'ehk_orders', webhookId: 'whk_mail', webhookName: '收件 Webhook', webhookRevision: 1, eventType: 'record.created', status: 'succeeded', createdAt: '2026-09-25T09:00:00Z', attemptCount: 0, manualRedriveCount: 0, errorCode: 'none' };
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
     vi.stubGlobal('fetch', vi.fn((path: string) => {
       if (path === '/admin/api/v1/deliveries?limit=50') return Promise.resolve(Response.json({ data: [delivery] }));
@@ -306,5 +306,6 @@ describe('Automation Admin surface', () => {
 
     expect(await screen.findByText('投递 ID')).toBeInTheDocument();
     expect(screen.getByText('dly_zh_1234', { exact: true })).toBeInTheDocument();
+    expect(document.body.textContent).toContain('记录已创建');
   });
 });

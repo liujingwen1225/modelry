@@ -10,6 +10,22 @@ import './drift.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
+const storageFindingFacts: Record<string, { expected: TranslationKey; actual: TranslationKey }> = {
+  'physicalProjection.tableMissing': {
+    expected: 'drift.findings.expectedStorageTable',
+    actual: 'drift.findings.actualStorageTable',
+  },
+  'runtimeState.orphanProjection': {
+    expected: 'drift.findings.expectedCollectionStorage',
+    actual: 'drift.findings.actualUnmatchedStorage',
+  },
+};
+
+function findingFact(finding: DriftFinding, side: 'expected' | 'actual', translate: (key: TranslationKey) => string): string {
+  const key = storageFindingFacts[finding.code]?.[side];
+  return key ? translate(key) : finding[side];
+}
+
 function stateTone(state: DriftReport['state']): string {
   switch (state) {
     case 'healthy': return 'ready';
@@ -137,8 +153,8 @@ export function DriftPage() {
                     {finding.collectionName && <span>{finding.collectionName}</span>}
                   </div>
                   <dl className="drift-finding__values">
-                    <div><dt>{t('drift.findings.expected')}</dt><dd>{finding.expected}</dd></div>
-                    <div><dt>{t('drift.findings.actual')}</dt><dd>{finding.actual}</dd></div>
+                    <div><dt>{t('drift.findings.expected')}</dt><dd>{findingFact(finding, 'expected', t)}</dd></div>
+                    <div><dt>{t('drift.findings.actual')}</dt><dd>{findingFact(finding, 'actual', t)}</dd></div>
                   </dl>
                   <div className="drift-finding__actions">
                     {finding.remedy === 'reconcile' && finding.collectionId && (

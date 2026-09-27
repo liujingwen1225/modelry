@@ -4,7 +4,9 @@ import { mkdtemp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, request, test, type Page } from '@playwright/test';
+import { request, type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type ReadyRecord = { state: string; url: string; projectId: string };
 type RuntimeProcess = ChildProcessWithoutNullStreams;
@@ -66,11 +68,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
+  captureRuntimeLogs(child, 'product-closure');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${stderr}`)), 60_000);
+    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${redactRuntimeText(stderr)}`)), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -95,12 +98,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${stderr}`));
+      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${redactRuntimeText(stderr)}`));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error(`Invalid READY record: ${JSON.stringify(record)}`);
@@ -315,6 +318,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('product-closure');
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
 
@@ -376,6 +380,50 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(JSON.stringify(ownerState.body)).toContain('closed');
     const collections = await requestJSON(activePage, 'GET', '/admin/api/v1/collections');
     expect(JSON.stringify(collections.body)).toContain('authors');
+
+    await activePage.goto(`${runtimeURL}/`);
+    await expect(activePage.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    const productNavigation = activePage.getByRole('navigation', { name: 'Project navigation' });
+    await expect(productNavigation.getByRole('link')).toHaveCount(7);
+    expect(await productNavigation.getByRole('link').allTextContents()).toEqual([
+      'Overview', 'Collections', 'API', 'Automation', 'Changes', 'Access', 'Settings',
+    ]);
+    await expect(activePage.locator('.nav-group__label')).toHaveText(['Build', 'Manage', 'System']);
+    await expect(activePage.locator('.overview-recent-work')).toContainText('authors');
+    await expect(activePage.locator('.overview-build-links').getByRole('link')).toHaveCount(3);
+    expect(await activePage.evaluate(() => {
+      const recentWork = document.querySelector('.overview-recent-work');
+      const buildLinks = document.querySelector('.overview-build-links');
+      return Boolean(recentWork && buildLinks && (recentWork.compareDocumentPosition(buildLinks) & Node.DOCUMENT_POSITION_FOLLOWING));
+    })).toBe(true);
+    await expect(activePage.getByRole('heading', { name: 'Connect a coding agent' })).toBeVisible();
+    await expect(activePage.locator('.overview-agent-card__command')).toContainText('modelry mcp --api-url');
+    await expect(activePage.locator('.overview-agent-card').getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
+    await expect(activePage.getByRole('region', { name: 'Runtime & storage' })).toBeVisible();
+    await expect(activePage.locator('.diagnostics-grid')).toHaveCount(0);
+    await expect(activePage.getByRole('heading', { name: 'Needs attention' })).toHaveCount(0);
+    await expect(activePage.getByText('Modelry Community', { exact: true })).toHaveCount(0);
+    await expect(activePage.getByText('V0.1', { exact: true })).toHaveCount(0);
+    await expect(activePage.locator('.brand-edition')).toHaveCount(0);
+
+    await activePage.goto(`${runtimeURL}/automations?tab=jobs&q=mail`);
+    const automationNavigation = activePage.getByRole('navigation', { name: 'Automation' });
+    await expect(automationNavigation.getByRole('link', { name: 'Extensions' })).toHaveAttribute('href', '/extensions');
+    await expect(automationNavigation.getByRole('link', { name: 'Secrets' })).toHaveAttribute('href', '/secrets');
+    await automationNavigation.getByRole('link', { name: 'Event Hooks' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/automations?tab=eventHooks&q=mail`);
+
+    await activePage.goto(`${runtimeURL}/access`);
+    const accessNavigation = activePage.getByRole('navigation', { name: 'Access' });
+    await expect(accessNavigation.getByRole('link', { name: 'Service Accounts / API Keys' })).toBeVisible();
+    await expect(accessNavigation.getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/administrators');
+    await expect(accessNavigation.getByRole('link', { name: 'Audit' })).toHaveAttribute('href', '/access/audit');
+
+    await productNavigation.getByRole('link', { name: 'Settings' }).click();
+    const settingsNavigation = activePage.getByRole('navigation', { name: 'Settings' });
+    for (const label of ['General / Status', 'Runtime', 'Files & Storage', 'Mail', 'Backup / Restore', 'Activity', 'Drift']) {
+      await expect(settingsNavigation.getByRole('link', { name: label })).toBeVisible();
+    }
 
     await activePage.goto(`${runtimeURL}/collections`);
     await activePage.getByRole('button', { name: /Search commands/ }).focus();
@@ -909,6 +957,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
     await expect(activePage.getByRole('heading', { name: /Request/ })).toBeVisible();
+    await expect(activePage.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/security`);
     expect(await activePage.locator('body').innerText()).not.toContain(appSession);
 
     await activePage.goto(`${runtimeURL}/api?tab=requests&search=${encodeURIComponent(deniedRequestId)}`);
@@ -1009,7 +1058,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activeKeyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
     const revokeDialog = activePage.getByRole('dialog', { name: 'Revoke this API Key?' });
     await revokeDialog.getByRole('button', { name: 'Revoke API Key', exact: true }).click();
-    await expect(activePage.getByText('revoked', { exact: true })).toBeVisible();
+    await expect(activePage.getByRole('row').filter({ hasText: 'Default API key' })).toContainText('Revoked');
     const revokedRead = await requestJSON(activePage, 'GET', '/admin/api/v1/collections', undefined, revokedAPIKey, 'omit', [401]);
     expect(revokedRead.status).toBe(401);
 

@@ -39,7 +39,8 @@
 .auth-error .auth-error__code { margin-top: 5px; color: var(--color-ink-muted); }
 .auth-error__code code, .auth-error__request code, .auth-error__violations code { color: var(--color-danger); font-size: 10px; font-weight: 700; }
 .auth-error .auth-error__hint { margin-top: 6px; color: var(--color-ink-muted); }
-.auth-error__violations { display: grid; gap: 4px; margin: 7px 0 0; padding-left: 16px; color: var(--color-ink-secondary); font-size: 10px; }
+.auth-error__violations { display: grid; gap: 4px; margin: 7px 0 0; padding-left: 16px; color: var(--color-ink-secondary); font-size: 10px; overflow-wrap: anywhere; }
+.auth-error__violations li, .auth-error__violations code { min-width: 0; overflow-wrap: anywhere; }
 .auth-error .auth-error__request { margin-top: 7px; color: var(--color-ink-muted); }
 .auth-recheck { min-height: 27px; margin: -9px 0 8px -7px; font-size: 10px; }
 .auth-link { display: inline-flex; align-items: center; gap: 6px; color: var(--color-accent); font-size: 11px; font-weight: 700; text-underline-offset: 3px; }

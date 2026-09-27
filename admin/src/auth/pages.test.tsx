@@ -78,7 +78,7 @@ describe('Owner bootstrap page', () => {
         error: {
           code: 'VALIDATION_FAILED',
           message: 'The Owner could not be created.',
-          details: { violations: [{ path: '/email', code: 'INVALID', message: 'Enter a valid email address.' }] },
+          details: { violations: [{ path: '/email', code: 'INVALID_EMAIL', message: 'Enter a valid email address.' }] },
           hint: 'Correct the email and retry.',
           requestId: 'req_bootstrap_validation',
         },

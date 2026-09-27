@@ -14,6 +14,25 @@ import './access.css';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
+function accessStatusLabel(status: string, t: Translate): string {
+  return status === 'active' || status === 'disabled' || status === 'revoked'
+    ? t(`access.statuses.${status}` as TranslationKey)
+    : status;
+}
+
+function auditActorLabel(kind: string, t: Translate): string {
+  if (kind === 'owner') return t('access.auditActorOwner');
+  if (kind === 'serviceAccount') return t('access.auditActorServiceAccount');
+  return kind;
+}
+
+function auditResultLabel(result: string, t: Translate): string {
+  if (result === 'success' || result === 'denied' || result === 'failure') {
+    return t(`access.auditResults.${result}` as TranslationKey);
+  }
+  return result;
+}
+
 const operationGroups: Array<{ labelKey: TranslationKey; operations: CustomPermissionOperation[] }> = [
   { labelKey: 'access.permissionGroups.runtime', operations: ['runtime.read', 'storage.read'] },
   { labelKey: 'access.permissionGroups.collections', operations: ['collections.read', 'collections.create', 'records.read', 'records.create', 'records.update', 'records.delete', 'files.read', 'files.write'] },
@@ -23,8 +42,19 @@ const operationGroups: Array<{ labelKey: TranslationKey; operations: CustomPermi
 ];
 
 function errorCopy(error: unknown, fallback: string, t: Translate) {
-  if (error instanceof ApiClientError) return { title: error.apiError.message, detail: [error.apiError.code, error.apiError.hint, `${t('common.requestId')}: ${error.apiError.requestId}`].filter(Boolean).join(' · ') };
-  return { title: fallback, detail: error instanceof Error ? error.message : t('common.tryAgainWhenAvailable') };
+  if (error instanceof ApiClientError) {
+    const messageKey: Record<string, TranslationKey> = {
+      UNAUTHENTICATED: 'errors.unauthenticated', UNAUTHORIZED: 'errors.unauthenticated',
+      AUTHORIZATION_DENIED: 'errors.authorizationDenied', FORBIDDEN: 'errors.authorizationDenied',
+      NOT_FOUND: 'errors.notFound', VALIDATION_FAILED: 'errors.validationFailed',
+    };
+    const localizedMessageKey = messageKey[error.apiError.code];
+    return {
+      title: localizedMessageKey ? t(localizedMessageKey) : fallback,
+      detail: [`${t('common.errorCode')}: ${error.apiError.code}`, `${t('common.requestId')}: ${error.apiError.requestId}`].join(' · '),
+    };
+  }
+  return { title: fallback, detail: t('common.tryAgainWhenAvailable') };
 }
 
 function PermissionLabel({ permission }: { permission: PermissionPreset }) {
@@ -94,7 +124,7 @@ function OneTimeReveal({ value, onDone }: { value: APIKeyReveal | null; onDone: 
     {value && <div className="access-reveal">
       <p role="status">{t('access.revealDescription')}</p>
       <div className="access-reveal__secret"><code>{value.secret}</code><CopyButton label={t('access.revealCopy')} value={value.secret} /></div>
-      <dl><div><dt>{t('access.revealKeyName')}</dt><dd>{value.apiKey.name}</dd></div><div><dt>{t('access.revealStatus')}</dt><dd><StatusChip state={value.apiKey.status}>{value.apiKey.status}</StatusChip></dd></div></dl>
+      <dl><div><dt>{t('access.revealKeyName')}</dt><dd>{value.apiKey.name}</dd></div><div><dt>{t('access.revealStatus')}</dt><dd><StatusChip state={value.apiKey.status}>{accessStatusLabel(value.apiKey.status, t)}</StatusChip></dd></div></dl>
       <Button onClick={onDone} type="button" variant="primary">{t('access.revealDone')}</Button>
     </div>}
   </Dialog>;
@@ -272,7 +302,7 @@ export function AccessPage() {
       <div className="section-heading-row access-section-title"><div><div className="access-title-mark"><KeyRound aria-hidden="true" size={16} /></div><div><h2>{t('access.accountsTitle')}</h2><p>{t('access.accountsDescription')}</p></div></div></div>
       {state === 'loading' && <LoadingState label={t('access.loading')} />}
       {state === 'error' && (() => { const copy = errorCopy(error, t('access.loadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => void refreshList()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
-      {state === 'ready' && (!visibleAccounts.length ? <EmptyState title={t('access.emptyTitle')} description={t('access.emptyDescription')}><Button onClick={() => setCreateOpen(true)} variant="primary"><Plus aria-hidden="true" size={15} /> {t('access.create')}</Button></EmptyState> : <div className="table-scroll"><table className="data-table access-account-table"><caption>{t('access.accountsTitle')}</caption><thead><tr><th scope="col">{t('access.columnName')}</th><th scope="col">{t('access.columnPermission')}</th><th scope="col">{t('access.columnStatus')}</th><th scope="col">{t('access.columnLastUsed')}</th></tr></thead><tbody>{visibleAccounts.map((item) => <tr key={item.id}><td><Link className="text-link" to={`/access?account=${encodeURIComponent(item.id)}`}>{item.name}</Link>{item.description && <small>{item.description}</small>}</td><td><PermissionLabel permission={item.permission} /></td><td><StatusChip state={item.status}>{item.status}</StatusChip></td><td>{item.lastUsedAt ? <time dateTime={item.lastUsedAt}>{formatDate(item.lastUsedAt)}</time> : t('access.never')}</td></tr>)}</tbody></table></div>)}
+      {state === 'ready' && (!visibleAccounts.length ? <EmptyState title={t('access.emptyTitle')} description={t('access.emptyDescription')}><Button onClick={() => setCreateOpen(true)} variant="primary"><Plus aria-hidden="true" size={15} /> {t('access.create')}</Button></EmptyState> : <div className="table-scroll"><table className="data-table access-account-table"><caption>{t('access.accountsTitle')}</caption><thead><tr><th scope="col">{t('access.columnName')}</th><th scope="col">{t('access.columnPermission')}</th><th scope="col">{t('access.columnStatus')}</th><th scope="col">{t('access.columnLastUsed')}</th></tr></thead><tbody>{visibleAccounts.map((item) => <tr key={item.id}><td><Link className="text-link" to={`/access?account=${encodeURIComponent(item.id)}`}>{item.name}</Link>{item.description && <small>{item.description}</small>}</td><td><PermissionLabel permission={item.permission} /></td><td><StatusChip state={item.status}>{accessStatusLabel(item.status, t)}</StatusChip></td><td>{item.lastUsedAt ? <time dateTime={item.lastUsedAt}>{formatDate(item.lastUsedAt)}</time> : t('access.never')}</td></tr>)}</tbody></table></div>)}
       {state === 'ready' && visibleAccounts.length > 0 && <nav aria-label={t('access.pagesLabel')} className="access-pagination"><Button disabled={!pageCursors.length} onClick={previousAccounts} size="small"><ArrowLeft aria-hidden="true" size={14} /> {t('access.previous')}</Button><span>{t('access.perPage')}</span><Button disabled={!cursor} onClick={nextAccounts} size="small">{t('access.next')} <ArrowRight aria-hidden="true" size={14} /></Button></nav>}
     </>}
     {accountId && <ServiceAccountDetail account={account} keys={keys} state={detailState} error={detailError} keyError={keyError} keyName={keyName} onKeyName={setKeyName} onCreateKey={makeKey} keyBusy={keyBusy} onEdit={() => { setEditOpen(true); setEditError(undefined); }} onDisable={() => setDanger({ kind: 'disable' })} onEnable={() => void enableAccount()} onRevoke={(key) => setDanger({ kind: 'revoke', key })} busy={dangerBusy} onRetry={() => setDetailReload((value) => value + 1)} />}
@@ -309,13 +339,13 @@ function ServiceAccountDetail({
   return <section aria-label={t('access.detailLabel')} className="access-detail">
     <p className="access-back"><Link to="/access"><ArrowLeft aria-hidden="true" size={14} /> {t('access.backToAccess')}</Link></p>
     <Surface className="access-detail-card" variant="standard">
-      <header className="access-detail-heading"><div><p className="eyebrow">{t('access.detailEyebrow')}</p><h2>{account.name}</h2><p>{account.description || t('access.noDescription')}</p></div><StatusChip state={account.status}>{account.status}</StatusChip><Button onClick={onEdit} size="small">{t('access.edit')}</Button>{account.status === 'active' ? <Button disabled={busy} onClick={onDisable} size="small" variant="danger">{t('access.disable')}</Button> : <Button disabled={busy} onClick={onEnable} size="small" variant="primary">{t('access.enable')}</Button>}</header>
+      <header className="access-detail-heading"><div><p className="eyebrow">{t('access.detailEyebrow')}</p><h2>{account.name}</h2><p>{account.description || t('access.noDescription')}</p></div><StatusChip state={account.status}>{accessStatusLabel(account.status, t)}</StatusChip><Button onClick={onEdit} size="small">{t('access.edit')}</Button>{account.status === 'active' ? <Button disabled={busy} onClick={onDisable} size="small" variant="danger">{t('access.disable')}</Button> : <Button disabled={busy} onClick={onEnable} size="small" variant="primary">{t('access.enable')}</Button>}</header>
       <dl className="access-account-meta"><div><dt>{t('access.detailPermission')}</dt><dd><PermissionLabel permission={account.permission} /></dd></div><div><dt>{t('access.detailCreated')}</dt><dd>{account.createdAt ? <time dateTime={account.createdAt}>{formatDate(account.createdAt)}</time> : '—'}</dd></div><div><dt>{t('access.detailLastUsed')}</dt><dd>{account.lastUsedAt ? <time dateTime={account.lastUsedAt}>{formatDate(account.lastUsedAt)}</time> : t('access.never')}</dd></div></dl>
       {account.permission === 'custom' && <div className="access-custom-summary"><strong>{t('access.customSummary', { version: account.customPermissionVersion ?? 1 })}</strong><ul>{(account.customOperations ?? []).map((operation) => <li key={operation}><code>{operation}</code></li>)}</ul></div>}
     </Surface>
     <Surface className="access-key-card" variant="standard"><header><div><h3>{t('access.keysTitle')}</h3><p>{t('access.keysDescription')}</p></div><form onSubmit={onCreateKey}><label className="sr-only" htmlFor="new-key-name">{t('access.newKeyName')}</label><input id="new-key-name" autoComplete="off" maxLength={80} onChange={(event) => onKeyName(event.target.value)} placeholder={t('access.keyNamePlaceholder')} value={keyName} /><Button disabled={keyBusy || account.status === 'disabled'} size="small" type="submit" variant="primary"><Plus aria-hidden="true" size={14} /> {t('access.createKeyAction')}</Button></form></header>
       {keyError !== undefined && (() => { const copy = errorCopy(keyError, t('access.keysLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={onRetry} size="small">{t('common.retry')}</Button></ErrorState>; })()}
-      {keyError === undefined && !keys.length ? <EmptyState title={t('access.noKeysTitle')} description={t('access.noKeysDescription')} /> : keyError === undefined && <div className="table-scroll"><table className="data-table"><caption>{t('access.keysCaption')}</caption><thead><tr><th scope="col">{t('access.columnName')}</th><th scope="col">{t('access.columnCreated')}</th><th scope="col">{t('access.columnLastUsed')}</th><th scope="col">{t('access.columnStatus')}</th><th scope="col">{t('access.columnAction')}</th></tr></thead><tbody>{keys.map((key) => <tr key={key.id}><td>{key.name}</td><td><time dateTime={key.createdAt}>{formatDate(key.createdAt)}</time></td><td>{key.lastUsedAt ? <time dateTime={key.lastUsedAt}>{formatDate(key.lastUsedAt)}</time> : t('access.never')}</td><td><StatusChip state={key.status}>{key.status}</StatusChip></td><td>{key.status === 'active' ? <Button disabled={busy} onClick={() => onRevoke(key)} size="small" variant="danger">{t('access.revoke')}</Button> : '—'}</td></tr>)}</tbody></table></div>}
+      {keyError === undefined && !keys.length ? <EmptyState title={t('access.noKeysTitle')} description={t('access.noKeysDescription')} /> : keyError === undefined && <div className="table-scroll"><table className="data-table"><caption>{t('access.keysCaption')}</caption><thead><tr><th scope="col">{t('access.columnName')}</th><th scope="col">{t('access.columnCreated')}</th><th scope="col">{t('access.columnLastUsed')}</th><th scope="col">{t('access.columnStatus')}</th><th scope="col">{t('access.columnAction')}</th></tr></thead><tbody>{keys.map((key) => <tr key={key.id}><td>{key.name}</td><td><time dateTime={key.createdAt}>{formatDate(key.createdAt)}</time></td><td>{key.lastUsedAt ? <time dateTime={key.lastUsedAt}>{formatDate(key.lastUsedAt)}</time> : t('access.never')}</td><td><StatusChip state={key.status}>{accessStatusLabel(key.status, t)}</StatusChip></td><td>{key.status === 'active' ? <Button disabled={busy} onClick={() => onRevoke(key)} size="small" variant="danger">{t('access.revoke')}</Button> : '—'}</td></tr>)}</tbody></table></div>}
     </Surface>
   </section>;
 }
@@ -416,8 +446,8 @@ export function AuditPage() {
     if (detailState === 'loading') return <div className="page-stack access-page"><AccessTabs active="audit" /><LoadingState label={t('access.auditDetailLoading')} /></div>;
     if (detailState === 'error' || !detail) { const copy = errorCopy(detailError, t('access.auditDetailLoadFailed'), t); return <div className="page-stack access-page"><AccessTabs active="audit" /><ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-link" to={returnPath}>{t('access.auditBack')}</Link></ErrorState></div>; }
     return <div className="page-stack access-page"><AccessTabs active="audit" /><p className="access-back"><Link to={returnPath}><ArrowLeft aria-hidden="true" size={14} /> {t('access.auditBack')}</Link></p><PageTitle description={t('access.auditDetailDescription')} eyebrow={t('access.auditDetailEyebrow')} title={t('access.auditDetailTitle')} /><Surface className="audit-detail-card" variant="standard">
-      <header><div><p className="eyebrow">{t('access.auditRecordEyebrow')}</p><h2><code>{detail.id}</code></h2></div><StatusChip state={detail.result}>{detail.result}</StatusChip></header>
-      <dl className="audit-detail-grid"><div><dt>{t('access.auditTime')}</dt><dd><time dateTime={detail.time}>{formatDate(detail.time)}</time></dd></div><div><dt>{t('access.auditActor')}</dt><dd>{detail.actor.kind} · <code>{detail.actor.id}</code></dd></div><div><dt>{t('access.auditAction')}</dt><dd><code>{detail.action}</code></dd></div><div><dt>{t('access.auditResult')}</dt><dd>{detail.result}</dd></div>{detail.requestId && <div><dt>{t('access.auditRequest')}</dt><dd><Link className="text-link" to={`/requests/${encodeURIComponent(detail.requestId)}?from=${encodeURIComponent(`/access/audit/${detail.id}`)}`}>{detail.requestId}</Link></dd></div>}</dl>
+      <header><div><p className="eyebrow">{t('access.auditRecordEyebrow')}</p><h2><code>{detail.id}</code></h2></div><StatusChip state={detail.result}>{auditResultLabel(detail.result, t)}</StatusChip></header>
+      <dl className="audit-detail-grid"><div><dt>{t('access.auditTime')}</dt><dd><time dateTime={detail.time}>{formatDate(detail.time)}</time></dd></div><div><dt>{t('access.auditActor')}</dt><dd>{auditActorLabel(detail.actor.kind, t)} · <code>{detail.actor.id}</code></dd></div><div><dt>{t('access.auditAction')}</dt><dd><code>{detail.action}</code></dd></div><div><dt>{t('access.auditResult')}</dt><dd>{auditResultLabel(detail.result, t)}</dd></div>{detail.requestId && <div><dt>{t('access.auditRequest')}</dt><dd><Link className="text-link" to={`/requests/${encodeURIComponent(detail.requestId)}?from=${encodeURIComponent(`/access/audit/${detail.id}`)}`}>{detail.requestId}</Link></dd></div>}</dl>
       <section className="audit-resource"><h3>{t('access.auditResource')}</h3><pre><code>{JSON.stringify(safeAuditValue(detail.resource), null, 2)}</code></pre></section>
     </Surface></div>;
   }
@@ -443,7 +473,7 @@ export function AuditPage() {
     <p className="audit-filter-note">{t('access.auditFilterNote')}</p>
     {state === 'loading' && <LoadingState label={t('access.auditLoading')} />}
     {state === 'error' && (() => { const copy = errorCopy(error, t('access.auditLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
-    {state === 'ready' && (!records.length ? <EmptyState title={t('access.auditEmptyTitle')} description={t('access.auditEmptyDescription')} /> : <div className="table-scroll"><table className="data-table"><caption>{t('access.auditCaption')}</caption><thead><tr><th scope="col">{t('access.auditColumnTime')}</th><th scope="col">{t('access.auditColumnActor')}</th><th scope="col">{t('access.auditColumnAction')}</th><th scope="col">{t('access.auditColumnResource')}</th><th scope="col">{t('access.auditColumnResult')}</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><Link className="text-link" to={`/access/audit/${encodeURIComponent(record.id)}?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}><time dateTime={record.time}>{formatDate(record.time)}</time></Link></td><td>{record.actor.kind}<small><code>{record.actor.id}</code></small></td><td><code>{record.action}</code></td><td><code>{JSON.stringify(safeAuditValue(record.resource))}</code></td><td><StatusChip state={record.result}>{record.result}</StatusChip></td></tr>)}</tbody></table></div>)}
+    {state === 'ready' && (!records.length ? <EmptyState title={t('access.auditEmptyTitle')} description={t('access.auditEmptyDescription')} /> : <div className="table-scroll"><table className="data-table"><caption>{t('access.auditCaption')}</caption><thead><tr><th scope="col">{t('access.auditColumnTime')}</th><th scope="col">{t('access.auditColumnActor')}</th><th scope="col">{t('access.auditColumnAction')}</th><th scope="col">{t('access.auditColumnResource')}</th><th scope="col">{t('access.auditColumnResult')}</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><Link className="text-link" to={`/access/audit/${encodeURIComponent(record.id)}?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}><time dateTime={record.time}>{formatDate(record.time)}</time></Link></td><td>{auditActorLabel(record.actor.kind, t)}<small><code>{record.actor.id}</code></small></td><td><code>{record.action}</code></td><td><code>{JSON.stringify(safeAuditValue(record.resource))}</code></td><td><StatusChip state={record.result}>{auditResultLabel(record.result, t)}</StatusChip></td></tr>)}</tbody></table></div>)}
     {state === 'ready' && records.length > 0 && <nav aria-label={t('access.auditPagesLabel')} className="access-pagination"><Button disabled={!pageCursors.length} onClick={previousPage} size="small"><ArrowLeft aria-hidden="true" size={14} /> {t('access.previous')}</Button><span>{t('access.auditPerPage')}</span><Button disabled={!nextCursor} onClick={nextPage} size="small">{t('access.next')} <ArrowRight aria-hidden="true" size={14} /></Button></nav>}
   </div>;
 }

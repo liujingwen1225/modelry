@@ -12,11 +12,11 @@ import './api-workspace.css';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
-function errorCopy(error: unknown, fallback: string, t: Translate) {
+function errorCopy(error: unknown, fallback: string, t: Translate, errorMessage: ReturnType<typeof useI18n>['errorMessage']) {
   if (error instanceof ApiClientError) {
-    return { title: error.apiError.message, detail: [error.apiError.code, error.apiError.hint, `${t('common.requestId')}: ${error.apiError.requestId}`].filter(Boolean).join(' · ') };
+    return { title: errorMessage(error.apiError.code) ?? t('errors.requestFailed'), detail: [t('common.errorCode'), error.apiError.code, `${t('common.requestId')}: ${error.apiError.requestId}`, t('common.tryAgainWhenAvailable')].join(' · ') };
   }
-  return { title: fallback, detail: error instanceof Error ? error.message : t('common.tryAgainWhenAvailable') };
+  return { title: fallback, detail: t('common.tryAgainWhenAvailable') };
 }
 
 function selectedEndpoint(endpoints: EndpointDefinition[], selectedId: string | null) {
@@ -36,7 +36,7 @@ function collectionTypeLabel(collection: Collection, t: Translate) {
 }
 
 function EndpointWorkspace({ collections, fixedCollection }: { collections: Collection[]; fixedCollection?: Collection }) {
-  const { t, formatNumber } = useI18n();
+  const { t, formatNumber, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('q') ?? '');
   const [pathValues, setPathValues] = useState<Record<string, string>>({});
@@ -203,7 +203,7 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
                 {activeEndpoint.operationId === 'listApplicationRecords' && <div className="api-runner__query-fields"><FormField htmlFor="api-limit" label={t('api.limitLabel')}><input id="api-limit" max="100" min="1" onChange={(event) => { setLimit(event.target.value); updateParam('runLimit', event.target.value); }} type="number" value={limit} /></FormField><FormField htmlFor="api-search" label={t('api.searchLabel')}><input id="api-search" onChange={(event) => { setSearchValue(event.target.value); updateParam('runSearch', event.target.value); }} value={searchValue} /></FormField><FormField htmlFor="api-filter" hint={t('api.filterHint')} label={t('api.filterLabel')}><input id="api-filter" onChange={(event) => { setFilter(event.target.value); updateParam('runFilter', event.target.value); }} value={filter} /></FormField><FormField htmlFor="api-sort" label={t('api.sortLabel')} hint={t('api.sortHint')}><input id="api-sort" onChange={(event) => { setSort(event.target.value); updateParam('runSort', event.target.value); }} value={sort} /></FormField></div>}
                 {(!activeEndpoint.authOnly || activeEndpoint.requiresSession) && <FormField htmlFor="api-app-session" hint={t('api.appSessionHint')} label={t('api.appSessionLabel')}><input autoComplete="off" id="api-app-session" onChange={(event) => setAppSession(event.target.value)} type="password" value={appSession} /></FormField>}
                 {activeEndpoint.bodySchema && <FormField htmlFor="api-request-body" hint={t('api.jsonBodyHint', { schema: activeEndpoint.bodySchema })} label={t('api.jsonBodyLabel')}><textarea autoComplete="off" id="api-request-body" onChange={(event) => setBody(event.target.value)} rows={8} spellCheck={false} value={body} />{runError instanceof SyntaxError && <span className="api-validation" role="alert">{t('api.invalidJson')}</span>}</FormField>}
-                {runError !== undefined && !(runError instanceof SyntaxError) && (() => { const copy = errorCopy(runError, t('api.requestFailed'), t); return <ErrorState description={copy.detail} title={copy.title} />; })()}
+                {runError !== undefined && !(runError instanceof SyntaxError) && (() => { const copy = errorCopy(runError, t('api.requestFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title} />; })()}
                 <div className="api-runner__actions"><Button disabled={running} type="submit" variant="primary">{running ? <><RefreshCw aria-hidden="true" className="spin" size={15} /> {t('api.sending')}</> : t('api.sendRequest', { method: activeEndpoint.method })}</Button><CopyButton label={t('api.copyCommand')} value={`curl -X ${activeEndpoint.method} '${activeEndpoint.path}'`} /></div>
               </form>
               {running && <LoadingState label={t('api.sendingLabel')} />}
@@ -217,14 +217,14 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
 }
 
 function ApplicationResponse({ result, location, endpoint }: { result: ApplicationRunResult; location: ReturnType<typeof useLocation>; endpoint: EndpointDefinition }) {
-  const { t, formatNumber } = useI18n();
+  const { t, formatNumber, errorMessage } = useI18n();
   const from = `${location.pathname}${location.search}`;
   return <section aria-label={t('api.responseLabel')} className="api-response" role="region">
     <header><div><p className="eyebrow">{t('api.responseEyebrow')}</p><h3>{t('api.responseTitle')}</h3></div><StatusChip state={result.status < 400 ? 'success' : 'error'}>{result.status}</StatusChip></header>
     <dl className="api-response__metadata">
       {result.requestId && <><dt>{t('common.requestId')}</dt><dd><code>{result.requestId}</code><CopyButton label={t('api.copyRequestId')} value={result.requestId} /></dd></>}
       <dt>{t('api.durationLabel')}</dt><dd>{formatNumber(result.durationMs)} ms</dd><dt>{t('api.endpointLabel')}</dt><dd><code>{endpoint.method} {endpoint.path}</code></dd>
-      {result.structuredError && <><dt>{t('api.errorLabel')}</dt><dd><strong>{result.structuredError.code}</strong> · {result.structuredError.message}</dd></>}
+      {result.structuredError && <><dt>{t('api.errorLabel')}</dt><dd><strong>{result.structuredError.code}</strong> · {errorMessage(result.structuredError.code) ?? t('errors.requestFailed')}</dd></>}
     </dl>
     {result.textResponseHidden && <p className="api-muted">{t('api.hiddenContent')}</p>}
     {result.body !== undefined && <pre className="api-response__body"><code>{JSON.stringify(result.body, null, 2)}</code></pre>}
@@ -244,7 +244,7 @@ function paginationParams(current: URLSearchParams, cursor?: string) {
 }
 
 function RequestHistory({ collections }: { collections: Collection[] }) {
-  const { t, formatDate, formatNumber } = useI18n();
+  const { t, formatDate, formatNumber, errorMessage } = useI18n();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const [searchDraft, setSearchDraft] = useState(params.get('search') ?? '');
@@ -315,7 +315,7 @@ function RequestHistory({ collections }: { collections: Collection[] }) {
       <Button type="submit" variant="primary">{t('api.applyFilters')}</Button>
     </form>
     {state === 'loading' && <LoadingState label={t('api.loadingRequests')} />}
-    {state === 'error' && (() => { const copy = errorCopy(error, t('api.requestsLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
+    {state === 'error' && (() => { const copy = errorCopy(error, t('api.requestsLoadFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
     {state === 'ready' && (!page?.data.length ? <EmptyState title={t('api.noRequestsTitle')} description={t('api.noRequestsDescription')} /> : <div className="table-scroll"><table className="data-table api-request-table"><caption>{t('api.requestsCaption')}</caption><thead><tr><th scope="col">{t('api.columnRequest')}</th><th scope="col">{t('api.columnTime')}</th><th scope="col">{t('api.columnEndpoint')}</th><th scope="col">{t('api.columnResult')}</th><th scope="col">{t('api.columnAccess')}</th></tr></thead><tbody>{page.data.map((record) => <tr key={record.requestId}>
       <td><Link className="text-link" to={`/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}>{record.requestId}</Link></td>
       <td><time dateTime={record.time}>{formatDate(record.time)}</time><small>{formatNumber(record.durationMs)} ms</small></td>
@@ -502,7 +502,7 @@ function RealtimeWorkspace({ collection, example }: { collection: Collection; ex
 }
 
 export function GlobalAPIPage() {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [params, setParams] = useSearchParams();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -519,7 +519,7 @@ export function GlobalAPIPage() {
 
   return <div className="page-stack api-page"><APIPageHeader description={t('api.workspaceDescription')} eyebrow="API" title={t('api.workspaceTitle')} />
     <nav aria-label={t('api.workspaceLabel')} className="api-tabs"><button aria-current={tab === 'endpoints' ? 'page' : undefined} onClick={() => { const next = new URLSearchParams(params); next.set('tab', 'endpoints'); setParams(next, { replace: true }); }} type="button">{t('api.endpointsTab')}</button><button aria-current={tab === 'requests' ? 'page' : undefined} onClick={() => { const next = new URLSearchParams(params); next.set('tab', 'requests'); setParams(next, { replace: true }); }} type="button">{t('api.requestsTab')}</button></nav>
-    {tab === 'requests' ? <RequestHistory collections={collections} /> : state === 'loading' ? <LoadingState label={t('api.loadingWorkspace')} /> : state === 'error' ? (() => { const copy = errorCopy(error, t('api.collectionsLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })() : <EndpointWorkspace collections={collections} />}
+    {tab === 'requests' ? <RequestHistory collections={collections} /> : state === 'loading' ? <LoadingState label={t('api.loadingWorkspace')} /> : state === 'error' ? (() => { const copy = errorCopy(error, t('api.collectionsLoadFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })() : <EndpointWorkspace collections={collections} />}
   </div>;
 }
 function internalReturnPath(value: string | null) {
@@ -549,7 +549,7 @@ function matchingEndpoint(collections: Collection[], record: RequestRecord) {
 }
 
 export function RequestDetailPage() {
-  const { t, formatDate, formatNumber } = useI18n();
+  const { t, formatDate, formatNumber, errorMessage } = useI18n();
   const { requestId = '' } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -575,7 +575,7 @@ export function RequestDetailPage() {
 
   if (state === 'loading') return <div className="page-stack api-page"><LoadingState label={t('api.requestDetailLoading')} /></div>;
   if (state === 'error' || !record) {
-    const copy = errorCopy(error, t('api.requestDetailLoadFailed'), t);
+    const copy = errorCopy(error, t('api.requestDetailLoadFailed'), t, errorMessage);
     return <div className="page-stack api-page"><ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-link" to="/api?tab=requests">{t('api.backToRequests')}</Link></ErrorState></div>;
   }
   const collection = collections.find((item) => item.id === record.collectionId);
@@ -597,7 +597,7 @@ export function RequestDetailPage() {
         <div><dt>{t('api.authorization')}</dt><dd>{record.authorizationOutcome ?? t('api.notRecorded')}</dd></div>
         <div><dt>{t('api.errorCode')}</dt><dd>{record.errorCode ?? '—'}</dd></div>
       </dl>
-      <div className="api-detail-actions"><Link className="button button--secondary button--small" to={endpointLink}>{t('api.openEndpoint')}</Link>{collectionLink && <Link className="button button--secondary button--small" to={collectionLink}>{t('api.openCollectionApi')}</Link>}<Button onClick={() => navigate('/api?tab=requests&search=' + encodeURIComponent(record.requestId))} size="small">{t('api.findInRequests')}</Button></div>
+      <div className="api-detail-actions"><Link className="button button--secondary button--small" to={endpointLink}>{t('api.openEndpoint')}</Link>{collectionLink && <Link className="button button--secondary button--small" to={collectionLink}>{t('api.openCollectionApi')}</Link>}{record.authorizationOutcome === 'denied' && record.collectionId && <Link className="button button--secondary button--small" to={`/collections/${encodeURIComponent(record.collectionId)}/security`}>{t('api.reviewAccessRules')}</Link>}<Button onClick={() => navigate('/api?tab=requests&search=' + encodeURIComponent(record.requestId))} size="small">{t('api.findInRequests')}</Button></div>
     </Surface>
   </div>;
 }

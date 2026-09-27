@@ -158,7 +158,9 @@ describe('Community V0.1.x closure', () => {
     const { unmount } = render(<App />);
 
     await waitFor(() => expect(document.querySelector('.command-palette-trigger')).not.toBeNull());
-    await waitFor(() => expect(document.querySelector('a.nav-link[href="/activity"]')).not.toBeNull());
+    await userEvent.click(await screen.findByRole('link', { name: 'Settings' }));
+    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
+    expect(within(settingsNavigation).getByRole('link', { name: 'Activity' })).toHaveAttribute('href', '/activity');
     // Command Registry 通过 effect 提交 revision；等一个宏任务再打开面板，避免读到上一版命令。
     await new Promise((resolve) => setTimeout(resolve, 0));
     await userEvent.keyboard('{Control>}k{/Control}');

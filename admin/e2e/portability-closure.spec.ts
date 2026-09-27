@@ -4,7 +4,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type RuntimeProcess = ChildProcessWithoutNullStreams;
 type ReadyRecord = { state: string; url: string; projectId: string };
@@ -26,6 +28,7 @@ let runtimeURL = '';
 // 由第一个测试产生，供第二个测试用真实 CLI restore 回放。
 let latestBundlePath = '';
 let latestCollectionId = '';
+let latestRecordId = '';
 let latestContractHash = '';
 
 function runChecked(command: string, args: string[], cwd: string) {
@@ -56,11 +59,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
   const command = isWindows ? runtimeLauncher : runtimeBinary;
   const args = isWindows ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0'] : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'portability-closure');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + stderr)), 60_000);
+    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + redactRuntimeText(stderr))), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -80,12 +84,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + stderr));
+      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + redactRuntimeText(stderr)));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error('Invalid READY record: ' + JSON.stringify(record));
@@ -148,7 +152,8 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
-  if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
+  await persistRuntimeLogs('portability-closure');
+  if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
 });
 
 test('WP28 backup, restore preflight, export/import, and the typed contract stay product-complete', async ({ page }) => {
@@ -176,12 +181,31 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   await expect(page).toHaveURL(/\/collections\/new$/);
 
   const collection = await requestJSON(page, 'POST', '/admin/api/v1/collections', {
-    name: 'posts', type: 'Normal', fields: [{ name: 'title', type: 'text', required: true }],
+    name: 'posts', type: 'Normal', fields: [
+      { name: 'title', type: 'text', required: true },
+      { name: 'attachment', type: 'file' },
+    ],
   });
   expect(collection.status).toBe(201);
   const collectionId = (JSON.parse(collection.text) as { data: { id: string } }).data.id;
-  const record = await requestJSON(page, 'POST', '/admin/api/v1/collections/' + collectionId + '/records', { values: { title: 'portable' } });
-  expect(record.status).toBe(201);
+  await page.goto(runtimeURL + '/collections/' + encodeURIComponent(collectionId));
+  await page.getByRole('button', { name: 'Create first record', exact: true }).click();
+  await page.getByLabel('title · Required').fill('portable');
+  await page.getByLabel('attachment file').setInputFiles({
+    name: 'portable.txt', mimeType: 'text/plain', buffer: Buffer.from('portable attachment bytes'),
+  });
+  await expect(page.getByRole('status').filter({ hasText: 'File ready' })).toBeVisible();
+  await page.locator('.record-editor').getByRole('button', { name: 'Create record', exact: true }).click();
+  await expect(page.getByText('Record saved. The durable result is shown here.')).toBeVisible();
+  latestRecordId = (await page.locator('.record-detail-identity code').textContent()) ?? '';
+  expect(latestRecordId).toMatch(/^rec_/);
+  await page.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
+
+  const settings = await requestJSON(page, 'PUT', '/admin/api/v1/settings', {
+    expectedRevision: 1, listenAddress: '127.0.0.1:0', requestRetentionDays: 14,
+  });
+  expect(settings.status).toBe(200);
+  expect((JSON.parse(settings.text) as { data: { requestRetentionDays: { value: string } } }).data.requestRetentionDays.value).toBe('14');
 
   await page.goto(runtimeURL + '/settings/portability');
   await expect(page.getByRole('heading', { name: 'Developer and portability', level: 1 })).toBeVisible();
@@ -284,6 +308,13 @@ test('WP28 a CLI restore of an Admin bundle restarts as a complete project', asy
   // 有原始的 portable Record，没有之后才导入的 imported Record。
   expect(listed.text).toContain('portable');
   expect(listed.text).not.toContain('imported');
+
+  await page.goto(restored.url + '/settings/runtime');
+  await expect(page.getByLabel('Request retention (days)')).toHaveValue('14');
+  const restoredFile = await requestJSON(page, 'GET', '/admin/api/v1/collections/' + encodeURIComponent(latestCollectionId)
+    + '/records/' + encodeURIComponent(latestRecordId) + '/files/attachment');
+  expect(restoredFile.status).toBe(200);
+  expect(restoredFile.text).toBe('portable attachment bytes');
 
   // 恢复出来的项目必须仍然可以产生一个自洽的 bundle。
   const backup = await requestJSON(page, 'POST', '/admin/api/v1/backup');

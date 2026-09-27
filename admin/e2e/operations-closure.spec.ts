@@ -4,7 +4,9 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type RuntimeProcess = ChildProcessWithoutNullStreams;
 type ReadyRecord = { state: string; url: string; projectId: string };
@@ -54,11 +56,12 @@ async function startRuntime(root: string, withListenFlag: boolean): Promise<Read
   if (withListenFlag) runtimeArgs.push('--listen', '127.0.0.1:0');
   const args = isWindows ? [runtimeBinary, ...runtimeArgs] : runtimeArgs;
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'operations-closure');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + stderr)), 60_000);
+    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + redactRuntimeText(stderr))), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -83,12 +86,12 @@ async function startRuntime(root: string, withListenFlag: boolean): Promise<Read
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + stderr));
+      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + redactRuntimeText(stderr)));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error('Invalid READY record: ' + JSON.stringify(record));
@@ -165,6 +168,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('operations-closure');
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
 
@@ -227,9 +231,9 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   expect([200, 201]).toContain(pending.status);
 
   await page.goto(runtimeURL + '/settings/drift');
-  await expect(page.getByRole('heading', { name: 'Drift', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Storage consistency', level: 1 })).toBeVisible();
   await expect(page.getByText('A saved change is waiting for review')).toBeVisible();
-  await expect(page.getByText('No drift detected')).toBeVisible();
+  await expect(page.getByText('No differences found')).toBeVisible();
 
   await page.goto(runtimeURL + '/activity');
   await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
@@ -244,7 +248,7 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   await page.goto(runtimeURL + '/collections/' + collectionId + '/security');
   await expect(page.getByRole('heading', { name: 'Simulate a request' })).toBeVisible();
   await page.getByLabel('Operation').selectOption('list');
-  await page.getByLabel('Principal').selectOption('anonymous');
+  await page.getByLabel('Request identity').selectOption('anonymous');
   await page.getByRole('button', { name: 'Simulate' }).click();
   const deniedPanel = page.locator('[data-simulation-decision="deny"]');
   await expect(deniedPanel).toBeVisible();

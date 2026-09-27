@@ -1,7 +1,7 @@
 # Spec 0001 — Modelry Admin 产品 UX 与页面规格
 
-- **Status:** Accepted — V0.1 Community Admin Product UX Baseline
-- **Scope:** Modelry V0.1 Community Project Admin
+- **Status:** Accepted — V0.1.x Admin Product UX Authority
+- **Scope:** Modelry self-hosted Project Admin for independent developers and coding-agent workflows
 - **Depends on:** docs/00-product-vision.md、docs/04-v0.1-community-scope.md、docs/05-product-experience-and-acceptance.md、docs/06-product-architecture.md
 - **Supersedes:** Pre-Reboot Admin UI / IA / Wireframe 文档中的页面结论
 - **Does not define:** HTTP DTO、Database Schema、Go Package、React Component API、最终视觉稿
@@ -25,18 +25,21 @@ Modelry Admin 是 Developer Backend Workspace，不是传统企业后台，也�
 9. 不展示没有真实 Runtime 能力的 Placeholder Action；
 10. UI 默认围绕 Model → Data → Secure → API → Observe → Evolve。
 
-# 2. V0.1 Exact Information Architecture
+# 2. V0.1.x Current Information Architecture
+
+Modelry Admin 面向独立应用开发者，提供自托管后端工作区。Owner 可直接操作，也可通过受支持的 MCP / Service Account 路径连接编码智能体。当前 Shell 按用户任务组织已交付页面；下列 V0.1.x 能力均为真实产品表面，不是路线图占位项。
 
 ## Sidebar
 
 ~~~text
-Overview
+Overview                         <- ungrouped
 
 Build
   Collections
   API
+  Automation
 
-Operate
+Manage
   Changes
   Access
 
@@ -44,21 +47,49 @@ System
   Settings
 ~~~
 
-V0.1 不建立独立一级：
+当前 contextual navigation 在对应产品区域的页面内容上方出现；它让已交付的相关页面可见，而不把每个实现模块都提升成 Sidebar 一级入口：
 
-- Hooks
-- Activity
+~~~text
+Automation
+  Webhooks
+  Event Hooks
+  Jobs
+  Deliveries
+  Extensions
+  Secrets
+
+Access
+  Service Accounts / API Keys
+  Administrators
+  Audit
+
+Settings
+  General
+  Runtime
+  Files & Storage
+  Mail
+  Backup & Restore
+  Diagnostics
+    Activity
+    Drift
+~~~
+
+产品区域入口分别是 `/automations`、`/access` 与 `/settings`；contextual links 使用已实现的子页面和 query context。Activity、Drift、Extensions、Secrets、Administrators 与 Storage / Mail / Portability 等具体路由归入相应区域。Settings 的 General 页面集中展示 Runtime、Database 与 Storage 诊断；Runtime settings 页面可编辑已支持的运行时配置。
+
+不设独立一级入口：
+
+- Extensions
 - Secrets
+- Activity
+- Administrators
 - Data
 - Schema
 - Auth
 - Requests
 
-Requests 属于 Global API。
+Requests 属于 Global API；Audit 属于 Access；Activity 与 Drift 属于 Settings 的 Diagnostics；Extensions 与 Secrets 属于 Automation；Administrators 属于 Access。
 
-Audit 属于 Access。
-
-Secrets 随 Extension Runtime 在 V0.1.x 增加。
+Command Palette、English / Simplified Chinese 与 Light / Dark Theme 是当前全局产品操作，不是未来占位项。
 
 ## Collection Workspace
 
@@ -88,6 +119,7 @@ Access Rules
 ~~~text
 Access Rules
 Authentication
+App Users
 Sessions
 ~~~
 
@@ -96,31 +128,34 @@ Sessions
 Desktop：
 
 ~~~text
-┌──────────────────────────────────────────────────────────────────┐
-│ Modelry / Project                         Runtime Status   User ▼ │
-├───────────────┬──────────────────────────────────────────────────┤
-│ Overview      │                                                  │
-│               │                                                  │
-│ Build         │                 Page Content                     │
-│ Collections   │                                                  │
-│ API           │                                                  │
-│               │                                                  │
-│ Operate       │                                                  │
-│ Changes       │                                                  │
-│ Access        │                                                  │
-│               │                                                  │
-│ System        │                                                  │
-│ Settings      │                                                  │
-└───────────────┴──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Project / Context | Command Palette | Runtime | Language | Theme | Owner │
+├───────────────────┬──────────────────────────────────────────────────────┤
+│ Overview          │ Contextual product navigation (when applicable)      │
+│ Build             ├──────────────────────────────────────────────────────┤
+│ Collections       │                                                      │
+│ API               │ Page content                                         │
+│ Automation        │                                                      │
+│ Manage            │                                                      │
+│ Changes           │                                                      │
+│ Access            │                                                      │
+│ System            │                                                      │
+│ Settings          │                                                      │
+└───────────────────┴──────────────────────────────────────────────────────┘
 ~~~
 
-Header：
+Global Topbar：
 
-- Project / Instance Identity；
+- Project / Context；
+- Command Palette；
 - Runtime Status；
-- Admin Menu：Theme、Session、Logout。
+- Language selector (`en` / `zh-CN`)；
+- Theme toggle；
+- authenticated Owner / Administrator menu and Sign out。
 
-V0.1 不提前增加没有统一搜索语义的 Global Search / Command Palette。
+Command Palette 搜索可见命令和导航，不是后台数据的 Global Search。当前用户、权限、路由及资源上下文决定哪些命令可见；服务端仍是权限校验权威。
+
+Product-area contextual navigation 的选项、路由映射与 query preservation 见第 2 节。无关一级区域切换不继承另一工作面的查询状态。
 
 Runtime Status 异常时直接导航到可处理页面：
 
@@ -229,6 +264,8 @@ users            Edit security
 - 不复制 Request Log；
 - 不复制 Audit；
 - 不放大 KPI。
+
+Overview 还提供面向开发者与编码智能体的 MCP 连接说明及 Service Account 管理入口。Agent access 使用 Control Plane Service Account / API Key；不把 Application User Credential 当作 Admin 身份，也不提供绕过 Runtime 授权的 Agent 通道。
 
 空项目：
 
@@ -710,7 +747,7 @@ Normal：
 Auth：
 
 ~~~text
-[ Access Rules ] [ Authentication ] [ Sessions ]
+[ Access Rules ] [ Authentication ] [ App Users ] [ Sessions ]
 ~~~
 
 # 13. Access Rules
@@ -766,7 +803,7 @@ Access Rule Draft 与 Schema Draft 分离。
 
 Apply Risk 仍由 Runtime 计算。
 
-V0.1 不提供假的 / 不完整 Hypothetical Simulation。
+Policy Simulation 已作为 Access Rules 的辅助预览交付。它不应用规则、不创建授权旁路，也不替代真实 Application HTTP 请求验证；Runtime 对真实请求的授权结果仍是权威事实。
 
 验证路径：
 
@@ -1034,28 +1071,22 @@ History 展示 Durable Applied Facts。
 
 # 19. Access
 
-V0.1 Access 固定：
+Access 是 Control Plane 身份、Permission 与 Audit 工作区。当前 contextual navigation 包含：
 
 ~~~text
-[ Access ] [ Audit ]
+[ Service Accounts / API Keys ] [ Administrators ] [ Audit ]
 ~~~
 
-## 19.1 Access
+Collection 的 Application Access Rules 仍位于 Collection → Security；它与控制平面 Access 分开。
 
-V0.1 只有：
+## 19.1 Service Accounts / API Keys
 
-- Current Owner
-- Service Accounts
-
-不提供 Additional Administrator Management。
+当前 Access 页面管理 Owner 可委派的 Service Accounts、其 Permission 及 API Keys。已交付 Administrators 管理；Owner 可为其他管理员配置受支持的控制平面访问范围。Application Service Account Permission 与 Admin Administrator Permission 是不同的身份 / 授权路径。
 
 ~~~text
 Access                                      [ + Create service account ]
 
-Owner
-jane@example.com                            Full access
-
-Service accounts
+Service accounts / API Keys
 Name              Permission      Status      Last used
 ci-deploy         Custom          Active      1h
 ~~~
@@ -1095,7 +1126,11 @@ API Key Plaintext 只 One-time Reveal。
 
 使用 Dialog。
 
-## 19.2 Audit
+## 19.2 Administrators
+
+Administrators 是 Access 的 contextual destination。它管理已交付的 Admin administrator accounts 与其控制平面 Permission；它不改变 Application Auth、Application User 或 Collection Access Rules 的领域语义。
+
+## 19.3 Audit
 
 ~~~text
 Audit
@@ -1112,38 +1147,23 @@ Audit 是 Control Plane Security / Governance Durable Fact。
 
 # 20. Settings
 
-固定：
+Settings 是系统状态、运行配置与运维能力的 contextual 工作区，当前页面层级为：
 
 ~~~text
-[ Runtime ] [ Storage ]
+Settings
+  General / Diagnostics
+  Runtime
+  Files & Storage
+  Mail
+  Backup & Restore
+  Diagnostics
+    Activity
+    Drift
 ~~~
 
-V0.1 Settings 以 Read-only / Diagnostic 为主。
+General 页面展示 Runtime、Database 与 Storage 健康状态和必要的诊断；Runtime settings 已支持编辑实际暴露的配置并说明其来源及是否需要重启。Files & Storage、Mail、Backup & Restore、Activity、Drift 都是已实现目的地，不是占位页面。
 
-## Runtime
-
-展示：
-
-- version
-- bind / address
-- project source
-- config source
-- runtime health
-- database health
-- restart guidance when relevant
-
-不为了首版 Settings Page 实现复杂 Runtime Config Mutation。
-
-## Storage
-
-展示：
-
-- provider = Local
-- path
-- health
-- usage where reliable
-
-不展示未支持的 S3 Placeholder。
+子页面按实际运行时能力展示可用设置与恢复路径。不得把尚未支持的配置伪装成可编辑，也不得把 settings mutations 与 Collection Schema Pending Draft 混合。
 
 # 21. 列表 Context / URL State
 
@@ -1407,28 +1427,30 @@ Admin V0.1 必须满足：
 - Changes 主 UI 不要求用户理解 ChangeSet / Apply Attempt / Migration；
 - Access UI 不要求理解 Principal / Capability / Credential；
 - Request 与 Audit 不混淆；
-- No Hooks / Activity / Secrets Placeholder；
+- 已实现的 Extensions / Secrets / Activity 等能力通过真实产品页面进入，不以未实现 Placeholder 代替；
 - Search / Filter / Sort / Pagination / Deep Link Context 保持；
 - 所有核心页面遵守 Modelry Design System；
 - Mandatory Browser Acceptance 完成真实业务闭环。
 
-# 30. V0.1.x 后续 Surface
+# 30. V0.1.x 已交付的产品表面
 
-明确不是 V0.1 Placeholder：
+以下能力已进入当前 Admin / Runtime 产品，不再按“未来能力”或 Placeholder 描述：
 
-- Realtime
-- Hooks / Extensions
-- Secrets
-- Generic Activity
-- Additional Administrators
-- Policy Simulation
-- Editable Runtime Settings
+- Realtime subscriptions；
+- Hooks / Extensions 与 Secrets；
+- Automation：Webhooks、Event Hooks、Jobs、Deliveries；
+- Activity 与 Drift；
+- Access 中的多管理员、Service Accounts 与 API Keys；
+- Collection Security 中的 Policy Simulation；
+- 可编辑 Runtime Settings；
+- Import / Export 与 Backup / Restore；
+- Admin i18n（English / Simplified Chinese）、Theme 与 Command Palette。
 
-当 Runtime Capability 真正进入对应版本时，再通过新的 Spec 增加 Product Surface，而不是提前在 V0.1 Sidebar 留空入口。
+高级运维能力按 Automation、Access、Settings contextual navigation 渐进式进入，不把内部模块数等同于一级导航数量。UI 文案和入口不得改写底层稳定 Domain / Contract 语义。此清单描述当前已交付产品面，不承诺 Enterprise、PostgreSQL 或其它 Issue 未定义路线。
 
-# 31. V0.1.x Admin Shell Evolution
+# 31. V0.1.x Admin Shell 与全局产品操作
 
-本节是 V0.1.x 的 UX 演进附录，不改写第 3 节所记录的 V0.1 决策。V0.1.x 的 Admin Shell 在保留既有 Project Admin 路由和业务语义的基础上，明确演进为共享的全局工作面：
+本节描述当前已实现的共享 Shell 和导航，不是尚待决定的演进方案；它与上文当前 Information Architecture 一致，且不改变底层 Project / Collection / Security 业务语义：
 
 ~~~text
 Project / Context | Command Palette | Runtime | Language | Theme | Owner
@@ -1455,11 +1477,12 @@ Command Palette 是通过共享、可扩展的 Command Registry 注册的操作�
 - `⌘K`（macOS）和 `Ctrl+K`（Windows/Linux）打开 palette；输入只对可见 command 的 label/keywords 做模糊匹配，不对后台数据做全文搜索。
 - 支持键盘上下移动、Enter 执行、Escape 关闭、focus trap 与关闭后的 focus restoration。
 - 只显示当前用户能力、项目、路由和资源上下文中真实可执行的命令。命令经正常导航和业务动作执行，不提供授权旁路。
-- V0.1.x Admin session 的真实授权主体只有经 Runtime 校验的 Owner；当前 Admin Session contract 不含细粒度 capability claims。CommandContext 从实时 Owner session 表达 `admin:owner-session` capability 与 Owner principal，并携带当前 route / Collection context。声明了所需 capability 的命令仅在上下文包含全部所需 capability 时可见；没有 capability requirement 的命令仍由其真实 route/resource `isVisible` 条件决定。Application Service Account / API Key 的 Permission 不属于 Admin authorization，也不得被复用于此处。
-- Command visibility 仅控制发现和调用入口；运行时 API 的 Owner session 校验仍是授权权威，不能由客户端命令注册替代或绕过。
-- 可用命令限于已实现的导航页、近期 Collection、当前 Collection tabs 与 Create actions、适用的 Pending/Failed Change，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
+- Command visibility 依据当前已认证 Admin session、角色 / Permission、route、resource 与 command context；只隐藏无权或不相关的入口，不替代服务端授权。
+- Owner 与 Administrator 使用 Admin Control Plane session / Permission；Application Service Account / API Key 与 Application User Credential 均不是 Admin session，也不得复用于 Admin authorization。
+- Command visibility 仅控制发现和调用入口；Runtime API 对 Admin session 与 Permission 的检查仍是授权权威，不能由客户端命令注册替代或绕过。
+- 可用命令限于真实存在的导航页、近期 Collection、当前 Collection tabs 与 Create actions、Automation destinations、适用的 Pending / Failed Change、Access / Settings destinations，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
 - 导航只在语义匹配时保留 URL/deep-link context；切换无关的一级工作区不继承另一页面的 query/hash。
 
 ## 31.4 Acceptance
 
-使用 Admin tests/build 与真实 Chromium 验证 Shell 双语、locale 持久化与无重载切换、当前深链状态保留、数据标识不变、Theme 持久化、平台快捷键、keyboard/focus 行为、命令上下文可见性与实际导航。此附录不改变 V0.1 Core Browser Flows 或服务端 Product Semantics。
+使用 Admin tests/build 与真实 Chromium 验证 Shell 双语、locale 持久化与无重载切换、当前深链状态保留、数据标识不变、Theme 持久化、平台快捷键、keyboard/focus 行为、命令上下文可见性与实际导航，以及 Automation / Access / Settings contextual navigation 和多管理员 Permission 下的真实可见性。完整浏览器发布门禁及 Computer Use 职责见 SPEC-0003；此节不改变底层 Domain / Contract 或 V0.1 Core Flows。

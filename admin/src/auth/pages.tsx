@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { ArrowRight, Check, CircleAlert, Command, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { ApiClientError } from '../api/client';
 import { Button, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
-import { useI18n } from '../i18n/i18n';
+import { useI18n, type TranslationKey } from '../i18n/i18n';
 import {
   createOwner,
   fetchBootstrapStatus,
@@ -14,6 +14,17 @@ import './auth.css';
 
 type AuthViolation = { path: string; code: string; message: string };
 
+const authViolationKeys: Record<string, TranslationKey> = {
+  INVALID_EMAIL: 'ownerAuth.invalidEmail',
+  REQUIRED: 'ownerAuth.requiredValue',
+  TOO_LONG: 'ownerAuth.passwordTooLong',
+  TOO_SHORT: 'ownerAuth.passwordLength',
+};
+
+function authViolationMessage(violation: AuthViolation, t: ReturnType<typeof useI18n>['t']): string {
+  return t(authViolationKeys[violation.code] ?? 'ownerAuth.validationReview', { code: violation.code });
+}
+
 function readViolations(error: unknown): AuthViolation[] {
   if (!(error instanceof ApiClientError)) return [];
   const violations = error.apiError.details.violations;
@@ -24,56 +35,56 @@ function readViolations(error: unknown): AuthViolation[] {
   );
 }
 
-function fieldViolation(error: unknown, field: 'email' | 'password'): string | undefined {
-  return readViolations(error).find((violation) => violation.path.split('/').at(-1) === field)?.message;
+function fieldViolation(error: unknown, field: 'email' | 'password', t: ReturnType<typeof useI18n>['t']): string | undefined {
+  const violation = readViolations(error).find((item) => item.path.split('/').at(-1) === field);
+  return violation ? authViolationMessage(violation, t) : undefined;
 }
 
 function AuthError({ error, fallback, title }: { error: unknown; fallback: string; title: string }) {
   const apiError = error instanceof ApiClientError ? error.apiError : undefined;
   const violations = readViolations(error);
-  const { errorMessage } = useI18n();
+  const { errorMessage, t } = useI18n();
   return (
     <section aria-label={title} className="auth-error" role="alert">
       <span aria-hidden="true" className="auth-error__icon"><CircleAlert size={17} /></span>
       <div className="auth-error__content">
         <h2>{title}</h2>
-        <p>{apiError ? errorMessage(apiError.code) ?? apiError.message : fallback}</p>
-        {apiError && <p className="auth-error__code">Error code <code>{apiError.code}</code></p>}
-        {apiError?.hint && <p className="auth-error__hint">{apiError.hint}</p>}
+        <p>{apiError ? errorMessage(apiError.code) ?? fallback : fallback}</p>
+        {apiError && <p className="auth-error__code">{t('ownerAuth.errorCode')} <code>{apiError.code}</code></p>}
         {violations.length > 0 && (
           <ul className="auth-error__violations">
             {violations.map((violation, index) => (
               <li key={`${violation.path}-${violation.code}-${index}`}>
-                <code>{violation.path}</code> {violation.message}
+                <code>{violation.path}</code> <code>{violation.code}</code> {authViolationMessage(violation, t)}
               </li>
             ))}
           </ul>
         )}
-        {apiError && <p className="auth-error__request">Request ID <code>{apiError.requestId}</code></p>}
+        {apiError && <p className="auth-error__request">{t('ownerAuth.requestId')} <code>{apiError.requestId}</code></p>}
       </div>
     </section>
   );
 }
 
-function AuthFrame({ children, eyebrow }: { children: ReactNode; eyebrow: string }) {
+function AuthFrame({ children, eyebrow, mode }: { children: ReactNode; eyebrow: string; mode: 'setup' | 'login' }) {
+  const { t } = useI18n();
   return (
     <main className="auth-screen">
       <div className="auth-layout">
         <a aria-label="Modelry" className="auth-brand" href="/">
           <span aria-hidden="true" className="auth-brand__mark"><Command size={18} strokeWidth={2.2} /></span>
           <span className="auth-brand__word">modelry</span>
-          <StatusChip state="ready">COMMUNITY</StatusChip>
+          <StatusChip state="ready">{t('shell.localContext')}</StatusChip>
         </a>
         <Surface className="auth-card" variant="raised">
           <div className="auth-card__heading">
             <span aria-hidden="true" className="auth-card__icon">
-              {eyebrow === 'FIRST RUN' ? <ShieldCheck size={20} /> : <LockKeyhole size={20} />}
+              {mode === 'setup' ? <ShieldCheck size={20} /> : <LockKeyhole size={20} />}
             </span>
             <p className="eyebrow">{eyebrow}</p>
           </div>
           {children}
         </Surface>
-        <footer className="auth-footer"><span>Modelry Community</span><span aria-hidden="true">·</span><span>Control Plane</span></footer>
       </div>
     </main>
   );
@@ -127,15 +138,16 @@ function AuthSuccess({
   result: AuthenticatedOwner;
   title: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className="auth-success" role="status">
       <span aria-hidden="true" className="auth-success__icon"><Check size={19} /></span>
       <h1>{title}</h1>
       <p className="auth-success__description">{description}</p>
       <dl className="auth-identity">
-        <div><dt>Owner account</dt><dd>{result.owner.email}</dd></div>
-        <div><dt>Session</dt><dd><StatusChip state="ready">Active</StatusChip></dd></div>
-        <div><dt>Session expires</dt><dd><time dateTime={result.session.expiresAt}>{result.session.expiresAt}</time></dd></div>
+        <div><dt>{t('ownerAuth.ownerAccount')}</dt><dd>{result.owner.email}</dd></div>
+        <div><dt>{t('ownerAuth.session')}</dt><dd><StatusChip state="ready">{t('ownerAuth.active')}</StatusChip></dd></div>
+        <div><dt>{t('ownerAuth.sessionExpires')}</dt><dd><time dateTime={result.session.expiresAt}>{result.session.expiresAt}</time></dd></div>
       </dl>
       {onContinue && (
         <Button className="auth-submit" onClick={onContinue} type="button" variant="primary">
@@ -155,6 +167,7 @@ export type BootstrapPageProps = {
 type BootstrapState = 'checking' | 'required' | 'closed' | 'unavailable' | 'complete';
 
 export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: BootstrapPageProps) {
+  const { t } = useI18n();
   const [state, setState] = useState<BootstrapState>('checking');
   const [statusError, setStatusError] = useState<unknown>();
   const [submitError, setSubmitError] = useState<unknown>();
@@ -201,79 +214,79 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
   }
 
   if (state === 'checking') {
-    return <AuthFrame eyebrow="FIRST RUN"><LoadingState label="Checking project setup" /></AuthFrame>;
+    return <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup"><LoadingState label={t('ownerAuth.loadingSetup')} /></AuthFrame>;
   }
 
   if (state === 'unavailable') {
     return (
-      <AuthFrame eyebrow="FIRST RUN">
-        <div className="auth-copy"><h1>Connect to your Modelry project</h1><p>Setup status is unavailable right now. Check that the Runtime is running, then try again.</p></div>
-        <AuthError error={statusError} fallback="The Runtime could not be reached." title="Setup status could not be loaded" />
-        <Button className="auth-submit" onClick={() => void checkStatus()} type="button" variant="primary">Retry setup check</Button>
+      <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
+        <div className="auth-copy"><h1>{t('ownerAuth.connectTitle')}</h1><p>{t('ownerAuth.setupUnavailable')}</p></div>
+        <AuthError error={statusError} fallback={t('ownerAuth.runtimeUnavailable')} title={t('ownerAuth.setupLoadFailed')} />
+        <Button className="auth-submit" onClick={() => void checkStatus()} type="button" variant="primary">{t('ownerAuth.retrySetup')}</Button>
       </AuthFrame>
     );
   }
 
   if (state === 'closed') {
     return (
-      <AuthFrame eyebrow="FIRST RUN">
-        <div className="auth-copy"><h1>Setup is already complete</h1><p>This project already has its Owner. Sign in to continue to the Admin.</p></div>
-        <a className="auth-link auth-link--button" href={loginHref}>Sign in <ArrowRight aria-hidden="true" size={15} /></a>
+      <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
+        <div className="auth-copy"><h1>{t('ownerAuth.setupAlreadyComplete')}</h1><p>{t('ownerAuth.setupAlreadyCompleteDescription')}</p></div>
+        <a className="auth-link auth-link--button" href={loginHref}>{t('ownerAuth.signIn')} <ArrowRight aria-hidden="true" size={15} /></a>
       </AuthFrame>
     );
   }
 
   if (state === 'complete' && result) {
     return (
-      <AuthFrame eyebrow="FIRST RUN">
+      <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
         <AuthSuccess
-          actionLabel="Continue to Modelry"
-          description="Setup is complete. Your Owner session is active for this project."
+          actionLabel={t('ownerAuth.continueToModelry')}
+          description={t('ownerAuth.setupCompleteDescription')}
           onContinue={onAuthenticated ? undefined : () => { window.location.assign('/'); }}
           result={result}
-          title="Owner account ready"
+          title={t('ownerAuth.ownerReady')}
         />
       </AuthFrame>
     );
   }
 
   return (
-    <AuthFrame eyebrow="FIRST RUN">
+    <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
       <div className="auth-copy">
-        <h1>Create your Modelry owner</h1>
-        <p>This Owner manages the Modelry project. Use an email and password you can keep secure.</p>
+        <h1>{t('ownerAuth.createOwner')}</h1>
+        <p>{t('ownerAuth.createOwnerDescription')}</p>
       </div>
       {submitError !== undefined && (
         <>
-          <AuthError error={submitError} fallback="The Runtime could not complete setup. Check the connection and try again." title="Owner setup could not be completed" />
-          <Button className="auth-recheck" disabled={submitting} onClick={() => void checkStatus()} type="button" variant="quiet">Check setup status</Button>
+          <AuthError error={submitError} fallback={t('ownerAuth.setupFailedDescription')} title={t('ownerAuth.setupFailed')} />
+          <Button className="auth-recheck" disabled={submitting} onClick={() => void checkStatus()} type="button" variant="quiet">{t('ownerAuth.checkSetup')}</Button>
         </>
       )}
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)}>
         <AuthInput
           autoComplete="email"
-          error={fieldViolation(submitError, 'email')}
+          error={fieldViolation(submitError, 'email', t)}
           id="bootstrap-email"
-          label="Email"
+          label={t('ownerAuth.email')}
           onChange={setEmail}
           type="email"
           value={email}
         />
         <AuthInput
           autoComplete="new-password"
-          error={fieldViolation(submitError, 'password')}
+          error={fieldViolation(submitError, 'password', t)}
           id="bootstrap-password"
-          label="Password"
+          label={t('ownerAuth.password')}
           onChange={setPassword}
           type="password"
           value={password}
         />
         <Button className="auth-submit" disabled={submitting} type="submit" variant="primary">
-          {submitting ? 'Creating owner…' : 'Complete setup'}
+          {submitting ? t('ownerAuth.creatingOwner') : t('ownerAuth.completeSetup')}
           {!submitting && <ArrowRight aria-hidden="true" size={16} />}
         </Button>
       </form>
-      <p className="auth-note"><KeyRound aria-hidden="true" size={14} /> Bootstrap closes after the first Owner is created.</p>
+      <p className="auth-note"><KeyRound aria-hidden="true" size={14} /> {t('ownerAuth.bootstrapNotice')}</p>
     </AuthFrame>
   );
 }
@@ -302,6 +315,7 @@ function getReturnTo(value: string | undefined): string | undefined {
 }
 
 export function LoginPage({ onAuthenticated, returnTo, sessionExpired = false }: LoginPageProps) {
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -334,48 +348,48 @@ export function LoginPage({ onAuthenticated, returnTo, sessionExpired = false }:
   if (result) {
     const destination = getReturnTo(returnTo) ?? '/';
     return (
-      <AuthFrame eyebrow="OWNER SIGN IN">
+      <AuthFrame eyebrow={t('ownerAuth.signInEyebrow')} mode="login">
         <AuthSuccess
-          actionLabel="Continue to Modelry"
-          description="You are signed in to this project with an active Owner session."
+          actionLabel={t('ownerAuth.continueToModelry')}
+          description={t('ownerAuth.signInSuccessDescription')}
           onContinue={onAuthenticated ? undefined : () => { window.location.assign(destination); }}
           result={result}
-          title="Owner session active"
+          title={t('ownerAuth.ownerSessionActive')}
         />
       </AuthFrame>
     );
   }
 
   return (
-    <AuthFrame eyebrow="OWNER SIGN IN">
-      <div className="auth-copy"><h1>Sign in</h1><p>Use your Modelry Owner account to open this project.</p></div>
-      {sessionExpired && <p className="auth-session-notice" role="status">Your session expired. Sign in to continue.</p>}
-      {error !== undefined && <AuthError error={error} fallback="The Runtime could not complete sign in. Check the connection and try again." title="Could not sign in" />}
+    <AuthFrame eyebrow={t('ownerAuth.signInEyebrow')} mode="login">
+      <div className="auth-copy"><h1>{t('ownerAuth.signInTitle')}</h1><p>{t('ownerAuth.signInDescription')}</p></div>
+      {sessionExpired && <p className="auth-session-notice" role="status">{t('ownerAuth.sessionExpired')}</p>}
+      {error !== undefined && <AuthError error={error} fallback={t('ownerAuth.signInFailedDescription')} title={t('ownerAuth.signInFailed')} />}
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)}>
         <AuthInput
           autoComplete="username"
-          error={fieldViolation(error, 'email')}
+          error={fieldViolation(error, 'email', t)}
           id="login-email"
-          label="Email"
+          label={t('ownerAuth.email')}
           onChange={setEmail}
           type="email"
           value={email}
         />
         <AuthInput
           autoComplete="current-password"
-          error={fieldViolation(error, 'password')}
+          error={fieldViolation(error, 'password', t)}
           id="login-password"
-          label="Password"
+          label={t('ownerAuth.password')}
           onChange={setPassword}
           type="password"
           value={password}
         />
         <Button className="auth-submit" disabled={submitting} type="submit" variant="primary">
-          {submitting ? 'Signing in…' : 'Sign in'}
+          {submitting ? t('ownerAuth.signingIn') : t('ownerAuth.signIn')}
           {!submitting && <ArrowRight aria-hidden="true" size={16} />}
         </Button>
       </form>
-      {submitting && <span className="sr-only" role="status">Signing in</span>}
+      {submitting && <span className="sr-only" role="status">{t('ownerAuth.signingIn')}</span>}
     </AuthFrame>
   );
 }

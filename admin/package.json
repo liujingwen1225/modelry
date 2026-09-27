@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "browser:acceptance": "playwright test",
+    "browser:acceptance": "node ./e2e/run-browser-acceptance.mjs",
     "browser:smoke": "npm run browser:acceptance"
   },
   "dependencies": {

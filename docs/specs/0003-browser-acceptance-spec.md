@@ -1,12 +1,12 @@
 # SPEC-0003 — V0.1 Browser Acceptance
 
-- **状态：** Accepted — V0.1 Browser Acceptance Baseline
-- **范围：** Modelry Community V0.1 核心产品流程的浏览器验收
-- **依据：** `CONTEXT.md`、`AGENTS.md`、V0.1 当前权威文档、SPEC-0001、SPEC-0002、ADR-0001、GitHub Issues #2 / #6
+- **状态：** Accepted — V0.1 Core Flows + Shipped V0.1.x Browser Acceptance
+- **范围：** V0.1 核心闭环及已交付 V0.1.x 产品表面的候选版本浏览器回归
+- **依据：** `CONTEXT.md`、`AGENTS.md`、当前权威产品文档、SPEC-0001、SPEC-0002、ADR-0001、GitHub Issues #2 / #6 / #11 / #20 / #35 / #36 / #37
 - **依赖：** ADR-0001 Runtime / Storage、SPEC-0002 Domain Foundation、Core HTTP Contract / OpenAPI
 - **不定义：** HTTP 路径或 DTO、SQLite 表结构、React 组件 API、测试框架或产品实现
 
-本 Spec 定义十条 V0.1 产品能力端到端验收流程。每条流程在其对应产品能力实现并纳入候选版本后，必须通过真实 Admin + Chromium 验收；API 和 Runtime 诊断用于第二观察面验证，不可代替浏览器产品验收。
+本 Spec 保留十条 V0.1 核心产品流程，并把当前已交付 V0.1.x 能力纳入候选版本回归范围。流程定义是验收要求，不表示当前候选已经通过。每项声明支持的能力都必须在真实 Admin + Chromium 中验证；API 和 Runtime 诊断是第二观察面，不能代替浏览器产品验收。
 
 ## 1. 验收环境与执行规则
 
@@ -40,7 +40,7 @@
 
 ### 1.3 产品能力发布判定
 
-十条流程分别是对应产品能力完成后的端到端发布门禁。候选版本声明支持某条流程所覆盖的能力时，该流程必须通过；声明完整 V0.1 核心产品能力时，FLOW-001 至 FLOW-010 均须通过。流程定义描述目标产品行为，不代表该能力已实现，也不授权提前实现后续功能。
+十条核心流程分别是对应产品能力完成后的端到端发布门禁。候选版本声明支持某条流程所覆盖的能力时，该流程必须通过；声明完整 V0.1 核心产品能力时，FLOW-001 至 FLOW-010 均须通过。V0.1.x 已交付能力还须通过第 1.5 节对应的完整 Playwright 回归。流程定义描述目标产品行为，不代表当前候选已实现或通过，也不授权提前实现后续功能。
 
 某项能力尚未进入候选版本时，不得把该流程记为通过，也不得把它伪装成已交付功能。该能力进入候选版本后，其流程必须按本 Spec 使用真实 Runtime、真实 SQLite、真实 HTTP、真实 Admin 和真实 Chromium；不得使用 Mock Backend、Stub、网络拦截或录制响应通过发布门禁。API 请求成功、Go 单元 / 集成测试通过或静态 OpenAPI 校验均不能单独替代浏览器流程结果。任何适用流程失败须先修复或阻断相应发布；不得把失败项标作通过。
 
@@ -61,6 +61,67 @@ empty Project Root
 ```
 
 此发布门禁执行全部十条流程，不得用旧的 Runtime / Storage foundation smoke 替代。Runtime / Storage 诊断和结构化错误仍是各流程的辅助核验；它们不能代替真实的产品操作、耐久状态检查或 Chromium 流程。候选版本声明完整支持 V0.1 Community 时，任何适用流程失败都阻断发布，不得将尚未实现的功能标为通过。
+
+### 1.5 V0.1.x 产品表面与当前完整 Playwright suite
+
+候选版本还须回归已经交付的 Realtime、Extensions / Secrets、Automation、文件与存储、多管理员、Activity、Policy Simulation、Drift、Runtime Settings、Portability，以及 Admin Sidebar / contextual navigation、Overview、Command Palette、MCP discoverability、i18n、Theme、Owner / Administrator visibility 等产品表面。旧的 V0.1 Community-only 描述不限定当前候选范围。
+
+仓库当前 `admin/e2e` 的完整 Playwright spec 文件为：
+
+~~~text
+auth-admin.spec.ts
+extensions-lifecycle.spec.ts
+files-storage.spec.ts
+operations-closure.spec.ts
+portability-closure.spec.ts
+product-closure.spec.ts
+realtime-events.spec.ts
+upgrade-ux-closure.spec.ts
+webhooks-jobs.spec.ts
+~~~
+
+全量入口是 `cd admin && npm run browser:acceptance`。候选门禁运行全部 spec，不得只挑产品改动对应的部分。当前 suite 使用 Chromium、`retries = 0`；核心 HTTP / Runtime 流程必须连接真实 standalone Runtime、真实 SQLite、真实 HTTP 与嵌入式 Admin。针对浏览器交互的关键路径不得用 Mock Runtime、Stub、网络拦截、录制响应或直接写 SQLite 来冒充闭环。
+
+产品表面回归至少检查：
+
+- Sidebar 当前 IA、Overview，以及 Automation / Access / Settings contextual navigation；
+- 旧 Deep Link、Back / query context、命令面板发现和执行、MCP / Agent 入口；
+- Community 旧定位不再主导当前入口；多管理员与 Owner 的入口按真实 Permission 显示；
+- locale 切换不丢当前上下文，数据标识保持原样；Light / Dark Theme 的切换与持久化；
+- 长名称、长 ID、长错误和中英文在 1280 / 1440 / 1920 桌面宽度、Tablet 与基础 Mobile 宽度下不破坏导航和可用性。
+
+### 1.6 Restart、Backup / Restore 与 Computer Use 边界
+
+FLOW-010 验证关闭浏览器、停止 Runtime 后，对同一 Project Root 重启并由 Chromium 重新核验 Durable State。已交付 Portability 还须覆盖完整的真实浏览器 Restore 闭环：
+
+~~~text
+真实业务状态
+→ Backup
+→ Validate
+→ Restore 到独立 Project Root
+→ 启动恢复后的 Runtime
+→ Browser 验证模型 / 数据 / 文件 / 配置
+~~~
+
+Playwright 负责可重复、确定性、可回归的业务断言、Durable State、导航和全局 Browser Health Gate。Codex Computer Use 是独立探索式产品复审：#37-A 在 #36 之前盲测产品心智与发现性，不重复执行测试脚本；#37-B 在全量 Playwright 通过及必要修复后，定向检查候选是否真的顺手。Computer Use 不由静态截图替代，Playwright 也不代替首次体验判断。
+
+### 1.7 #37-A 体验结论与修复状态
+
+第一次盲测报告的实际路径为：隔离空 Root 启动 → 在 Overview 创建 Owner → 自动进入创建 Collection → 创建包含必填 `title` 和 Boolean `done` 的 `tasks` → 创建 Record → 到 Access Rules 执行匿名 List 拒绝模拟 → 从 Collection API 得到真实 403 → 打开持久化 Request Detail → 返回 Overview。该次探索范围内未报告 P1，结论是建议继续项目所有者真实体验；这不等于 #36 全量 suite、#37-B 或发布决策已完成。
+
+上面记录的闭环路径本身没有访问 Automation、Settings 或 MCP 配置页面；这些入口的可发现性仍须在 #36 产品表面 suite 和 #37-B 定向复审中核验，不从其它已完成页面推断其通过。
+
+- **P2（已修复）：** Request Detail 缺少返回该 Collection Access Rules 的恢复入口。现提供 `Review access rules` 深链到 `/collections/{collectionId}/security`；针对性真实 Runtime E2E 已通过。最终候选仍须由 #36 全量 suite 和之后的 #37-B 复验。
+- **P3（两项留作后续）：** Command Palette 搜索“服务账号”仍无匹配；1280×720 时部分中文“必填 / 唯一”表单标签仍会换行。按 #20 分级，这两项轻量问题可留作后续优化，不作为当前阻断项。中文空状态残留英文 `Collection` 已改为“集合”，并有单元测试覆盖。
+- **单独 P1 诊断（修复后验证未闭合）：** Owner cookie 不按端口隔离曾阻塞 Root A 后 Root B 首次 Bootstrap。已移除 Bootstrap 中可选 Owner-cookie 预校验，同时保持同源 / loopback / Auth guard 与 atomic Bootstrap；Go 回归通过。Root A → Root B 跨 Root 的 Computer Use 复验尚未完成，当前被 Computer Use 基础设施错误阻止，因此不能记录为体验确认或宣称 No P1 Remaining。
+
+### 1.8 问题分级与修复—复验闭环
+
+- **P1：** 阻止项目所有者体验，包括核心流程、数据 / 权限 / 安全 / 持久化、Broken Navigation、关键能力发现、严重布局 / i18n 或与当前定位冲突的默认体验问题。
+- **P2：** 明显影响体验但仍有绕过，包括多余步骤、不自然页面层级、主操作不明显、明显密度 / 对齐问题或恢复路径不够直接。
+- **P3：** 轻量文案、spacing 或非关键像素问题。
+
+对发现的 P1 和本轮决定修复的 P2，闭环为：发现 → 分级 → 修复 → 受影响 unit / integration → 受影响 Playwright → 必要时全量 Playwright → Computer Use 复验。P1 不得以“存在绕过”标为可接受；未复验的修复要明确标出，不得记为通过。
 
 ## 2. FLOW-001 — First Run
 
@@ -430,6 +491,8 @@ empty Project Root
 
 ## 12. Flow Coverage 与完成条件
 
+本节的 `[x]` 表示十条核心流程的验收定义已写入本 Spec，不表示当前工作分支的全量 Playwright、Restart、Backup / Restore 或 Computer Use 已执行 / 通过。候选运行结果须由 #36 和 #37 记录。
+
 - [x] FLOW-001 First Run
 - [x] FLOW-002 Create Normal Collection
 - [x] FLOW-003 Record CRUD
@@ -447,3 +510,8 @@ empty Project Root
 - [x] 主 Agent 已复核 Accepted HTTP Contract / OpenAPI、十条流程结构与 V0.1 Product Closure 发布门禁，并接受本 Spec。
 
 ## 13. 明确排除
+
+- 本 Spec 不承诺 Enterprise / PostgreSQL / 多项目运行时路线；也不以该路线扩张 V0.1.x 候选门禁。
+- UI 页面层级和用户词汇不改写 Accepted Domain / HTTP Contract；页面文案不能成为底层领域语义的新定义。
+- 不把 API-only、unit / integration、Mock、截图、人工直接读写 SQLite 或 Computer Use 观察记作全量 Playwright 通过。
+- 未执行的 suite、未完成的重启 / 恢复与未做的 Computer Use 复验必须标为未验证，不得从流程已定义推断为通过。

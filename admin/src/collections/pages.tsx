@@ -10,9 +10,9 @@ import './collections.css';
 import type { CollectionWorkspaceContext } from './workspace-context';
 
 const SYSTEM_FIELDS = [
-  { name: 'id', label: 'System ID', type: 'text' },
-  { name: 'createdAt', label: 'Created time', type: 'dateTime' },
-  { name: 'updatedAt', label: 'Updated time', type: 'dateTime' },
+  { name: 'id', type: 'text' },
+  { name: 'createdAt', type: 'dateTime' },
+  { name: 'updatedAt', type: 'dateTime' },
 ] as const;
 
 type FieldDraft = {
@@ -37,13 +37,18 @@ function newFieldDraft(key: string): FieldDraft {
   };
 }
 
-function apiErrorCopy(error: unknown, fallback: string) {
+function apiErrorCopy(
+  error: unknown,
+  fallback: string,
+  t: ReturnType<typeof useI18n>['t'],
+  errorMessage: ReturnType<typeof useI18n>['errorMessage'],
+) {
   if (!(error instanceof ApiClientError)) {
-    return { title: fallback, message: error instanceof Error ? error.message : 'Try again when the project is available.' };
+    return { title: fallback, message: t('common.tryAgainWhenAvailable') };
   }
   return {
-    title: error.apiError.message,
-    message: [error.apiError.code, error.apiError.hint, `Request ID: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+    title: errorMessage(error.apiError.code) ?? t('errors.requestFailed'),
+    message: [t('common.errorCode'), error.apiError.code, `${t('common.requestId')}: ${error.apiError.requestId}`, t('common.tryAgainWhenAvailable')].join(' · '),
   };
 }
 
@@ -62,7 +67,7 @@ function PageTitle({ eyebrow, title, description, action }: {
 }
 
 export function CollectionsPage() {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<CollectionSummary[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -138,14 +143,14 @@ export function CollectionsPage() {
 
       {state === 'loading' && <LoadingState label={t('collections.loading')} />}
       {state === 'error' && (() => {
-        const copy = apiErrorCopy(error, t('collections.loadFailed'));
+        const copy = apiErrorCopy(error, t('collections.loadFailed'), t, errorMessage);
         return <ErrorState description={copy.message} title={copy.title}>
           <Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button>
         </ErrorState>;
       })()}
       {state === 'ready' && visible.length === 0 && items.length === 0 && (
         <EmptyState description={t('collections.emptyDescription')} title={t('collections.emptyTitle')}>
-          <Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={15} />Create Collection</Link>
+          <Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={15} />{t('collections.create')}</Link>
         </EmptyState>
       )}
       {state === 'ready' && visible.length === 0 && items.length > 0 && (
@@ -169,7 +174,7 @@ function CollectionCard({ collection }: { collection: CollectionSummary }) {
   const { t } = useI18n();
   return (
     <Link className="collection-card" to={`/collections/${encodeURIComponent(collection.id)}`}>
-      <div className="collection-card__top"><span className="collection-card__icon"><Database aria-hidden="true" size={18} /></span><StatusChip state={collection.type}>{collection.type}</StatusChip></div>
+      <div className="collection-card__top"><span className="collection-card__icon"><Database aria-hidden="true" size={18} /></span><StatusChip state={collection.type}>{collectionTypeName(collection.type, t)}</StatusChip></div>
       <h2>{collection.name}</h2>
       <p className="collection-card__description">{collection.description || t('collections.noDescription')}</p>
       <div className="collection-card__meta">
@@ -187,7 +192,7 @@ function CollectionListItem({ collection }: { collection: CollectionSummary }) {
   return <Link className="collection-list__item" role="listitem" to={`/collections/${encodeURIComponent(collection.id)}`}>
     <span className="collection-list__icon"><Database aria-hidden="true" size={17} /></span>
     <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || t('collections.noDescription')}</span></span>
-    <StatusChip state={collection.type}>{collection.type}</StatusChip>
+    <StatusChip state={collection.type}>{collectionTypeName(collection.type, t)}</StatusChip>
     <span className="collection-list__meta">
       {collectionCount(collection.recordCount, 'record', t)} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}
       <CollectionChangeIndicator status={collection.pendingChangeStatus} />
@@ -201,6 +206,10 @@ function collectionCount(count: number | undefined, noun: 'record' | 'field', tr
   const plural = noun === 'record' ? 'collections.count.recordMany' : 'collections.count.fieldMany';
   if (typeof count !== 'number') return '— ' + translate(plural, { count: 0 });
   return translate(count === 1 ? singular : plural, { count });
+}
+
+function collectionTypeName(type: CollectionType, t: ReturnType<typeof useI18n>['t']) {
+  return t(type === 'Auth' ? 'collections.auth' : 'collections.normal');
 }
 
 function CollectionChangeIndicator({ status }: { status?: CollectionSummary['pendingChangeStatus'] }) {
@@ -219,7 +228,7 @@ function isFieldName(value: string) {
   return /^[A-Za-z][A-Za-z0-9_]{0,62}$/.test(value);
 }
 
-function parseInitialFields(fields: FieldDraft[], type: CollectionType): { fields: FieldDefinition[]; errors: Record<string, FieldErrors> } {
+function parseInitialFields(fields: FieldDraft[], type: CollectionType, t: ReturnType<typeof useI18n>['t']): { fields: FieldDefinition[]; errors: Record<string, FieldErrors> } {
   const errors: Record<string, FieldErrors> = {};
   const seen = new Set<string>(['id', 'createdat', 'updatedat', 'password']);
   if (type === 'Auth') seen.add('email');
@@ -228,25 +237,25 @@ function parseInitialFields(fields: FieldDraft[], type: CollectionType): { field
     const name = field.name.trim();
     if (!name && fields.length === 1 && index === 0) return;
     const rowErrors: FieldErrors = {};
-    if (!isFieldName(name)) rowErrors.name = 'Use a letter first, then letters, numbers, or underscores.';
-    if (seen.has(name.toLocaleLowerCase())) rowErrors.name = 'Field names must be unique.';
+    if (!isFieldName(name)) rowErrors.name = t('collections.validation.fieldName');
+    if (seen.has(name.toLocaleLowerCase())) rowErrors.name = t('collections.validation.fieldNameUnique');
     if (name) seen.add(name.toLocaleLowerCase());
 
     const definition: FieldDefinition = { name, type: field.type, required: field.required, unique: field.unique };
     if (field.description.trim()) definition.description = field.description.trim();
     if (field.defaultValue.trim()) {
       try { definition.default = JSON.parse(field.defaultValue); }
-      catch { rowErrors.defaultValue = 'Enter a valid JSON value.'; }
+      catch { rowErrors.defaultValue = t('collections.validation.jsonValue'); }
     }
     if (field.validation.trim()) {
       try {
         const validation: unknown = JSON.parse(field.validation);
-        if (!validation || typeof validation !== 'object' || Array.isArray(validation)) rowErrors.validation = 'Validation must be a JSON object.';
+        if (!validation || typeof validation !== 'object' || Array.isArray(validation)) rowErrors.validation = t('collections.validation.validationObject');
         else definition.validation = validation as Record<string, unknown>;
-      } catch { rowErrors.validation = 'Enter a valid JSON object.'; }
+      } catch { rowErrors.validation = t('collections.validation.jsonObject'); }
     }
     if (field.type === 'relation') {
-      if (!field.targetCollectionId) rowErrors.target = 'Choose a target Collection.';
+      if (!field.targetCollectionId) rowErrors.target = t('collections.validation.chooseTarget');
       else definition.relation = { targetCollectionId: field.targetCollectionId, cardinality: field.cardinality };
     }
     if (Object.keys(rowErrors).length) errors[field.key] = rowErrors;
@@ -256,7 +265,7 @@ function parseInitialFields(fields: FieldDraft[], type: CollectionType): { field
 }
 
 export function CreateCollectionPage() {
-  const { t } = useI18n();
+  const { t, errorMessage, validationMessage } = useI18n();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -313,11 +322,11 @@ export function CreateCollectionPage() {
     event.preventDefault();
     const trimmedName = name.trim();
     const nextNameError = !trimmedName
-      ? 'Enter a Collection name.'
+      ? t('collections.validation.nameRequired')
       : trimmedName !== name || [...trimmedName].length > 80
-        ? 'Use 1–80 characters with no leading or trailing spaces.'
+        ? t('collections.validation.nameLength')
         : '';
-    const parsed = parseInitialFields(fields, type);
+    const parsed = parseInitialFields(fields, type, t);
     setNameError(nextNameError);
     setFieldErrors(parsed.errors);
     setRequestError(undefined);
@@ -341,7 +350,9 @@ export function CreateCollectionPage() {
         const nextErrors: Record<string, FieldErrors> = {};
         for (const [index, field] of fields.entries()) {
           const violation = violations.find((item) => typeof item.path === 'string' && item.path.includes(`/fields/${index}/name`));
-          if (violation && typeof violation.message === 'string') nextErrors[field.key] = { name: violation.message };
+          if (violation) nextErrors[field.key] = {
+            name: (typeof violation.code === 'string' ? validationMessage(violation.code) : undefined) ?? t('collections.validation.reviewField'),
+          };
         }
         if (Object.keys(nextErrors).length) setFieldErrors(nextErrors);
       }
@@ -355,10 +366,12 @@ export function CreateCollectionPage() {
       <Link className="text-link text-link--muted collection-back" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
       <div className="collection-create-intro"><p className="eyebrow">{t('collections.buildEyebrow')}</p><h1>{t('collections.create')}</h1><p>{t('collections.createDescription')}</p></div>
       {requestError !== undefined && (() => {
-        const copy = apiErrorCopy(requestError, t('collections.createFailed'));
+        const copy = apiErrorCopy(requestError, t('collections.createFailed'), t, errorMessage);
         const api = requestError instanceof ApiClientError ? requestError.apiError : undefined;
         return <ErrorState className="collection-form-error" description={copy.message} title={copy.title}>
-          {api?.details.violations && Array.isArray(api.details.violations) && <ul>{api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>{violation.message}</li>)}</ul>}
+          {api?.details.violations && Array.isArray(api.details.violations) && <ul>{api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>
+            {typeof violation.code === 'string' && <code>{violation.code}</code>} {(typeof violation.code === 'string' ? validationMessage(violation.code) : undefined) ?? t('collections.validation.reviewField')}
+          </li>)}</ul>}
         </ErrorState>;
       })()}
 
@@ -387,7 +400,7 @@ export function CreateCollectionPage() {
           <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.systemEyebrow')}</p><h2>{t('collections.systemTitle')}</h2><p>{t('collections.systemDescription')}</p></div></div>
           <div className="system-fields-table" role="table" aria-label={t('collections.systemTitle')}>
             <div className="system-fields-table__head" role="row"><span role="columnheader">{t('collections.systemName')}</span><span role="columnheader">{t('collections.systemType')}</span><span role="columnheader">{t('collections.systemAccess')}</span></div>
-            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{field.label}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</span></div>)}
+            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{t(field.name === 'id' ? 'collections.systemId' : field.name === 'createdAt' ? 'collections.systemCreatedTime' : 'collections.systemUpdatedTime')}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</span></div>)}
             {type === 'Auth' && <div className="system-fields-table__row system-fields-table__row--auth" role="row"><strong role="cell">email</strong><span role="cell">{t('collections.emailIdentifier')}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.requiredUnique')}</span></div>}
           </div>
         </Surface>
@@ -441,49 +454,50 @@ type FieldEditorProps = {
 };
 
 function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, removable, targets, targetsLoading }: FieldEditorProps) {
+  const { t } = useI18n();
   const detailsId = useId();
   return (
-    <section className="initial-field-row" aria-label={`Initial field ${index + 1}`}>
+    <section className="initial-field-row" aria-label={t('collections.initialFieldLabel', { index: index + 1 })}>
       <div className="initial-field-row__main">
-        <FormField htmlFor={`field-name-${field.key}`} label="Name">
-          <input aria-label={`Field name ${index + 1}`} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder="e.g. title" value={field.name} />
+        <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
+          <input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
           {errors.name && <span className="collection-field-error" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
         </FormField>
-        <FormField htmlFor={`field-type-${field.key}`} label="Type">
+        <FormField htmlFor={`field-type-${field.key}`} label={t('collections.fieldType')}>
           <select id={`field-type-${field.key}`} onChange={(event) => onUpdate({ type: event.target.value as FieldType, ...(event.target.value === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type}>
-            <option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="dateTime">Date &amp; time</option><option value="json">JSON</option><option value="relation">Relation</option><option value="file">File</option><option value="files">Files</option>
+            <option value="text">{t('schema.fieldTypes.text')}</option><option value="number">{t('schema.fieldTypes.number')}</option><option value="boolean">{t('schema.fieldTypes.boolean')}</option><option value="dateTime">{t('schema.fieldTypes.dateTime')}</option><option value="json">{t('schema.fieldTypes.json')}</option><option value="relation">{t('schema.fieldTypes.relation')}</option><option value="file">{t('schema.fieldTypes.file')}</option><option value="files">{t('schema.fieldTypes.files')}</option>
           </select>
         </FormField>
-        <label className="initial-field-toggle"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />Required</label>
-        <label className="initial-field-toggle"><input checked={field.unique} onChange={(event) => onUpdate({ unique: event.target.checked })} type="checkbox" />Unique</label>
-        {removable && <Button aria-label={`Remove initial field ${index + 1}`} className="initial-field-remove" onClick={onRemove} size="small" type="button" variant="quiet">Remove</Button>}
+        <label className="initial-field-toggle"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />{t('collections.fieldRequired')}</label>
+        <label className="initial-field-toggle"><input checked={field.unique} onChange={(event) => onUpdate({ unique: event.target.checked })} type="checkbox" />{t('collections.fieldUnique')}</label>
+        {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} className="initial-field-remove" onClick={onRemove} size="small" type="button" variant="quiet">{t('collections.remove')}</Button>}
       </div>
       {field.type === 'relation' && <div className="initial-relation-config">
-        <FormField htmlFor={`field-target-${field.key}`} label="Target Collection">
+        <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
           <select id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onChange={(event) => onUpdate({ targetCollectionId: event.target.value })} value={field.targetCollectionId}>
-            <option value="">{targetsLoading ? 'Loading Collections…' : 'Choose a Collection'}</option>
+            <option value="">{targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection')}</option>
             {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
           </select>
           {errors.target && <span className="collection-field-error" role="alert">{errors.target}</span>}
         </FormField>
-        <FormField htmlFor={`field-cardinality-${field.key}`} label="Cardinality">
+        <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
           <select id={`field-cardinality-${field.key}`} onChange={(event) => onUpdate({ cardinality: event.target.value })} value={field.cardinality}>
-            <option value="many-to-one">Many to one</option><option value="one-to-one">One to one</option><option value="one-to-many">One to many</option><option value="many-to-many">Many to many</option>
+            <option value="many-to-one">{t('collections.manyToOne')}</option><option value="one-to-one">{t('collections.oneToOne')}</option><option value="one-to-many">{t('collections.oneToMany')}</option><option value="many-to-many">{t('collections.manyToMany')}</option>
           </select>
         </FormField>
       </div>}
       <details className="initial-field-advanced" id={detailsId}>
-        <summary><ChevronDown aria-hidden="true" size={14} />Advanced field settings</summary>
+        <summary><ChevronDown aria-hidden="true" size={14} />{t('collections.advancedFieldSettings')}</summary>
         <div className="initial-field-advanced__grid">
-          <FormField htmlFor={`field-description-${field.key}`} label="Description">
-            <input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder="Optional" value={field.description} />
+          <FormField htmlFor={`field-description-${field.key}`} label={t('collections.fieldDescription')}>
+            <input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder={t('collections.optional')} value={field.description} />
           </FormField>
-          <FormField htmlFor={`field-default-${field.key}`} label="Default value (JSON)" hint={'Examples: "draft", 0, true, or null.'}>
-            <input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder="Optional" value={field.defaultValue} />
+          <FormField htmlFor={`field-default-${field.key}`} label={t('collections.defaultValue') + ' (JSON)'} hint={t('collections.defaultValueHint')}>
+            <input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
             {errors.defaultValue && <span className="collection-field-error" role="alert">{errors.defaultValue}</span>}
           </FormField>
-          <FormField htmlFor={`field-validation-${field.key}`} label="Validation (JSON object)" hint="For example: {&quot;minLength&quot;: 2}">
-            <textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder="Optional" rows={2} value={field.validation} />
+          <FormField htmlFor={`field-validation-${field.key}`} label={t('collections.validationLabel') + ' (JSON)'} hint={t('collections.validationHint')}>
+            <textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
             {errors.validation && <span className="collection-field-error" role="alert">{errors.validation}</span>}
           </FormField>
         </div>
@@ -495,7 +509,7 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
 export function CollectionWorkspacePage() {
   const { collectionId = '' } = useParams();
   const location = useLocation();
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const { rememberCollection } = useCommandRegistry();
   const [collection, setCollection] = useState<Collection | null>(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
@@ -554,10 +568,10 @@ export function CollectionWorkspacePage() {
     return () => controller.abort();
   }, [collectionId]);
 
-  if (loadingCollection) return <div className="collection-page collection-workspace-page"><LoadingState label="Loading Collection workspace" /></div>;
+  if (loadingCollection) return <div className="collection-page collection-workspace-page"><LoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {
-    const copy = apiErrorCopy(collectionError, 'The Collection could not be loaded.');
-    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button><Link className="text-link" to="/collections">Back to Collections</Link></ErrorState></div>;
+    const copy = apiErrorCopy(collectionError, t('collections.workspaceLoadFailed'), t, errorMessage);
+    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button><Link className="text-link" to="/collections">{t('collections.backToCollections')}</Link></ErrorState></div>;
   }
 
   const context: CollectionWorkspaceContext = { collection, pendingChange: pending, refreshCollection, refreshPendingChange };
@@ -565,12 +579,12 @@ export function CollectionWorkspacePage() {
     <div className="page-stack collection-page collection-workspace-page">
       <div className="collection-breadcrumb"><Link to="/collections">{t('navigation.collections')}</Link><span aria-hidden="true">/</span><span>{collection.name}</span></div>
       <header className="collection-workspace-header">
-        <div className="collection-workspace-identity"><span className="collection-workspace-icon"><Database aria-hidden="true" size={20} /></span><div><div className="collection-workspace-title"><h1>{collection.name}</h1><StatusChip state={collection.type}>{collection.type}</StatusChip></div><p>{collection.description || 'Collection workspace'}</p></div></div>
-        <span className="collection-workspace-meta">Model v{collection.schemaVersion ?? 1} · {collection.fields.length} fields</span>
+        <div className="collection-workspace-identity"><span className="collection-workspace-icon"><Database aria-hidden="true" size={20} /></span><div><div className="collection-workspace-title"><h1>{collection.name}</h1><StatusChip state={collection.type}>{collectionTypeName(collection.type, t)}</StatusChip></div><p>{collection.description || t('collections.workspaceDescription')}</p></div></div>
+        <span className="collection-workspace-meta">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</span>
       </header>
-      {newlyCreated && <div className="collection-created-notice" role="status"><Check aria-hidden="true" size={16} /><div><strong>Your collection is ready.</strong><span>The Collection and its initial model are saved. Continue with Records or edit the schema.</span></div><button aria-label="Dismiss collection created notice" onClick={() => setNewlyCreated(false)} type="button">Dismiss</button></div>}
-      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, 'Schema status is unavailable.').message} title="Could not load the Pending Change"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button></ErrorState>}
-      {!loadingPending && pending?.status === 'failed' && <div className="collection-recovery-banner" role="status"><CircleAlert aria-hidden="true" size={17} /><div><strong>A schema change needs attention.</strong><span>Your pending changes are saved. Review the recovery details before retrying.</span></div><Link className="text-link" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>View recovery details <ArrowRight aria-hidden="true" size={14} /></Link></div>}
+      {newlyCreated && <div className="collection-created-notice" role="status"><Check aria-hidden="true" size={16} /><div><strong>{t('collections.readyNoticeTitle')}</strong><span>{t('collections.readyNoticeDescription')}</span></div><button aria-label={t('collections.dismissReadyNotice')} onClick={() => setNewlyCreated(false)} type="button">{t('common.dismissMessage')}</button></div>}
+      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, t('collections.pendingStatusUnavailable'), t, errorMessage).message} title={t('collections.pendingChangeLoadFailed')}><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button></ErrorState>}
+      {!loadingPending && pending?.status === 'failed' && <div className="collection-recovery-banner" role="status"><CircleAlert aria-hidden="true" size={17} /><div><strong>{t('collections.recoveryTitle')}</strong><span>{t('collections.recoveryDescription')}</span></div><Link className="text-link" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>{t('collections.viewRecoveryDetails')} <ArrowRight aria-hidden="true" size={14} /></Link></div>}
       <nav aria-label={t('navigation.collectionWorkspace')} className="collection-workspace-tabs">
         {[
           { label: t('navigation.records'), to: `/collections/${collectionId}`, end: true },

@@ -35,14 +35,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function errorDetails(error: unknown, t: Translate) {
+function errorDetails(error: unknown, t: Translate, errorMessage: ReturnType<typeof useI18n>['errorMessage']) {
   if (!(error instanceof ApiClientError)) {
-    return { title: t('schema.changeFailed'), message: error instanceof Error ? error.message : t('common.tryAgainWhenAvailable') };
+    return { title: t('schema.changeFailed'), message: t('common.tryAgainWhenAvailable') };
   }
   return {
-    title: error.apiError.message,
-    message: [error.apiError.code, error.apiError.hint, `${t('common.requestId')}: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+    title: errorMessage(error.apiError.code) ?? t('errors.requestFailed'),
+    message: [t('common.errorCode'), error.apiError.code, `${t('common.requestId')}: ${error.apiError.requestId}`, t('common.tryAgainWhenAvailable')].join(' · '),
   };
+}
+
+const preconditionMessageKeys: Record<string, TranslationKey> = {
+  INVALID_MODEL: 'schema.preconditionMessages.invalidModel',
+  REQUIRED_FIELD_NEEDS_DEFAULT: 'schema.preconditionMessages.requiredFieldNeedsDefault',
+  RELATION_TARGET_MISSING: 'schema.preconditionMessages.relationTargetMissing',
+  UNIQUE_VALUES_CONFLICT: 'schema.preconditionMessages.uniqueValuesConflict',
+  FIELD_VALUE_INCOMPATIBLE: 'schema.preconditionMessages.fieldValueIncompatible',
+  MODEL_COMPATIBLE: 'schema.preconditionMessages.modelCompatible',
+};
+
+function preconditionMessage(code: unknown, t: Translate) {
+  const key = typeof code === 'string' ? preconditionMessageKeys[code] : undefined;
+  return key ? t(key) : t('schema.preconditionMessages.fallback');
+}
+
+function preconditionStatus(status: unknown, t: Translate) {
+  if (status === 'passed' || status === 'failed') return t(`schema.preconditionStatuses.${status}` as TranslationKey);
+  return t('schema.preconditionStatuses.unknown');
 }
 
 function operationDefinition(operation: PendingOperation): Record<string, unknown> {
@@ -115,7 +134,7 @@ function previewBody(preview: SchemaPreview, uniqueConflict: boolean, t: Transla
 }
 
 export function CollectionSchemaPage() {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, errorMessage } = useI18n();
   const { collection, pendingChange, refreshCollection, refreshPendingChange } = useCollectionWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedView = searchParams.get('view');
@@ -302,7 +321,7 @@ export function CollectionSchemaPage() {
         {(['fields', 'relations', 'indexes', 'history'] as const).map((tab) => <button aria-current={view === tab ? 'page' : undefined} className={view === tab ? 'is-active' : ''} key={tab} onClick={() => selectView(tab)} type="button">{t(`schema.views.${tab}`)}</button>)}
       </nav>
       {notice && <div className="schema-notice" role="status"><Check aria-hidden="true" size={15} />{t(notice)}</div>}
-      {localError !== undefined && (() => { const copy = errorDetails(localError, t); return <ErrorState className="schema-error" description={copy.message} title={copy.title}><Button onClick={() => void refreshModel()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('schema.refreshStatus')}</Button></ErrorState>; })()}
+      {localError !== undefined && (() => { const copy = errorDetails(localError, t, errorMessage); return <ErrorState className="schema-error" description={copy.message} title={copy.title}><Button onClick={() => void refreshModel()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('schema.refreshStatus')}</Button></ErrorState>; })()}
       {view === 'fields' && <section aria-labelledby="schema-view-heading" className="schema-panel">
         <div className="schema-panel-heading"><div><span className="schema-panel-icon"><Layers3 aria-hidden="true" size={16} /></span><div><h3 id="schema-view-heading">{t('schema.fieldsTitle')}</h3><p>{t(fields.length === 1 ? 'schema.fieldsSummaryOne' : 'schema.fieldsSummaryMany', { count: fields.length })}</p></div></div><Button onClick={() => { setEditorKind('field'); setEditingOperation(null); setEditingTarget(null); }} size="small" type="button" variant="primary"><Plus aria-hidden="true" size={14} />{t('schema.addField')}</Button></div>
         {fields.length === 0 ? <EmptyState description={t('schema.noFieldsDescription')} title={t('schema.noFieldsTitle')} /> : <div className="schema-table-wrap"><table className="schema-table"><caption>{t('schema.fieldsCaption', { name: collection.name })}</caption><thead><tr><th scope="col">{t('schema.columnField')}</th><th scope="col">{t('schema.columnType')}</th><th scope="col">{t('schema.columnRequired')}</th><th scope="col">{t('schema.columnUnique')}</th><th scope="col">{t('schema.columnStatus')}</th><th scope="col"><span className="sr-only">{t('schema.columnActions')}</span></th></tr></thead><tbody>
@@ -338,7 +357,7 @@ export function CollectionSchemaPage() {
 
       {view === 'history' && <section className="schema-panel schema-history-panel"><div className="schema-panel-heading"><div><span className="schema-panel-icon schema-panel-icon--blue"><Clock3 aria-hidden="true" size={16} /></span><div><h3>{t('schema.historyTitle')}</h3><p>{t('schema.historyDescription')}</p></div></div></div>
         {historyLoading && history.length === 0 && <LoadingState label={t('schema.historyLoading')} />}
-        {historyError !== undefined && (() => { const copy = errorDetails(historyError, t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => { setHistoryError(undefined); setHistoryRetryKey((value) => value + 1); }} size="small">{t('common.retry')}</Button></ErrorState>; })()}
+        {historyError !== undefined && (() => { const copy = errorDetails(historyError, t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => { setHistoryError(undefined); setHistoryRetryKey((value) => value + 1); }} size="small">{t('common.retry')}</Button></ErrorState>; })()}
         {!historyLoading && !historyError && history.length === 0 && <EmptyState description={t('schema.historyEmptyDescription')} title={t('schema.historyEmptyTitle')} />}
         {history.length > 0 && <ol className="schema-history-list">{history.map((entry) => {
           const changes = entry.diff?.length ?? 0;
@@ -350,7 +369,7 @@ export function CollectionSchemaPage() {
       {localPending && localPending.operations.length > 0 && <section aria-label={t('schema.pendingPanelLabel')} className="schema-pending-panel">
         <div className="schema-pending-panel__heading"><div><span className="schema-pending-icon"><Save aria-hidden="true" size={16} /></span><div><strong>{t(localPending.operations.length === 1 ? 'schema.pendingOne' : 'schema.pendingMany', { count: localPending.operations.length })}</strong><span>{t('schema.pendingSavedFor', { version: localPending.version })}</span></div></div><StatusChip state={localPending.status}>{t(pendingStatusKey)}</StatusChip></div>
         <ul className="schema-pending-operations">{localPending.operations.map((operation) => <li key={operation.id}><span>{operationName(operation, t)}</span><Button aria-label={t('schema.removeOperation', { name: operationName(operation, t) })} disabled={working} onClick={() => void removeOperation(operation)} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} />{t('schema.undo')}</Button></li>)}</ul>
-        {localPending.status === 'failed' && <div className="schema-recovery-guidance"><AlertTriangle aria-hidden="true" size={15} /><div><strong>{t('schema.recoveryTitle')}</strong><span>{localPending.recoveryState?.summary || t('schema.recoveryFallback')}</span></div><Link to={`/changes?changeSet=${encodeURIComponent(localPending.changeSetId)}`}>{t('schema.openRecovery')} <ArrowRight aria-hidden="true" size={13} /></Link></div>}
+        {localPending.status === 'failed' && <div className="schema-recovery-guidance"><AlertTriangle aria-hidden="true" size={15} /><div><strong>{t('schema.recoveryTitle')}</strong><span>{t('schema.recoveryFallback')}</span></div><Link to={`/changes?changeSet=${encodeURIComponent(localPending.changeSetId)}`}>{t('schema.openRecovery')} <ArrowRight aria-hidden="true" size={13} /></Link></div>}
         <div className="schema-pending-panel__actions"><Button disabled={working} onClick={() => void discard()} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={14} />{t('schema.discard')}</Button><Button disabled={working} onClick={() => void previewAndApply()} size="small" type="button" variant="primary">{working ? <><LoaderCircle aria-hidden="true" className="spin" size={14} />{t('schema.working')}</> : localPending.status === 'failed' ? t('schema.reviewAndRetry') : t('schema.reviewAndApply')}<ArrowRight aria-hidden="true" size={14} /></Button></div>
       </section>}
       {preview && preview.risk !== 'safe' && <PreviewPanel preview={preview} working={working} onAttempt={() => void applyAfterPreview(preview, true)} onCancel={() => setPreview(null)} onConfirm={() => void applyAfterPreview(preview, true)} />}
@@ -466,7 +485,7 @@ function PreviewPanel({ preview, working, onCancel, onConfirm, onAttempt }: { pr
     <div className="schema-preview__heading"><span className="schema-preview__icon">{preview.risk === 'blocked' ? <AlertTriangle aria-hidden="true" size={17} /> : <ShieldCheck aria-hidden="true" size={17} />}</span><div><p className="eyebrow">{t('schema.previewEyebrow')}</p><h3 id="schema-preview-title">{previewTitle(preview, uniqueConflict, t)}</h3><p>{previewBody(preview, uniqueConflict, t)}</p></div><StatusChip state={resultChipState(preview.risk)}>{preview.risk === 'review' ? t('schema.riskReview') : t('schema.riskBlocked')}</StatusChip></div>
     {preview.diff.length > 0 && <div className="schema-preview__section"><h4>{t('schema.whatWillChange')}</h4><ul>{preview.diff.map((change, index) => <li key={index}><span className={`schema-diff-mark schema-diff-mark--${String(change.action ?? 'change')}`}>{change.action === 'remove' ? '−' : change.action === 'update' ? '~' : '+'}</span><span>{diffLabel(change, t)}</span><code>{String(change.kind ?? '')}</code></li>)}</ul></div>}
     <div className="schema-preview__impact"><strong>{t('schema.impact')}</strong><span>{summary || t('schema.impactFallback')}</span>{rowsAffected !== undefined && <span>{t('schema.recordsAffected', { count: formatNumber(rowsAffected) })}</span>}</div>
-    {preview.preconditions.length > 0 && <div className="schema-preview__section"><h4>{t('schema.checks')}</h4><ul>{preview.preconditions.map((condition, index) => <li className={`schema-precondition schema-precondition--${String(condition.status ?? 'unknown')}`} key={index}><span>{String(condition.message ?? condition.code ?? t('schema.precondition'))}</span><StatusChip state={String(condition.status ?? 'unknown')}>{String(condition.status ?? t('schema.check'))}</StatusChip></li>)}</ul></div>}
+    {preview.preconditions.length > 0 && <div className="schema-preview__section"><h4>{t('schema.checks')}</h4><ul>{preview.preconditions.map((condition, index) => <li className={`schema-precondition schema-precondition--${String(condition.status ?? 'unknown')}`} key={index}><span>{preconditionMessage(condition.code, t)}{typeof condition.code === 'string' && <> <code>{condition.code}</code></>}</span><StatusChip state={String(condition.status ?? 'unknown')}>{preconditionStatus(condition.status, t)}</StatusChip></li>)}</ul></div>}
     <div className="schema-preview__actions"><Button disabled={working} onClick={onCancel} type="button" variant="quiet">{t('common.cancel')}</Button>{uniqueConflict && <Button disabled={working} onClick={onAttempt} type="button" variant="primary">{working ? t('schema.applying') : t('schema.attemptApply')}<ArrowRight aria-hidden="true" size={14} /></Button>}{preview.risk === 'review' && <Button disabled={working} onClick={onConfirm} type="button" variant="primary">{working ? t('schema.applying') : t('schema.confirmAndApply')}<ArrowRight aria-hidden="true" size={14} /></Button>}</div>
   </section>;
 }

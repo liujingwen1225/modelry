@@ -17,11 +17,25 @@ function safeRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function changeError(error: unknown, translate: ReturnType<typeof useI18n>['t']) {
-  if (!(error instanceof ApiClientError)) return { title: translate('changes.loadFailed'), message: error instanceof Error ? error.message : translate('changes.loadFailedHint') };
+const userCopyFields = new Set(['actions', 'description', 'hint', 'message', 'notice', 'reason', 'summary', 'title']);
+
+function diagnosticDetails(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(diagnosticDetails);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key, entry]) => !userCopyFields.has(key.toLowerCase()) && !(key.toLowerCase() === 'error' && typeof entry === 'string'))
+    .map(([key, entry]) => [key, diagnosticDetails(entry)]));
+}
+
+function changeError(
+  error: unknown,
+  translate: ReturnType<typeof useI18n>['t'],
+  errorMessage: ReturnType<typeof useI18n>['errorMessage'],
+) {
+  if (!(error instanceof ApiClientError)) return { title: translate('changes.loadFailed'), message: translate('changes.loadFailedHint') };
   return {
-    title: error.apiError.message,
-    message: [error.apiError.code, error.apiError.hint, `Request ID: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+    title: errorMessage(error.apiError.code) ?? translate('errors.requestFailed'),
+    message: [translate('common.errorCode'), error.apiError.code, `${translate('common.requestId')}: ${error.apiError.requestId}`, translate('common.tryAgainWhenAvailable')].join(' · '),
   };
 }
 
@@ -52,7 +66,7 @@ function statusLabel(status: string, translate: ReturnType<typeof useI18n>['t'])
 }
 
 export function ChangesPage() {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<ChangeListItem[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -151,7 +165,7 @@ export function ChangesPage() {
         </nav>
       </Surface>
       {state === 'loading' && <LoadingState label={t('changes.loading')} />}
-      {state === 'error' && (() => { const copy = changeError(error, t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('changes.retry')}</Button></ErrorState>; })()}
+      {state === 'error' && (() => { const copy = changeError(error, t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('changes.retry')}</Button></ErrorState>; })()}
       {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState description={t('changes.emptyDescription')} title={t('changes.emptyTitle')}><Link className="text-link" to="/collections">{t('changes.browseCollections')} <ArrowRight aria-hidden="true" size={14} /></Link></EmptyState>}
       {state === 'ready' && visible.length === 0 && items.length > 0 && <EmptyState description={t('changes.noMatchDescription')} title={t('changes.noMatchTitle')} />}
       {state === 'ready' && visible.length > 0 && <div className={`changes-layout${selectedId ? ' changes-layout--selected' : ''}`}>
@@ -184,25 +198,28 @@ function ChangeDetailPanel({
   onRetry: () => void;
   collectionNames: Map<string, string>;
 }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   if (detailState === 'loading') return <aside aria-label={t('changes.detailLabel')} className="changes-detail"><LoadingState label={t('changes.loadingDetail')} /></aside>;
   if (detailState === 'error' || !detail) {
-    const copy = changeError(detailError, t);
+    const copy = changeError(detailError, t, errorMessage);
     return <aside aria-label={t('changes.detailLabel')} className="changes-detail"><ErrorState description={copy.message} title={copy.title}><Button onClick={onRetry} size="small">{t('changes.retry')}</Button></ErrorState></aside>;
   }
   const failed = detail.status === 'failed';
   const recovery = safeRecord(detail.recoveryState);
+  const recoveryActions = recovery.state === 'retryable'
+    ? [t('changes.recoveryActions.reviewCurrentModel'), t('changes.recoveryActions.retryApply')]
+    : [t('changes.recoveryActions.openDetails')];
   return <aside aria-label={t('changes.detailLabel')} className="changes-detail">
     <div className="changes-detail__heading"><div><p className="eyebrow">{t('changes.detailEyebrow')}</p><h2>{collectionNames.get(detail.collectionId) ?? t('changes.collection')}</h2><span>{statusLabel(detail.status, t)}</span></div><StatusChip state={detail.status}>{statusLabel(detail.status, t)}</StatusChip></div>
-    {failed && <div className="changes-detail__recovery" role="alert"><AlertTriangle aria-hidden="true" size={16} /><div><strong>{t('changes.recoveryNeeded')}</strong><span>{typeof recovery.summary === 'string' ? recovery.summary : t('changes.recoverySummary')}</span></div></div>}
+    {failed && <div className="changes-detail__recovery" role="alert"><AlertTriangle aria-hidden="true" size={16} /><div><strong>{t('changes.recoveryNeeded')}</strong><span>{t('changes.recoverySummary')}</span></div></div>}
     {detail.status === 'needsReview' && <div className="changes-detail__review" role="status"><ShieldAlert aria-hidden="true" size={15} /><span>{t('changes.reviewHint')}</span></div>}
     {detail.operations && detail.operations.length > 0 && <section className="changes-detail-section"><h3>{t('changes.pendingChanges')}</h3><ul>{detail.operations.map((operation) => <li key={operation.id}>{operationSummary(operation, t)}</li>)}</ul></section>}
     {detail.applyAttempts.length > 0 && <section className="changes-detail-section"><h3>{t('changes.applyAttempts')}</h3><ol className="changes-attempt-list">{detail.applyAttempts.map((rawAttempt, index) => {
       const attempt = safeRecord(rawAttempt);
-      return <li key={String(attempt.id ?? index)}><div><strong>{typeof attempt.status === 'string' ? statusLabel(attempt.status, t) : t('changes.attempt')}</strong><time>{typeof attempt.startedAt === 'string' ? new Date(attempt.startedAt).toLocaleString() : ''}</time></div>{typeof attempt.errorCode === 'string' && <span className="changes-error-code">{attempt.errorCode}</span>}<details><summary>{t('changes.technicalDetails')}</summary><pre>{JSON.stringify(rawAttempt, null, 2)}</pre></details></li>;
+      return <li key={String(attempt.id ?? index)}><div><strong>{typeof attempt.status === 'string' ? statusLabel(attempt.status, t) : t('changes.attempt')}</strong><time>{typeof attempt.startedAt === 'string' ? new Date(attempt.startedAt).toLocaleString() : ''}</time></div>{typeof attempt.errorCode === 'string' && <span className="changes-error-code">{attempt.errorCode}</span>}<details><summary>{t('changes.technicalDetails')}</summary><pre>{JSON.stringify(diagnosticDetails(rawAttempt), null, 2)}</pre></details></li>;
     })}</ol></section>}
     {detail.appliedMigration && <section className="changes-detail-section"><h3>{t('changes.appliedModel')}</h3><div className="changes-applied-state"><Check aria-hidden="true" size={15} /><span>{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span></div>{detail.appliedMigration.diff && <ul>{detail.appliedMigration.diff.map((diff, index) => <li key={index}>{String(diff.action ?? t('changes.changed'))} {String(diff.kind ?? t('changes.schema'))} {String(diff.name ?? '')}</li>)}</ul>}</section>}
-    {detail.recoveryState && Array.isArray(recovery.actions) && recovery.actions.length > 0 && <section className="changes-detail-section"><h3>{t('changes.recommendedSteps')}</h3><ul>{recovery.actions.map((action, index) => <li key={index}>{String(action)}</li>)}</ul></section>}
+    {detail.recoveryState && <section className="changes-detail-section"><h3>{t('changes.recommendedSteps')}</h3><ul>{recoveryActions.map((action, index) => <li key={index}>{action}</li>)}</ul></section>}
     {(detail.status === 'ready' || detail.status === 'needsReview' || detail.status === 'failed') && <Link className="button button--primary changes-detail__action" to={`/collections/${encodeURIComponent(detail.collectionId)}/schema`}>{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></Link>}
     {detail.appliedMigration && <details className="changes-technical"><summary>{t('changes.technicalDetails')}</summary><dl><div><dt>{t('changes.changeReference')}</dt><dd><code>{detail.changeSetId}</code></dd></div><div><dt>{t('changes.appliedModelRecord')}</dt><dd><code>{detail.appliedMigration.id}</code></dd></div><div><dt>{t('changes.applyAttempt')}</dt><dd><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></details>}
   </aside>;

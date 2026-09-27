@@ -48,7 +48,7 @@ describe('Modelry Admin shell', () => {
     await user.click(await screen.findByRole('option', { name: 'Automations' }));
 
     expect(await screen.findByRole('heading', { name: 'Automations' })).toBeInTheDocument();
-    expect(within(navigation).getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
+    expect(within(navigation).getByRole('link', { name: 'Automation' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('preserves the current Automation search context in a Command Palette create deep link', async () => {
@@ -76,23 +76,71 @@ describe('Modelry Admin shell', () => {
 
   it('renders the shared sidebar and reads runtime health through the diagnostics client', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
-    const fetchMock = vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input))));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.startsWith('/admin/api/v1/collections?')) return Promise.resolve(Response.json({ data: [] }));
+      return Promise.resolve(diagnosticResponse(path));
+    });
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
 
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
     expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Overview', 'Collections', 'API', 'Changes', 'Access', 'Activity', 'Automations', 'Extensions', 'Secrets', 'Settings', 'Drift', 'Runtime settings', 'Developer and portability', 'Administrators', 'Mail',
+      'Overview', 'Collections', 'API', 'Automation', 'Changes', 'Access', 'Settings',
     ]);
-    // #27 交付了 V0.1 曾延后的 Activity 面，因此这里断言入口存在。
-    expect(navigation).toHaveTextContent(/Activity/);
-    expect(await screen.findByText('Runtime ready')).toBeInTheDocument();
-    const storageCard = screen.getByRole('heading', { name: 'Local project data' }).closest('.diagnostic-card');
-    expect(storageCard).not.toBeNull();
-    expect(await within(storageCard as HTMLElement).findByText('Local', { exact: true })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Your backend is ready' })).toBeInTheDocument();
+    const buildLinks = document.querySelector('.overview-build-links');
+    expect(buildLinks).not.toBeNull();
+    expect(within(buildLinks as HTMLElement).getByRole('link', { name: 'API' })).toHaveAttribute('href', '/api');
+    expect(screen.getByRole('heading', { name: 'Connect a coding agent' })).toBeInTheDocument();
+    expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
+    expect(screen.getByRole('region', { name: 'Runtime & storage' })).toHaveTextContent('Runtime');
+    expect(screen.queryByRole('heading', { name: 'Runtime & storage' })).not.toBeInTheDocument();
+    expect(document.querySelector('.diagnostics-grid')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/runtime/status', expect.any(Object));
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/storage/status', expect.any(Object));
+  });
+
+  it('aggregates Automation and Settings pages while preserving the active Automation search', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/automations?tab=webhooks&q=mail');
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === '/admin/api/v1/webhooks' || path === '/admin/api/v1/secrets' || path === '/admin/api/v1/event-hooks' || path === '/admin/api/v1/jobs') return Promise.resolve(Response.json({ data: [] }));
+      return Promise.resolve(diagnosticResponse(path));
+    }));
+    render(<App />);
+
+    const automationNavigation = await screen.findByRole('navigation', { name: 'Automation' });
+    expect(within(automationNavigation).getByRole('link', { name: 'Extensions' })).toHaveAttribute('href', '/extensions');
+    expect(within(automationNavigation).getByRole('link', { name: 'Secrets' })).toHaveAttribute('href', '/secrets');
+    await user.click(within(automationNavigation).getByRole('link', { name: 'Event Hooks' }));
+    expect(window.location.pathname + window.location.search).toBe('/automations?tab=eventHooks&q=mail');
+
+    const primaryNavigation = screen.getByRole('navigation', { name: 'Project navigation' });
+    await user.click(within(primaryNavigation).getByRole('link', { name: 'Settings' }));
+    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
+    expect(within(settingsNavigation).getByRole('link', { name: 'General / Status' })).toHaveAttribute('href', '/settings');
+    expect(within(settingsNavigation).getByRole('link', { name: 'Files & Storage' })).toHaveAttribute('href', '/settings/storage');
+    expect(within(settingsNavigation).getByRole('link', { name: 'Backup / Restore' })).toHaveAttribute('href', '/settings/portability');
+    expect(within(settingsNavigation).getByText('Diagnostics')).toBeInTheDocument();
+    expect(within(settingsNavigation).getByRole('link', { name: 'Activity' })).toHaveAttribute('href', '/activity');
+    expect(within(settingsNavigation).getByRole('link', { name: 'Drift' })).toHaveAttribute('href', '/settings/drift');
+    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'zh-CN');
+    expect(await screen.findByRole('heading', { name: '设置' })).toBeInTheDocument();
+    expect(screen.getByText(/移动已有文件/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('迁移');
+    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'en');
+
+    await user.click(within(primaryNavigation).getByRole('link', { name: 'Access' }));
+    const accessNavigation = await screen.findByRole('navigation', { name: 'Access' });
+    expect(within(accessNavigation).getByRole('link', { name: 'Service Accounts / API Keys' })).toHaveAttribute('href', '/access');
+    expect(within(accessNavigation).getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/administrators');
+    expect(within(accessNavigation).getByRole('link', { name: 'Audit' })).toHaveAttribute('href', '/access/audit');
   });
 
   it('persists a keyboard reachable light and dark theme toggle', async () => {
@@ -103,6 +151,9 @@ describe('Modelry Admin shell', () => {
     const darkThemeButton = await screen.findByRole('button', { name: 'Switch to dark theme' });
     const ownerMenu = document.querySelector('.owner-menu');
     expect(ownerMenu?.querySelector('.theme-button')).toBeNull();
+    await user.click(ownerMenu?.querySelector('summary') as HTMLElement);
+    expect(within(ownerMenu as HTMLElement).getByText('Session active')).toBeInTheDocument();
+    expect(ownerMenu).not.toHaveTextContent('Control Plane');
 
     darkThemeButton.focus();
     await user.keyboard('{Enter}');
@@ -129,11 +180,15 @@ describe('Modelry Admin shell', () => {
     expect(within(navigation).getByRole('link', { name: 'Collections' })).toBeInTheDocument();
     await user.selectOptions(language, 'zh-CN');
 
-    expect(await screen.findByRole('navigation', { name: '项目导航' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '集合' })).toBeInTheDocument();
+    const localizedNavigation = await screen.findByRole('navigation', { name: '项目导航' });
+    expect(within(localizedNavigation).getByRole('link', { name: '集合' })).toBeInTheDocument();
     expect(window.location.pathname + window.location.search + window.location.hash).toBe('/?filter=keep#selected');
-    expect(document.documentElement).toHaveAttribute('lang', 'zh-CN');
-    expect(window.localStorage.getItem('modelry-admin-locale')).toBe('zh-CN');
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute('lang', 'zh-CN');
+      expect(window.localStorage.getItem('modelry-admin-locale')).toBe('zh-CN');
+    });
+    await user.click(document.querySelector('.owner-menu summary') as HTMLElement);
+    expect(document.querySelector('.owner-menu')).not.toHaveTextContent(/控制面|控制平面/);
 
     mounted.unmount();
     render(<App />);
