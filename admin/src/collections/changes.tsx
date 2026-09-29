@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Check, FileClock, RefreshCw, Search, ShieldA
 import { Link, useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
-import { Button, EmptyState, ErrorState, LoadingState, PartialState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink, EmptyState, ErrorState, LoadingState, PartialState, StatusChip, Surface } from '../components/ui';
 import { getChange, listAllChanges, listAllCollections, type ChangeDetail, type ChangeListItem, type Collection, type PendingChange, type PendingOperation } from './client';
 import './collections.css';
 
@@ -220,7 +220,7 @@ function ChangeDetailPanel({
     })}</ol></section>}
     {detail.appliedMigration && <section className="changes-detail-section"><h3>{t('changes.appliedModel')}</h3><div className="changes-applied-state"><Check aria-hidden="true" size={15} /><span>{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span></div>{detail.appliedMigration.diff && <ul>{detail.appliedMigration.diff.map((diff, index) => <li key={index}>{String(diff.action ?? t('changes.changed'))} {String(diff.kind ?? t('changes.schema'))} {String(diff.name ?? '')}</li>)}</ul>}</section>}
     {detail.recoveryState && <section className="changes-detail-section"><h3>{t('changes.recommendedSteps')}</h3><ul>{recoveryActions.map((action, index) => <li key={index}>{action}</li>)}</ul></section>}
-    {(detail.status === 'ready' || detail.status === 'needsReview' || detail.status === 'failed') && <Link className="button button--primary changes-detail__action" to={`/collections/${encodeURIComponent(detail.collectionId)}/schema`}>{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></Link>}
+    {(detail.status === 'ready' || detail.status === 'needsReview' || detail.status === 'failed') && <ButtonLink className="changes-detail__action" to={`/collections/${encodeURIComponent(detail.collectionId)}/model`} variant="primary">{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></ButtonLink>}
     {detail.appliedMigration && <details className="changes-technical"><summary>{t('changes.technicalDetails')}</summary><dl><div><dt>{t('changes.changeReference')}</dt><dd><code>{detail.changeSetId}</code></dd></div><div><dt>{t('changes.appliedModelRecord')}</dt><dd><code>{detail.appliedMigration.id}</code></dd></div><div><dt>{t('changes.applyAttempt')}</dt><dd><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></details>}
   </aside>;
 }

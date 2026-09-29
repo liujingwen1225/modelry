@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, Bot, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, Network, Puzzle, RefreshCw, Webhook } from 'lucide-react';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { DiagnosticsCards } from '../components/runtime-status';
-import { Button, CopyButton, PartialState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink, CopyButton, PartialState, StatusChip, Surface } from '../components/ui';
 import { useI18n } from '../i18n/i18n';
 import type { TranslationKey } from '../i18n/i18n';
 import { listAllCollections, type CollectionSummary } from '../collections/client';
@@ -131,7 +131,7 @@ export function OverviewPage() {
       />
       {emptyProject && <Surface className="overview-empty" variant="raised">
         <div><h2>{t('overview.emptyTitle')}</h2><p>{t('overview.emptyDescription')}</p></div>
-        <Link className="button button--primary" to="/collections/new"><Layers3 aria-hidden="true" size={15} />{t('overview.createCollection')}</Link>
+        <ButtonLink to="/collections/new" variant="primary"><Layers3 aria-hidden="true" size={15} />{t('overview.createCollection')}</ButtonLink>
       </Surface>}
       {recentCollections.length > 0 && <section aria-labelledby="recent-work-heading" className="overview-recent-work">
         <div className="section-heading-row">
@@ -143,7 +143,7 @@ export function OverviewPage() {
         <div className="overview-recent-work__list">
           {recentCollections.map((collection) => <Surface className="overview-recent-work__item" key={collection.id} variant="standard">
             <span><strong>{collection.name}</strong><small>{t(collection.type === 'Auth' ? 'overview.authCollection' : 'overview.collection')}</small></span>
-            <Link to={collection.type === 'Auth' ? `/collections/${encodeURIComponent(collection.id)}/security` : `/collections/${encodeURIComponent(collection.id)}`}>
+            <Link to={collection.type === 'Auth' ? `/collections/${encodeURIComponent(collection.id)}/access` : `/collections/${encodeURIComponent(collection.id)}`}>
               {t(collection.type === 'Auth' ? 'overview.editSecurity' : 'overview.openRecords')}<ArrowRight aria-hidden="true" size={14} />
             </Link>
           </Surface>)}
@@ -151,9 +151,9 @@ export function OverviewPage() {
       </section>}
       <section aria-label={t('navigation.build')} className="overview-build-links">
         <Link className="overview-build-link" to="/collections"><Layers3 aria-hidden="true" size={17} /><span>{t('navigation.collections')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-        <Link className="overview-build-link" to="/api"><Network aria-hidden="true" size={17} /><span>{t('navigation.api')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-        <Link className="overview-build-link" to="/extensions"><Puzzle aria-hidden="true" size={17} /><span>{t('navigation.hooks')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-        <Link className="overview-build-link" to="/automations"><Webhook aria-hidden="true" size={17} /><span>{t('navigation.automation')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+        <Link className="overview-build-link" to="/connect/api"><Network aria-hidden="true" size={17} /><span>{t('navigation.api')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+        <Link className="overview-build-link" to="/automations/hooks"><Puzzle aria-hidden="true" size={17} /><span>{t('navigation.hooks')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
+        <Link className="overview-build-link" to="/automations"><Webhook aria-hidden="true" size={17} /><span>{t('navigation.automations')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
       </section>
       {pendingCollections.length > 0 && <div className="overview-pending-summary" role="status">
         <span>{pendingCollections.length === 1 ? t('overview.schemaPendingOne') : t('overview.schemaPendingMany', { count: pendingCollections.length })}</span>
@@ -165,7 +165,7 @@ export function OverviewPage() {
           {failedCollections.map((collection) => <li key={collection.id}>
             <AlertTriangle aria-hidden="true" size={16} />
             <span>{t('overview.failedChange', { name: collection.name })}</span>
-            <Link to={`/collections/${encodeURIComponent(collection.id)}/schema`}>{t('overview.view')}</Link>
+            <Link to={`/collections/${encodeURIComponent(collection.id)}/model`}>{t('overview.view')}</Link>
           </li>)}
           {collectionsUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.collectionsUnavailable')}</span><Link to="/collections">{t('overview.openCollections')}</Link></li>}
           {runtimeUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.runtimeUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}

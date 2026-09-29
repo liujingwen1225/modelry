@@ -1,1514 +1,828 @@
-# Spec 0001 — Modelry Admin 产品 UX 与页面规格
+# Spec 0001 — Modelry Admin 全新体验与界面规格
 
-- **Status:** Accepted — V0.1.x Admin Product UX Authority
-- **Scope:** Modelry self-hosted Project Admin for independent developers and coding-agent workflows
-- **Depends on:** docs/00-product-vision.md、docs/04-v0.1-community-scope.md、docs/05-product-experience-and-acceptance.md、docs/06-product-architecture.md
-- **Supersedes:** Pre-Reboot Admin UI / IA / Wireframe 文档中的页面结论
-- **Does not define:** HTTP DTO、Database Schema、Go Package、React Component API、最终视觉稿
+- **状态：** 新版设计提案（2026-09-29）
+- **范围：** 自托管 Modelry 项目 Admin 的信息架构、内容、操作旅程与视觉系统
+- **替代：** 本文件重建 Admin 的导航、页面组织、首页、内容表达和交互方式；实现阶段从本稿重新对照，不沿用旧版页面结论
+- **依赖：** `docs/00-product-vision.md`、`docs/04-v0.1-community-scope.md`、`docs/05-product-experience-and-acceptance.md`、`docs/06-product-architecture.md` 及已接受的相关 ADR / Spec / HTTP Contract
+- **不定义：** HTTP DTO、数据库结构、Go 包、业务能力或组件 API
 
-本 Spec 是 V0.1 Admin Exact IA、页面、交互、Primary Action 与 Durable Result 的唯一权威来源。
+本文件提供一套可评审、可实施的新版 Admin 设计。用户界面的精确信息架构与体验以本文件为准；产品能力和业务语义以对应已接受的产品文档与契约为准。
 
-# 1. 设计目标
+# 1. 产品体验目标
 
-Modelry Admin 是 Developer Backend Workspace，不是传统企业后台，也不是数据库管理器。
+Modelry Admin 是开发者构建和运营一个应用后端的工作台。界面沿着实际任务组织，让用户在同一工作区里完成建模、数据管理、应用接入、安全配置、运行观察与模型演进。
 
-必须满足：
+默认服务一个开发者、一个项目、一个运行时。界面不引入组织、环境晋级、多项目切换或企业治理心智。
 
-1. 一个页面解决一个主要用户问题；
-2. 一个工作面只有一个明显 Primary Action；
-3. 普通用户不需要先理解内部 Domain Object；
-4. 能少一步就不增加中转页；
-5. Durable Result 原地可见；
-6. Schema Pending Changes 与 Runtime/Data Operation 明确分离；
-7. Search / Filter / Sort / Pagination / Deep Link Context 尽可能保留；
-8. Empty / Loading / Error / Permission / Partial / Recovery State 都是一等状态；
-9. 不展示没有真实 Runtime 能力的 Placeholder Action；
-10. UI 默认围绕 Model → Data → Secure → API → Observe → Evolve。
+新版体验必须：
 
-# 2. V0.1.x Current Information Architecture
+1. 让首次使用者知道下一步能完成什么；
+2. 把常用操作放在产生结果的上下文中；
+3. 将运行状态、模型状态和记录数据状态分开表达；
+4. 让成功结果留在页面中，刷新后仍能继续查看；
+5. 把错误写成可理解、可处理的下一步；
+6. 让开发者和编码智能体经过同一授权、校验、变更与审计路径；
+7. 用稳定的深链接恢复集合、记录、请求和变更上下文；
+8. 在键盘、屏幕阅读器、窄屏和明暗主题下保持可操作。
 
-Modelry Admin 是面向个人开发者、独立开发者和编码智能体的本地优先后端工作台。Owner 可直接操作，也可通过受支持的 MCP / Service Account 路径连接编码智能体。当前 Shell 按用户任务组织已交付页面；下列 V0.1.x 能力均为真实产品表面，不是路线图占位项。
+首页承担任务入口与注意事项，不承担统计大屏职责。产品不展示没有真实运行能力的入口或示意指标。
 
-## Sidebar
+# 2. 两条核心任务旅程
+
+## 2.1 开发者旅程
 
 ~~~text
-Overview                         <- ungrouped
+启动 Runtime
+→ 创建 Owner
+→ 建立第一个 Collection
+→ 创建一条 Record
+→ 配置应用访问规则
+→ 发出第一条 API 请求
+→ 按需要添加 Hook / Webhook / Schedule
+→ 查看请求和运行状态
+→ 审核、应用并验证后续模型变化
+~~~
 
-Build
+每一步都在完成上一步后就地提供下一条有意义的路。用户可以跳过非必需步骤，已有项目直接恢复到最近工作。
+
+## 2.2 编码智能体旅程
+
+~~~text
+连接 MCP
+→ 检查当前项目和权限
+→ 理解 Collection / API / Access Rules
+→ 提出受控变更
+→ 展示差异、影响和运行时风险
+→ 必要时由开发者复核
+→ 应用
+→ 用 API 或运行状态验证
+→ 查看审计记录
+~~~
+
+Admin 展示 MCP 连接方式、服务账号权限和验证结果。编码智能体没有绕过权限、模型变更生命周期或审计的路径。Service Account、Admin Account 与 Application User 分别表达不同身份。
+
+# 3. 新版信息架构
+
+## 3.1 全局导航
+
+全局导航依开发者完成后端的工作顺序排列。它不使用传统企业后台的模块分组，也不把内部实现模块直接作为一级页面。
+
+~~~text
+Home
+
+BUILD
   Collections
-  API
-  Hooks
-  Automation
 
-Manage
-  Model changes
-  Project access
+CONNECT
+  API & SDK
 
-System
+AUTOMATE
+  Automations
+
+OBSERVE
+  Requests
+  Activity & Audit
+
+EVOLVE
+  Changes
+  Model health
+
+PROJECT
+  Access & keys
   Settings
 ~~~
 
-当前 contextual navigation 在对应产品区域的页面内容上方出现；它让已交付的相关页面可见，而不把每个实现模块都提升成 Sidebar 一级入口：
+导航目的地与已交付页面映射：
+
+| 入口 | 页面内容 |
+| --- | --- |
+| Home | 项目状态、继续最近工作、当前需要处理的问题、首次使用的下一步 |
+| Collections | Collection 列表和创建；选中 Collection 后进入 Records / Model / Access / API 工作区 |
+| API & SDK | 全局端点、请求调试、OpenAPI、SDK 生成、MCP 连接与接入说明 |
+| Automations | Extensions / Hooks、Secrets 入口、Webhooks、Event Triggers、Scheduled Triggers 和投递历史 |
+| Requests | 应用请求日志、请求详情和从请求进入 API 调试的上下文 |
+| Activity & Audit | 活动时间线与管理面审计事实；两类记录清楚区分 |
+| Changes | 尚待应用的模型变化、应用尝试和已应用历史 |
+| Model health | 已应用模型与运行时投影的 Drift 检查及可执行的恢复路径 |
+| Access & keys | Administrators、Service Accounts、Permission 和 API Key |
+| Settings | 项目状态与 Runtime、Files & Storage、Mail、Secrets、数据导入 / 导出、Backup & restore |
+
+Connect 的本地子导航为 `API`、`SDK & Contract`、`MCP`。MCP 与 SDK 一样，是接入 Modelry 的开发者接口；Service Account 凭据的生命周期仍由 Access & keys 管理。MCP 子页展示：连接状态与可复制的连接配置命令、绑定的 Service Account 及其权限摘要、最近的 Agent 操作列表（按 Service Account 过滤 Activity）；不在此页管理凭据。
+
+Automations 的子导航按实际运行对象显示：`Hooks`、`Webhooks`、`Triggers`、`Schedules`、`Delivery history`。如果用户无权访问其中一项，只隐藏对应入口，服务端继续负责授权。
+
+Collection 工作区：
 
 ~~~text
-Automation
-  Webhooks
-  Triggers and delivery
-    Webhooks
-    Event triggers
-    Scheduled triggers
-  Run history
-    Delivery history
-
-Project access
-  Identity
-    Service Accounts
-    Administrators
-  Security
-    Audit log
-
-Settings
-  Project
-    Status
-    Runtime
-  Service
-    Files & Storage
-    Mail
-    Secrets
-  Maintenance
-    Backup and restore
-    Activity
-    Storage consistency
-  Developer
-    Data import / export
-    API Contract / SDK
-    MCP
+Records     Model     Access     API
 ~~~
 
-Hooks 是独立的一级开发者能力，承载已交付的后端扩展与 Collection Record 生命周期 Hooks，不归入 Automation；产品入口显示为 Hooks，并映射到既有 `/extensions` 路由。Hooks 页面可保留 Extension Runtime 技术细节。Automation 中的事件触发器表示 Collection Record Event 到 Webhook；定时触发表示 UTC Cron 到 Webhook，不执行任意代码。
+`Model` 内含 `Fields`、`Relations`、`Indexes`。Auth Collection 的 `Access` 内含 `Rules`、`Authentication`、`App users`、`Sessions`。Normal Collection 不显示只属于认证集合的页面。
 
-Automation、Project access 与 Settings 的产品区域入口分别是 `/automations`、`/access` 与 `/settings`；各区域的 contextual links 使用已实现的子页面和 query context。服务账号与管理员属于 Project access 身份；API Key 在所属 Service Account 详情内管理；Audit log 属于 Project access 安全记录。Status 页面集中展示 Runtime、Database 与 Storage 健康状态；Runtime 页面可编辑已支持的运行时配置。Activity 与 Storage consistency 属于 Maintenance。Secrets 是服务配置页面，可从 Settings 稳定进入，也可从 Hooks、Files & Storage 与 Mail 的相关上下文发现。
+## 3.2 导航行为
 
-Backup and restore、Data import / export 与 API Contract / SDK 是三个独立页面。历史 `/settings/portability` 深链继续打开 Backup and restore；此页面不呈现数据导入 / 导出或 SDK Contract 内容。MCP 在 Settings → Developer 提供连接说明，复用现有 `modelry mcp` CLI 与已授权的 Control Plane API，不建立权限、变更生命周期或审计旁路。
+- 全局主导航切换到新的工作目的地；集合内子导航保留当前 Collection。
+- 顶栏固定显示 Modelry 标识、当前项目路径/本地上下文、Runtime 状态、全局搜索/命令、语言、主题和 Admin 账户。
+- 自托管单项目没有项目切换器。项目路径仅作当前运行上下文说明，不伪装成可切换的云资源。
+- 选中 Collection 后，在页面标题和集合内子导航持续显示 Collection 名称与类型。
+- Pending changes 在 Changes 入口、对应 Collection 导航和 Collection 页面内显示同一实时计数；失败状态使用文本和图标说明。
+- Runtime、Database 或 Storage 出现问题时，状态控件直接打开可恢复问题的详情页。
+- 路由、query、hash 和返回上下文遵守第 15 节的 URL 约定。
 
-不设独立一级入口：
-
-- Secrets（通过相关上下文入口发现；保留 `/secrets` Deep Link）
-- Activity
-- Administrators
-- Data
-- Schema
-- Auth
-- Requests
-
-Requests 属于 Global API；Hooks 是独立一级入口并映射到 `/extensions`；Secrets 通过 Settings 服务分组和相关服务页面的上下文入口发现，并保留 `/secrets` Deep Link；Activity 与 Storage consistency 属于 Settings Maintenance；Administrators 与 Audit log 属于 Project access。
-
-Command Palette、English / Simplified Chinese 与 Light / Dark Theme 是当前全局产品操作，不是未来占位项。
-
-## Collection Workspace
+## 3.3 桌面工作区框架
 
 ~~~text
-Records        <- default
-Schema
-Security
-API
+┌────────────────────────────────────────────────────────────────────────┐
+│ modelry  /  local project       Runtime: Ready   ⌘K   EN   ◐   Owner  │
+├────────────────────┬───────────────────────────────────────────────────┤
+│ Home               │                                                   │
+│                    │ Page title                         Primary action │
+│ BUILD              │ Context summary / actionable state                │
+│ Collections        │                                                   │
+│                    │ Main work surface                                  │
+│ CONNECT            │                                                   │
+│ API & SDK          │                                                   │
+│                    │                                                   │
+│ AUTOMATE           │                                                   │
+│ Automations        │                                                   │
+│                    │                                                   │
+│ OBSERVE            │                                                   │
+│ Requests           │                                                   │
+│ Activity & Audit   │                                                   │
+│                    │                                                   │
+│ EVOLVE             │                                                   │
+│ Changes            │                                                   │
+│ Model health       │                                                   │
+│                    │                                                   │
+│ PROJECT            │                                                   │
+│ Access & keys      │                                                   │
+│ Settings           │                                                   │
+└────────────────────┴───────────────────────────────────────────────────┘
 ~~~
 
-### Schema
+Shell 的侧栏使用低对比度底色，当前目的地使用清晰的左侧标记和底色。主要内容区保持连续画布，不把每个区块做成同等权重的卡片。
+
+# 4. 首次使用与登录
+
+## 4.1 Owner 初始化
+
+首次本机启动直接显示 Owner 创建表单，不要求复制 Setup Token。界面只询问创建 Owner 所需的邮箱与密码，并提供密码显示切换、密码管理器支持和明确的输入错误。
 
 ~~~text
-Fields         <- default
-Relations
-Indexes
+创建你的 Modelry 管理员
+这个账号管理当前后端项目。
+
+邮箱
+[________________________________]
+
+密码
+[________________________________]
+
+                         [ 创建管理员 ]
 ~~~
 
-### Security — Normal Collection
+提交时保留输入；服务端错误关联到表单或具体字段。Owner 创建成功后建立会话并关闭 Bootstrap。若尚无 Collection，直接进入 Create Collection；已有 Collection 则返回用户原始深链接或 Home。
+
+远程首次初始化沿用对应 Security ADR 的 Claim / Secret 规则。无效或过期 claim、已完成初始化和 Runtime 不可用都显示原因及恢复路径。
+
+## 4.2 登录
+
+登录只用于 Modelry Owner / Administrator，不显示应用用户登录入口。成功登录优先返回用户最初访问的安全站内深链接；无法使用的深链接安全回退 Home。
+
+密码错误、账号恢复和会话失效分别给出清楚说明。登录错误不泄露账号是否存在等敏感信息。
+
+# 5. Home — 项目工作台
+
+## 5.1 页面任务
+
+回答：**项目现在能否正常工作？我可以继续做什么？**
+
+Home 以状态和任务顺序组织内容，不展示 KPI 瓷砖墙、重复 Collection 清单、重复请求列表或纯装饰性图表。
 
 ~~~text
-Access Rules
-~~~
+Home
+后端项目的当前状态与下一步工作。
 
-### Security — Auth Collection
-
-~~~text
-Access Rules
-Authentication
-App Users
-Sessions
-~~~
-
-# 3. App Shell
-
-Desktop：
-
-~~~text
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Project / Context | Command Palette | Runtime | Language | Theme | Owner │
-├───────────────────┬──────────────────────────────────────────────────────┤
-│ Overview          │ Contextual product navigation (when applicable)      │
-│ Build             ├──────────────────────────────────────────────────────┤
-│ Collections       │                                                      │
-│ API               │ Page content                                         │
-│ Hooks             │                                                      │
-│ Automation        │                                                      │
-│ Manage            │                                                      │
-│ Model changes     │                                                      │
-│ Project access    │                                                      │
-│ System            │                                                      │
-│ Settings          │                                                      │
-└───────────────────┴──────────────────────────────────────────────────────┘
-~~~
-
-Global Topbar：
-
-- Project / Context；
-- Command Palette；
-- Runtime Status；
-- Language selector (`en` / `zh-CN`)；
-- Theme toggle；
-- authenticated Owner / Administrator menu and Sign out。
-
-Command Palette 搜索可见命令和导航，不是后台数据的 Global Search。当前用户、权限、路由及资源上下文决定哪些命令可见；服务端仍是权限校验权威。
-
-Product-area contextual navigation 的选项、路由映射与 query preservation 见第 2 节。无关一级区域切换不继承另一工作面的查询状态。
-
-Runtime Status 异常时直接导航到可处理页面：
-
-~~~text
-Pending / Failed Change -> Changes
-Storage problem         -> Settings
-Runtime health problem  -> Overview / Settings
-~~~
-
-# 4. First Run / Bootstrap
-
-## 目的
-
-> 新 Runtime 如何安全、快速开始？
-
-默认本机流程不要求复制 Setup Token。
-
-~~~text
-Create your Modelry owner
-
-Email
-[____________________________]
-
-Password
-[____________________________]
-
-                         [ Complete setup ]
-~~~
-
-成功：
-
-~~~text
-Owner created
-→ session established
-→ bootstrap closed
-→ no collections?
-     yes -> Create Collection
-     no  -> Overview
-~~~
-
-首次空项目减少 Overview 中转。
-
-Create Collection Surface 必须提供 Back / Skip to Overview，不形成死路。
-
-Remote Bootstrap 只有在显式远程首次初始化时才采用额外 Claim / Secret Mechanism，由 Security ADR 定义。
-
-必须覆盖：
-
-- already configured
-- invalid / expired remote claim
-- runtime unavailable
-- password validation
-- submitting
-- durable success
-
-# 5. Login
-
-~~~text
-Sign in
-
-Email
-[____________________________]
-
-Password
-[____________________________]
-
-                              [ Sign in ]
-~~~
-
-不得出现 Application User 登录。
-
-登录成功优先返回原 Deep Link。
-
-# 6. Overview
-
-## 目的
-
-> Backend 当前是否健康？现在有什么需要处理？
-
-Overview 是 Action Center，不是统计 Dashboard。
-
-~~~text
-Overview
-
-Needs attention                         only when needed
-! 2 schema changes failed                      View
-! Storage unavailable                          Open settings
-
-Backend health
+Workspace status
 Runtime          Ready
 Database         Ready
-Storage          Ready
-Schema           Up to date
+File storage     Ready
+Model            Up to date
 
-Continue recent work
-posts            Open records
-users            Edit security
-~~~
-
-规则：
-
-- Needs attention 只在需要操作时展示；
-- 正常状态紧凑；
-- Unknown / Unavailable 不得伪装为 Ready；
-- 不复制 Collections Inventory；
-- 不复制 Request Log；
-- 不复制 Audit；
-- 不放大 KPI。
-
-Overview 还提供面向开发者与编码智能体的 MCP 连接说明及 Service Account 管理入口。Agent access 使用 Control Plane Service Account / API Key；不把 Application User Credential 当作 Admin 身份，也不提供绕过 Runtime 授权的 Agent 通道。
-
-空项目：
-
-~~~text
-Your backend is ready
-
-Create your first Collection to define application data and API.
-
+Next step
+Create your first Collection
+定义应用数据并生成对应 API。
 [ Create Collection ]
+
+Recent work
+Collection name        Updated       Open
+
+Needs attention                         仅在有待处理问题时出现
+Storage needs attention · View storage settings
 ~~~
 
-# 7. Collections
+空项目的主要操作是 Create Collection。创建成功后，首页提示 Create first record；产生记录后可继续配置 Access Rules 或调用 API。引导项只根据当前真实状态生成，完成后自动收起。
 
-## 目的
+## 5.2 已有项目
 
-> 有哪些业务模型？我要进入或创建哪一个？
+- 首屏显示 Runtime / Database / Storage / Model 四类当前状态；正常状态精简为一行。
+- 显示一项建议的下一步，例如完成 API 调用、查看待应用变化或恢复 Storage。
+- 显示最近访问的 Collection 和最近一次有意义的操作；不把时间线复制成 Activity。
+- Pending / Failed Change 只在存在时出现，并直达对应的 Changes / Recovery context。
+- Agent connection 作为低权重、可复制的接入说明，提供通往 Access & keys 和 MCP 文档的入口。
+
+## 5.3 首页数据失败
+
+某个状态服务失败时，保留已加载的其它状态。明确写出哪些信息不可用，并提供对应重试或设置入口。不可用状态不得显示为零、正常或空项目。
+
+# 6. Build — Collections 与集合工作区
+
+## 6.1 Collections 列表
+
+页面目的：找到要管理的业务数据模型，或创建新的 Collection。
+
+- 标题下说明 Collection 定义数据字段并提供记录、规则和 API 工作区。
+- 主操作为 `Create Collection`。
+- 支持搜索、Normal / Auth 类型筛选、排序和列表/表格密度切换；不默认展示重复的大图卡片墙。
+- 每行显示名称、类型、记录数、字段数和最近更新。Pending / Failed 只在需要关注时强调。
+- 打开某项后默认进入 Records；返回时恢复搜索、筛选、排序、分页和滚动位置。
+
+空状态直接说明 Collection 能解决的问题，主按钮仍为 `Create Collection`。
+
+## 6.2 Create Collection
+
+使用一个聚焦的完整页面完成 Collection 名称、类型和首批字段。复杂长表单不放进窄 Dialog，也不拆成需要来回提交的多步向导。
 
 ~~~text
-Collections                                  [ + Create Collection ]
+Create Collection                             [ Cancel ]
+为应用数据创建一个稳定的集合。
 
-[ Card ] [ List ]      Search...   Type ▼   Sort ▼
-~~~
-
-默认 Card View。
-
-Card：
-
-- Name 最强；
-- Type 使用轻量 Badge；
-- Description 最多两行；
-- Records / Fields 为 Secondary Metadata；
-- Pending / Failed Change 仅异常时强调；
-- 整卡可进入 Collection Workspace。
-
-Card / List 共用 Search / Filter / Sort State。
-
-# 8. Create Collection
-
-Create Collection 一次完成初始模型，不先创建空 Collection 再跳 Schema。
-
-使用 Focused Workspace，不拆多步 Wizard。
-
-~~~text
-Create Collection
-
-Type
-[ Normal Collection ]   [ Auth Collection ]
-
-Name
-[ posts ]
-
-Description
-[ Blog posts ]
-
-System fields
-id           System ID       Locked
-createdAt    Created Time    System · Locked
-updatedAt    Updated Time    System · Locked
+Collection name       Type
+[ posts             ] [ Normal collection ▼ ]
 
 Initial fields
+Name            Type          Required       Unique       More
+title           Text          Yes            No
+slug            Text          Yes            Yes
 
-Name        Type        Required   Unique   Configuration
-title       Text        Yes        No
-slug        Text        Yes        Yes
-author      Relation    No         No       users · many-to-one
+[ Field name ] [ Type ▼ ] [ Add field ]
 
-Quick add
-[ name ] [ Type ▼ ] [ Required ] [ Unique ] [ + Add ]
+System fields
+id · createdAt · updatedAt       Managed by Modelry
 
-                                       Cancel   Create Collection
-~~~
-
-## 8.1 System Fields
-
-V0.1 固定：
-
-- id
-- createdAt
-- updatedAt
-
-全部：
-
-- always present；
-- visible；
-- system-managed；
-- locked；
-- not removable；
-- not renameable；
-- not editable in Record Form。
-
-这样避免删除 / 恢复默认字段、reserved-name 与不同 timestamp 状态带来的首版复杂度。
-
-## 8.2 Quick Add
-
-基础 Field 应连续录入：
-
-- Enter 添加；
-- 成功后焦点回到 Name；
-- 默认 Type = Text；
-- duplicate name 当前行报错；
-- 不滚回顶部；
-- 不关闭当前 Workspace。
-
-## 8.3 Relation Inline
-
-选择 Relation 后原行展开必要配置：
-
-~~~text
-author
-Relation
-Target      [ users ▼ ]
-Cardinality [ many-to-one ▼ ]
-~~~
-
-复杂 Delete Behavior 再进入 Advanced Field Editor。
-
-Relation 仍然是 Field Type，Relations View 只是 Projection。
-
-## 8.4 Unique
-
-普通单字段 Unique 是 Field Feature：
-
-~~~text
-Unique [x]
-~~~
-
-Runtime 内部可以生成对应 Index。
-
-Composite / Advanced Index 再进入 Schema / Indexes。
-
-## 8.5 Auth Collection
-
-选择 Auth 后原地出现：
-
-~~~text
-Authentication
-
-Email + password                 Enabled
-Email                            Required · Unique
-Allow users to sign up           [ ]
-Session duration                  7 days
+                              [ Create Collection ]
 ~~~
 
 规则：
 
-- Email + Password 默认启用；
-- Self Registration 默认 Disabled；
-- 用户可在创建时直接开启；
-- email 是 Auth Identifier Field；
-- password 是 Credential，不是普通 Field；
-- 可以在同一次创建中增加 name / avatar / role 等 Profile Field。
+- Name 可读、必填、唯一性错误就地呈现。
+- 系统字段 `id`、`createdAt`、`updatedAt` 始终显示并锁定。
+- 字段录入后焦点返回新字段行；Enter 只在输入完整且动作明确时添加字段。
+- 重复名称在当前行提示，不清空其它字段或滚回页面顶部。
+- 建立 Relation 时在当前行展开目标 Collection 和 cardinality；更复杂的删除行为进入完整字段编辑器。
+- 常见 Text / Number / Boolean / Date / JSON / Relation / File 配置就地完成；少见高级选项折叠在字段详情。
+- 用户可返回或取消，不会进入无返回路径。
 
-## 8.6 提交
+选择 Auth Collection 后原地出现真实可用的认证选项：email + password、是否允许自助注册、会话有效期和 Profile 字段。`email` 是必填唯一标识，`password` 是凭证，不作为普通 Field 展示。V0.2 之前不得出现未交付的 OAuth Provider 选项。
 
-新 Collection 没有既有数据，不向普通用户展示 Migration Review。
+新 Collection 尚无既有数据，创建时直接校验并建立；不展示与风险无关的迁移确认。成功后进入 Records，并提供 `Create first record`。Model 初始字段和 Auth 配置在此上下文中可继续修改。
 
-~~~text
-Create Collection
-→ validate
-→ internally create/apply canonical change
-→ durable Collection
-→ Records
-~~~
+## 6.3 Collection 工作区
 
-如果 Validation / Precondition 失败，在当前 Create Surface 原地解释并修复。
+标题区持续提供 Collection 名称、类型、状态以及进入其它集合的返回路径。主操作由当前子页面任务决定。
 
-成功后：
+`Records` | `Model` | `Access` | `API` 四个子页共享 Collection 身份和 pending-change 状态。
 
-~~~text
-No records yet
-Your collection is ready.
-
-[ Create first record ]
-
-Secondary: Edit schema
-~~~
-
-# 9. Collection Workspace
-
-Header 共用 Collection Identity：
+记录页头示意：
 
 ~~~text
 Collections / posts
-
-posts                                          Normal
-Blog posts
-
-[ Records ] [ Schema ] [ Security ] [ API ]
+posts                                     [ Create record ]
+Records   Model   Access   API
 ~~~
 
-Auth Collection 的 Security 内增加 Authentication / Sessions。
+## 6.4 Records
 
-异常状态，例如 failed pending apply，可以在 Header 下显示 Context Banner。
+- 记录表格支持搜索、筛选、排序、分页、列显示、复制稳定 ID 和恢复 URL 上下文。
+- 系统字段作为可理解的系统信息展示；Record 表单不能修改系统字段。
+- 创建、查看与编辑在保留列表上下文的宽工作面完成。查看面板显示记录字段、关系、文件值和更新时间。
+- 删除使用明确对象名称和可恢复性说明；执行后该行与结果在当前列表中可见。
+- Empty、Loading、Error、Permission denied、Partial Data 都有独立表现。
+- Auth Collection 创建应用用户时，同一表单完成 Profile Record 和 Password Credential；结果显示用户状态并提供进入 Sessions 的链接。
 
-# 10. Records
+## 6.5 Model — Fields / Relations / Indexes
 
-## 目的
+Model 统一呈现字段、关系和索引。用户不需要在多个页面间理解同一 Collection 的模型状态。
 
-> 当前 Collection 有哪些真实数据？如何连续管理？
+- `Fields` 是字段默认视图；字段名称、类型、约束和关系目标优先显示。
+- `Relations` 是跨集合关系视图，突出来源、目标与 cardinality；不作为另一份独立模型。
+- `Indexes` 展示复合索引和高级索引。普通单字段 Unique 留在字段表单。
+- 所有字段、关系和索引操作写入同一个 Collection-scoped、durable Pending Changes。
+- Policy 与 Authentication 配置有各自保存路径，不计入 Model Pending Changes。
+- 用户保存一次本地编辑后，操作才成为 durable pending change。页面显示 `N pending changes`，不把已保存操作称为 unsaved。
+- 离开未保存的本地表单时提供保护；离开已保存 pending changes 不再弹“未保存”确认。
+
+## 6.6 Access — Rules / Authentication / Users / Sessions
+
+Normal Collection 的 Access 页展示 Collection Access Rules。
+
+Auth Collection 的 Access 工作区提供：
 
 ~~~text
-Records · 128                                  [ + Create Record ]
-
-Search...   Filter   Sort   Columns                 More
-────────────────────────────────────────────────────────
-Title              Author          Updated
-Hello Modelry      Alice           10 min
-────────────────────────────────────────────────────────
-                                           < Previous Next >
+Rules    Authentication    App users    Sessions
 ~~~
 
-必须支持：
+Access Rules 覆盖 List / View / Create / Update / Delete，默认拒绝。先显示易懂的预设：No access、Anyone、Signed-in users、Record owner，再提供 Custom rule。当前规则、受影响操作与策略模拟结果清楚关联；不只靠颜色表达权限。
 
-- Search
-- Filter
-- Sort
-- Pagination / Cursor
-- Column Visibility
-- Field-driven Columns
-- Loading / Empty / Error
-- Record Deep Link
-- Context Preservation
+Authentication 页只展示后端真实支持的配置，如注册开关、密码策略、Session 时长、邮箱验证或密码重置通知状态。不可用的邮件服务提示配置入口，不伪装通知成功。
 
-无 Bulk Runtime 时：
+App users 和 Sessions 使用相同的返回上下文。撤销 Session 后显示已撤销事实并提示可验证的后续结果。
 
-- 不显示 Row Selection；
-- 不显示 Bulk Action。
+## 6.7 Collection API
 
-## 10.1 Record Detail
+Collection API 是全局 API & SDK 工作区的 Collection 过滤视图。保留当前 Collection，并跳转到对应 endpoint、示例、文档或调试表单。Realtime 订阅作为该 Collection 的接口能力在 Collection API 内展示（订阅事件、示例与连接说明）；Connect / API 只保留全局 Realtime 文档入口，不重复连接配置。
 
-Row click → Detail Sheet。
+# 7. Connect — API & SDK
+
+## 7.1 页面结构
+
+页面任务：**找到应用调用方式，验证一次真实请求，并把正确配置带回应用。**
 
 ~~~text
-Record
+API & SDK
+Base URL [复制]
 
-title        Hello Modelry
-author       Alice
-
-Metadata ▼
-
-                              [ Delete ] [ Edit ]
+Endpoints                 Request workspace
+GET /api/collections/...  Method / Path
+POST /api/collections/... Headers / Params / Body
+                           [ Run request ]
+                           Response
+                           Status · Duration · Request ID
 ~~~
 
-Edit 是 Primary。
+- Endpoint 列表按 Collection 与行为浏览，不要求用户从原始 OpenAPI JSON 开始。
+- 请求工作区显示方法、路径、必需参数、认证要求和可编辑请求体。
+- 可复制 Base URL、示例命令、请求体和响应；Copy 成功在控件自身反馈。
+- 运行后固定展示状态码、耗时和 Request ID。错误保留结构化 code 与可读解释。
+- `View request` 打开相同 Request Detail，并保留回到 Runner 的上下文。
+- OpenAPI 展示、复制或下载使用当前 Runtime 实际暴露的 Contract。
+- SDK 页面选择受支持的 SDK 目标，提供生成产物、安装步骤、首个请求和兼容性信息。`modelry generate` 指引来自真实 CLI，不显示虚构的生成结果。
+- API Key 值不在此页面反复暴露；需要身份时链接到对应身份详情。
 
-Row Overflow 同时提供 **Edit**，允许：
+# 8. Automate — Hooks 与自动化
+
+Automations 汇总生命周期 Hook 和 HTTP / Cron 投递工作，但清楚区分代码扩展、事件触发、定时任务与外部投递事实。
+
+页面子页：`Hooks`、`Webhooks`、`Triggers`、`Schedules`、`Delivery history`。
+
+- Hook 页说明触发事件、脚本、配置状态和最近运行结果。Secrets 在需要时以受控链接进入管理；页面不输出 Secret 值。
+- Webhook 配置页显示目标 URL、事件范围、启停和投递状态，不把外部投递描述成 SQLite 事务回滚。
+- Event Trigger 明确显示 Collection 事件和目标 Webhook。
+- Schedule 显示 Cron、时区（UTC）和下一次运行时间。
+- Delivery history 支持按目标、状态和时间检索；失败条目提供响应摘要、重试状态、关联 Request / Activity 与当前恢复动作。
+- 任何实际重试都展示投递副作用事实和新的尝试记录；重复投递不能伪装成恰好一次。
+- 没有配置时分别提供能完成初始化的主操作，不用单一“Add integration”掩盖配置对象差异。
+
+# 9. Observe — Requests、Activity、Audit 与 Runtime
+
+## 9.1 Requests
+
+Requests 是应用 HTTP 请求日志，围绕诊断一次应用调用设计。
+
+- 列表可按请求 ID、Collection、endpoint、method、status、认证结果、授权结果、错误码和时间筛选。
+- 结果列展示时间、方法/路径、状态、耗时、Collection 和 requestId。
+- 详情展示请求元数据、结构化响应错误和安全范围内的认证 / 授权结果。
+- 禁止显示 Raw Credential、完整 Authorization Header、Full Request Body、Full Response Body 或无限制 Raw Header / Query values。
+- API Runner 的失败必须使用同一个 Request ID 直接打开详情。
+- 详情展示字段使用显式 allowlist：requestId、时间、method、path、status、耗时、错误码、Collection、认证结果（是否通过与主体类型）、授权结果（是否通过与拒绝原因码）、User-Agent 摘要。未列入 allowlist 的字段一律不展示；新增展示字段必须先更新本清单。
+
+## 9.2 Activity & Audit
+
+Activity 展示各子系统有界的用户可见操作和操作结果；Audit 展示管理面安全事实。通过同一页面容器的本地页签切换，或由 URL 明确分开的子页呈现，不把两类记录混成一个不可解释的 Feed。
+
+两者支持按 Actor、Action、Resource、Result 与时间过滤。字段映射为 Owner、Administrator、Service Account 等产品术语。原始身份标识可在技术详情中查看。
+
+## 9.3 状态与诊断
+
+Runtime、Database、File Storage 各自报告 Ready、Degraded、Unavailable 或 Unknown，并显示最近检查时间和下一步操作。
+
+Settings → Status 是诊断详情和刷新入口；顶栏状态负责快速发现并直达详情。健康页不以颜色单独表达状态，也不把检查失败显示为正常。
+
+# 10. Evolve — Changes 与 Model Health
+
+## 10.1 Changes 列表
+
+Changes 回答：**有哪些模型变化还没完成、哪些需要我复核、历史结果是什么？**
 
 ~~~text
-Row action Edit
-→ Edit Sheet
-→ Save
+Changes
+Pending changes (2)          Applied history
+
+Collection   Summary                     Status           Updated
+posts        Add publishedAt              Ready            2 min ago
+users        Remove legacyRole            Needs review     1 hour ago
+
+[ Review and apply changes ]
 ~~~
 
-不用先打开 Detail。
+待应用变化按 Collection 聚合，显示业务变化摘要、更新时间和 Ready / Needs review / Failed。用户界面不要求理解 ChangeSet 或 Apply Attempt。
 
-## 10.2 Create / Edit
+## 10.2 Change Review 与 Apply
 
-- 简单 Record → Standard Sheet；
-- 多字段 / File / Relation / long text → Wide Sheet；
-- V0.1 不默认跳独立页面。
+- Review 在相同 Collection 上下文中展示字段、关系和索引的 before / after 差异。
+- 运行时返回的 Risk、Preconditions 和 Impact 以用户可理解语言显示；Technical details 折叠提供原始契约信息。
+- SAFE 变化直接提供 Apply，不增加空确认步骤。
+- 需要复核的风险变化明确说明受影响数据、不可逆影响和可用恢复方式，在页面中确认。
+- Apply 期间显示可访问的进度状态并锁定重复提交。
+- 成功后当前页面保留应用结果、实际变化和 Applied history 链接。
+- 失败后同时显示最新状态、失败原因、是否产生耐久副作用及恢复操作。Retry 会成为新的运行时尝试记录。
+- Discard 只允许针对尚未应用的 pending operation，并说明会删除哪些已保存操作。
 
-Create 成功：
+## 10.3 Applied history 与 Model health
+
+Applied history 展示已应用变更事实。Migration ID、Change ID、Ledger 等实现信息只进入 Technical details。
+
+Model health 展示 Drift 检查结果、对比范围和实际支持的校准 / 恢复动作。未知或部分不可读的状态写成 Unknown / Unavailable，不用“0 differences”代替检查失败。
+
+# 11. Project — Access & keys 与 Settings
+
+## 11.1 Access & keys
+
+Project access 只管理 Modelry 管理面身份与权限，不管理 Collection 的 Application Access Rules。
+
+页面切换：`Service Accounts`、`Administrators`。Audit 记录在 Observe 中，相关详情可从身份动作进入。
+
+Service Account 创建一次完成名称、说明和 Permission。默认创建 API Key，提交后只显示一次明文；之后只展示 Key metadata、创建时间、末次使用及状态。创建结果保留在 Service Account Detail，包含复制状态和 MCP 接入说明。
+
+权限使用 Full access、Read only、Custom 等产品语言。权限详情明确列出可执行操作；不向用户暴露 Principal / Capability 图。
+
+Disable Service Account、撤销 API Key 和移除 Administrator 使用确认 Dialog，写出对象名称和影响。Admin 权限仍由服务端执行检查。
+
+## 11.2 Settings
+
+Settings 按用户要完成的设置任务组织：
 
 ~~~text
-persist
-→ same Sheet switches to View
-→ durable ID/value visible
-→ table refreshes
+Project status
+Runtime
+
+Data and files
+Files & Storage
+Data import / export
+Backup & restore
+
+Service configuration
+Mail
+Secrets
+
+Project data
+Data import / export
+Backup & restore
 ~~~
 
-View 状态提供 Secondary：
+- Runtime settings 只编辑真实支持字段，标明来源以及变更何时生效；需重启的设置先持久化并明确显示 restart required。
+- Files & Storage 显示当前提供方、容量/健康信息和支持的提供方迁移流程。
+- Mail 显示实际配置与通知验证结果。
+- Secrets 只显示名称、用途、元信息与状态，不回显明文。
+- Data import / export 处理 Collection NDJSON，显示目标 Collection、校验结果和实际导入/导出结果。
+- Backup & restore 显示已有备份事实、创建操作、恢复预检和 CLI 恢复步骤。历史 `/settings/portability` 继续打开此页。
+- API Contract / SDK 与 MCP 统一进入 Connect，避免在 Settings 复制一份开发者接口页面。
+- Activity、Drift、Admin 身份和 Service Account 不以旧式单页设置清单重复出现。
 
-- Create another
+# 12. 全局操作与文案规则
 
-不自动清空刚创建结果。
+## 12.1 Command Search
 
-## 10.3 Auth User Record
+`⌘K`（macOS）和 `Ctrl+K`（Windows/Linux）打开全局命令搜索。它检索当前用户可见的导航、命令和近期 Collection，不搜索后台全部记录。
 
-Auth Collection 的 Create Record 是增强型 User Editor：
+支持方向键、Enter、Escape 和关闭后的焦点返回。命令按当前权限、页面和资源上下文显示；服务端仍是授权权威。无实现能力没有占位命令。
 
-~~~text
-Create user
+## 12.2 术语
 
-Profile
-Email
-[________________]
-Name
-[________________]
+界面使用稳定、普通开发者能理解的产品用语：
 
-Authentication
-Password
-[________________]
-Confirm password
-[________________]
+| 内部领域名 | 界面用语 |
+| --- | --- |
+| ChangeSet | Pending change / 待应用变更 |
+| Apply Attempt | Apply details / 应用详情 |
+| Migration | Applied change / 已应用变更；原始 ID 进入技术详情 |
+| Principal | Owner、Administrator、Service Account、App user |
+| Capability | Permission / 权限 |
+| Credential | Password、API Key、Session |
+| Policy | Access rule / 访问规则 |
+| Collection | Collection / 集合（随 locale 展示） |
+| Record | Record / 记录（随 locale 展示） |
 
-                                  [ Create user ]
-~~~
+API、数据库、Runtime 里的稳定标识、Collection 名称、字段名、ID 和服务端错误码不翻译。错误码可映射到本地化的恢复说明。
 
-产品上一次完成：
+## 12.3 写作规则
 
-~~~text
-Profile Record
-+
-Password Credential
-~~~
+- 页面标题说明任务或对象，副标题说明用户能在此完成什么。
+- Primary Action 使用动作 + 对象，如 `Create Collection`、`Run request`、`Apply changes`。
+- 表单每个输入都有可见 Label、持久说明（复杂字段）、Required 标记和字段级错误。
+- 成功文案写出已完成的持久结果；Toast 仅用于补充。
+- 失败文案依次说明发生了什么、可能原因、是否保存了变化、可执行的下一步。
+- 避免“Something went wrong”“Success!”等脱离对象的消息。
+- 除运行时原始错误详情外，不把内部包、SQL、表名或 SQLite 实现词汇作为主文案。
 
-底层仍保持两类资源。
+## 12.4 语言与主题
+
+- 提供 English 与简体中文。首次加载优先使用已保存选择；没有选择时匹配支持的浏览器 locale，不支持的 locale 回退 English。
+- 用户切换语言后立即生效，不重载页面，不修改 pathname、query、hash 或正在查看的资源。
+- 数字、日期、时间和相对时间使用共享 locale-aware formatter。用户数据、Collection / Field 名称、ID 和 API 标识不翻译。
+- 提供 Light / Dark 主题，第一次使用可跟随系统偏好；用户明确选择后持久化并覆盖系统偏好。
+- 语言和主题控件在窄屏上仍可找到，键盘可操作，并具有准确的可访问名称。
+
+# 13. 共享交互模式
+
+## 13.1 Primary Action
+
+每个页面只有一个视觉 Primary Action。次要动作放在工具栏、行菜单、详情页或低强调按钮中。删除、撤销、恢复等破坏性动作不使用 Primary 样式。
+
+## 13.2 工作面
+
+- **页面：** 列表、长表单、Model Review、诊断和需要长期阅读的内容。
+- **侧栏面板：** 短详情、快速编辑和保留列表上下文的 Record 详情。
+- **宽面板：** Record 编辑、复杂 Field 编辑等需要完整输入宽度的内容。
+- **Dialog：** Delete、Revoke、Disable、明确的风险确认和离开未保存本地表单。
+- **Split view：** Endpoint 列表与 Runner / Detail 等需要持续切换的工作区。
+
+长表单和长期编辑不能放进窄 Modal。关闭 Panel / Dialog 后焦点返回触发控件。
+
+## 13.3 Form
+
+- 表单控件采用 shadcn/ui 的 Label、Input、Textarea、Select、Checkbox、Switch 等组件，并通过共享 Form / Field 组合表达标签、帮助文本、必填、禁用和错误状态。
+- 保存前反馈为本地校验；服务端校验在相应字段旁说明。
+- 保存中禁用重复提交并给出进度。
+- 失败保留用户输入，focus 到第一处错误字段并关联 `aria-describedby`。
+- 禁用态给出原因；不能操作的原因不可只用 tooltip 隐藏。
+- 清空、撤销与破坏性结果明确区分。
+
+## 13.4 Table 与结构化结果
+
+- 结构化记录使用 shadcn/ui Table 组合和语义化 HTML Table，行操作使用 shadcn/ui Dropdown Menu 等可访问菜单组件。
+- Sorting、Filter、Empty、Loading、Error、Pagination 和 context restore 共享一致模式。
+- 无批量操作时不显示行选择框。
+- 长文本优先换行；截断时提供可键盘访问的完整内容。
+- JSON、Diff、API Request / Response 使用统一结构化查看器，提供格式化、折叠、复制和按需搜索。
+- 复制值后在原控件显示 `Copied`，不额外抢焦点或重复 Toast。
+
+## 13.5 状态徽标
+
+状态必须包含文本标签，必要时加图标。颜色只作辅助。使用有限状态：Ready、Needs review、Running、Failed、Unavailable、Unknown、Applied、Disabled 等；不发明相近但含义不同的自由文本状态。
+
+# 14. 页面状态、反馈与恢复
 
-User Detail：
-
-~~~text
-Profile
-...
-
-Authentication
-Password          Set
-Sessions          3 active
-
-[ Change password ]
-[ Revoke all sessions ]
-~~~
-
-Password：
-
-- 不进入 Schema；
-- 不显示 read-back；
-- 不出现在普通 Record API response。
-
-# 11. Schema
-
-## 目的
-
-> Collection 结构是什么？如何连续修改并安全 Apply？
-
-~~~text
-Schema
-
-[ Fields ] [ Relations ] [ Indexes ]
-~~~
-
-三者共用一个 **Schema Pending Draft**。
-
-Policy / Auth 不加入这个 Draft。
-
-## 11.1 Fields
-
-~~~text
-Schema · 8 fields                               [ + Add Field ]
-
-Field          Type          Required     Features
-id             System ID     Yes          System · Locked
-createdAt      Datetime      —            System · Locked
-updatedAt      Datetime      —            System · Locked
-title          Text          Yes
-slug           Text          Yes          Unique
-author         Relation      No           -> users
-~~~
-
-Add / Edit → Canonical Field Editor。
-
-保存 Editor 时，不立即修改 Applied Model，而是耐久保存一个 Pending Operation。
-
-~~~text
-Save field
-→ pending operation persisted
-→ return to Schema
-→ pending count visible
-~~~
-
-## 11.2 Relations
-
-Relations 是 Relation-oriented Projection。
-
-~~~text
-Field          Target       Cardinality
-author         users        many-to-one
-~~~
-
-Add / Edit 复用 Relation Field Editor。
-
-不建立第二 Draft / 第二 Validation / 第二 Submit Path。
-
-## 11.3 Indexes
-
-~~~text
-Name                 Type       Fields
-idx_posts_slug       Unique     slug
-idx_posts_status     Index      status, updatedAt
-~~~
-
-普通单字段 Unique 优先从 Field Editor 操作。
-
-这里主要负责：
-
-- composite index；
-- advanced index；
-- conflict / precondition diagnostics。
-
-## 11.4 Durable Pending Changes
-
-同一 Collection 内：
-
-- Field add / update / remove；
-- Relation add / update / remove；
-- Index add / update / remove；
-- structural validation / default change；
-
-进入同一 Schema Pending Draft。
-
-一旦 Field / Relation / Index Editor 保存：
-
-- Pending Operation 已耐久；
-- refresh 不丢；
-- 切换 Schema View 不丢；
-- 离开 Collection 不丢；
-- 不弹 Save for Later。
-
-只有编辑器本地表单尚未保存时，离开才触发 Unsaved Form Protection。
-
-Bottom Bar：
-
-~~~text
-3 pending changes                     Discard   Apply 3 changes
-~~~
-
-不是 “3 unsaved changes”。
-
-## 11.5 Apply
-
-~~~text
-Apply 3 changes
-→ Runtime canonical Diff / Risk / Preconditions / Impact
-~~~
-
-SAFE：
-
-~~~text
-→ apply immediately
-→ current Schema refreshes
-→ pending draft clears
-~~~
-
-Need Review：
-
-~~~text
-Review changes
-
-What will change
-+ subtitle field
-~ author relation target
-+ composite index
-
-Checks & impact
-128 records affected
-1 warning
-
-[ Cancel ]                        [ Confirm & Apply ]
-~~~
-
-不强制跳 Changes。
-
-Failed：
-
-- 当前 Context 显示失败；
-- Pending Change 保留；
-- 提供 Recovery Guidance；
-- 也可从 Changes 恢复。
-
-# 12. Security
-
-Security 是 Collection 的“谁能访问、如何认证”工作区。
-
-Normal：
-
-~~~text
-[ Access Rules ]
-~~~
-
-Auth：
-
-~~~text
-[ Access Rules ] [ Authentication ] [ App Users ] [ Sessions ]
-~~~
-
-# 13. Access Rules
-
-## 目的
-
-> Application Client / User 对当前 Collection 可以做什么？
-
-首屏展示五种操作整体状态：
-
-~~~text
-Operation   Access
-List        Record owner
-View        Record owner
-Create      Signed-in users
-Update      Record owner
-Delete      No access
-~~~
-
-点击一项后编辑：
-
-~~~text
-Update access
-
-Who can update?
-( ) No access
-( ) Anyone
-( ) Signed-in users
-(x) Record owner
-( ) Custom rule
-
-Owner field
-[ author ▼ ]
-
-Secondary:
-[ Copy from View ]
-[ Advanced expression ]
-
-                         Cancel   Save pending rule
-~~~
-
-Custom 才展示 Expression。
-
-Copy from another operation 只改变当前 Draft。
-
-Access Rule Draft 与 Schema Draft 分离。
-
-有 Pending Rule 时：
-
-~~~text
-2 pending access rule changes       Discard   Apply 2 changes
-~~~
-
-Apply Risk 仍由 Runtime 计算。
-
-Policy Simulation 已作为 Access Rules 的辅助预览交付。它不应用规则、不创建授权旁路，也不替代真实 Application HTTP 请求验证；Runtime 对真实请求的授权结果仍是权威事实。
-
-验证路径：
-
-~~~text
-Access Rule
-→ Apply
-→ API Runner
-→ Request Detail
-→ allowed / denied reason
-~~~
-
-# 14. Authentication — Auth Collection Only
-
-创建 Auth Collection 时已经完成基础 Authentication Setup。
-
-页面用于后续调整：
-
-~~~text
-Authentication
-
-Email + password            Enabled
-Self registration          Disabled
-Session duration            7 days
-
-                                      [ Edit ]
-~~~
-
-编辑形成独立 Auth Configuration Pending Change，不与 Schema Draft 合并。
-
-页面明确：
-
-~~~text
-email
-→ Auth identifier field
-
-password
-→ Application credential
-→ not a normal field
-~~~
-
-# 15. Sessions — Auth Collection Only
-
-~~~text
-Sessions
-
-Search user...
-
-User                 Created       Last used       Status
-alice@example.com    2h            10m             Active
-bob@example.com      1d            2h              Revoked
-~~~
-
-优先显示可识别用户。
-
-Row Action：
-
-- Revoke
-
-流程：
-
-~~~text
-Revoke
-→ confirm
-→ runtime operation
-→ row stays visible
-→ status becomes Revoked
-~~~
-
-不走 Schema Change。
-
-# 16. Collection API
-
-## 目的
-
-> 当前 Collection 的 API 怎么用？
-
-~~~text
-API
-
-Endpoints
-GET      /api/v1/posts
-POST     /api/v1/posts
-GET      /api/v1/posts/:id
-PATCH    /api/v1/posts/:id
-DELETE   /api/v1/posts/:id
-
-Selected endpoint
-GET /api/v1/posts/:id
-
-Parameters
-Headers
-Body
-Responses
-
-                                      [ Run request ]
-~~~
-
-Secondary：
-
-- Copy path
-- Copy curl
-- View OpenAPI
-- View requests for endpoint
-
-Runner 不自动使用 Admin Credential。
-
-Collection 与 Global API 必须复用 Endpoint Detail / Runner。
-
-# 17. Global API
-
-固定：
-
-~~~text
-[ Endpoints ] [ Requests ]
-~~~
-
-## 17.1 Endpoints
-
-~~~text
-Search endpoints...
-
-Collection ▼   Kind ▼   Method ▼   Auth ▼
-
-Collection    Method    Endpoint                 Kind
-posts         GET       /api/v1/posts            Data
-users         POST      /api/v1/auth/login       Auth
-~~~
-
-选择后使用 Detail Pane。
-
-## 17.2 Runner Result
-
-每次执行至少显示：
-
-~~~text
-Status        403
-Duration      18 ms
-Request ID    req_abc123
-
-POLICY_DENIED
-Current access rule denied this request.
-
-[ View request details ]
-~~~
-
-View request details 一次点击打开对应 Request Detail。
-
-禁止要求用户：
-
-~~~text
-copy requestId
-→ Requests
-→ search
-→ open
-~~~
-
-## 17.3 Requests
-
-~~~text
-Search request ID...
-
-Collection ▼   Endpoint ▼   Method ▼
-Status ▼       Error ▼      Time ▼
-
-Time       Collection   Method   Endpoint       Status   Duration
-14:32:01   posts        GET      /posts/:id     200      18 ms
-14:31:55   posts        POST     /posts         403      12 ms
-~~~
-
-Request Detail：
-
-- Request ID
-- time / duration
-- method / route
-- collection
-- status
-- authentication outcome
-- authorization outcome
-- error code
-- response size
-- Open Endpoint
-- Open Collection
-
-V0.1 不记录展示：
-
-- Raw Credential
-- Raw Authorization Header
-- Full Request Body
-- Full Response Body
-- unrestricted Raw Header / Query values
-
-# 18. Model Changes
-
-## 目的
-
-> 哪些 Model Changes 还没完成？哪些需要我处理？历史发生了什么？
-
-Model changes 是 Collection Model / Schema 待应用变更、复核、应用、失败恢复和已应用历史的工作区，不是每次编辑的强制中转页，也不暗示记录所有系统变更。
-
-固定：
-
-~~~text
-[ Pending ] [ History ]
-~~~
-
-Pending：
-
-~~~text
-Change summary                    Scope       Status          Updated
-Add 3 fields to posts             posts       Ready           5m
-Remove legacy status field        posts       Needs review    1h
-Update users access rules         users       Failed          2h
-~~~
-
-用户主状态：
-
-- Ready
-- Needs review
-- Failed
-- Applied
-
-不要求用户理解：
-
-- ChangeSet
-- Apply Attempt
-- Migration
-
-## 18.1 Change Detail
-
-~~~text
-Remove legacy status field
-
-Status              Needs review
-Scope               posts
-
-What will change
-[...]
-
-Checks & impact
-[...]
-
-Recovery
-[...]
-
-Technical details ▼
-
-                                  [ Confirm & Apply ]
-~~~
-
-Technical Details 可展示：
-
-- Change ID
-- ChangeSet ID
-- canonical diff
-- Apply Attempts
-- Migration ID / Ledger fact
-
-Retry 创建新的 Apply Attempt，但主 UI 只表达：
-
-- previous attempt failed；
-- current recovery action；
-- latest state。
-
-History 展示 Durable Applied Facts。
-
-# 19. Project Access
-
-Project access 管理当前项目的 Control Plane 身份、Permission 与 Audit。Collection Application Access Rules 仍位于 Collection → Security。当前 contextual navigation 包含：
-
-~~~text
-[ Service Accounts ] [ Administrators ] [ Audit log ]
-~~~
-
-Collection 的 Application Access Rules 仍位于 Collection → Security；它与 Project access 分开。
-
-## 19.1 Service Accounts
-
-当前 Project access 页面管理 Owner 可委派的 Service Accounts 及其 Permission。API Key 是 Service Account 的 Credential，只在对应详情内创建、查看 metadata 与撤销。已交付 Administrators 管理；Owner 可为其他管理员配置受支持的控制平面访问范围。Application Service Account Permission 与 Admin Administrator Permission 是不同的身份 / 授权路径。
-
-~~~text
-Project access                              [ + Create service account ]
-
-Service accounts
-Name              Permission      Status      Last used
-ci-deploy         Custom          Active      1h
-~~~
-
-### Create Service Account
-
-一次完成：
-
-- Name
-- Description
-- Permission preset
-- Create API Key now：默认开启
-
-Permission：
-
-- Full access
-- Read only
-- Custom
-
-成功：
-
-~~~text
-service account created
-→ API key created
-→ one-time reveal
-→ copy
-→ Done
-→ stay on detail
-~~~
-
-API Key Plaintext 只 One-time Reveal。
-
-危险操作：
-
-- Disable service account
-- Revoke API key
-
-使用 Dialog。
-
-## 19.2 Administrators
-
-Administrators 是 Project access 的 contextual destination。它管理已交付的 Admin administrator accounts 与其控制平面 Permission；它不改变 Application Auth、Application User 或 Collection Access Rules 的领域语义。
-
-## 19.3 Audit
-
-~~~text
-Audit
-
-Search...   Actor ▼   Action ▼   Resource ▼   Time ▼
-
-Time        Actor          Action        Resource       Result
-...
-~~~
-
-Audit 是 Control Plane Security / Governance Durable Fact。
-
-不复制 Application Request Log。
-
-# 20. Settings
-
-Settings 是配置和维护 Modelry 的 contextual 工作区，当前页面层级为：
-
-~~~text
-Settings
-  Project
-    Status
-    Runtime
-  Service
-    Files & Storage
-    Mail
-    Secrets
-  Maintenance
-    Backup and restore
-    Activity
-    Storage consistency
-  Developer
-    Data import / export
-    API Contract / SDK
-    MCP
-~~~
-
-Status 页面展示 Runtime、Database 与 Storage 健康状态；Runtime 已支持编辑实际暴露的配置并说明其来源及是否需要重启。Secrets 管理供 Modelry 服务访问外部资源的保密配置，供 Hooks、Storage 与 Mail 等服务使用。Backup and restore 只负责创建备份、恢复预检与 CLI 恢复指引。
-
-Data import / export 只负责 Collection NDJSON 导入与导出。API Contract / SDK 只负责 Application API Contract、下载与 `modelry generate` 指引。MCP 页面复用既有连接能力，并说明 Service Account 权限、模型变更生命周期与审计。历史 `/settings/portability` Deep Link 保留并显示 Backup and restore。
-
-Activity 与 Storage consistency 是独立维护目的地，不与其它设置表面混合。Files & Storage、Mail、Secrets、Activity 与 Storage consistency 都是已实现页面，不是占位入口。
-
-子页面按实际运行时能力展示可用设置与恢复路径。不得把尚未支持的配置伪装成可编辑，也不得把 settings mutations 与 Collection Schema Pending Draft 混合。
-
-# 21. 列表 Context / URL State
-
-进入 Detail / Edit 后返回，尽可能恢复：
-
-- Search
-- Filter
-- Sort
-- Pagination / Cursor
-- local tab
-- column visibility
-- scroll / selection where stable
-
-适合共享与 Back 恢复的状态进入 URL。
-
-Record / Request / Change Detail 必须支持 Deep Link。
-
-# 22. Surface 使用边界
-
-## Standard Sheet
-
-- short object detail
-- short form
-
-## Wide Sheet
-
-- Record Editor
-- Complex Field Editor
-
-## Focused Workspace
-
-- Create Collection
-- future long-form editing
-
-## Split Pane
-
-- Endpoint list + detail
-- other list + persistent inspector workflows
-
-## Dialog
-
-只用于：
-
-- Delete
-- Revoke
-- Disable
-- Destructive Confirm
-- Unsaved local form leave protection
-
-禁止复杂长期编辑器放进窄 Modal。
-
-# 23. Primary Action
-
-默认：
-
-~~~text
-Page Title                                  [ Primary Action ]
-~~~
-
-有 durable Pending Change 时：
-
-~~~text
-3 pending changes                 Discard   Apply 3 changes
-~~~
-
-Destructive Action 不与 Primary Action 同视觉权重。
-
-# 24. 页面状态
-
-核心页面至少覆盖：
-
-- Loading
-- Empty
-- Error
-- Permission Denied
-- Partial Data
-- Ready
-- Mutation In Progress
-- Durable Success
-- Recovery Required
-
-Empty State：
-
-~~~text
-No collections yet
-Create your first Collection to define application data.
-
-[ Create Collection ]
-~~~
-
-Partial Data：
-
-- 成功部分继续展示；
-- 失败部分标记 Unavailable；
-- 不把失败显示为 0；
-- 提供 Retry / Recovery。
-
-# 25. Feedback
-
-默认：
-
-~~~text
-local field edit
-→ immediate local validation
-
-durable mutation
-→ pessimistic
-
-success
-→ durable result remains visible
-
-toast
-→ supplementary only
-
-failure
-→ inline actionable error
-~~~
-
-Schema Pending Operation 保存成功后，应直接出现在 Pending Count / Local Projection 中。
-
-# 26. Responsive / Density
-
-Admin 优先 Desktop Developer Tool。
-
-- 1280px：完整可用；
-- 1440px：主要设计基准；
-- 1920px：合理利用空间；
-- Tablet（含 768px）：Sidebar 必须折叠或响应式适配，不遮挡 Workspace；
-- Mobile：只要求基础导航 / 只读不崩坏，不作为核心编辑场景。
-
-Density：
-
-- Standard
-- Compact Table
-
-Form 不无限横跨大屏。
-
-# 27. Design System Contract
-
-固定：
+每个主要工作区定义并实现：
+
+- Initial loading；
+- Empty；
+- Ready；
+- Partial data；
+- Error；
+- Permission denied；
+- Mutation in progress；
+- Durable success；
+- Recovery required。
+
+Partial data 保留成功部分，明确标记不可用部分并提供 Retry。Error 至少回答：
+
+1. 哪一步失败；
+2. 失败原因或可以确认的事实；
+3. 是否已经产生 Durable Side Effect；
+4. 当前服务端记录的最终状态；
+5. 用户可以执行的恢复动作及入口。
+
+Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态以 Runtime 响应为准，不基于乐观 UI 推断成功。重试前显示是否会重复外部副作用。
+
+# 15. URL、返回路径与兼容
+
+可共享或可恢复的状态进入 URL：
+
+- 当前 Collection 和子页；
+- Search、Filter、Sort、Page / Cursor；
+- 当前选中的 Record、Request、Change、Audit record；
+- API endpoint 与 Runner 结果上下文；
+- 当前明确可分享的本地页签。
+
+浏览器 Back 尽量恢复原列表筛选和滚动位置。切换到无关主导航时清除不相关 query，但不得丢弃可分享的 resource identity。
+
+旧稳定深链接继续打开同一产品对象，并映射到新导航：
+
+- `/extensions` → Automations / Hooks；
+- `/extensions/:extensionId` → Automations / 对应 Hook 详情；
+- `/automations` → Automations；
+- `/activity` → Activity；
+- `/requests/:requestId` → Requests / 同一 Request Detail；
+- `/changes` → Changes；
+- `/access`、`/administrators` → Access & keys 中对应身份；
+- `/access/audit` → Activity & Audit / Audit；
+- `/access/audit/:auditRecordId` → Activity & Audit / 对应 Audit 详情；
+- `/secrets` → Settings / Secrets；
+- `/settings/portability`、`/settings/backups` → Settings / Backup & restore；
+- `/settings/data` → Settings / Data import & export；
+- `/settings/developer` → Connect / SDK & Contract；
+- `/settings/mcp` → Connect / MCP；
+- `/settings/drift` → Model health；
+- `/settings/runtime` → Settings / Runtime；
+- `/settings/storage` → Settings / Files & Storage；
+- `/settings/mail` → Settings / Mail；
+- `/settings` → Settings；
+- `/api` → Connect / API；
+- `/collections/new` → Create Collection；
+- `/collections/:collectionId` → 对应 Collection / Records；
+- `/collections/:collectionId/schema` → 对应 Collection / Model；
+- `/collections/:collectionId/security` → 对应 Collection / Access；
+- `/collections/:collectionId/api` → 对应 Collection / API；
+- 既有 Collection、Schema、Security、API 和 Record 深链接保留资源与页面上下文。
+
+路由映射不得更改 Admin HTTP Contract，也不得丢弃登录前的安全站内 return path。
+
+旧路径映射实现为独立的纯函数路由映射模块，并配套覆盖每一行的单元测试。该模块不依赖任何新页面完成，属于重建的首批交付，保证重建期间既有书签与文档链接持续可用。
+
+# 16. Responsive、键盘与无障碍
+
+## 16.1 断点与空间
+
+- 1440 px 是桌面主设计基准；1280 px 保持完整可用；1920 px 使用限制内容最大宽度的主画布。
+- 1024 px 下导航收窄，主工作区保持可操作。
+- 768 px 以下全局导航折叠为明确的导航抽屉，集合内子页转为滚动标签或选择器。
+- 390 px 手机宽度下不出现页面横向滚动。表单单列；Record / Field 编辑占用全屏工作面；表格允许可辨认的局部横向滚动并固定标识列。
+- 全部触控目标至少 44 × 44 CSS px；相邻动作留足间距。
+- Sticky header、导航抽屉、Panel 和提示条不能遮住键盘焦点。
+- 异步列表预留标题和内容位置；Loading 不引起布局跳动。长列表使用分页或游标，不在单页一次渲染全部记录。
+- 加载指示匹配真实等待时长：短操作不闪烁，较长操作使用保留空间的 Skeleton 或具名进度状态。
+
+## 16.2 键盘与读屏
+
+- Tab 顺序跟随视觉顺序，所有可操作元素都有可见焦点。
+- `Enter` 仅提交预期的简单表单；长表单可用 `Cmd/Ctrl + Enter`。
+- `Escape` 在不会丢失耐久状态时关闭层；破坏性流程不能被无意 Escape 提交。
+- Sheet / Dialog 管理焦点陷阱、焦点返回和标题关联。
+- 状态变更使用最少数量的 live region；状态文本完整，不逐字打断读屏。
+- 图标按钮有稳定可访问名称；装饰图标从读屏树隐藏。
+- 文字/背景对比目标 WCAG 2.2 AA；键盘焦点可见且不被遮盖；减少动态效果遵循 `prefers-reduced-motion`。
+
+# 17. 新视觉系统
+
+## 17.1 方向
+
+新版方向命名为 **Quiet Mono（黑白灰开发工作台）**：以高对比黑、白和中性灰建立层级，用留白、字重和细边界表达结构。配色参考 shadcn/ui 官方 `neutral` 基色和语义 CSS 变量约定，明暗主题使用同一组语义 Token 成对映射。
+
+视觉规则：
+
+- Light 使用纯白画布、近黑正文与浅灰分隔；Dark 使用近黑画布、近白正文、炭灰表面与低对比边界。
+- 主按钮和选中项使用黑白反差：Light 为近黑底/近白字，Dark 为近白底/近黑字。
+- 导航选中、hover、secondary surface、input 和分隔线全部使用中性灰，不增加品牌色强调。
+- Ready、Applied、Warning 等状态以中性色背景、图标和文字标签表达；危险操作及明确错误使用 shadcn `destructive` 语义色。
+- 以字重、留白、对齐和边界建立信息层次，不依赖卡片阴影。
+- 避免大面积渐变、玻璃模糊、彩色发光、扫描线、数字跳动和装饰动画。
+- 标题和说明以可读 Sans 为主；代码、路径、ID、时间、API 示例采用等宽字。
+- Lucide SVG 使用统一描边；不用 Emoji 充当交互图标。
+- 视觉基准（2026-09-29 确认）：以 [ui.shadcn.com](https://ui.shadcn.com/) 官方站点实际使用的 Light / Dark 主题为准；第 17.2 节 Token 表即该主题的 neutral 基线，实现时以站点渲染效果做像素级对照，不引入额外品牌色。重建方式确认为整体重建，不逐页沿用旧版实现。
+
+## 17.2 Token 基线
+
+`components.json` 使用 `baseColor: neutral` 和 CSS variable theming。以下值采用 [shadcn/ui 官方 neutral 默认主题](https://ui.shadcn.com/docs/theming) 的语义变量；组件通过 `background`、`primary`、`muted`、`border`、`ring` 等语义名取色，不在业务组件中写 Hex / OKLCH。
+
+| shadcn Token | Light | Dark |
+| --- | --- | --- |
+| `background` | `oklch(1 0 0)` | `oklch(0.145 0 0)` |
+| `foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` |
+| `card` / `popover` | `oklch(1 0 0)` | `oklch(0.205 0 0)` |
+| `card-foreground` / `popover-foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` |
+| `primary` | `oklch(0.205 0 0)` | `oklch(0.922 0 0)` |
+| `primary-foreground` | `oklch(0.985 0 0)` | `oklch(0.205 0 0)` |
+| `secondary` / `muted` / `accent` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` |
+| `secondary-foreground` / `accent-foreground` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` |
+| `muted-foreground` | `oklch(0.556 0 0)` | `oklch(0.708 0 0)` |
+| `border` | `oklch(0.922 0 0)` | `oklch(1 0 0 / 10%)` |
+| `input` | `oklch(0.922 0 0)` | `oklch(1 0 0 / 15%)` |
+| `ring` | `oklch(0.708 0 0)` | `oklch(0.556 0 0)` |
+| `sidebar` | `oklch(0.985 0 0)` | `oklch(0.205 0 0)` |
+| `sidebar-foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` |
+| `sidebar-accent` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` |
+| `destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` |
+
+成功、警告、信息不新增彩色品牌 Token；它们使用中性色表面和前景，配合状态文字/图标。只有破坏性操作和错误使用 `destructive` 色。实现时仍须验证完整前景/背景组合符合 WCAG 2.2 AA。
+
+## 17.3 字体、间距与动效
+
+- UI 字体：IBM Plex Sans；若离线/自托管无法加载外部字体，使用随应用打包的本地字体与系统回退，不在运行时依赖 Google Fonts。IBM Plex Sans 不含中文字形，中文回退栈显式定义为系统 CJK 字体（如 PingFang SC、Microsoft YaHei），避免中英混排基线与字重静默失控。
+- Code 字体：JetBrains Mono；仅用于 API、字段标识、路径、ID 和技术详情。
+- 字号层级：12 / 14 / 16 / 18 / 24 / 32 px；普通正文以 16 px 为基准，辅助标签不低于 12 px，窄屏常规正文为 16 px。
+- 间距基于 4 px 单位，常用 8 / 12 / 16 / 24 / 32 px。
+- 表面只使用少数一致圆角与一层轻微阴影；列表和工作区以分隔线构建结构。
+- 页面内容更换不做入场动画；Panel 使用轻微透明度/位移表示来源，短状态变化快速完成且可打断。
+- 所有非必要动效服从 `prefers-reduced-motion`，动效不是状态正确性的前置条件。
+
+## 17.4 组件实现边界
+
+shadcn/ui 是 Admin 唯一的通用 UI 组件体系，作为明确的实现框架使用；不得另建一套与 shadcn/ui 并行的 CSS 组件库。实现基线保持：
 
 ~~~text
 React + TypeScript + Vite
-        ↓
-Modelry Design System
-        ↓
-shadcn/ui
-        ↓
-Base UI
-        ↓
-Tailwind CSS v4
+→ Modelry Design System
+→ shadcn/ui
+→ Base UI
+→ Tailwind CSS v4
 ~~~
 
-Modelry Design System 必须覆盖：
+实现约束：
 
-- semantic tokens
-- typography
-- spacing
-- radius / elevation
-- light / dark
-- button hierarchy
-- form pattern
-- table pattern
-- sheet / workspace / dialog pattern
-- status
-- empty / error / partial state
-- keyboard / focus
-- interaction feedback
-- structured viewer
-- copy interaction
+- 通用组件从 `admin/src/components/ui` 导入和复用，遵循仓库 `admin/components.json` 的 shadcn/ui 配置（Base UI、`base-nova`、`neutral`、CSS variables）。组件样式使用第 17.2 节语义 Token。
+- Button、Badge、Input、Textarea、Label、Select、Checkbox、Switch、Table、Tabs、Dialog、Alert Dialog、Sheet、Dropdown Menu、Popover、Tooltip、Skeleton 等通用控件及其交互状态，必须使用 shadcn/ui 对应组件与变体组合；禁止用裸 HTML + 手写 CSS 重造一套按钮、字段、徽标、表格、菜单或弹层。
+- Tailwind CSS v4 用于页面布局、响应式排布和 shadcn/ui 组件组合；不得借助页面 CSS 或散落的 utility class 另行定义通用控件的视觉、焦点、禁用、错误、悬停和弹出层行为。
+- 新增通用组件先检查 shadcn/ui 可用组件并通过兼容的 shadcn/ui registry / CLI 纳入 `components/ui`。确无对应组件时，在同一目录扩展现有组件和变体，沿用 Base UI 原语、语义 Token 与统一调用接口；不得引入第二套组件库或另设样式体系。
+- 业务组件可以组合 `components/ui` 中的控件来承载 Modelry 专属语义和流程；页面级 CSS 仅负责独有的结构布局，不能复制通用组件的样式与交互实现。
+- 按钮、状态徽标、表单字段、表格、加载/空/错误状态、Dialog 和 Sheet 使用统一组件接口。既有页面迁移时复用这些 shadcn/ui 组件，并清理被替代的旧控件样式。
 
-目标 Accessibility：WCAG 2.2 AA。
+# 18. 真实浏览器验收
 
-# 28. Browser Acceptance
+核心页面验收使用真实 Runtime、SQLite、HTTP、Admin 和 Chromium。验收业务耐久状态、HTTP 事实和跨页面结果；无 Mock Backend 替代核心流程。
 
-至少覆盖：
+第 18 节的各闭环在重建动工前先实现为针对现有 Admin 的 Playwright e2e 用例，作为重建期间的持续回归基线；对应新页面或新流程以相关用例全部通过为完成标准。
 
-## First Run
+## 18.1 首次可用后端
 
 ~~~text
-Start
-→ Bootstrap Owner
-→ Create Collection
-→ Create first Record
+空 Project Root 启动
+→ Owner 初始化
+→ 创建 Normal Collection 和字段
+→ 创建 Record
+→ 刷新后记录仍在
+→ 从 Collection API 发出真实请求
+→ Requests 中打开同一 requestId
 ~~~
 
-## Normal Collection
+## 18.2 Access 闭环
 
 ~~~text
-Create Collection
-→ Initial Fields
-→ Record CRUD
-→ Access Rule
-→ API Runner
-→ Request Detail
-→ Schema Pending Changes
+创建 Auth Collection
+→ 创建 App user + Password
+→ 关闭默认注册时确认匿名创建被拒绝
+→ 配置规则并模拟
+→ 登录 / 查看 Session
+→ 撤销 Session
+→ 验证后续应用访问拒绝
+→ 查看对应 Audit fact
+~~~
+
+## 18.3 Model Changes 闭环
+
+~~~text
+增加 Field
+→ 保存成 durable pending change
+→ 切换页 / 刷新后仍可见
+→ Review 差异和 Runtime Risk
 → Apply
-→ Restart
-→ Verify
+→ 查看 Record/API 结果
+→ 重启 Runtime
+→ Applied history 仍可验证
 ~~~
 
-## Auth Collection
+另覆盖失败应用、恢复与新 Retry Attempt 的事实。
+
+## 18.4 API 与观察闭环
 
 ~~~text
-Create Auth Collection
-→ Create App User + Password
-→ Login
-→ Session
-→ Revoke
-→ access fails
-→ Audit
+Run API request
+→ 显示 Status / Duration / requestId
+→ View request
+→ Request Detail 对应同一 ID 和错误码
+→ 返回 Runner 保留 endpoint 和输入
 ~~~
 
-## API Error
+## 18.5 Automation 与身份
 
-~~~text
-Run
-→ structured error
-→ requestId
-→ View request details
-→ same Request
-~~~
+- 配置 Hook Secret 后只查看 metadata，不回显明文；验证 Hook 运行结果。
+- 配置 Event Trigger / Schedule，查看真实 Delivery history、失败原因、重试与外部副作用状态。
+- 创建 Service Account 和 API Key；明文只显示一次，刷新后只显示 metadata。
+- 使用 Service Account 权限调用 MCP 可用能力；越权动作仍被服务端拒绝并记录事实。
 
-## Failed Model Change
+## 18.6 Shell 与视觉验收
 
-~~~text
-Apply
-→ failure visible
-→ Changes / Recovery
-→ retry
-→ applied history
-~~~
+- 浏览器刷新、返回、深链接和 locale/theme preference 保持；
+- Light / Dark 的真实 Token 对比通过 WCAG 2.2 AA 检查；
+- 对比度验证由自动化 Token 对比测试持续执行（沿用并扩展现有 contrast 测试），不依赖人工抽查；
+- 390 / 768 / 1024 / 1440 px 下不丢失主动作与资源上下文；
+- 每个流程均可纯键盘完成，Panel/Dialog 关闭后焦点正确返回；
+- 无遮挡焦点、控制台异常、未处理页面错误、意外 5xx、失败请求或卡住的 Loading；
+- 简体中文和 English 覆盖全部共享 Shell、关键页面、表单错误和恢复消息。
 
-Mandatory Browser Flow 使用：
+# 19. 完成标准
 
-- Real Runtime
-- Real SQLite
-- Real HTTP
-- Real Admin
-- Real Chromium
+新版 Admin 交付必须同时满足：
 
-不以 Mock Backend 替代核心 Closure。
-
-# 29. Definition of Done
-
-Admin V0.1 必须满足：
-
-- First Run 不要求本机复制 Setup Token；
-- Bootstrap 后无 Collection 时直接进入 Create Collection；
-- Create Collection 一次完成初始模型；
-- id / createdAt / updatedAt 明确可见且锁定；
-- Auth Collection 创建后 Authentication Ready；
-- Admin 创建 Auth User 时一次完成 Record + Password Credential；
-- Schema Pending Changes 耐久且不需要 Save for Later；
-- Policy / Auth 不与 Schema 共用 Collection-wide Draft；
-- SAFE Apply 不增加额外 Review；
-- Risk Review 原地完成；
-- Records CRUD 不进入 Schema Change；
-- Access Rules Preset-first；
-- Runner Error 一键进入对应 Request Detail；
-- Model changes 主 UI 不要求用户理解 ChangeSet / Apply Attempt / Migration；
-- Project access UI 不要求理解 Principal / Capability / Credential；
-- Request 与 Audit 不混淆；
-- 已实现的 Extensions / Secrets / Activity 等能力通过真实产品页面进入，不以未实现 Placeholder 代替；
-- Search / Filter / Sort / Pagination / Deep Link Context 保持；
-- 所有核心页面遵守 Modelry Design System；
-- Mandatory Browser Acceptance 完成真实业务闭环。
-
-# 30. V0.1.x 已交付的产品表面
-
-以下能力已进入当前 Admin / Runtime 产品，不再按“未来能力”或 Placeholder 描述：
-
-- Realtime subscriptions；
-- 独立一级入口 Hooks（映射到既有 Extensions 路由）与 Settings 中的 Secrets；
-- Automation：Webhooks、Event triggers、Scheduled triggers、Delivery history；
-- Activity 与 Drift；
-- Project access 中的多管理员和 Service Accounts，API Keys 在所属 Service Account 详情内管理；
-- Collection Security 中的 Policy Simulation；
-- 可编辑 Runtime Settings；
-- 分离的 Data import / export、Backup and restore、API Contract / SDK 与 MCP 页面；
-- Admin i18n（English / Simplified Chinese）、Theme 与 Command Palette。
-
-Hooks 作为独立一级开发者能力进入；其他高级能力按 Automation、Project access、Settings contextual navigation 渐进式暴露，不把内部模块数等同于一级导航数量。UI 文案和入口不得改写底层稳定 Domain / Contract 语义。此清单描述当前已交付产品面，不承诺 Enterprise、PostgreSQL 或其它 Issue 未定义路线。
-
-# 31. V0.1.x Admin Shell 与全局产品操作
-
-本节描述当前已实现的共享 Shell 和导航，不是尚待决定的演进方案；它与上文当前 Information Architecture 一致，且不改变底层 Project / Collection / Security 业务语义：
-
-~~~text
-Project / Context | Command Palette | Runtime | Language | Theme | Owner
-~~~
-
-## 31.1 Language
-
-Admin 初始支持 `en`（English）和 `zh-CN`（简体中文）。所有用户可见的共享 Shell、导航、状态控件和 Command Palette 文案必须使用结构化、按产品域组织的 locale resources 与稳定 translation keys。后续 V0.1.x Surface 从首次实现开始使用同一 i18n API，不得自建页面翻译表。
-
-- 首次选择：有有效 Modelry locale preference 时使用该值；否则仅在首次默认值中匹配明确支持的浏览器 locale（`en`、`zh-CN`，标签匹配不区分大小写）；`zh-TW` 等不支持的 locale 安全回退到 English，不按语言前缀推断区域变体。
-- 用户选择持久化；切换即时生效，不重新加载页面，也不改变当前 pathname、query、hash 或局部工作上下文。
-- 日期、时间、相对时间、数字和复数通过 `Intl` locale-aware formatter 提供共享入口。
-- Collection/Field 名称、ID、用户数据、API/domain 标识符及稳定服务端错误码是数据或契约，不翻译。已支持的服务端错误码可以映射到本地化的说明文案。
-- 单个 locale 缺少已知 key 时回退到 English。未知 key 在 development/test 显式失败；production 使用可见但安全的 key 标记回退。诊断不得包含插值值、credential 或 secret。
-
-## 31.2 Theme
-
-Light / Dark 是独立的全局 Theme action，位于 Topbar，与 Owner 身份、Session 和 Sign out 分开。沿用当前持久化 preference 行为；控件必须可键盘访问，具有可理解的可访问名称、可见 focus 与满足 Design System 的对比度。
-
-## 31.3 Command Palette
-
-Command Palette 是通过共享、可扩展的 Command Registry 注册的操作与导航表面。Command metadata 至少包括稳定 ID、产品域分类、显示文案、可选关键词、上下文/能力可见条件与执行动作。后续 V0.1.x Surface 可以从自己的模块注册和移除 commands，无需扩展一个集中巨型组件。
-
-- `⌘K`（macOS）和 `Ctrl+K`（Windows/Linux）打开 palette；输入只对可见 command 的 label/keywords 做模糊匹配，不对后台数据做全文搜索。
-- 支持键盘上下移动、Enter 执行、Escape 关闭、focus trap 与关闭后的 focus restoration。
-- 只显示当前用户能力、项目、路由和资源上下文中真实可执行的命令。命令经正常导航和业务动作执行，不提供授权旁路。
-- Command visibility 依据当前已认证 Admin session、角色 / Permission、route、resource 与 command context；只隐藏无权或不相关的入口，不替代服务端授权。
-- Owner 与 Administrator 使用 Admin Control Plane session / Permission；Application Service Account / API Key 与 Application User Credential 均不是 Admin session，也不得复用于 Admin authorization。
-- Command visibility 仅控制发现和调用入口；Runtime API 对 Admin session 与 Permission 的检查仍是授权权威，不能由客户端命令注册替代或绕过。
-- 可用命令限于真实存在的导航页、近期 Collection、当前 Collection tabs 与 Create actions、Automation destinations、适用的 Pending / Failed Model change、Project access / Settings destinations，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
-- 导航只在语义匹配时保留 URL/deep-link context；切换无关的一级工作区不继承另一页面的 query/hash。
-
-## 31.4 Acceptance
-
-使用 Admin tests/build 与真实 Chromium 验证 Shell 双语、locale 持久化与无重载切换、当前深链状态保留、数据标识不变、Theme 持久化、折叠 Sidebar、平台快捷键、keyboard/focus 行为、命令上下文可见性与实际导航，以及 Automation / Project access / Settings contextual navigation、旧深链和 Owner / Administrator Permission 下的真实可见性。完整浏览器发布门禁及 Computer Use 职责见 SPEC-0003；此节不改变底层 Domain / Contract 或 V0.1 Core Flows。
+- 工作顺序可从 Home 连续走到第一条真实 API 请求；
+- 建模、访问控制、API、自动化、观察和变更演进入口由开发者任务组织；
+- 空项目第一步明确，正常状态下 Home 不变成无意义中转页；
+- 每项主要操作的成功结果耐久、就地可见且可通过第二观察面验证；
+- SAFE 模型变化不需要多余确认，真实高风险变化说明影响并由 Runtime 权威判定；
+- 表单、表格、Sheet、Dialog、错误、部分状态、复制和状态反馈遵守共享模式；
+- Owner、Administrator、Service Account、App user 身份边界清楚；
+- 现有已交付 V0.1.x 页面都有新导航入口，不存在 Placeholder Action；
+- 当前 Admin HTTP Contract、CLI、MCP 和业务流程保持不变；
+- 旧深链接映射到新信息架构并保留 resource/query context；
+- Light / Dark、English / Simplified Chinese、响应式和 WCAG 2.2 AA 验收通过；
+- 完成第 18 节真实浏览器的业务闭环与耐久性验收。

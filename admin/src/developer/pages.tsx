@@ -13,7 +13,7 @@ export function MCPGuidePage() {
     category: 'commands.categories.system',
     label: () => t('commands.mcp'),
     keywords: () => ['mcp', 'agent', 'coding agent', 'model context protocol'],
-    execute: () => navigate('/settings/mcp'),
+    execute: () => navigate('/connect/mcp'),
   }], [navigate, t]);
   useRegisterCommands(commands);
 

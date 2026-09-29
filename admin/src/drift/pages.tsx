@@ -5,10 +5,17 @@ import { Button, EmptyState, ErrorState, LoadingState, StatusChip, Surface } fro
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
+import { mapLegacyPath } from '../route-map';
 import { fetchDriftReport, reconcileCollectionProjection, type DriftFinding, type DriftReport, type DriftSeverity } from './client';
 import './drift.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
+
+// deepLink 由 Runtime 契约返回，可能仍是旧信息架构路径；经 route-map 映射到新导航。
+function correctiveSurfaceLink(deepLink: string): string {
+  const mapped = mapLegacyPath(deepLink.split('?')[0] ?? deepLink, deepLink.includes('?') ? deepLink.slice(deepLink.indexOf('?')) : '');
+  return mapped === null ? deepLink : `${mapped.pathname}${mapped.search}`;
+}
 
 const storageFindingFacts: Record<string, { expected: TranslationKey; actual: TranslationKey }> = {
   'physicalProjection.tableMissing': {
@@ -87,7 +94,7 @@ export function DriftPage() {
       category: 'commands.categories.system',
       label: () => t('commands.drift'),
       keywords: () => [t('drift.searchKeywords')],
-      execute: () => navigate('/settings/drift'),
+      execute: () => navigate('/health'),
     },
   ], [navigate, t]);
   useRegisterCommands(commands);
@@ -163,7 +170,7 @@ export function DriftPage() {
                       </Button>
                     )}
                     {finding.remedy === 'manual' && <span className="drift-manual">{t('drift.manualRemedy')}</span>}
-                    <Link className="drift-finding__link" to={finding.deepLink}>{t('drift.openCorrectiveSurface')}</Link>
+                    <Link className="drift-finding__link" to={correctiveSurfaceLink(finding.deepLink)}>{t('drift.openCorrectiveSurface')}</Link>
                   </div>
                 </li>
               ))}

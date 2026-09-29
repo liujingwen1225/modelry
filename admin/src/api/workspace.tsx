@@ -6,8 +6,9 @@ import { allApplicationEndpoints, endpointOpenApiSnippet, endpointsForCollection
 import { getRequestRecord, listRequestRecords, runApplicationRequest, type ApplicationRunResult, type RequestRecord } from './workspace-client';
 import { getAccessRules, listAllCollections, type AccessRuleMode, type AccessRulesState, type Collection } from '../collections/client';
 import { useCollectionWorkspace } from '../collections/workspace-context';
-import { Button, CopyButton, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink, CopyButton, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
+import { mapLegacyPath } from '../route-map';
 import './api-workspace.css';
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -195,7 +196,7 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
             <div className="api-endpoint-meta"><span><strong>{t('api.operationLabel')}</strong>{activeEndpoint.operationId}</span><span><strong>{t('api.collectionModelLabel')}</strong>{t('api.collectionModelValue', { version: selectedCollection.schemaVersion ?? 1, count: selectedCollection.fields.length })}</span>{accessOperation && <span><strong>{t('api.appliedAccessLabel')}</strong>{ruleReady ? accessRuleLabel(appliedAccessMode, t) : t('api.loadingAccess')}</span>}</div>
             <div className="api-fields"><strong>{t('api.appliedFields')}</strong><div>{selectedCollection.fields.map((field) => <span className="api-field-chip" key={field.id ?? field.name}><code>{field.name}</code><small>{field.type}{field.required ? t('api.fieldRequired') : ''}</small></span>)}</div></div>
             <section className="api-runner">
-              <div className="api-runner__heading"><div><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="text-link" to={`/api?tab=requests&filter=${encodeURIComponent(`collectionId eq "${selectedCollection.id}"`)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
+              <div className="api-runner__heading"><div><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="text-link" to={`/connect/api?tab=requests&filter=${encodeURIComponent(`collectionId eq "${selectedCollection.id}"`)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
               <form onSubmit={(event) => void run(event)}>
                 {activeEndpoint.template.includes('{recordId}') && <FormField htmlFor="api-record-id" label={t('api.recordIdLabel')}><input autoComplete="off" id="api-record-id" onChange={(event) => setPathValues((value) => ({ ...value, recordId: event.target.value }))} value={pathValues.recordId ?? ''} /></FormField>}
                 {activeEndpoint.template.includes('{sessionId}') && <FormField htmlFor="api-session-id" label={t('api.sessionIdLabel')}><input autoComplete="off" id="api-session-id" onChange={(event) => setPathValues((value) => ({ ...value, sessionId: event.target.value }))} value={pathValues.sessionId ?? ''} /></FormField>}
@@ -229,7 +230,7 @@ function ApplicationResponse({ result, location, endpoint }: { result: Applicati
     {result.textResponseHidden && <p className="api-muted">{t('api.hiddenContent')}</p>}
     {result.body !== undefined && <pre className="api-response__body"><code>{JSON.stringify(result.body, null, 2)}</code></pre>}
     <div className="api-response__actions">
-      {result.requestId && result.requestRecordPersisted && <Link className="button button--secondary button--small" to={`/requests/${encodeURIComponent(result.requestId)}?from=${encodeURIComponent(from)}`}>{t('api.viewRequestDetails')} <ArrowRight aria-hidden="true" size={14} /></Link>}
+      {result.requestId && result.requestRecordPersisted && <ButtonLink size="small" to={`/requests/${encodeURIComponent(result.requestId)}?from=${encodeURIComponent(from)}`}>{t('api.viewRequestDetails')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>}
       {result.requestId && !result.requestRecordPersisted && <span className="api-muted">{t('api.requestUnavailable')}</span>}
     </div>
   </section>;
@@ -524,8 +525,14 @@ export function GlobalAPIPage() {
 }
 function internalReturnPath(value: string | null) {
   if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return undefined;
-  if (!value.startsWith('/api') && !value.startsWith('/collections/') && !value.startsWith('/access/audit')) return undefined;
-  return value;
+  // 旧书签可能仍携带旧信息架构的 return path；经 route-map 映射到新导航后再使用。
+  const queryIndex = value.indexOf('?');
+  const pathname = queryIndex >= 0 ? value.slice(0, queryIndex) : value;
+  const search = queryIndex >= 0 ? value.slice(queryIndex) : '';
+  const mapped = mapLegacyPath(pathname, search);
+  if (mapped !== null) return `${mapped.pathname}${mapped.search}`;
+  if (value.startsWith('/connect/api') || value.startsWith('/collections/') || value.startsWith('/activity/audit')) return value;
+  return undefined;
 }
 
 function matchingEndpoint(collections: Collection[], record: RequestRecord) {
@@ -576,14 +583,14 @@ export function RequestDetailPage() {
   if (state === 'loading') return <div className="page-stack api-page"><LoadingState label={t('api.requestDetailLoading')} /></div>;
   if (state === 'error' || !record) {
     const copy = errorCopy(error, t('api.requestDetailLoadFailed'), t, errorMessage);
-    return <div className="page-stack api-page"><ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-link" to="/api?tab=requests">{t('api.backToRequests')}</Link></ErrorState></div>;
+    return <div className="page-stack api-page"><ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-link" to="/connect/api?tab=requests">{t('api.backToRequests')}</Link></ErrorState></div>;
   }
   const collection = collections.find((item) => item.id === record.collectionId);
-  const endpointLink = endpoint ? `/api?tab=endpoints&collection=${encodeURIComponent(endpoint.collectionId)}&endpoint=${encodeURIComponent(endpoint.operationId)}` : '/api?tab=endpoints';
+  const endpointLink = endpoint ? `/connect/api?tab=endpoints&collection=${encodeURIComponent(endpoint.collectionId)}&endpoint=${encodeURIComponent(endpoint.operationId)}` : '/connect/api?tab=endpoints';
   const collectionLink = collection && endpoint ? `/collections/${encodeURIComponent(collection.id)}/api?endpoint=${encodeURIComponent(endpoint.operationId)}` : undefined;
 
   return <div className="page-stack api-page api-request-detail">
-    <p className="api-breadcrumb"><Link to={from ?? '/api?tab=requests'}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link></p>
+    <p className="api-breadcrumb"><Link to={from ?? '/connect/api?tab=requests'}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link></p>
     <APIPageHeader description={t('api.requestDetailDescription')} eyebrow={t('api.requestDetailEyebrow')} title={t('api.requestDetailTitle')} />
     <Surface className="api-detail-card" variant="standard">
       <header><div><p className="eyebrow">{t('api.canonicalRequestId')}</p><h2><code>{record.requestId}</code></h2></div><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip><CopyButton label={t('api.copyRequestId')} value={record.requestId} /></header>
@@ -597,7 +604,7 @@ export function RequestDetailPage() {
         <div><dt>{t('api.authorization')}</dt><dd>{record.authorizationOutcome ?? t('api.notRecorded')}</dd></div>
         <div><dt>{t('api.errorCode')}</dt><dd>{record.errorCode ?? '—'}</dd></div>
       </dl>
-      <div className="api-detail-actions"><Link className="button button--secondary button--small" to={endpointLink}>{t('api.openEndpoint')}</Link>{collectionLink && <Link className="button button--secondary button--small" to={collectionLink}>{t('api.openCollectionApi')}</Link>}{record.authorizationOutcome === 'denied' && record.collectionId && <Link className="button button--secondary button--small" to={`/collections/${encodeURIComponent(record.collectionId)}/security`}>{t('api.reviewAccessRules')}</Link>}<Button onClick={() => navigate('/api?tab=requests&search=' + encodeURIComponent(record.requestId))} size="small">{t('api.findInRequests')}</Button></div>
+      <div className="api-detail-actions"><ButtonLink size="small" to={endpointLink}>{t('api.openEndpoint')}</ButtonLink>{collectionLink && <ButtonLink size="small" to={collectionLink}>{t('api.openCollectionApi')}</ButtonLink>}{record.authorizationOutcome === 'denied' && record.collectionId && <ButtonLink size="small" to={`/collections/${encodeURIComponent(record.collectionId)}/access`}>{t('api.reviewAccessRules')}</ButtonLink>}<Button onClick={() => navigate('/connect/api?tab=requests&search=' + encodeURIComponent(record.requestId))} size="small">{t('api.findInRequests')}</Button></div>
     </Surface>
   </div>;
 }

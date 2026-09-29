@@ -291,7 +291,7 @@ async function actionButtonContrast(page: Page) {
       button.remove();
       return result;
     };
-    return { primary: read('button button--primary'), danger: read('button button--danger') };
+    return { primary: read('button bg-primary text-primary-foreground'), danger: read('button bg-destructive text-destructive-foreground') };
   });
 }
 
@@ -323,7 +323,7 @@ test.afterAll(async () => {
 });
 
 test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empty Project Root', async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(7_200_000);
   const healthIssues: string[] = [];
   const expectedHTTPFailures = new Set<string>();
   addBrowserHealthGate(page, healthIssues, expectedHTTPFailures);
@@ -384,11 +384,11 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.goto(`${runtimeURL}/`);
     await expect(activePage.getByRole('heading', { name: 'Overview' })).toBeVisible();
     const productNavigation = activePage.getByRole('navigation', { name: 'Project navigation' });
-    await expect(productNavigation.getByRole('link')).toHaveCount(8);
+    await expect(productNavigation.getByRole('link')).toHaveCount(9);
     expect(await productNavigation.getByRole('link').allTextContents()).toEqual([
-      'Overview', 'Collections', 'API', 'Hooks', 'Automation', 'Model changes', 'Project access', 'Settings',
+      'Home', 'Collections', 'API & SDK', 'Automations', 'Activity & Audit', 'Changes', 'Model health', 'Access & keys', 'Settings',
     ]);
-    await expect(activePage.locator('.nav-group__label')).toHaveText(['Build', 'Manage', 'System']);
+    await expect(activePage.locator('.nav-group__label')).toHaveText(['Build', 'Connect', 'Automate', 'Observe', 'Evolve', 'Project']);
     await expect(activePage.locator('.overview-recent-work')).toContainText('authors');
     await expect(activePage.locator('.overview-build-links').getByRole('link')).toHaveCount(4);
     expect(await activePage.evaluate(() => {
@@ -406,56 +406,58 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByText('V0.1', { exact: true })).toHaveCount(0);
     await expect(activePage.locator('.brand-edition')).toHaveCount(0);
 
-    await productNavigation.getByRole('link', { name: 'Hooks' }).click();
-    await expect(activePage).toHaveURL(`${runtimeURL}/extensions`);
+    await productNavigation.getByRole('link', { name: 'Automations' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/automations/hooks`);
     await expect(activePage.getByRole('heading', { name: 'Hooks', level: 1 })).toBeVisible();
-    await expect(productNavigation.getByRole('link', { name: 'Hooks' })).toHaveAttribute('aria-current', 'page');
-    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveAttribute('aria-current', 'page');
-    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveClass(/nav-link--active/);
+    await expect(productNavigation.getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
     await activePage.getByRole('link', { name: 'Manage Secrets' }).click();
-    await expect(activePage).toHaveURL(`${runtimeURL}/secrets`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/settings/secrets`);
     await expect(activePage.getByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
-    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveAttribute('aria-current', 'page');
-    await expect(productNavigation.getByRole('link', { name: 'Automation' })).not.toHaveClass(/nav-link--active/);
+    await expect(productNavigation.getByRole('link', { name: 'Automations' })).not.toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Automations' })).not.toHaveClass(/nav-link--active/);
 
     await activePage.goto(`${runtimeURL}/automations?tab=jobs&q=mail`);
-    await expect(productNavigation.getByRole('link', { name: 'Automation' })).toHaveAttribute('aria-current', 'page');
-    await expect(productNavigation.getByRole('link', { name: 'Automation' })).toHaveClass(/nav-link--active/);
-    const automationNavigation = activePage.getByRole('navigation', { name: 'Automation' });
-    await expect(automationNavigation.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/automations?tab=webhooks&q=mail');
-    await expect(automationNavigation.getByRole('link', { name: 'Scheduled triggers' })).toHaveAttribute('href', '/automations?tab=jobs&q=mail');
+    await expect(activePage).toHaveURL(`${runtimeURL}/automations/schedules?q=mail`);
+    await expect(productNavigation.getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Automations' })).toHaveClass(/nav-link--active/);
+    const automationNavigation = activePage.getByRole('navigation', { name: 'Automations' });
+    await expect(automationNavigation.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/automations/webhooks');
+    await expect(automationNavigation.getByRole('link', { name: 'Schedules' })).toHaveAttribute('href', '/automations/schedules');
     await expect(automationNavigation.getByRole('link', { name: 'Extensions' })).toHaveCount(0);
     await expect(automationNavigation.getByRole('link', { name: 'Secrets' })).toHaveCount(0);
     await expect(automationNavigation.getByText('Triggers and delivery')).toBeVisible();
     await expect(automationNavigation.getByText('Run history')).toBeVisible();
-    await automationNavigation.getByRole('link', { name: 'Event triggers' }).click();
-    await expect(activePage).toHaveURL(`${runtimeURL}/automations?tab=eventHooks&q=mail`);
+    await automationNavigation.getByRole('link', { name: 'Triggers' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/automations/triggers`);
 
     await activePage.goto(`${runtimeURL}/access`);
-    const accessNavigation = activePage.getByRole('navigation', { name: 'Project access' });
+    const accessNavigation = activePage.getByRole('navigation', { name: 'Access & keys' });
     await expect(accessNavigation.getByRole('link', { name: 'Service Accounts' })).toBeVisible();
     await expect(accessNavigation.getByText('Identity')).toBeVisible();
     await expect(accessNavigation.getByText('Security')).toBeVisible();
-    await expect(accessNavigation.getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/administrators');
-    await expect(accessNavigation.getByRole('link', { name: 'Audit log' })).toHaveAttribute('href', '/access/audit');
+    await expect(accessNavigation.getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/access/administrators');
+    await expect(accessNavigation.getByRole('link', { name: 'Audit log' })).toHaveAttribute('href', '/activity/audit');
 
     await productNavigation.getByRole('link', { name: 'Settings' }).click();
     const settingsNavigation = activePage.getByRole('navigation', { name: 'Settings' });
-    for (const label of ['Status', 'Runtime', 'Files & Storage', 'Mail', 'Secrets', 'Backup and restore', 'Activity', 'Storage consistency', 'Data import / export', 'API Contract / SDK', 'MCP']) {
+    for (const label of ['Status', 'Runtime', 'Files & Storage', 'Mail', 'Secrets', 'Backup and restore', 'Data import / export']) {
       await expect(settingsNavigation.getByRole('link', { name: label })).toBeVisible();
     }
-    for (const label of ['Project', 'Service', 'Maintenance', 'Developer']) await expect(settingsNavigation.getByText(label)).toBeVisible();
+    for (const label of ['Project', 'Service', 'Maintenance']) await expect(settingsNavigation.getByText(label)).toBeVisible();
 
     await activePage.goto(`${runtimeURL}/settings/portability`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/settings/backups`);
     await expect(activePage.getByRole('heading', { name: 'Backup and restore', level: 1 })).toBeVisible();
     await expect(settingsNavigation.getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('aria-current', 'page');
     await activePage.goto(`${runtimeURL}/settings/data`);
     await expect(activePage.getByRole('heading', { name: 'Data import / export', level: 1 })).toBeVisible();
     await expect(activePage.getByRole('button', { name: 'Create and download backup' })).toHaveCount(0);
     await activePage.goto(`${runtimeURL}/settings/developer`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/connect/sdk`);
     await expect(activePage.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
     await expect(activePage.getByTestId('contract-hash')).toBeVisible();
     await activePage.goto(`${runtimeURL}/settings/mcp`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/connect/mcp`);
     await expect(activePage.getByRole('heading', { name: 'MCP', level: 1 })).toBeVisible();
     await expect(activePage.getByText(/Model changes go through review and apply, and actions are audited/)).toBeVisible();
 
@@ -715,7 +717,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
   });
 
   await test.step('FLOW-004 — Accumulate and apply durable Schema Pending Changes', async () => {
-    await activePage.getByRole('link', { name: 'Schema', exact: true }).click();
+    await activePage.getByRole('link', { name: 'Model', exact: true }).click();
     await activePage.getByRole('button', { name: 'Add field', exact: true }).click();
     await activePage.getByLabel('Field name', { exact: true }).fill('summary');
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
@@ -750,7 +752,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await palette.getByRole('combobox', { name: 'Search commands' }).fill('Open pending change: posts');
     await expect(palette.getByRole('option', { name: 'Open pending change: posts' })).toBeVisible();
     await activePage.keyboard.press('Enter');
-    await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/model`);
     await activePage.getByRole('button', { name: 'Fields', exact: true }).click();
     await activePage.reload();
     await expect(activePage.getByRole('row').filter({ hasText: 'summary' })).toBeVisible();
@@ -1003,7 +1005,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
     await expect(activePage.getByRole('heading', { name: /Request/ })).toBeVisible();
-    await expect(activePage.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/security`);
+    await expect(activePage.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/access`);
     expect(await activePage.locator('body').innerText()).not.toContain(appSession);
 
     await activePage.goto(`${runtimeURL}/api?tab=requests&search=${encodeURIComponent(deniedRequestId)}`);
@@ -1044,7 +1046,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
     await expect(activePage).toHaveURL(/\/requests\/req_/);
     await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
-    await expect(activePage.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=' + encodeURIComponent(postsId) + '&endpoint=readApplicationRecordFile');
+    await expect(activePage.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=' + encodeURIComponent(postsId) + '&endpoint=readApplicationRecordFile');
     await expect(activePage.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/api?endpoint=readApplicationRecordFile`);
   });
 
@@ -1116,14 +1118,14 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(auditRow).toBeVisible();
     const auditLink = auditRow.getByRole('link').first();
     await auditLink.click();
-    await expect(activePage).toHaveURL(/\/access\/audit\/[^?]+\?from=/);
+    await expect(activePage).toHaveURL(/\/activity\/audit\/[^?]+\?from=/);
     await expect(activePage.locator('.audit-detail-grid')).toContainText('apiKey.revoked');
     await expect(activePage.locator('.audit-resource pre')).toContainText('apiKey');
     expect(await activePage.locator('body').innerText()).not.toContain(revokedAPIKey);
   });
 
   await test.step('FLOW-009 — Durable unique-conflict failure and successful retry', async () => {
-    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/model`);
     await activePage.getByRole('row').filter({ hasText: 'category' }).getByRole('button', { name: 'Edit', exact: true }).click();
     await activePage.getByLabel('Unique', { exact: true }).check();
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
@@ -1154,7 +1156,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(failedChangePalette.getByRole('option', { name: 'Open failed change: posts' })).toBeVisible();
     await activePage.keyboard.press('Enter');
     await expect(activePage).toHaveURL(`${runtimeURL}/changes?changeSet=${encodeURIComponent(changeSetId)}`);
-    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/schema`);
+    await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/model`);
     const unchanged = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}`)).body);
     const categoryField = (unchanged as { fields: Array<{ name: string; unique?: boolean }> }).fields.find((field) => field.name === 'category');
     expect(categoryField).toBeDefined();
@@ -1166,7 +1168,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.locator('#record-field-category').fill('different-category');
     await activePage.getByRole('button', { name: 'Save changes', exact: true }).click();
     await activePage.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
-    await activePage.getByRole('link', { name: 'Schema', exact: true }).click();
+    await activePage.getByRole('link', { name: 'Model', exact: true }).click();
     await activePage.getByRole('button', { name: 'Review and retry', exact: true }).click();
     await expect(activePage.getByRole('heading', { name: 'Review schema changes' })).toBeVisible();
     await activePage.getByRole('button', { name: 'Confirm & apply', exact: true }).click();

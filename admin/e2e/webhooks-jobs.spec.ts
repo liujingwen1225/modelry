@@ -295,7 +295,7 @@ async function createSecret(page: Page, name: string, value: string): Promise<st
 }
 
 async function createWebhook(page: Page, name: string, pathname: string, secretId: string) {
-  await page.goto(`${runtimeURL}/automations?tab=webhooks`);
+  await page.goto(`${runtimeURL}/automations/webhooks`);
   await page.getByRole('button', { name: 'Create Webhook' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await page.getByLabel('HTTPS destination').fill(`https://hooks.modelry.test${pathname}`);
@@ -317,7 +317,7 @@ async function createWebhook(page: Page, name: string, pathname: string, secretI
 }
 
 async function createEventHook(page: Page, name: string, collectionId: string, webhookId: string) {
-  await page.goto(`${runtimeURL}/automations?tab=eventHooks`);
+  await page.goto(`${runtimeURL}/automations/triggers`);
   await page.getByRole('button', { name: 'Create Event Hook' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await page.getByLabel('Collection').selectOption(collectionId);
@@ -357,7 +357,7 @@ async function deliveryForEvent(page: Page, hookId: string, eventId: string, sta
 }
 
 async function deliveryPage(page: Page, id: string) {
-  await page.goto(`${runtimeURL}/automations?tab=deliveries&deliveryId=${encodeURIComponent(id)}`);
+  await page.goto(`${runtimeURL}/automations/deliveries?deliveryId=${encodeURIComponent(id)}`);
   await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
   await expect(page.getByText(id, { exact: true })).toBeVisible();
 }
@@ -470,7 +470,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   const primaryWebhook = await createWebhook(page, 'Primary receiver', '/record-hook', primarySecretId);
   const primaryHook = await createEventHook(page, 'Record event receiver', collectionId, primaryWebhook.id);
 
-  await page.goto(`${runtimeURL}/automations?tab=jobs`);
+  await page.goto(`${runtimeURL}/automations/schedules`);
   await page.getByRole('button', { name: 'Create Job' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('UTC maturity check');
   await page.getByLabel('Webhook').selectOption(primaryWebhook.id);
@@ -548,7 +548,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   const disableEventId = (JSON.parse(disableRequest.body) as { event?: { id?: string } }).event?.id;
   expect(disableEventId).toMatch(/^evt_/);
   const disableDelivery = await deliveryForEvent(page, cancelHook.id, disableEventId!, 'running');
-  await page.goto(`${runtimeURL}/automations?tab=webhooks`);
+  await page.goto(`${runtimeURL}/automations/webhooks`);
   const cancelCard = page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' });
   await cancelCard.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Disable Webhook?' })).toBeVisible();
@@ -560,7 +560,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect.poll(() => fixture!.count('/cancel-hook')).toBe(1);
   expect(disableRecord).toMatch(/^rec_/);
 
-  await page.goto(`${runtimeURL}/automations?tab=webhooks`);
+  await page.goto(`${runtimeURL}/automations/webhooks`);
   await page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' }).getByRole('button', { name: 'Enable', exact: true }).click();
   await expect(page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' }).getByText('Enabled', { exact: true })).toBeVisible();
   const revokeGate = fixture!.blockNext('/cancel-hook');
@@ -630,7 +630,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(replay[0]!.idempotencyKey).toBe(interruptedDelivery.id);
   expect(replay[1]!.idempotencyKey).toBe(interruptedDelivery.id);
 
-  await page.goto(`${runtimeURL}/automations?tab=deliveries&deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
+  await page.goto(`${runtimeURL}/automations/deliveries?deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
   await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
   await expect(page.getByText(interruptedDelivery.id, { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(privateRecordMarker);

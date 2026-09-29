@@ -14,4 +14,4 @@
 .administrators-operations code, .administrators-operations span { overflow-wrap: anywhere; }
 .administrators-sessions { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 11px; }
 .administrators-sessions li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-bottom: 1px solid var(--color-border); padding: 6px 0; }
-.administrators-sessions li .status-chip { margin-left: auto; }
+.administrators-sessions li [data-slot="badge"] { margin-left: auto; }

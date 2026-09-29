@@ -8,13 +8,14 @@ import {
   Command,
   FileStack,
   GitBranch,
+  HeartPulse,
   Home,
   LogOut,
   Moon,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
-  Puzzle,
+  ScrollText,
   Settings2,
   ShieldCheck,
   Sun,
@@ -37,71 +38,102 @@ import {
 import {
   useTheme } from './theme-context';
 
+// 新版信息架构（spec 0001 §3.1）：按开发者完成后的工作顺序排列——
+// Home；BUILD/Collections；CONNECT/API & SDK；AUTOMATE/Automations；
+// OBSERVE/Requests + Activity & Audit；EVOLVE/Changes + Model health；
+// PROJECT/Access & keys + Settings。Requests 导航项随 M4 Requests 页交付。
 const groups: Array<{
   label: TranslationKey | null;
   items: Array<{ label: TranslationKey; to: string; icon: LucideIcon; operation?: string }>;
 }> = [
-  { label: null, items: [{ label: 'navigation.overview', to: '/', icon: Home, operation: 'runtime.read' }] },
+  { label: null, items: [{ label: 'navigation.home', to: '/', icon: Home, operation: 'runtime.read' }] },
   {
     label: 'navigation.build',
+    items: [{ label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read' }],
+  },
+  {
+    label: 'navigation.connect',
+    items: [{ label: 'navigation.apiSdk', to: '/connect', icon: Network, operation: 'collections.read' }],
+  },
+  {
+    label: 'navigation.automate',
+    items: [{ label: 'navigation.automations', to: '/automations', icon: Webhook }],
+  },
+  {
+    label: 'navigation.observe',
+    items: [{ label: 'navigation.activityAudit', to: '/activity', icon: ScrollText, operation: 'activity.read' }],
+  },
+  {
+    label: 'navigation.evolve',
     items: [
-      { label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read' },
-      { label: 'navigation.api', to: '/api', icon: Network, operation: 'collections.read' },
-      { label: 'navigation.hooks', to: '/extensions', icon: Puzzle },
-      { label: 'navigation.automation', to: '/automations', icon: Webhook },
+      { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
+      { label: 'navigation.modelHealth', to: '/health', icon: HeartPulse, operation: 'drift.read' },
     ],
   },
   {
-    label: 'navigation.manage',
+    label: 'navigation.project',
     items: [
-      { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
-      { label: 'navigation.access', to: '/access', icon: ShieldCheck, operation: 'serviceAccounts.read' },
+      { label: 'navigation.accessKeys', to: '/access', icon: ShieldCheck, operation: 'serviceAccounts.read' },
+      { label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' },
     ],
   },
-  { label: 'navigation.system', items: [{ label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' }] },
 ];
 
 type AreaLink = { label: TranslationKey; to: string; operation?: string };
-type AreaSection = { label?: TranslationKey; links: AreaLink[] };
+type AreaSection = { label?: TranslationKey | null; links: AreaLink[] };
 type ProductAreaNavigation = {
-  id: 'automation' | 'access' | 'settings';
+  id: 'automation' | 'connect' | 'access' | 'settings';
   label: TranslationKey;
   sections: AreaSection[];
 };
 
 function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
-  if (pathname === '/automations') {
+  if (pathname.startsWith('/automations')) {
     return {
       id: 'automation',
-      label: 'navigation.automation',
+      label: 'navigation.automations',
       sections: [
         { label: 'automation.navigation.triggers', links: [
-        { label: 'automation.tabs.webhooks', to: '/automations?tab=webhooks' },
-        { label: 'automation.tabs.eventHooks', to: '/automations?tab=eventHooks' },
-        { label: 'automation.tabs.jobs', to: '/automations?tab=jobs' },
+          { label: 'automation.subnav.hooks', to: '/automations/hooks' },
+          { label: 'automation.subnav.webhooks', to: '/automations/webhooks' },
+          { label: 'automation.subnav.triggers', to: '/automations/triggers' },
+          { label: 'automation.subnav.schedules', to: '/automations/schedules' },
         ] },
         { label: 'automation.navigation.runHistory', links: [
-          { label: 'automation.tabs.deliveries', to: '/automations?tab=deliveries' },
+          { label: 'automation.subnav.deliveries', to: '/automations/deliveries' },
         ] },
       ],
     };
   }
-  if (pathname.startsWith('/access') || pathname === '/administrators') {
+  if (pathname.startsWith('/connect')) {
+    return {
+      id: 'connect',
+      label: 'navigation.apiSdk',
+      sections: [
+        { label: null, links: [
+          { label: 'navigation.connectApi', to: '/connect/api', operation: 'collections.read' },
+          { label: 'navigation.connectSdk', to: '/connect/sdk' },
+          { label: 'navigation.connectMcp', to: '/connect/mcp' },
+        ] },
+      ],
+    };
+  }
+  if (pathname.startsWith('/access')) {
     return {
       id: 'access',
-      label: 'navigation.access',
+      label: 'navigation.accessKeys',
       sections: [
         { label: 'access.navigation.identity', links: [
           { label: 'access.tabs.serviceAccounts', to: '/access', operation: 'serviceAccounts.read' },
-          { label: 'navigation.administrators', to: '/administrators', operation: 'administrators.read' },
+          { label: 'navigation.administrators', to: '/access/administrators', operation: 'administrators.read' },
         ] },
         { label: 'access.navigation.security', links: [
-          { label: 'access.tabs.audit', to: '/access/audit', operation: 'audit.read' },
+          { label: 'access.tabs.audit', to: '/activity/audit', operation: 'audit.read' },
         ] },
       ],
     };
   }
-  if (pathname.startsWith('/settings') || pathname === '/activity' || pathname === '/secrets') {
+  if (pathname.startsWith('/settings')) {
     return {
       id: 'settings',
       label: 'navigation.settings',
@@ -113,17 +145,11 @@ function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
         { label: 'settings.navigation.service', links: [
           { label: 'settings.navigation.filesStorage', to: '/settings/storage', operation: 'storage.read' },
           { label: 'settings.navigation.mail', to: '/settings/mail', operation: 'mail.read' },
-          { label: 'settings.navigation.secrets', to: '/secrets' },
+          { label: 'settings.navigation.secrets', to: '/settings/secrets' },
         ] },
         { label: 'settings.navigation.maintenance', links: [
           { label: 'settings.navigation.backupRestore', to: '/settings/backups' },
-          { label: 'navigation.activity', to: '/activity', operation: 'activity.read' },
-          { label: 'settings.navigation.consistency', to: '/settings/drift', operation: 'drift.read' },
-        ] },
-        { label: 'settings.navigation.developer', links: [
           { label: 'settings.navigation.dataTransfer', to: '/settings/data' },
-          { label: 'settings.navigation.apiContract', to: '/settings/developer' },
-          { label: 'settings.navigation.mcp', to: '/settings/mcp' },
         ] },
       ],
     };
@@ -131,36 +157,19 @@ function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
   return null;
 }
 
-function isAreaLinkActive(link: AreaLink, pathname: string, search: string): boolean {
-  const [targetPath, targetSearch = ''] = link.to.split('?');
-  const activePath = pathname === '/settings/portability' ? '/settings/backups' : pathname;
-  if (activePath !== targetPath) return false;
-  const current = new URLSearchParams(search);
-  const target = new URLSearchParams(targetSearch);
-  for (const [key, value] of target) {
-    if (current.get(key) !== value) return false;
-  }
-  if (targetPath === '/automations' && !target.has('tab')) {
-    return !current.has('tab') || current.get('tab') === 'webhooks';
-  }
-  return true;
+// 子导航为纯路径形态（query 参数仅保留在页面内部状态）。
+// 命中多个前缀时只高亮最具体的那个（如 /access 与 /access/administrators）。
+function isAreaLinkMatch(link: AreaLink, pathname: string): boolean {
+  return pathname === link.to || pathname.startsWith(`${link.to}/`);
 }
 
 function isPrimaryLinkActive(pathname: string, to: string): boolean {
-  if (to === '/automations') return pathname === '/automations';
-  if (to === '/access') return pathname.startsWith('/access') || pathname === '/administrators';
-  if (to === '/settings') return pathname.startsWith('/settings') || pathname === '/activity' || pathname === '/secrets';
+  if (to === '/') return pathname === '/';
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function areaLinkTarget(link: AreaLink, search: string, hash: string): string {
-  const [targetPath, targetSearch = ''] = link.to.split('?');
-  if (targetPath !== '/automations') return link.to;
-  const query = new URLSearchParams(search);
-  const target = new URLSearchParams(targetSearch);
-  for (const [key, item] of target) query.set(key, item);
-  const serialized = query.toString();
-  return `${targetPath}${serialized ? `?${serialized}` : ''}${hash}`;
+function areaLinkTarget(link: AreaLink): string {
+  return link.to;
 }
 
 const readOnlyControlPlaneOperations = new Set([
@@ -259,13 +268,11 @@ function ThemeButton() {
   );
 }
 
-function ProductAreaNavigation({ area, role, permission, pathname, search, hash }: {
+function ProductAreaNavigation({ area, role, permission, pathname }: {
   area: ProductAreaNavigation;
   role?: AppShellProps['role'];
   permission?: ControlPlanePermission;
   pathname: string;
-  search: string;
-  hash: string;
 }) {
   const { t } = useI18n();
   const sections = area.sections
@@ -273,17 +280,19 @@ function ProductAreaNavigation({ area, role, permission, pathname, search, hash 
     .filter((section) => section.links.length > 0);
 
   if (!sections.length) return null;
+  const activeLinks = sections.flatMap((section) => section.links).filter((link) => isAreaLinkMatch(link, pathname));
+  const activeLink = activeLinks.sort((a, b) => b.to.length - a.to.length)[0];
   return (
     <nav aria-label={t(area.label)} className={`area-navigation area-navigation--${area.id}`}>
       {sections.map((section, index) => <div className="area-navigation__section" key={section.label ?? `section-${index}`}>
         {section.label && <span className="area-navigation__label">{t(section.label)}</span>}
         {section.links.map((link) => {
-          const active = isAreaLinkActive(link, pathname, search);
+          const active = link === activeLink;
           return <Link
             aria-current={active ? 'page' : undefined}
             className={`area-navigation__link${active ? ' area-navigation__link--active' : ''}`}
             key={link.to}
-            to={areaLinkTarget(link, search, hash)}
+            to={areaLinkTarget(link)}
           >{t(link.label)}</Link>;
         })}
       </div>)}
@@ -387,21 +396,21 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
     const result: AdminCommand[] = [
       go('navigate.overview', 'commands.overview', '/'),
       go('navigate.collections', 'commands.collections', '/collections', ['build']),
-      go('navigate.api', 'commands.api', '/api'),
+      go('navigate.api', 'commands.api', '/connect/api'),
       go('navigate.changes', 'commands.changes', '/changes'),
       go('navigate.access', 'commands.access', '/access'),
       go('navigate.automations', 'commands.automations', '/automations', ['webhook', 'event hook', 'cron', 'delivery']),
-      go('navigate.extensions', 'commands.extensions', '/extensions', ['hooks', 'lifecycle', 'runtime', 'extension', '扩展']),
-      go('navigate.secrets', 'commands.secrets', '/secrets', ['write-only', 'secret']),
+      go('navigate.extensions', 'commands.extensions', '/automations/hooks', ['hooks', 'lifecycle', 'runtime', 'extension', '扩展']),
+      go('navigate.secrets', 'commands.secrets', '/settings/secrets', ['write-only', 'secret']),
       go('navigate.settings', 'commands.settings', '/settings'),
-      ...(allowsOperation(role, permission, 'activity.read') ? [go('navigate.activity', 'commands.activity', '/activity', ['timeline', 'operations'])] : []),
-      ...(allowsOperation(role, permission, 'drift.read') ? [go('navigate.drift', 'commands.drift', '/settings/drift', ['consistency', 'projection', 'reconcile'])] : []),
+      ...(allowsOperation(role, permission, 'activity.read') ? [go('navigate.activity', 'commands.activity', '/activity', ['timeline', 'operations', 'audit'])] : []),
+      ...(allowsOperation(role, permission, 'drift.read') ? [go('navigate.drift', 'commands.drift', '/health', ['consistency', 'projection', 'reconcile'])] : []),
       ...(allowsOperation(role, permission, 'settings.read') ? [go('navigate.runtimeSettings', 'commands.runtimeSettings', '/settings/runtime', ['runtime', 'configuration', 'restart'])] : []),
       ...(role === undefined || role === 'owner' ? [
         go('navigate.backupRestore', 'commands.backupRestore', '/settings/backups', ['backup', 'restore']),
         go('navigate.dataTransfer', 'commands.dataTransfer', '/settings/data', ['import', 'export', 'ndjson']),
-        go('navigate.apiContract', 'commands.apiContract', '/settings/developer', ['sdk', 'openapi', 'contract']),
-        go('navigate.mcp', 'commands.mcp', '/settings/mcp', ['agent', 'model context protocol']),
+        go('navigate.apiContract', 'commands.apiContract', '/connect/sdk', ['sdk', 'openapi', 'contract']),
+        go('navigate.mcp', 'commands.mcp', '/connect/mcp', ['agent', 'model context protocol']),
       ] : []),
       ...(role === undefined || role === 'owner' ? [
         {
@@ -409,7 +418,7 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
           category: 'commands.categories.system' as const,
           label: () => t('commands.administrators'),
           keywords: () => [t('administrators.searchKeywords')],
-          execute: (context: CommandContext) => context.navigate('/administrators'),
+          execute: (context: CommandContext) => context.navigate('/access/administrators'),
         },
         {
           id: 'navigate.mail',
@@ -446,15 +455,15 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
       },
       ...([
         { key: 'currentRecords', path: '' },
-        { key: 'currentSchema', path: '/schema' },
-        { key: 'currentSecurity', path: '/security' },
+        { key: 'currentSchema', path: '/model' },
+        { key: 'currentSecurity', path: '/access' },
         { key: 'currentAPI', path: '/api' },
         { key: 'currentRealtime', path: '/api?tab=realtime' },
       ] as const).map(({ key, path }): AdminCommand => ({
         id: `collection.current.${key}`,
         category: 'commands.categories.collection',
         label: () => t(`commands.${key}`),
-        keywords: () => ['records', 'schema', 'security', 'api', 'realtime', 'events', 'stream'],
+        keywords: () => ['records', 'model', 'schema', 'access', 'security', 'api', 'realtime', 'events', 'stream'],
         isVisible: (context) => Boolean(context.collectionId),
         execute: (context) => context.navigate(`/collections/${encodeURIComponent(context.collectionId ?? '')}${path}`),
       })),
@@ -538,7 +547,7 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
             <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} role={role} sessionExpiresAt={sessionExpiresAt} />
           </div>
         </header>
-        {area && <ProductAreaNavigation area={area} hash={location.hash} pathname={location.pathname} permission={permission} role={role} search={location.search} />}
+        {area && <ProductAreaNavigation area={area} pathname={location.pathname} permission={permission} role={role} />}
         <main className="page-area" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>

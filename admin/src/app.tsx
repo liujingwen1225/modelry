@@ -22,6 +22,7 @@ import { DriftPage } from './drift/pages';
 import { RuntimeSettingsPage } from './settings/pages';
 import { APIContractPage, BackupRestorePage, DataTransferPage } from './portability/pages';
 import { MCPGuidePage } from './developer/pages';
+import { mapLegacyPath } from './route-map';
 
 function NotFoundPage() {
   const { t } = useI18n();
@@ -32,6 +33,15 @@ function NotFoundPage() {
       <a className="text-link" href="/">{t('notFound.back')}</a>
     </div>
   );
+}
+
+// Spec 0001 §15：旧稳定深链接经纯函数 route-map 映射到新导航，
+// 保留 query/hash 上下文；未命中映射的路径进入 404。
+function LegacyRedirect() {
+  const location = useLocation();
+  const mapped = mapLegacyPath(location.pathname, location.search);
+  if (mapped === null) return <NotFoundPage />;
+  return <Navigate replace to={{ pathname: mapped.pathname, search: mapped.search, hash: location.hash }} />;
 }
 
 function SessionRecovery({ error, onRetry }: { error: unknown; onRetry: () => void }) {
@@ -75,38 +85,49 @@ function AuthenticatedWorkspace() {
     <Routes>
       <Route element={<AppShell onLogout={logout} ownerEmail={session.owner.email} permission={session.permission} role={session.role} sessionExpiresAt={session.expiresAt} />}>
         <Route element={<OverviewPage />} path="/" />
+        {/* BUILD — Collections（Collection 工作区：Records | Model | Access | API，spec §3.1） */}
         <Route element={<CollectionsPage />} path="/collections" />
         <Route element={<CreateCollectionPage />} path="/collections/new" />
         <Route element={<CollectionWorkspacePage />} path="/collections/:collectionId">
           <Route element={<CollectionRecordsPage />} index />
-          <Route element={<CollectionSchemaPage />} path="schema" />
-          <Route element={<CollectionSecurityPage />} path="security" />
+          <Route element={<CollectionSchemaPage />} path="model" />
+          <Route element={<CollectionSecurityPage />} path="access" />
           <Route element={<CollectionAPIPage />} path="api" />
         </Route>
-        <Route element={<GlobalAPIPage />} path="/api" />
+        {/* CONNECT — API & SDK（子导航：API | SDK & Contract | MCP） */}
+        <Route element={<Navigate replace to="/connect/api" />} path="/connect" />
+        <Route element={<GlobalAPIPage />} path="/connect/api" />
+        <Route element={<APIContractPage />} path="/connect/sdk" />
+        <Route element={<MCPGuidePage />} path="/connect/mcp" />
+        {/* AUTOMATE — Automations（子导航：Hooks | Webhooks | Triggers | Schedules | Delivery history）。
+            裸 /automations 与 /automations?tab=* 都交给 catch-all LegacyRedirect / route-map 处理，
+            避免 /automations 的显式 redirect 抢先吞掉 ?tab= 变体。 */}
+        <Route element={<ExtensionsPage />} path="/automations/hooks" />
+        <Route element={<ExtensionsPage />} path="/automations/hooks/:extensionId" />
+        <Route element={<AutomationPage />} path="/automations/webhooks" />
+        <Route element={<AutomationPage />} path="/automations/triggers" />
+        <Route element={<AutomationPage />} path="/automations/schedules" />
+        <Route element={<AutomationPage />} path="/automations/deliveries" />
+        {/* OBSERVE */}
         <Route element={<RequestDetailPage />} path="/requests/:requestId" />
+        <Route element={<ActivityPage />} path="/activity" />
+        <Route element={<AuditPage />} path="/activity/audit" />
+        <Route element={<AuditPage />} path="/activity/audit/:auditRecordId" />
+        {/* EVOLVE */}
         <Route element={<GlobalChangesPage />} path="/changes" />
+        <Route element={<DriftPage />} path="/health" />
+        {/* PROJECT */}
         <Route element={<AccessPage />} path="/access" />
-        <Route element={<AuditPage />} path="/access/audit" />
-        <Route element={<AuditPage />} path="/access/audit/:auditRecordId" />
-        <Route element={<ExtensionsPage />} path="/extensions" />
-        <Route element={<ExtensionsPage />} path="/extensions/:extensionId" />
-        <Route element={<SecretsPage />} path="/secrets" />
-        <Route element={<AutomationPage />} path="/automations" />
+        <Route element={<AdministratorsPage />} path="/access/administrators" />
         <Route element={<SettingsPage />} path="/settings" />
+        <Route element={<RuntimeSettingsPage />} path="/settings/runtime" />
         <Route element={<FileStoragePage />} path="/settings/storage" />
         <Route element={<MailPage />} path="/settings/mail" />
-        <Route element={<ActivityPage />} path="/activity" />
-        <Route element={<DriftPage />} path="/settings/drift" />
-        <Route element={<RuntimeSettingsPage />} path="/settings/runtime" />
-        <Route element={<BackupRestorePage />} path="/settings/portability" />
-        <Route element={<BackupRestorePage />} path="/settings/backups" />
+        <Route element={<SecretsPage />} path="/settings/secrets" />
         <Route element={<DataTransferPage />} path="/settings/data" />
-        <Route element={<APIContractPage />} path="/settings/developer" />
-        <Route element={<MCPGuidePage />} path="/settings/mcp" />
-        <Route element={<AdministratorsPage />} path="/administrators" />
+        <Route element={<BackupRestorePage />} path="/settings/backups" />
         <Route element={<AuthenticatedRedirect />} path="/login" />
-        <Route element={<NotFoundPage />} path="*" />
+        <Route element={<LegacyRedirect />} path="*" />
       </Route>
     </Routes>
   );

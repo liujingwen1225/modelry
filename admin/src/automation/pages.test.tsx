@@ -74,7 +74,7 @@ describe('Automation Admin surface', () => {
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Billing receiver');
     await user.type(screen.getByLabelText('HTTPS destination'), 'https://billing.example.test/hooks');
     await user.selectOptions(screen.getByLabelText('Signing Secret'), 'sec_mail');
-    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/secrets');
+    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
     expect(screen.queryByText('never-render-this-secret')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Webhook' }));
 

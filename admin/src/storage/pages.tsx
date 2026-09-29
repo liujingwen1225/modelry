@@ -274,8 +274,8 @@ export function FileStoragePage() {
             </select>
           </FormField>
           {secrets.length === 0
-            ? <p className="storage-hint">{t('storage.provider.noSecrets')} <Link to="/secrets">{t('storage.provider.createSecret')}</Link></p>
-            : <p className="storage-hint"><Link to="/secrets">{t('storage.provider.manageSecrets')}</Link></p>}
+            ? <p className="storage-hint">{t('storage.provider.noSecrets')} <Link to="/settings/secrets">{t('storage.provider.createSecret')}</Link></p>
+            : <p className="storage-hint"><Link to="/settings/secrets">{t('storage.provider.manageSecrets')}</Link></p>}
         </div>}
         <div className="storage-actions">
           {provider === 's3' && <Button disabled={busy !== null} onClick={() => void testConnection()} size="small" type="button" variant="secondary">{t('storage.provider.test')}</Button>}

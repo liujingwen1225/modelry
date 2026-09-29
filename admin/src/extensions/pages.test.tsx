@@ -58,10 +58,11 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     await userEvent.type(input, 'Hooks');
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
-    const automationLink = within(navigation).getByRole('link', { name: 'Automation' });
-    expect(automationLink).not.toHaveAttribute('aria-current', 'page');
-    expect(automationLink).not.toHaveClass(/nav-link--active/);
-    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/secrets');
+    // 新版 IA：Hooks 属于 Automations 组，侧栏 Automations 项保持高亮。
+    const automationLink = within(navigation).getByRole('link', { name: 'Automations' });
+    expect(automationLink).toHaveAttribute('aria-current', 'page');
+    expect(automationLink).toHaveClass(/nav-link--active/);
+    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
     expect(await screen.findByRole('link', { name: /Normalize Profile/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('link', { name: 'Manage Secrets' }));
@@ -70,7 +71,7 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     expect(automationLink).not.toHaveClass(/nav-link--active/);
 
     await userEvent.click(automationLink);
-    expect(await screen.findByRole('heading', { name: 'Automation' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
     expect(automationLink).toHaveAttribute('aria-current', 'page');
     expect(automationLink).toHaveClass(/nav-link--active/);
   });
@@ -129,7 +130,7 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     expect(document.body.textContent).not.toContain(cleartext);
     const createCall = fetchMock.mock.calls.find(([path, init]) => path === '/admin/api/v1/secrets' && init?.method === 'POST');
     expect(createCall?.[1]?.body).toBe(JSON.stringify({ name: 'New provider', value: cleartext }));
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/secrets?q=provider#saved');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/settings/secrets?q=provider#saved');
   });
 
   it('shows only allowlisted Hook Run metadata and keeps the cursor in the deep link', async () => {
@@ -157,6 +158,6 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Language' }), 'zh-CN');
     expect(await screen.findByRole('heading', { name: 'Secrets' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '创建密钥' })).toBeInTheDocument();
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/secrets?q=mail#selected');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/settings/secrets?q=mail#selected');
   });
 });

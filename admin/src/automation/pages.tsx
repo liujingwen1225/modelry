@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, Clock3, Radio, Webhook as WebhookIcon } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
@@ -20,14 +20,30 @@ function selectedTab(value: string | null): Tab {
   return value === 'eventHooks' || value === 'jobs' || value === 'deliveries' ? value : 'webhooks';
 }
 
+// 新版信息架构（spec 0001 §3.1）：Automations 使用路径子导航；
+// 旧 `/automations?tab=*` 深链接经 route-map 重定向，这里同时兼容两种形态。
+const automationPathTabs: Record<string, Tab> = {
+  '/automations/webhooks': 'webhooks',
+  '/automations/triggers': 'eventHooks',
+  '/automations/schedules': 'jobs',
+  '/automations/deliveries': 'deliveries',
+};
+
+const automationTabPaths: Record<Tab, string> = {
+  webhooks: '/automations/webhooks',
+  eventHooks: '/automations/triggers',
+  jobs: '/automations/schedules',
+  deliveries: '/automations/deliveries',
+};
+
 function automationCommandPath(context: { pathname: string; search: string }, tab: Tab, additions: Record<string, string> = {}): string {
-  const current = new URLSearchParams(context.pathname === '/automations' ? context.search : '');
+  const current = new URLSearchParams(context.pathname.startsWith('/automations') ? context.search : '');
   const next = new URLSearchParams();
   const search = current.get('q');
   if (search) next.set('q', search);
-  next.set('tab', tab);
   for (const [key, value] of Object.entries(additions)) next.set(key, value);
-  return `/automations?${next.toString()}`;
+  const serialized = next.toString();
+  return `${automationTabPaths[tab]}${serialized ? `?${serialized}` : ''}`;
 }
 
 const validationTranslations: Record<string, TranslationKey> = {
@@ -63,41 +79,43 @@ export function AutomationPage() {
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const activeTab = selectedTab(params.get('tab'));
+  const location = useLocation();
+  const pathTab = automationPathTabs[location.pathname];
+  const activeTab = pathTab ?? selectedTab(params.get('tab'));
   const commands = useMemo<AdminCommand[]>(() => ([
     {
       id: 'automation.open-webhooks', category: 'commands.categories.automation', label: () => t('automation.tabs.webhooks'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'webhooks')),
     },
     {
       id: 'automation.open-event-hooks', category: 'commands.categories.automation', label: () => t('automation.tabs.eventHooks'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'eventHooks')),
     },
     {
       id: 'automation.open-jobs', category: 'commands.categories.automation', label: () => t('automation.tabs.jobs'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'jobs')),
     },
     {
       id: 'automation.open-deliveries', category: 'commands.categories.automation', label: () => t('commands.deliveryHistory'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'deliveries')),
     },
     {
       id: 'automation.create-webhook', category: 'commands.categories.automation', label: () => t('commands.createWebhook'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'webhooks', { create: '1' })),
     },
     {
       id: 'automation.create-event-hook', category: 'commands.categories.automation', label: () => t('commands.createEventHook'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'eventHooks', { create: '1' })),
     },
     {
       id: 'automation.create-job', category: 'commands.categories.automation', label: () => t('commands.createJob'),
-      isVisible: (context) => context.pathname === '/automations',
+      isVisible: (context) => context.pathname.startsWith('/automations'),
       execute: (context) => context.navigate(automationCommandPath(context, 'jobs', { create: '1' })),
     },
   ]), [t]);
@@ -105,6 +123,13 @@ export function AutomationPage() {
 
   function selectTab(tab: Tab) {
     const next = new URLSearchParams(params);
+    next.delete('tab');
+    if (pathTab !== undefined) {
+      // 路径子导航形态：切换 tab 时更新 pathname，保留 q/create/edit 等参数。
+      const search = next.toString();
+      navigate(`${automationTabPaths[tab]}${search ? `?${search}` : ''}`);
+      return;
+    }
     next.set('tab', tab);
     setParams(next);
   }
@@ -187,7 +212,7 @@ function WebhooksPanel({ params, setParams, navigate }: {
     setBusyId(item.id);
     try {
       const result = await sendWebhookTest(item.id);
-      navigate(`/automations?tab=deliveries&deliveryId=${encodeURIComponent(result.id)}&source=test`);
+      navigate(`/automations/deliveries?deliveryId=${encodeURIComponent(result.id)}&source=test`);
     } catch { setError(true); }
     finally { setBusyId(undefined); }
   }
@@ -275,8 +300,8 @@ function WebhookForm({ editing, secrets, onCancel, onSaved }: {
       <FormField htmlFor="automation-webhook-secret" hint={t('automation.webhooks.writeOnly')} label={t('automation.webhooks.signingSecret')}><select id="automation-webhook-secret" onChange={(event) => setSecretId(event.target.value)} required value={secretId} aria-invalid={Boolean(secretError)} aria-errormessage={secretError ? 'automation-webhook-secret-error' : undefined}><option value="">{t('automation.webhooks.chooseSecret')}</option>{editing && !secrets.some((secret) => secret.id === editing.signingSecretId) && <option disabled value={editing.signingSecretId}>{t('automation.webhooks.secretUnavailable')}</option>}{secrets.filter((secret) => secret.configured).map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}</select></FormField>
       {secretError && <p className="automation-field-error" id="automation-webhook-secret-error" role="alert">{secretError}</p>}
       {secrets.some((secret) => secret.configured)
-        ? <p className="automation-inline-note"><Link className="text-link" to="/secrets">{t('automation.webhooks.manageSecrets')}</Link></p>
-        : <p className="automation-inline-note">{t('automation.webhooks.noSecrets')} <Link className="text-link" to="/secrets">{t('navigation.secrets')}</Link></p>}
+        ? <p className="automation-inline-note"><Link className="text-link" to="/settings/secrets">{t('automation.webhooks.manageSecrets')}</Link></p>
+        : <p className="automation-inline-note">{t('automation.webhooks.noSecrets')} <Link className="text-link" to="/settings/secrets">{t('navigation.secrets')}</Link></p>}
       {!editing && <p className="automation-inline-note">{t('automation.webhooks.enableHint')}</p>}
       {error !== undefined && <p className="automation-form-error" role="alert">{safeErrorMessage(error, t)}</p>}
       <div className="automation-form-actions"><Button disabled={saving || !name.trim() || !targetUrl.trim() || !secretId || !secrets.some((secret) => secret.id === secretId && secret.configured)} type="submit" variant="primary">{saving ? t('automation.webhooks.saving') : t('automation.webhooks.save')}</Button><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>

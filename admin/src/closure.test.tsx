@@ -162,7 +162,8 @@ describe('Community V0.1.x closure', () => {
     await waitFor(() => expect(document.querySelector('.command-palette-trigger')).not.toBeNull());
     await userEvent.click(await screen.findByRole('link', { name: 'Settings' }));
     const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
-    expect(within(settingsNavigation).getByRole('link', { name: 'Activity' })).toHaveAttribute('href', '/activity');
+    // Activity 是 OBSERVE 组的一级入口，不再作为 Settings 子页。
+    expect(within(settingsNavigation).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
     // Command Registry 通过 effect 提交 revision；等一个宏任务再打开面板，避免读到上一版命令。
     await new Promise((resolve) => setTimeout(resolve, 0));
     await userEvent.keyboard('{Control>}k{/Control}');
@@ -200,8 +201,8 @@ describe('Community V0.1.x closure', () => {
     expect(within(adminSettings).queryByRole('link', { name: 'Data import / export' })).not.toBeInTheDocument();
     expect(within(adminSettings).queryByRole('link', { name: 'API Contract / SDK' })).not.toBeInTheDocument();
     expect(within(adminSettings).queryByRole('link', { name: 'MCP' })).not.toBeInTheDocument();
-    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Project access' }));
-    const adminAccess = await screen.findByRole('navigation', { name: 'Project access' });
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Access & keys' }));
+    const adminAccess = await screen.findByRole('navigation', { name: 'Access & keys' });
     expect(within(adminAccess).getByRole('link', { name: 'Service Accounts' })).toBeInTheDocument();
     expect(within(adminAccess).getByRole('link', { name: 'Administrators' })).toBeInTheDocument();
     expect(within(adminAccess).getByRole('link', { name: 'Audit log' })).toBeInTheDocument();

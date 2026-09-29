@@ -12,7 +12,7 @@
 .auth-brand { display: flex; width: fit-content; align-items: center; gap: 9px; margin: 0 auto 25px; color: var(--color-ink); }
 .auth-brand__mark { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid color-mix(in srgb, var(--color-accent) 22%, var(--color-border)); border-radius: 10px; background: var(--color-accent-soft); color: var(--color-accent); }
 .auth-brand__word { font-family: var(--font-display); font-size: 21px; font-weight: 750; letter-spacing: -1.1px; }
-.auth-brand .status-chip { min-height: 21px; margin-left: 4px; font-size: 9px; }
+.auth-brand [data-slot="badge"] { min-height: 21px; margin-left: 4px; font-size: 9px; }
 
 .auth-card { padding: clamp(23px, 5vw, 34px); box-shadow: var(--shadow-soft); }
 .auth-card__heading { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -22,9 +22,9 @@
 .auth-copy h1, .auth-success h1 { margin: 0; color: var(--color-ink); font-family: var(--font-display); font-size: clamp(23px, 4vw, 29px); font-weight: 700; letter-spacing: -0.85px; line-height: 1.2; }
 .auth-copy p, .auth-success__description { margin: 9px 0 0; color: var(--color-ink-muted); font-size: 12px; line-height: 1.7; }
 .auth-form { display: grid; gap: 17px; }
-.auth-form .form-field { gap: 7px; }
-.auth-form .form-field label { font-size: 12px; }
-.auth-form .form-field input { min-height: 43px; border-radius: 9px; font-size: 13px; }
+.auth-form [data-slot="form-field"] { gap: 7px; }
+.auth-form [data-slot="form-field"] label { font-size: 12px; }
+.auth-form [data-slot="form-field"] input { min-height: 43px; border-radius: 9px; font-size: 13px; }
 .auth-submit { width: 100%; min-height: 43px; margin-top: 3px; border-radius: 9px; font-size: 12px; }
 .auth-submit svg { margin-left: auto; }
 .auth-session-notice { margin: 0 0 14px; border: 1px solid color-mix(in srgb, var(--color-info) 24%, var(--color-border)); border-radius: var(--radius-md); background: var(--color-info-soft); color: var(--color-info); font-size: 11px; padding: 10px 12px; }

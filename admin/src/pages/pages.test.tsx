@@ -46,7 +46,7 @@ describe('Overview action center', () => {
     expect(screen.getByRole('link', { name: 'Create Collection' })).toHaveAttribute('href', '/collections/new');
     const build = screen.getByRole('region', { name: 'Build' });
     expect(build.querySelectorAll('a')).toHaveLength(4);
-    expect(build.querySelector('a[href="/extensions"]')).toHaveTextContent('Hooks');
+    expect(build.querySelector('a[href="/automations/hooks"]')).toHaveTextContent('Hooks');
     expect(document.querySelector('.diagnostics-grid')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Continue recent work' })).not.toBeInTheDocument();
@@ -60,9 +60,9 @@ describe('Overview action center', () => {
 
     expect(await screen.findByRole('heading', { name: 'Needs attention' })).toBeInTheDocument();
     expect(screen.getByText('A schema change needs recovery in posts.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/collections/col_posts/schema');
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/collections/col_posts/model');
     expect(screen.getByRole('heading', { name: 'Continue recent work' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Edit security/ })).toHaveAttribute('href', '/collections/col_users/security');
+    expect(screen.getByRole('link', { name: /Edit security/ })).toHaveAttribute('href', '/collections/col_users/access');
     expect(screen.getByRole('link', { name: /Open records/ })).toHaveAttribute('href', '/collections/col_posts');
     const recentWork = screen.getByRole('region', { name: 'Continue recent work' });
     const buildLinks = screen.getByRole('region', { name: 'Build' });

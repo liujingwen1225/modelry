@@ -171,4 +171,22 @@ test('768px Tablet Sidebar can collapse, expand, and preserve primary navigation
   await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(210);
   await expect(page.getByRole('navigation', { name: 'Project navigation' }).getByRole('link', { name: 'Collections' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(768);
+
+  const created = await page.evaluate(async (name) => {
+    const response = await fetch('/admin/api/v1/collections', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type: 'Normal', fields: [{ name: 'title', type: 'text', required: true }] }),
+    });
+    return { status: response.status, body: await response.json() as { data?: { id?: string } } };
+  }, 'orders_for_international_customer_support_and_regional_fulfillment_operations_26');
+  expect(created.status).toBe(201);
+  const collectionId = created.body.data?.id;
+  expect(collectionId).toBeTruthy();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(runtimeURL + '/collections/' + encodeURIComponent(collectionId!), { timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Records', level: 1 })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

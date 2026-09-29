@@ -158,13 +158,13 @@ function ExtensionList() {
     setCreateError(undefined);
     try {
       const created = await createExtension({ name: name.trim(), language, source });
-      navigate(`/extensions/${encodeURIComponent(created.id)}`);
+      navigate(`/automations/hooks/${encodeURIComponent(created.id)}`);
     } catch (reason) { setCreateError(reason); }
     finally { setSaving(false); }
   }
 
   return <div className="page-stack extension-page">
-    <PageHeading eyebrow={t('extensions.eyebrow')} title={t('extensions.title')} description={t('extensions.description')} action={<Link className="text-link" to="/secrets">{t('extensions.manageSecrets')}</Link>} />
+    <PageHeading eyebrow={t('extensions.eyebrow')} title={t('extensions.title')} description={t('extensions.description')} action={<Link className="text-link" to="/settings/secrets">{t('extensions.manageSecrets')}</Link>} />
     <Surface className="extension-toolbar">
       <label className="extension-search"><span className="sr-only">{t('extensions.search')}</span><input aria-label={t('extensions.search')} onChange={(event) => updateQuery(event.target.value)} placeholder={t('extensions.searchPlaceholder')} type="search" value={search} /></label>
       <span className="extension-count">{t('extensions.count', { count: visible.length })}</span>
@@ -174,7 +174,7 @@ function ExtensionList() {
     {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState title={t('extensions.emptyTitle')} description={t('extensions.emptyDescription')} />}
     {state === 'ready' && visible.length === 0 && items.length > 0 && <EmptyState title={t('extensions.noMatches')} description={t('extensions.noMatchesDescription')} />}
     {visible.length > 0 && <nav className="extension-list" aria-label={t('extensions.list')}>
-      {visible.map((item) => <Link className="extension-list__item" key={item.id} to={`/extensions/${encodeURIComponent(item.id)}`}>
+      {visible.map((item) => <Link className="extension-list__item" key={item.id} to={`/automations/hooks/${encodeURIComponent(item.id)}`}>
         <span className="extension-list__identity"><strong>{item.name}</strong><span>{t('extensions.listMeta', { language: t(`extensions.languages.${item.language}`), revision: item.activeRevision, date: formatDate(item.updatedAt) })}</span></span>
         <span className="extension-list__counts">{t('extensions.bindingsCount', { count: item.bindingCount })} · {t('extensions.runs')}</span>
         <StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('extensions.enabled') : t('extensions.disabled')}</StatusChip>
@@ -296,10 +296,10 @@ function ExtensionEditor({ extensionId }: { extensionId: string }) {
   }
 
   if (state === 'loading') return <div className="page-stack extension-page"><LoadingState label={t('extensions.loadingDetail')} /></div>;
-  if (state === 'error' || !detail || !draft) return <div className="page-stack extension-page"><ErrorState description={errorDetails(error, t)} title={t('extensions.loadFailed')}><Link className="text-link" to="/extensions">{t('extensions.backToList')}</Link><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.retry')}</Button></ErrorState></div>;
+  if (state === 'error' || !detail || !draft) return <div className="page-stack extension-page"><ErrorState description={errorDetails(error, t)} title={t('extensions.loadFailed')}><Link className="text-link" to="/automations/hooks">{t('extensions.backToList')}</Link><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.retry')}</Button></ErrorState></div>;
 
   return <div className="page-stack extension-page">
-    <Link className="text-link extension-back" to="/extensions"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
+    <Link className="text-link extension-back" to="/automations/hooks"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
     <PageHeading eyebrow={t('extensions.eyebrow')} title={detail.name} description={t('extensions.detailDescription', { revision: detail.activeRevision })} action={<div className="extension-state-action"><Button disabled={busy || hasUnsavedChanges} onClick={() => void toggleEnabled()} variant={detail.enabled ? 'danger' : 'primary'}>{detail.enabled ? t('extensions.disable') : t('extensions.enable')}</Button>{hasUnsavedChanges && <span role="status">{t('extensions.saveBeforeStateChange')}</span>}</div>} />
     {actionError !== undefined ? <ErrorState description={errorDetails(actionError, t)} title={t('extensions.actionFailed')} /> : null}
     <div className="extension-tabs" aria-label={t('extensions.tabs')} role="tablist">
@@ -327,7 +327,7 @@ function ExtensionEditor({ extensionId }: { extensionId: string }) {
       </Surface>
       <Surface className="extension-editor-section">
         <div className="extension-section-heading"><div><p className="eyebrow">{t('extensions.capabilitiesEyebrow')}</p><h2>{t('extensions.secretsAndOrigins')}</h2><p>{t('extensions.capabilitiesDescription')}</p></div></div>
-        <section className="extension-subsection"><div className="extension-subsection-heading"><h3>{t('extensions.secretAliases')}</h3><Link className="text-link" to="/secrets">{t('extensions.manageSecrets')}</Link></div>
+        <section className="extension-subsection"><div className="extension-subsection-heading"><h3>{t('extensions.secretAliases')}</h3><Link className="text-link" to="/settings/secrets">{t('extensions.manageSecrets')}</Link></div>
           {draft.secretBindings.map((binding, index) => <div className="extension-config-row" key={`secret-${index}`}>
             <FormField htmlFor={`secret-alias-${index}`} label={t('extensions.alias')}><input autoComplete="off" id={`secret-alias-${index}`} maxLength={64} onChange={(event) => updateDraft('secretBindings', draft.secretBindings.map((item, position) => position === index ? { ...item, alias: event.target.value } : item))} pattern="[A-Za-z][A-Za-z0-9_]{0,63}" required value={binding.alias} /></FormField>
             <FormField htmlFor={`secret-id-${index}`} label={t('extensions.secret')}><select id={`secret-id-${index}`} onChange={(event) => updateDraft('secretBindings', draft.secretBindings.map((item, position) => position === index ? { ...item, secretId: event.target.value } : item))} required value={binding.secretId}><option value="">{t('extensions.chooseSecret')}</option>{secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}</select></FormField>
@@ -335,7 +335,7 @@ function ExtensionEditor({ extensionId }: { extensionId: string }) {
             <Button aria-label={t('extensions.removeSecretAlias')} onClick={() => updateDraft('secretBindings', draft.secretBindings.filter((_, position) => position !== index))} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>
           </div>)}
           <Button disabled={!secrets.length} onClick={() => updateDraft('secretBindings', [...draft.secretBindings, { alias: '', secretId: secrets[0]?.id ?? '' }])} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('extensions.addAlias')}</Button>
-          {!secrets.length && <p className="extension-muted">{t('extensions.noSecretsAvailable')} <Link className="text-link" to="/secrets">{t('extensions.createSecretLink')}</Link></p>}
+          {!secrets.length && <p className="extension-muted">{t('extensions.noSecretsAvailable')} <Link className="text-link" to="/settings/secrets">{t('extensions.createSecretLink')}</Link></p>}
         </section>
         <section className="extension-subsection"><FormField htmlFor="extension-origins" hint={t('extensions.originsHint')} label={t('extensions.allowedOrigins')}><textarea autoCapitalize="off" autoCorrect="off" id="extension-origins" onChange={(event) => setOriginsText(event.target.value)} placeholder={t('extensions.originPlaceholder')} spellCheck={false} value={originsText} /></FormField></section>
       </Surface>

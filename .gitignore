@@ -6,3 +6,6 @@ admin/playwright-report/
 admin/coverage/
 .env
 .env.*
+.codebuddy
+.workbuddy
+.idea

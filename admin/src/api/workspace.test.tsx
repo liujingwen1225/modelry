@@ -175,7 +175,7 @@ describe('API Workspace', () => {
     expect(screen.getByText('方法与路由')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '返回请求上下文' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '打开集合 API' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看访问规则' })).toHaveAttribute('href', '/collections/col_posts/security');
+    expect(screen.getByRole('link', { name: '查看访问规则' })).toHaveAttribute('href', '/collections/col_posts/access');
     expect(screen.getByRole('button', { name: '在请求中查找' })).toBeInTheDocument();
   });
 
@@ -274,7 +274,7 @@ describe('API Workspace', () => {
     expect(screen.getByText('FORBIDDEN')).toBeInTheDocument();
     expect(screen.getByText('denied')).toBeInTheDocument();
     expect(screen.getByText('46 bytes')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/api?tab=requests');
+    expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/connect/api?tab=requests');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=getApplicationRecord');
   });
 
@@ -286,7 +286,7 @@ describe('API Workspace', () => {
     </Routes></MemoryRouter></LocaleProvider>);
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', '/collections/col_posts/security');
+    expect(screen.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', '/collections/col_posts/access');
   });
 
   it('resolves Request Detail links when durable telemetry stores a route template', async () => {
@@ -297,7 +297,7 @@ describe('API Workspace', () => {
     </Routes></MemoryRouter></LocaleProvider>);
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
   });
 
   it('resolves ordered file read templates to the indexed endpoint', async () => {
@@ -308,7 +308,7 @@ describe('API Workspace', () => {
     </Routes></MemoryRouter></LocaleProvider>);
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
   });
   it('preserves file endpoint context in Request Detail links', async () => {
     mocks.getRequestRecord.mockResolvedValue(fileRequestRecord);
@@ -318,7 +318,7 @@ describe('API Workspace', () => {
     </Routes></MemoryRouter></LocaleProvider>);
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=readApplicationRecordFile');
   });
 });

@@ -91,7 +91,7 @@ describe('Operations surfaces', () => {
     expect(await screen.findByRole('heading', { name: 'Storage consistency', level: 1 })).toBeInTheDocument();
     expect(await screen.findByText('Collection data is missing from storage')).toBeInTheDocument();
     expect(screen.getByText('Collection data should be available in storage.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open corrective surface' })).toHaveAttribute('href', '/collections/col_posts/schema');
+    expect(screen.getByRole('link', { name: 'Open corrective surface' })).toHaveAttribute('href', '/collections/col_posts/model');
     expect(document.body.textContent?.toLowerCase()).not.toContain('projection');
     await userEvent.click(screen.getByRole('button', { name: /Repair storage/ }));
     await waitFor(() => expect(screen.getByText('Stored data now matches the saved Collection model.')).toBeInTheDocument());

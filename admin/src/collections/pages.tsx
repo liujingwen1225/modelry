@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type Keybo
 import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, Plus, RefreshCw, Search, Shield, SlidersHorizontal } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
 import { useI18n } from '../i18n/i18n';
 import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionSummary, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
@@ -114,7 +114,7 @@ export function CollectionsPage() {
   return (
     <div className="page-stack collection-page">
       <PageTitle
-        action={<Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={16} />{t('collections.create')}</Link>}
+        action={<ButtonLink to="/collections/new" variant="primary"><Plus aria-hidden="true" size={16} />{t('collections.create')}</ButtonLink>}
         description={t('collections.description')}
         eyebrow={t('collections.eyebrow')}
         title={t('collections.title')}
@@ -150,7 +150,7 @@ export function CollectionsPage() {
       })()}
       {state === 'ready' && visible.length === 0 && items.length === 0 && (
         <EmptyState description={t('collections.emptyDescription')} title={t('collections.emptyTitle')}>
-          <Link className="button button--primary" to="/collections/new"><Plus aria-hidden="true" size={15} />{t('collections.create')}</Link>
+          <ButtonLink to="/collections/new" variant="primary"><Plus aria-hidden="true" size={15} />{t('collections.create')}</ButtonLink>
         </EmptyState>
       )}
       {state === 'ready' && visible.length === 0 && items.length > 0 && (
@@ -435,7 +435,7 @@ export function CreateCollectionPage() {
           <p className="collection-enter-hint"><kbd>Enter</kbd> {t('collections.enterHint')}</p>
         </Surface>
 
-        <footer className="collection-form-actions"><Link className="button button--secondary" to="/collections">{t('collections.cancel')}</Link><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
+        <footer className="collection-form-actions"><ButtonLink to="/collections">{t('collections.cancel')}</ButtonLink><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
       </form>
     </main>
   );
@@ -524,7 +524,7 @@ export function CollectionWorkspacePage() {
     const failed = pending.status === 'failed';
     const route = failed
       ? `/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`
-      : `/collections/${encodeURIComponent(collection.id)}/schema`;
+      : `/collections/${encodeURIComponent(collection.id)}/model`;
     return [{
       id: `change.open.${pending.changeSetId}`,
       category: 'commands.categories.changes',
@@ -588,10 +588,10 @@ export function CollectionWorkspacePage() {
       <nav aria-label={t('navigation.collectionWorkspace')} className="collection-workspace-tabs">
         {[
           { label: t('navigation.records'), to: `/collections/${collectionId}`, end: true },
-          { label: t('navigation.schema'), to: `/collections/${collectionId}/schema` },
-          { label: t('navigation.security'), to: `/collections/${collectionId}/security` },
+          { label: t('navigation.model'), to: `/collections/${collectionId}/model` },
+          { label: t('navigation.access'), to: `/collections/${collectionId}/access` },
           { label: t('navigation.api'), to: `/collections/${collectionId}/api` },
-        ].map((tab) => <NavLink end={tab.end} key={tab.label} to={tab.to}>{tab.label}</NavLink>)}
+        ].map((tab) => <NavLink end={tab.end} key={tab.to} to={tab.to}>{tab.label}</NavLink>)}
       </nav>
       <Outlet context={context} />
     </div>

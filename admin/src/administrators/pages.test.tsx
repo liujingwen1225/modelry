@@ -101,7 +101,15 @@ describe('Administrators Admin surface', () => {
     const sessionsDialog = within(await screen.findByRole('dialog', { name: 'Administrator sessions' }));
     expect(await sessionsDialog.findByText(/Expires/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete colleague@example.test' }));
+    // A real browser keeps the page behind a modal dialog inert, so close the
+    // sessions dialog before using the row-level Delete action. The dialog has
+    // both a header X (aria-label) and a body "Close dialog" button; use the body one.
+    const bodyCloseButton = sessionsDialog
+      .getAllByRole('button', { name: 'Close dialog' })
+      .find((element) => element.getAttribute('data-slot') !== 'dialog-close');
+    expect(bodyCloseButton).toBeDefined();
+    await userEvent.click(bodyCloseButton!);
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete colleague@example.test' }));
     await userEvent.click(screen.getByRole('button', { name: 'Delete Administrator' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input) === '/admin/api/v1/administrators/adm_1' && (init as RequestInit | undefined)?.method === 'DELETE')).toBe(true));
   });

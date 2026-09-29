@@ -250,7 +250,7 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 
-  await page.goto(`${runtimeURL}/extensions`);
+  await page.goto(`${runtimeURL}/automations/hooks`);
   await page.locator('#extension-create-name').fill('Lifecycle guard');
   await page.locator('#extension-create-language').selectOption('typescript');
   await page.locator('#extension-create-source').fill('export function beforeCreate() { return { action: "reject" }; }');
@@ -323,7 +323,7 @@ export function afterCommitCreate() {
   expect(postHookRestart.projectId).toBe(firstRuntime.projectId);
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await page.goto(`${runtimeURL}/extensions/${encodeURIComponent(extensionId)}`);
+  await page.goto(`${runtimeURL}/automations/hooks/${encodeURIComponent(extensionId)}`);
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
 
   const longRunningSource = `export function beforeCreate(context: { values: Record<string, unknown> }) {
@@ -347,7 +347,7 @@ export function afterCommitCreate() { while (true) {} }`;
   expect(restartedRuntime.projectId).toBe(firstRuntime.projectId);
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await page.goto(`${runtimeURL}/extensions/${encodeURIComponent(extensionId)}?tab=runs`);
+  await page.goto(`${runtimeURL}/automations/hooks/${encodeURIComponent(extensionId)}?tab=runs`);
   await expect(page.getByRole('heading', { name: 'Lifecycle guard' })).toBeVisible();
   await expect.poll(async () => {
     const runs = await listRuns(page, extensionId);

@@ -2,7 +2,7 @@
 .mail-page__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .mail-provider__heading { display: flex; align-items: center; gap: 12px; }
 .mail-provider__heading h2 { margin: 0; }
-.mail-provider__heading .status-chip { margin-left: auto; }
+.mail-provider__heading [data-slot="badge"] { margin-left: auto; }
 .mail-provider__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
 .mail-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .mail-test { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 14px; border-top: 1px solid var(--color-border); padding-top: 12px; }

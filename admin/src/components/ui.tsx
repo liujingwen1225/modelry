@@ -1,35 +1,122 @@
 import { cloneElement, isValidElement, useId, useState, type ReactElement, type ReactNode } from 'react';
-import { Check, Copy, X } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
+import { Link, type LinkProps } from 'react-router-dom';
 import { useI18n } from '../i18n/i18n';
+import { cn } from '@/lib/utils';
+import { Button as ButtonPrimitive, buttonVariants } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog as DialogRoot,
+  DialogContent,
+  DialogCloseButton,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+} from '@/components/ui/dialog';
+import {
+  Sheet as SheetRoot,
+  SheetContent,
+  SheetCloseButton,
+  SheetHeader,
+  SheetTitle,
+  SheetBody,
+} from '@/components/ui/sheet';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'quiet' | 'danger';
   size?: 'default' | 'small';
 };
 
-export function Button({ variant = 'secondary', size = 'default', className = '', ...props }: ButtonProps) {
-  return <button className={`button button--${variant} button--${size} ${className}`.trim()} {...props} />;
+const legacyVariants = { primary: 'default', secondary: 'outline', quiet: 'ghost', danger: 'destructive' } as const;
+
+export function Button({ variant = 'secondary', size = 'default', className, ...props }: ButtonProps) {
+  return (
+    <ButtonPrimitive
+      variant={legacyVariants[variant]}
+      size={size === 'small' ? 'sm' : 'default'}
+      className={className}
+      {...props}
+    />
+  );
+}
+
+export function ButtonLink({ variant = 'secondary', size = 'default', className, ...props }: Omit<LinkProps, 'className'> & Pick<ButtonProps, 'variant' | 'size'> & { className?: string }) {
+  return (
+    <Link
+      data-slot="button"
+      className={cn(buttonVariants({
+        variant: legacyVariants[variant],
+        size: size === 'small' ? 'sm' : 'default',
+        className,
+      }))}
+      {...props}
+    />
+  );
 }
 
 export function Surface({
   children,
   variant = 'standard',
-  className = '',
+  className,
 }: {
   children: ReactNode;
   variant?: 'standard' | 'inset' | 'raised';
   className?: string;
 }) {
-  return <section className={`surface surface--${variant} ${className}`.trim()}>{children}</section>;
+  return (
+    <section
+      data-slot="surface"
+      data-variant={variant}
+      className={cn(
+        'rounded-lg border',
+        variant === 'inset' && 'bg-muted',
+        variant === 'raised' && 'bg-card shadow-soft',
+        variant === 'standard' && 'bg-card',
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
 }
+
+const chipVariants: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'outline'> = {
+  ready: 'success',
+  active: 'success',
+  ok: 'success',
+  degraded: 'warning',
+  stopping: 'warning',
+  partial: 'warning',
+  pending: 'warning',
+  unavailable: 'danger',
+  failed: 'danger',
+  error: 'danger',
+  unknown: 'info',
+  starting: 'info',
+  loading: 'info',
+  configuring: 'info',
+};
 
 export function StatusChip({ state, children }: { state: string; children: ReactNode }) {
   const tone = state.toLowerCase().replace(/[^a-z]+/g, '-');
-  return <span className={`status-chip status-chip--${tone}`}>{children}</span>;
+  return <Badge variant={chipVariants[tone] ?? 'default'}>{children}</Badge>;
 }
 
 export function LoadingState({ label }: { label: string }) {
-  return <div aria-label={label} className="loading-state" role="status"><span className="pulse-dot" aria-hidden="true" />{label}</div>;
+  return (
+    <div aria-label={label} role="status" className="flex items-center gap-2 rounded-md bg-info-soft px-3 py-3 text-[11px] text-info">
+      <span aria-hidden="true" className="inline-block size-1.5 animate-pulse rounded-full bg-current" />
+      {label}
+    </div>
+  );
 }
 
 export function EmptyState({
@@ -41,25 +128,41 @@ export function EmptyState({
   description: string;
   children?: ReactNode;
 }) {
-  return <div className="empty-state" role="status"><h3>{title}</h3><p>{description}</p>{children}</div>;
+  return (
+    <div role="status" className="rounded-md border border-dashed border-input bg-secondary px-3 py-3 text-[11px] text-ink-secondary">
+      <h3 className="mb-1 text-xs font-semibold">{title}</h3>
+      <p className="m-0 text-[10px] text-muted-foreground">{description}</p>
+      {children}
+    </div>
+  );
 }
 
 export function ErrorState({
   title,
   description,
   children,
-  className = '',
+  className,
 }: {
   title: string;
   description: string;
   children?: ReactNode;
   className?: string;
 }) {
-  return <div className={`error-state ${className}`.trim()} role="alert"><strong>{title}</strong><p>{description}</p>{children}</div>;
+  return (
+    <div role="alert" className={cn('rounded-md border border-danger/30 bg-danger-soft px-3 py-3 text-[11px] text-danger', className)}>
+      <strong className="mb-1 block text-[11px]">{title}</strong>
+      <p className="m-0 text-[10px] text-muted-foreground">{description}</p>
+      {children}
+    </div>
+  );
 }
 
-export function PartialState({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`partial-state ${className}`.trim()} role="status">{children}</div>;
+export function PartialState({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div role="status" className={cn('rounded-md border border-warning/30 bg-warning-soft px-3 py-3 text-[11px] text-warning', className)}>
+      {children}
+    </div>
+  );
 }
 
 export function FormField({
@@ -83,10 +186,10 @@ export function FormField({
       })
     : children;
   return (
-    <div className="form-field">
-      <label htmlFor={htmlFor}>{label}</label>
+    <div data-slot="form-field" className="grid gap-1.5 [&_input]:min-h-9 [&_input]:w-full [&_input]:rounded-lg [&_input]:border [&_input]:border-input [&_input]:bg-card [&_input]:px-3 [&_input]:py-2 [&_input]:text-xs [&_input]:transition-[color,box-shadow] [&_input]:outline-none [&_input:hover]:border-subtle-foreground [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-ring [&_input:disabled]:opacity-55 [&_select]:min-h-9 [&_select]:w-full [&_select]:rounded-lg [&_select]:border [&_select]:border-input [&_select]:bg-card [&_select]:px-3 [&_select]:py-2 [&_select]:text-xs [&_textarea]:min-h-16 [&_textarea]:w-full [&_textarea]:rounded-lg [&_textarea]:border [&_textarea]:border-input [&_textarea]:bg-card [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-xs">
+      <label htmlFor={htmlFor} className="text-[11px] font-semibold text-ink-secondary">{label}</label>
       {describedChild}
-      {hint && <p className="form-hint" id={hintId}>{hint}</p>}
+      {hint && <p className="form-hint m-0 text-[10px] text-muted-foreground" id={hintId}>{hint}</p>}
     </div>
   );
 }
@@ -101,17 +204,25 @@ export function DataTable({
   rows: ReactNode[][];
 }) {
   return (
-    <div className="table-scroll">
-      <table className="data-table">
-        <caption>{caption}</caption>
-        <thead><tr>{headers.map((header) => <th key={header} scope="col">{header}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>
+    <Table>
+      <caption>{caption}</caption>
+      <TableHeader>
+        <tr>
+          {headers.map((header) => (
+            <TableHead key={header} scope="col">{header}</TableHead>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row, index) => (
+          <TableRow key={index}>
+            {row.map((cell, cellIndex) => (
+              <TableCell key={cellIndex}>{cell}</TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -156,7 +267,7 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
       <Button
         aria-label={label}
         aria-describedby={failed ? feedbackId : undefined}
-        className="copy-button"
+        className="ml-auto min-h-6 px-1.5"
         onClick={() => void handleCopy()}
         size="small"
         type="button"
@@ -174,7 +285,7 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
 
 export function JsonViewer({ value, label }: { value: unknown; label: string }) {
   return (
-    <details className="json-viewer">
+    <details className="border-t pt-1.5 text-[10px] text-muted-foreground [&_pre]:mt-2 [&_pre]:max-h-40 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-muted [&_pre]:p-2.5 [&_pre]:leading-relaxed [&_pre]:text-ink-secondary [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary:hover]:text-primary">
       <summary>{label}</summary>
       <pre><code>{JSON.stringify(value, null, 2)}</code></pre>
     </details>
@@ -199,29 +310,37 @@ export function Dialog({
   presentation?: 'dialog' | 'sheet';
 }) {
   const titleId = useId();
+
+  function handleOpenChange(next: boolean) {
+    if (!next) onClose();
+  }
+
+  if (presentation === 'sheet') {
+    return (
+      // Sheet 承载「保留列表上下文的详情与快速编辑」（spec 0001 §13.2），
+      // 必须保持列表可查询/可读屏：非 modal 形态不对外部内容施加 inert/aria-hidden。
+      <SheetRoot modal={false} open={open} onOpenChange={handleOpenChange}>
+        <SheetContent size={size} aria-labelledby={titleId}>
+          <SheetHeader>
+            <SheetTitle id={titleId}>{title}</SheetTitle>
+            <SheetCloseButton aria-label={closeLabel} />
+          </SheetHeader>
+          <SheetBody>{children}</SheetBody>
+        </SheetContent>
+      </SheetRoot>
+    );
+  }
+
   return (
-    <dialog
-      aria-labelledby={titleId}
-      className={`dialog dialog--${size}${presentation === 'sheet' ? ' sheet' : ''}`}
-      onCancel={(event) => { event.preventDefault(); onClose(); }}
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
-      ref={(element) => {
-        if (!element) return;
-        if (open && !element.open) {
-          if (typeof element.showModal === 'function') element.showModal();
-          else element.setAttribute('open', '');
-        } else if (!open && element.open) {
-          if (typeof element.close === 'function') element.close();
-          else element.removeAttribute('open');
-        }
-      }}
-      >
-      <header className="dialog__header">
-        <h2 id={titleId}>{title}</h2>
-        <Button aria-label={closeLabel} onClick={onClose} variant="quiet"><X aria-hidden="true" size={18} /></Button>
-      </header>
-      <div className="dialog__body">{children}</div>
-    </dialog>
+    <DialogRoot open={open} onOpenChange={handleOpenChange}>
+      <DialogContent size={size} aria-labelledby={titleId}>
+        <DialogHeader>
+          <DialogTitle id={titleId}>{title}</DialogTitle>
+          <DialogCloseButton aria-label={closeLabel} />
+        </DialogHeader>
+        <DialogBody>{children}</DialogBody>
+      </DialogContent>
+    </DialogRoot>
   );
 }
 
@@ -230,7 +349,7 @@ export function Sheet(props: Omit<Parameters<typeof Dialog>[0], 'presentation'>)
 }
 
 export function FocusedWorkspace({ children }: { children: ReactNode }) {
-  return <main className="focused-workspace">{children}</main>;
+  return <main className="mx-auto w-full max-w-[880px] min-w-0">{children}</main>;
 }
 
 export function SplitPane({
@@ -240,5 +359,10 @@ export function SplitPane({
   primary: ReactNode;
   secondary: ReactNode;
 }) {
-  return <div className="split-pane"><section>{primary}</section><aside>{secondary}</aside></div>;
+  return (
+    <div className="grid grid-cols-1 items-start gap-4 min-[681px]:grid-cols-[minmax(0,1fr)_minmax(270px,0.8fr)] [&>aside]:min-w-0 [&>section]:min-w-0">
+      <section>{primary}</section>
+      <aside>{secondary}</aside>
+    </div>
+  );
 }

@@ -361,7 +361,7 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await page.locator('.locale-switcher select').selectOption('zh-CN');
   await expect(page).toHaveURL(/\/settings\/runtime\?filter=keep#selected$/);
   await expect(page.getByRole('heading', { name: '运行时设置', level: 1 })).toBeVisible();
-  await expect(page.getByRole('link', { name: '活动' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '文件与存储' })).toBeVisible();
   // 迁移到共享 i18n 的 V0.1 时代页面同样必须以中文渲染。
   await page.goto(runtimeURL + '/');
   await expect(page.getByRole('heading', { name: '总览', level: 1 })).toBeVisible();
@@ -375,7 +375,7 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.locator('.overview-agent-card__command code')).toHaveText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>');
   await page.goto(runtimeURL + '/settings/runtime');
   await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Activity' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Files & Storage' })).toBeVisible();
 
   // 5b) V0.1 时代的四个产品面（Collection Schema / Collection Security / Access · Audit /
   //     Application API Workspace）必须在两种语言下都完整可用，且不得残留另一语言的界面文案。
@@ -399,7 +399,7 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('heading', { name: 'Schema', level: 2 })).toHaveCount(0);
   // 语言切换必须保留 Schema 深链上下文（view=indexes 不能被重置）。
   await page.locator('.locale-switcher select').selectOption('en');
-  await expect(page).toHaveURL(/\/collections\/[^/]+\/schema\?view=indexes$/);
+  await expect(page).toHaveURL(/\/collections\/[^/]+\/model\?view=indexes$/);
   await expect(page.getByRole('heading', { name: 'Schema', level: 2 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add index' })).toBeVisible();
   // 深链上下文在两种语言下都保持：Indexes 仍是当前视图。
@@ -422,10 +422,10 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
 
   await page.locator('.locale-switcher select').selectOption('zh-CN');
   await page.goto(runtimeURL + '/access');
-  await expect(page.getByRole('heading', { name: '访问', level: 1 })).toBeVisible();
-  await expect(page.getByRole('link', { name: '审计' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '项目访问', level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: '审计日志' })).toBeVisible();
   await expect(page.getByRole('button', { name: '创建服务账号' }).first()).toBeVisible();
-  await page.getByRole('link', { name: '审计' }).click();
+  await page.getByRole('link', { name: '审计日志' }).click();
   await expect(page.getByRole('heading', { name: '审计', level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '主体' })).toBeVisible();
@@ -497,8 +497,8 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
     { label: 'Collection Workspace', path: `/collections/${encodeURIComponent(longCollectionId)}`, title: longCollectionName },
     { label: 'Schema', path: `/collections/${encodeURIComponent(longCollectionId)}/schema?view=indexes`, title: longCollectionName, section: 'Schema' },
     { label: 'Collection API', path: `/collections/${encodeURIComponent(longCollectionId)}/api`, title: `${longCollectionName} API` },
-    { label: 'API Workspace', path: '/api', title: 'API Workspace' },
-    { label: 'Automation', path: '/automations?tab=webhooks', title: 'Automation' },
+    { label: 'API Workspace', path: '/connect/api', title: 'API Workspace' },
+    { label: 'Automation', path: '/automations/webhooks', title: 'Automation' },
     { label: 'Project access', path: '/access', title: 'Project access' },
     { label: 'Settings', path: '/settings', title: 'Status' },
   ];

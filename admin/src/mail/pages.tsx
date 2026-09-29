@@ -249,8 +249,8 @@ export function MailPage() {
             </select>
           </FormField>
           {secrets.length === 0
-            ? <p className="mail-hint">{t('mail.provider.noSecrets')} <Link to="/secrets">{t('mail.provider.createSecret')}</Link></p>
-            : <p className="mail-hint"><Link to="/secrets">{t('mail.provider.manageSecrets')}</Link></p>}
+            ? <p className="mail-hint">{t('mail.provider.noSecrets')} <Link to="/settings/secrets">{t('mail.provider.createSecret')}</Link></p>
+            : <p className="mail-hint"><Link to="/settings/secrets">{t('mail.provider.manageSecrets')}</Link></p>}
           <div className="mail-actions">
             <Button disabled={busy !== null} type="submit" size="small" variant="primary">
               {busy === 'save' ? t('mail.provider.saving') : t('mail.provider.save')}
