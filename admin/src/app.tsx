@@ -20,7 +20,8 @@ import { MailPage } from './mail/pages';
 import { ActivityPage } from './activity/pages';
 import { DriftPage } from './drift/pages';
 import { RuntimeSettingsPage } from './settings/pages';
-import { PortabilityPage } from './portability/pages';
+import { APIContractPage, BackupRestorePage, DataTransferPage } from './portability/pages';
+import { MCPGuidePage } from './developer/pages';
 
 function NotFoundPage() {
   const { t } = useI18n();
@@ -98,7 +99,11 @@ function AuthenticatedWorkspace() {
         <Route element={<ActivityPage />} path="/activity" />
         <Route element={<DriftPage />} path="/settings/drift" />
         <Route element={<RuntimeSettingsPage />} path="/settings/runtime" />
-        <Route element={<PortabilityPage />} path="/settings/portability" />
+        <Route element={<BackupRestorePage />} path="/settings/portability" />
+        <Route element={<BackupRestorePage />} path="/settings/backups" />
+        <Route element={<DataTransferPage />} path="/settings/data" />
+        <Route element={<APIContractPage />} path="/settings/developer" />
+        <Route element={<MCPGuidePage />} path="/settings/mcp" />
         <Route element={<AdministratorsPage />} path="/administrators" />
         <Route element={<AuthenticatedRedirect />} path="/login" />
         <Route element={<NotFoundPage />} path="*" />

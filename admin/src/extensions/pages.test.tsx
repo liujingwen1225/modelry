@@ -70,7 +70,7 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     expect(automationLink).not.toHaveClass(/nav-link--active/);
 
     await userEvent.click(automationLink);
-    expect(await screen.findByRole('heading', { name: 'Automations' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Automation' })).toBeInTheDocument();
     expect(automationLink).toHaveAttribute('aria-current', 'page');
     expect(automationLink).toHaveClass(/nav-link--active/);
   });
@@ -155,7 +155,7 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     render(<App />);
     await screen.findByRole('heading', { name: 'Secrets' });
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Language' }), 'zh-CN');
-    expect(await screen.findByRole('heading', { name: '密钥' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Secrets' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '创建密钥' })).toBeInTheDocument();
     expect(window.location.pathname + window.location.search + window.location.hash).toBe('/secrets?q=mail#selected');
   });

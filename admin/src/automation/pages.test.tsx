@@ -41,7 +41,7 @@ describe('Automation Admin surface', () => {
 
     renderAutomation('/automations?tab=webhooks&q=mail');
 
-    expect(await screen.findByRole('heading', { name: 'Automations' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Automation' })).toBeInTheDocument();
     expect(await screen.findByText('Mail receiver')).toBeInTheDocument();
     expect(screen.queryByText('https://private.example.test/secret-path')).not.toBeInTheDocument();
     expect(screen.queryByText('never-render-this-secret')).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe('Automation Admin surface', () => {
     renderAutomation('/automations?tab=webhooks');
     await user.click(await screen.findByRole('button', { name: 'Disable' }));
     const dialog = await screen.findByRole('dialog', { name: 'Disable Webhook?' });
-    expect(dialog).toHaveTextContent('Disabling a Webhook cancels pending Event Hook and Job deliveries.');
+    expect(dialog).toHaveTextContent('Disabling a Webhook cancels pending event trigger and scheduled trigger deliveries.');
     await user.click(screen.getByRole('button', { name: 'Disable Webhook' }));
 
     expect(await screen.findByText('Disabled')).toBeInTheDocument();
@@ -171,13 +171,13 @@ describe('Automation Admin surface', () => {
     const user = userEvent.setup();
 
     renderAutomation('/automations?tab=eventHooks&q=order');
-    await user.click(await screen.findByRole('button', { name: 'Create Event Hook' }));
+    await user.click(await screen.findByRole('button', { name: 'Create event trigger' }));
     expect(screen.getByText(/including applicable before and after field values/)).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Order created');
     await user.selectOptions(screen.getByLabelText('Collection'), 'col_orders');
     await user.selectOptions(screen.getByLabelText('Record Event'), 'record.created');
     await user.selectOptions(screen.getByLabelText('Webhook'), 'whk_mail');
-    await user.click(screen.getByRole('button', { name: 'Save Event Hook' }));
+    await user.click(screen.getByRole('button', { name: 'Save event trigger' }));
 
     expect(await screen.findByText('Created successfully.')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/event-hooks', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Order created', collectionId: 'col_orders', eventType: 'record.created', webhookId: 'whk_mail' }) }));
@@ -198,7 +198,7 @@ describe('Automation Admin surface', () => {
     const user = userEvent.setup();
 
     renderAutomation('/automations?tab=jobs');
-    await user.click(await screen.findByRole('button', { name: 'Create Job' }));
+    await user.click(await screen.findByRole('button', { name: 'Create scheduled trigger' }));
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Daily report');
     await user.selectOptions(screen.getByLabelText('Webhook'), 'whk_mail');
     const cron = screen.getByRole('textbox', { name: /Cron schedule/ });
@@ -208,10 +208,10 @@ describe('Automation Admin surface', () => {
     await user.clear(cron);
     await user.type(cron, '@daily');
     expect(screen.getByText(/Enter a valid five-field Cron expression\./)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save Job' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save scheduled trigger' })).toBeDisabled();
     await user.clear(cron);
     await user.type(cron, '0 9 * * *');
-    await user.click(screen.getByRole('button', { name: 'Save Job' }));
+    await user.click(screen.getByRole('button', { name: 'Save scheduled trigger' }));
 
     expect(await screen.findByText('Created successfully.')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/jobs', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Daily report', webhookId: 'whk_mail', cron: '0 9 * * *' }) }));
@@ -274,8 +274,8 @@ describe('Automation Admin surface', () => {
     renderAutomation('/automations?tab=jobs');
 
     expect(await screen.findByRole('heading', { name: '自动化' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: '创建任务' })).toBeInTheDocument();
-    expect(screen.getByText('使用五字段 UTC Cron 表达式定时发送信号。任务不会执行代码。')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '创建定时触发' })).toBeInTheDocument();
+    expect(screen.getByText('按五字段 UTC Cron 计划发送 Webhook。定时触发不会执行代码。')).toBeInTheDocument();
   });
 
   it('does not offer retry for a capacity-exceeded Delivery without a retained payload', async () => {

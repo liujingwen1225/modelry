@@ -55,7 +55,7 @@ const groups: Array<{
     label: 'navigation.manage',
     items: [
       { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
-      { label: 'navigation.access', to: '/access', icon: ShieldCheck, operation: 'accessRules.read' },
+      { label: 'navigation.access', to: '/access', icon: ShieldCheck, operation: 'serviceAccounts.read' },
     ],
   },
   { label: 'navigation.system', items: [{ label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' }] },
@@ -74,40 +74,56 @@ function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
     return {
       id: 'automation',
       label: 'navigation.automation',
-      sections: [{ links: [
+      sections: [
+        { label: 'automation.navigation.triggers', links: [
         { label: 'automation.tabs.webhooks', to: '/automations?tab=webhooks' },
         { label: 'automation.tabs.eventHooks', to: '/automations?tab=eventHooks' },
         { label: 'automation.tabs.jobs', to: '/automations?tab=jobs' },
-        { label: 'automation.tabs.deliveries', to: '/automations?tab=deliveries' },
-      ] }],
+        ] },
+        { label: 'automation.navigation.runHistory', links: [
+          { label: 'automation.tabs.deliveries', to: '/automations?tab=deliveries' },
+        ] },
+      ],
     };
   }
   if (pathname.startsWith('/access') || pathname === '/administrators') {
     return {
       id: 'access',
       label: 'navigation.access',
-      sections: [{ links: [
-        { label: 'access.tabs.serviceAccounts', to: '/access', operation: 'serviceAccounts.read' },
-        { label: 'navigation.administrators', to: '/administrators', operation: 'administrators.read' },
-        { label: 'access.tabs.audit', to: '/access/audit', operation: 'audit.read' },
-      ] }],
+      sections: [
+        { label: 'access.navigation.identity', links: [
+          { label: 'access.tabs.serviceAccounts', to: '/access', operation: 'serviceAccounts.read' },
+          { label: 'navigation.administrators', to: '/administrators', operation: 'administrators.read' },
+        ] },
+        { label: 'access.navigation.security', links: [
+          { label: 'access.tabs.audit', to: '/access/audit', operation: 'audit.read' },
+        ] },
+      ],
     };
   }
-  if (pathname.startsWith('/settings') || pathname === '/activity') {
+  if (pathname.startsWith('/settings') || pathname === '/activity' || pathname === '/secrets') {
     return {
       id: 'settings',
       label: 'navigation.settings',
       sections: [
-        { links: [
-          { label: 'settings.navigation.general', to: '/settings', operation: 'runtime.read' },
+        { label: 'settings.navigation.project', links: [
+          { label: 'settings.navigation.status', to: '/settings', operation: 'runtime.read' },
           { label: 'settings.navigation.runtime', to: '/settings/runtime', operation: 'settings.read' },
+        ] },
+        { label: 'settings.navigation.service', links: [
           { label: 'settings.navigation.filesStorage', to: '/settings/storage', operation: 'storage.read' },
           { label: 'settings.navigation.mail', to: '/settings/mail', operation: 'mail.read' },
-          { label: 'settings.navigation.backupRestore', to: '/settings/portability' },
+          { label: 'settings.navigation.secrets', to: '/secrets' },
         ] },
-        { label: 'settings.navigation.diagnostics', links: [
+        { label: 'settings.navigation.maintenance', links: [
+          { label: 'settings.navigation.backupRestore', to: '/settings/backups' },
           { label: 'navigation.activity', to: '/activity', operation: 'activity.read' },
-          { label: 'navigation.drift', to: '/settings/drift', operation: 'drift.read' },
+          { label: 'settings.navigation.consistency', to: '/settings/drift', operation: 'drift.read' },
+        ] },
+        { label: 'settings.navigation.developer', links: [
+          { label: 'settings.navigation.dataTransfer', to: '/settings/data' },
+          { label: 'settings.navigation.apiContract', to: '/settings/developer' },
+          { label: 'settings.navigation.mcp', to: '/settings/mcp' },
         ] },
       ],
     };
@@ -117,7 +133,8 @@ function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
 
 function isAreaLinkActive(link: AreaLink, pathname: string, search: string): boolean {
   const [targetPath, targetSearch = ''] = link.to.split('?');
-  if (pathname !== targetPath) return false;
+  const activePath = pathname === '/settings/portability' ? '/settings/backups' : pathname;
+  if (activePath !== targetPath) return false;
   const current = new URLSearchParams(search);
   const target = new URLSearchParams(targetSearch);
   for (const [key, value] of target) {
@@ -132,7 +149,7 @@ function isAreaLinkActive(link: AreaLink, pathname: string, search: string): boo
 function isPrimaryLinkActive(pathname: string, to: string): boolean {
   if (to === '/automations') return pathname === '/automations';
   if (to === '/access') return pathname.startsWith('/access') || pathname === '/administrators';
-  if (to === '/settings') return pathname.startsWith('/settings') || pathname === '/activity';
+  if (to === '/settings') return pathname.startsWith('/settings') || pathname === '/activity' || pathname === '/secrets';
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
@@ -380,7 +397,12 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
       ...(allowsOperation(role, permission, 'activity.read') ? [go('navigate.activity', 'commands.activity', '/activity', ['timeline', 'operations'])] : []),
       ...(allowsOperation(role, permission, 'drift.read') ? [go('navigate.drift', 'commands.drift', '/settings/drift', ['consistency', 'projection', 'reconcile'])] : []),
       ...(allowsOperation(role, permission, 'settings.read') ? [go('navigate.runtimeSettings', 'commands.runtimeSettings', '/settings/runtime', ['runtime', 'configuration', 'restart'])] : []),
-      ...(role === undefined || role === 'owner' ? [go('navigate.portability', 'commands.portability', '/settings/portability', ['backup', 'restore', 'import', 'export', 'sdk'])] : []),
+      ...(role === undefined || role === 'owner' ? [
+        go('navigate.backupRestore', 'commands.backupRestore', '/settings/backups', ['backup', 'restore']),
+        go('navigate.dataTransfer', 'commands.dataTransfer', '/settings/data', ['import', 'export', 'ndjson']),
+        go('navigate.apiContract', 'commands.apiContract', '/settings/developer', ['sdk', 'openapi', 'contract']),
+        go('navigate.mcp', 'commands.mcp', '/settings/mcp', ['agent', 'model context protocol']),
+      ] : []),
       ...(role === undefined || role === 'owner' ? [
         {
           id: 'navigate.administrators',

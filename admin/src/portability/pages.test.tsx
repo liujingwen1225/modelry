@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
@@ -40,17 +40,19 @@ function setupFetch(options: { preflight?: unknown } = {}) {
   return fetchMock;
 }
 
-describe('Developer and portability surface', () => {
-  it('shows the contract hash and validates a bundle without writing anything', async () => {
+describe('Settings developer surfaces', () => {
+  it('keeps the legacy portability deep link on backup and restore', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     window.history.pushState({}, '', '/settings/portability');
     const fetchMock = setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Developer and portability', level: 1 })).toBeInTheDocument();
-    expect((await screen.findAllByText('posts')).length).toBeGreaterThan(0);
-    expect(screen.getByTestId('contract-hash')).toHaveTextContent('a'.repeat(64));
-    expect(screen.getByText('2 endpoints')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Backup and restore', level: 1 })).toBeInTheDocument();
+    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
+    expect(within(settingsNavigation).getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByTestId('contract-hash')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Collection import / export' })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith('/admin/api/v1/developer/contract', expect.any(Object));
 
     const file = new File([new Uint8Array([1, 2, 3])], 'bundle.tar', { type: 'application/x-tar' });
     await userEvent.upload(screen.getByLabelText('Validate a backup bundle'), file);
@@ -72,10 +74,40 @@ describe('Developer and portability surface', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: 'Developer and portability', level: 1 });
+    await screen.findByRole('heading', { name: 'Backup and restore', level: 1 });
     const file = new File([new Uint8Array([9])], 'bundle.tar', { type: 'application/x-tar' });
     await userEvent.upload(screen.getByLabelText('Validate a backup bundle'), file);
     await waitFor(() => expect(screen.getByText('Not compatible')).toBeInTheDocument());
     expect(screen.getByText('This bundle was produced by a newer Modelry project format.')).toBeInTheDocument();
+  });
+
+  it('shows Collection data import and export without backup or contract controls', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.pushState({}, '', '/settings/data');
+    const fetchMock = setupFetch();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Data import / export', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Collection import / export' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export NDJSON' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create and download backup' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('contract-hash')).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith('/admin/api/v1/developer/contract', expect.any(Object));
+  });
+
+  it('shows the API Contract and SDK guidance without backup or Collection transfer', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.pushState({}, '', '/settings/developer');
+    const fetchMock = setupFetch();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'API Contract' })).toBeInTheDocument();
+    expect(screen.getByTestId('contract-hash')).toHaveTextContent('a'.repeat(64));
+    expect(screen.getByText('2 endpoints')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download application-api.json' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create and download backup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Export NDJSON' })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/developer/contract', expect.any(Object));
   });
 });

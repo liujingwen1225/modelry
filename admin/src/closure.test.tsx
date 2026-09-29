@@ -56,6 +56,8 @@ describe('Community V0.1.x closure', () => {
   it('covers every accepted V0.1.x surface in both languages', () => {
     const surfaces = [
       'navigation.activity', 'navigation.drift', 'navigation.runtimeSettings', 'navigation.portability',
+      'settings.navigation.project', 'settings.navigation.service', 'settings.navigation.maintenance', 'settings.navigation.developer',
+      'settings.navigation.backupRestore', 'settings.navigation.dataTransfer', 'settings.navigation.apiContract', 'settings.navigation.mcp',
       'navigation.administrators', 'navigation.mail', 'navigation.automations', 'navigation.extensions',
       'navigation.secrets', 'navigation.collections', 'navigation.changes', 'navigation.access',
       'activity.title', 'drift.title', 'runtimeSettings.title', 'portability.title',
@@ -166,7 +168,7 @@ describe('Community V0.1.x closure', () => {
     await userEvent.keyboard('{Control>}k{/Control}');
     const palette = await screen.findByRole('dialog');
     const labels = within(palette).getAllByRole('option').map((option) => option.textContent ?? '');
-    for (const expected of ['Open Activity', 'Open Drift', 'Open Runtime settings', 'Open Developer and portability', 'Open Mail settings', 'Open Administrators']) {
+    for (const expected of ['Open Activity', 'Open Drift', 'Open Runtime settings', 'Open Backup and restore', 'Open Data import / export', 'Open API Contract / SDK', 'Open MCP connection guide', 'Open Mail settings', 'Open Administrators']) {
       expect(labels.join('|')).toContain(expected);
     }
     await userEvent.keyboard('{Escape}');
@@ -183,6 +185,25 @@ describe('Community V0.1.x closure', () => {
     expect(restrictedLabels).toContain('Open Activity');
     expect(restrictedLabels).not.toContain('Open Mail settings');
     expect(restrictedLabels).not.toContain('Open Administrators');
-    expect(restrictedLabels).not.toContain('Open Developer and portability');
+    for (const restrictedLabel of ['Open Backup and restore', 'Open Data import / export', 'Open API Contract / SDK', 'Open MCP connection guide']) {
+      expect(restrictedLabels).not.toContain(restrictedLabel);
+    }
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const adminSidebar = screen.getByRole('navigation', { name: 'Project navigation' });
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Settings' }));
+    const adminSettings = await screen.findByRole('navigation', { name: 'Settings' });
+    expect(within(adminSettings).getByRole('link', { name: 'Status' })).toBeInTheDocument();
+    expect(within(adminSettings).getByRole('link', { name: 'Files & Storage' })).toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'Secrets' })).not.toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'Backup and restore' })).not.toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'Data import / export' })).not.toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'API Contract / SDK' })).not.toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'MCP' })).not.toBeInTheDocument();
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Project access' }));
+    const adminAccess = await screen.findByRole('navigation', { name: 'Project access' });
+    expect(within(adminAccess).getByRole('link', { name: 'Service Accounts' })).toBeInTheDocument();
+    expect(within(adminAccess).getByRole('link', { name: 'Administrators' })).toBeInTheDocument();
+    expect(within(adminAccess).getByRole('link', { name: 'Audit log' })).toBeInTheDocument();
   });
 });

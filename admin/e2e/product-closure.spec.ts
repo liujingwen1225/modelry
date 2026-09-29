@@ -386,7 +386,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const productNavigation = activePage.getByRole('navigation', { name: 'Project navigation' });
     await expect(productNavigation.getByRole('link')).toHaveCount(8);
     expect(await productNavigation.getByRole('link').allTextContents()).toEqual([
-      'Overview', 'Collections', 'API', 'Hooks', 'Automation', 'Changes', 'Access', 'Settings',
+      'Overview', 'Collections', 'API', 'Hooks', 'Automation', 'Model changes', 'Project access', 'Settings',
     ]);
     await expect(activePage.locator('.nav-group__label')).toHaveText(['Build', 'Manage', 'System']);
     await expect(activePage.locator('.overview-recent-work')).toContainText('authors');
@@ -423,23 +423,41 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(productNavigation.getByRole('link', { name: 'Automation' })).toHaveClass(/nav-link--active/);
     const automationNavigation = activePage.getByRole('navigation', { name: 'Automation' });
     await expect(automationNavigation.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/automations?tab=webhooks&q=mail');
-    await expect(automationNavigation.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/automations?tab=jobs&q=mail');
+    await expect(automationNavigation.getByRole('link', { name: 'Scheduled triggers' })).toHaveAttribute('href', '/automations?tab=jobs&q=mail');
     await expect(automationNavigation.getByRole('link', { name: 'Extensions' })).toHaveCount(0);
     await expect(automationNavigation.getByRole('link', { name: 'Secrets' })).toHaveCount(0);
-    await automationNavigation.getByRole('link', { name: 'Event Hooks' }).click();
+    await expect(automationNavigation.getByText('Triggers and delivery')).toBeVisible();
+    await expect(automationNavigation.getByText('Run history')).toBeVisible();
+    await automationNavigation.getByRole('link', { name: 'Event triggers' }).click();
     await expect(activePage).toHaveURL(`${runtimeURL}/automations?tab=eventHooks&q=mail`);
 
     await activePage.goto(`${runtimeURL}/access`);
-    const accessNavigation = activePage.getByRole('navigation', { name: 'Access' });
-    await expect(accessNavigation.getByRole('link', { name: 'Service Accounts / API Keys' })).toBeVisible();
+    const accessNavigation = activePage.getByRole('navigation', { name: 'Project access' });
+    await expect(accessNavigation.getByRole('link', { name: 'Service Accounts' })).toBeVisible();
+    await expect(accessNavigation.getByText('Identity')).toBeVisible();
+    await expect(accessNavigation.getByText('Security')).toBeVisible();
     await expect(accessNavigation.getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/administrators');
-    await expect(accessNavigation.getByRole('link', { name: 'Audit' })).toHaveAttribute('href', '/access/audit');
+    await expect(accessNavigation.getByRole('link', { name: 'Audit log' })).toHaveAttribute('href', '/access/audit');
 
     await productNavigation.getByRole('link', { name: 'Settings' }).click();
     const settingsNavigation = activePage.getByRole('navigation', { name: 'Settings' });
-    for (const label of ['General / Status', 'Runtime', 'Files & Storage', 'Mail', 'Backup / Restore', 'Activity', 'Drift']) {
+    for (const label of ['Status', 'Runtime', 'Files & Storage', 'Mail', 'Secrets', 'Backup and restore', 'Activity', 'Storage consistency', 'Data import / export', 'API Contract / SDK', 'MCP']) {
       await expect(settingsNavigation.getByRole('link', { name: label })).toBeVisible();
     }
+    for (const label of ['Project', 'Service', 'Maintenance', 'Developer']) await expect(settingsNavigation.getByText(label)).toBeVisible();
+
+    await activePage.goto(`${runtimeURL}/settings/portability`);
+    await expect(activePage.getByRole('heading', { name: 'Backup and restore', level: 1 })).toBeVisible();
+    await expect(settingsNavigation.getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('aria-current', 'page');
+    await activePage.goto(`${runtimeURL}/settings/data`);
+    await expect(activePage.getByRole('heading', { name: 'Data import / export', level: 1 })).toBeVisible();
+    await expect(activePage.getByRole('button', { name: 'Create and download backup' })).toHaveCount(0);
+    await activePage.goto(`${runtimeURL}/settings/developer`);
+    await expect(activePage.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
+    await expect(activePage.getByTestId('contract-hash')).toBeVisible();
+    await activePage.goto(`${runtimeURL}/settings/mcp`);
+    await expect(activePage.getByRole('heading', { name: 'MCP', level: 1 })).toBeVisible();
+    await expect(activePage.getByText(/Model changes go through review and apply, and actions are audited/)).toBeVisible();
 
     await activePage.goto(`${runtimeURL}/collections`);
     await activePage.getByRole('button', { name: /Search commands/ }).focus();

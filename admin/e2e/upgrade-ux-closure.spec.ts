@@ -368,9 +368,9 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('region', { name: '运行时与存储' })).toBeVisible();
   await expect(page.locator('.overview-agent-card__command code')).toHaveText('modelry mcp --api-url "<API 源站地址>" --api-key "<服务账号 API Key>"');
   await page.goto(runtimeURL + '/settings');
-  await expect(page.getByRole('heading', { name: '设置', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '状态', level: 1 })).toBeVisible();
   await page.locator('.locale-switcher select').selectOption('en');
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Status', level: 1 })).toBeVisible();
   await page.goto(runtimeURL + '/');
   await expect(page.locator('.overview-agent-card__command code')).toHaveText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>');
   await page.goto(runtimeURL + '/settings/runtime');
@@ -498,9 +498,9 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
     { label: 'Schema', path: `/collections/${encodeURIComponent(longCollectionId)}/schema?view=indexes`, title: longCollectionName, section: 'Schema' },
     { label: 'Collection API', path: `/collections/${encodeURIComponent(longCollectionId)}/api`, title: `${longCollectionName} API` },
     { label: 'API Workspace', path: '/api', title: 'API Workspace' },
-    { label: 'Automation', path: '/automations?tab=webhooks', title: 'Automations' },
-    { label: 'Access', path: '/access', title: 'Access' },
-    { label: 'Settings', path: '/settings', title: 'Settings' },
+    { label: 'Automation', path: '/automations?tab=webhooks', title: 'Automation' },
+    { label: 'Project access', path: '/access', title: 'Project access' },
+    { label: 'Settings', path: '/settings', title: 'Status' },
   ];
   for (const surface of responsiveSurfaces) {
     await page.goto(runtimeURL + surface.path);

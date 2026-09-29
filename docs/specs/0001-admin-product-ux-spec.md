@@ -41,8 +41,8 @@ Build
   Automation
 
 Manage
-  Changes
-  Access
+  Model changes
+  Project access
 
 System
   Settings
@@ -53,29 +53,43 @@ System
 ~~~text
 Automation
   Webhooks
-  Event Hooks
-  Jobs
-  Deliveries
+  Triggers and delivery
+    Webhooks
+    Event triggers
+    Scheduled triggers
+  Run history
+    Delivery history
 
-Access
-  Service Accounts / API Keys
-  Administrators
-  Audit
+Project access
+  Identity
+    Service Accounts
+    Administrators
+  Security
+    Audit log
 
 Settings
-  General
-  Runtime
-  Files & Storage
-  Mail
-  Backup & Restore
-  Diagnostics
+  Project
+    Status
+    Runtime
+  Service
+    Files & Storage
+    Mail
+    Secrets
+  Maintenance
+    Backup and restore
     Activity
-    Drift
+    Storage consistency
+  Developer
+    Data import / export
+    API Contract / SDK
+    MCP
 ~~~
 
-Hooks 是独立的一级开发者能力，承载已交付的后端扩展与生命周期 Hooks，不归入 Automation；产品入口显示为 Hooks，并映射到既有 `/extensions` 路由。Hooks 页面可保留 Extension Runtime 技术细节。Secrets 是支撑能力，不固定归入 Automation；用户可从相关产品上下文中的 `Manage Secrets` 入口发现，既有 `/secrets` 路由和 Deep Link 继续可访问。
+Hooks 是独立的一级开发者能力，承载已交付的后端扩展与 Collection Record 生命周期 Hooks，不归入 Automation；产品入口显示为 Hooks，并映射到既有 `/extensions` 路由。Hooks 页面可保留 Extension Runtime 技术细节。Automation 中的事件触发器表示 Collection Record Event 到 Webhook；定时触发表示 UTC Cron 到 Webhook，不执行任意代码。
 
-Automation、Access 与 Settings 的产品区域入口分别是 `/automations`、`/access` 与 `/settings`；各区域的 contextual links 使用已实现的子页面和 query context。Activity 与 Drift 属于 Settings 的 Diagnostics；Administrators 与 Audit 属于 Access；Storage、Mail 与 Portability 通过 Settings 相关页面进入。Settings 的 General 页面集中展示 Runtime、Database 与 Storage 诊断；Runtime settings 页面可编辑已支持的运行时配置。
+Automation、Project access 与 Settings 的产品区域入口分别是 `/automations`、`/access` 与 `/settings`；各区域的 contextual links 使用已实现的子页面和 query context。服务账号与管理员属于 Project access 身份；API Key 在所属 Service Account 详情内管理；Audit log 属于 Project access 安全记录。Status 页面集中展示 Runtime、Database 与 Storage 健康状态；Runtime 页面可编辑已支持的运行时配置。Activity 与 Storage consistency 属于 Maintenance。Secrets 是服务配置页面，可从 Settings 稳定进入，也可从 Hooks、Files & Storage 与 Mail 的相关上下文发现。
+
+Backup and restore、Data import / export 与 API Contract / SDK 是三个独立页面。历史 `/settings/portability` 深链继续打开 Backup and restore；此页面不呈现数据导入 / 导出或 SDK Contract 内容。MCP 在 Settings → Developer 提供连接说明，复用现有 `modelry mcp` CLI 与已授权的 Control Plane API，不建立权限、变更生命周期或审计旁路。
 
 不设独立一级入口：
 
@@ -87,7 +101,7 @@ Automation、Access 与 Settings 的产品区域入口分别是 `/automations`�
 - Auth
 - Requests
 
-Requests 属于 Global API；Hooks 是独立一级入口并映射到 `/extensions`；Secrets 通过相关上下文入口发现，不设固定 Automation 子导航且保留 `/secrets` Deep Link；Activity 与 Drift 属于 Settings 的 Diagnostics；Administrators 与 Audit 属于 Access。
+Requests 属于 Global API；Hooks 是独立一级入口并映射到 `/extensions`；Secrets 通过 Settings 服务分组和相关服务页面的上下文入口发现，并保留 `/secrets` Deep Link；Activity 与 Storage consistency 属于 Settings Maintenance；Administrators 与 Audit log 属于 Project access。
 
 Command Palette、English / Simplified Chinese 与 Light / Dark Theme 是当前全局产品操作，不是未来占位项。
 
@@ -138,8 +152,8 @@ Desktop：
 │ Hooks             │                                                      │
 │ Automation        │                                                      │
 │ Manage            │                                                      │
-│ Changes           │                                                      │
-│ Access            │                                                      │
+│ Model changes     │                                                      │
+│ Project access    │                                                      │
 │ System            │                                                      │
 │ Settings          │                                                      │
 └───────────────────┴──────────────────────────────────────────────────────┘
@@ -996,13 +1010,13 @@ V0.1 不记录展示：
 - Full Response Body
 - unrestricted Raw Header / Query values
 
-# 18. Changes
+# 18. Model Changes
 
 ## 目的
 
 > 哪些 Model Changes 还没完成？哪些需要我处理？历史发生了什么？
 
-Changes 是恢复 / 汇总 / History Surface，不是每次编辑的强制中转页。
+Model changes 是 Collection Model / Schema 待应用变更、复核、应用、失败恢复和已应用历史的工作区，不是每次编辑的强制中转页，也不暗示记录所有系统变更。
 
 固定：
 
@@ -1070,24 +1084,24 @@ Retry 创建新的 Apply Attempt，但主 UI 只表达：
 
 History 展示 Durable Applied Facts。
 
-# 19. Access
+# 19. Project Access
 
-Access 是 Control Plane 身份、Permission 与 Audit 工作区。当前 contextual navigation 包含：
+Project access 管理当前项目的 Control Plane 身份、Permission 与 Audit。Collection Application Access Rules 仍位于 Collection → Security。当前 contextual navigation 包含：
 
 ~~~text
-[ Service Accounts / API Keys ] [ Administrators ] [ Audit ]
+[ Service Accounts ] [ Administrators ] [ Audit log ]
 ~~~
 
-Collection 的 Application Access Rules 仍位于 Collection → Security；它与控制平面 Access 分开。
+Collection 的 Application Access Rules 仍位于 Collection → Security；它与 Project access 分开。
 
-## 19.1 Service Accounts / API Keys
+## 19.1 Service Accounts
 
-当前 Access 页面管理 Owner 可委派的 Service Accounts、其 Permission 及 API Keys。已交付 Administrators 管理；Owner 可为其他管理员配置受支持的控制平面访问范围。Application Service Account Permission 与 Admin Administrator Permission 是不同的身份 / 授权路径。
+当前 Project access 页面管理 Owner 可委派的 Service Accounts 及其 Permission。API Key 是 Service Account 的 Credential，只在对应详情内创建、查看 metadata 与撤销。已交付 Administrators 管理；Owner 可为其他管理员配置受支持的控制平面访问范围。Application Service Account Permission 与 Admin Administrator Permission 是不同的身份 / 授权路径。
 
 ~~~text
-Access                                      [ + Create service account ]
+Project access                              [ + Create service account ]
 
-Service accounts / API Keys
+Service accounts
 Name              Permission      Status      Last used
 ci-deploy         Custom          Active      1h
 ~~~
@@ -1129,7 +1143,7 @@ API Key Plaintext 只 One-time Reveal。
 
 ## 19.2 Administrators
 
-Administrators 是 Access 的 contextual destination。它管理已交付的 Admin administrator accounts 与其控制平面 Permission；它不改变 Application Auth、Application User 或 Collection Access Rules 的领域语义。
+Administrators 是 Project access 的 contextual destination。它管理已交付的 Admin administrator accounts 与其控制平面 Permission；它不改变 Application Auth、Application User 或 Collection Access Rules 的领域语义。
 
 ## 19.3 Audit
 
@@ -1148,21 +1162,32 @@ Audit 是 Control Plane Security / Governance Durable Fact。
 
 # 20. Settings
 
-Settings 是系统状态、运行配置与运维能力的 contextual 工作区，当前页面层级为：
+Settings 是配置和维护 Modelry 的 contextual 工作区，当前页面层级为：
 
 ~~~text
 Settings
-  General / Diagnostics
-  Runtime
-  Files & Storage
-  Mail
-  Backup & Restore
-  Diagnostics
+  Project
+    Status
+    Runtime
+  Service
+    Files & Storage
+    Mail
+    Secrets
+  Maintenance
+    Backup and restore
     Activity
-    Drift
+    Storage consistency
+  Developer
+    Data import / export
+    API Contract / SDK
+    MCP
 ~~~
 
-General 页面展示 Runtime、Database 与 Storage 健康状态和必要的诊断；Runtime settings 已支持编辑实际暴露的配置并说明其来源及是否需要重启。Files & Storage、Mail、Backup & Restore、Activity、Drift 都是已实现目的地，不是占位页面。
+Status 页面展示 Runtime、Database 与 Storage 健康状态；Runtime 已支持编辑实际暴露的配置并说明其来源及是否需要重启。Secrets 管理供 Modelry 服务访问外部资源的保密配置，供 Hooks、Storage 与 Mail 等服务使用。Backup and restore 只负责创建备份、恢复预检与 CLI 恢复指引。
+
+Data import / export 只负责 Collection NDJSON 导入与导出。API Contract / SDK 只负责 Application API Contract、下载与 `modelry generate` 指引。MCP 页面复用既有连接能力，并说明 Service Account 权限、模型变更生命周期与审计。历史 `/settings/portability` Deep Link 保留并显示 Backup and restore。
+
+Activity 与 Storage consistency 是独立维护目的地，不与其它设置表面混合。Files & Storage、Mail、Secrets、Activity 与 Storage consistency 都是已实现页面，不是占位入口。
 
 子页面按实际运行时能力展示可用设置与恢复路径。不得把尚未支持的配置伪装成可编辑，也不得把 settings mutations 与 Collection Schema Pending Draft 混合。
 
@@ -1425,8 +1450,8 @@ Admin V0.1 必须满足：
 - Records CRUD 不进入 Schema Change；
 - Access Rules Preset-first；
 - Runner Error 一键进入对应 Request Detail；
-- Changes 主 UI 不要求用户理解 ChangeSet / Apply Attempt / Migration；
-- Access UI 不要求理解 Principal / Capability / Credential；
+- Model changes 主 UI 不要求用户理解 ChangeSet / Apply Attempt / Migration；
+- Project access UI 不要求理解 Principal / Capability / Credential；
 - Request 与 Audit 不混淆；
 - 已实现的 Extensions / Secrets / Activity 等能力通过真实产品页面进入，不以未实现 Placeholder 代替；
 - Search / Filter / Sort / Pagination / Deep Link Context 保持；
@@ -1438,16 +1463,16 @@ Admin V0.1 必须满足：
 以下能力已进入当前 Admin / Runtime 产品，不再按“未来能力”或 Placeholder 描述：
 
 - Realtime subscriptions；
-- 独立一级入口 Hooks（映射到既有 Extensions 路由）与上下文可发现的 Secrets；
-- Automation：Webhooks、Event Hooks、Jobs、Deliveries；
+- 独立一级入口 Hooks（映射到既有 Extensions 路由）与 Settings 中的 Secrets；
+- Automation：Webhooks、Event triggers、Scheduled triggers、Delivery history；
 - Activity 与 Drift；
-- Access 中的多管理员、Service Accounts 与 API Keys；
+- Project access 中的多管理员和 Service Accounts，API Keys 在所属 Service Account 详情内管理；
 - Collection Security 中的 Policy Simulation；
 - 可编辑 Runtime Settings；
-- Import / Export 与 Backup / Restore；
+- 分离的 Data import / export、Backup and restore、API Contract / SDK 与 MCP 页面；
 - Admin i18n（English / Simplified Chinese）、Theme 与 Command Palette。
 
-Hooks 作为独立一级开发者能力进入；其他高级运维能力按 Automation、Access、Settings contextual navigation 渐进式暴露，不把内部模块数等同于一级导航数量。UI 文案和入口不得改写底层稳定 Domain / Contract 语义。此清单描述当前已交付产品面，不承诺 Enterprise、PostgreSQL 或其它 Issue 未定义路线。
+Hooks 作为独立一级开发者能力进入；其他高级能力按 Automation、Project access、Settings contextual navigation 渐进式暴露，不把内部模块数等同于一级导航数量。UI 文案和入口不得改写底层稳定 Domain / Contract 语义。此清单描述当前已交付产品面，不承诺 Enterprise、PostgreSQL 或其它 Issue 未定义路线。
 
 # 31. V0.1.x Admin Shell 与全局产品操作
 
@@ -1481,9 +1506,9 @@ Command Palette 是通过共享、可扩展的 Command Registry 注册的操作�
 - Command visibility 依据当前已认证 Admin session、角色 / Permission、route、resource 与 command context；只隐藏无权或不相关的入口，不替代服务端授权。
 - Owner 与 Administrator 使用 Admin Control Plane session / Permission；Application Service Account / API Key 与 Application User Credential 均不是 Admin session，也不得复用于 Admin authorization。
 - Command visibility 仅控制发现和调用入口；Runtime API 对 Admin session 与 Permission 的检查仍是授权权威，不能由客户端命令注册替代或绕过。
-- 可用命令限于真实存在的导航页、近期 Collection、当前 Collection tabs 与 Create actions、Automation destinations、适用的 Pending / Failed Change、Access / Settings destinations，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
+- 可用命令限于真实存在的导航页、近期 Collection、当前 Collection tabs 与 Create actions、Automation destinations、适用的 Pending / Failed Model change、Project access / Settings destinations，以及确有问题时的诊断目的地。无实现的能力不显示占位命令。
 - 导航只在语义匹配时保留 URL/deep-link context；切换无关的一级工作区不继承另一页面的 query/hash。
 
 ## 31.4 Acceptance
 
-使用 Admin tests/build 与真实 Chromium 验证 Shell 双语、locale 持久化与无重载切换、当前深链状态保留、数据标识不变、Theme 持久化、平台快捷键、keyboard/focus 行为、命令上下文可见性与实际导航，以及 Automation / Access / Settings contextual navigation 和多管理员 Permission 下的真实可见性。完整浏览器发布门禁及 Computer Use 职责见 SPEC-0003；此节不改变底层 Domain / Contract 或 V0.1 Core Flows。
+使用 Admin tests/build 与真实 Chromium 验证 Shell 双语、locale 持久化与无重载切换、当前深链状态保留、数据标识不变、Theme 持久化、折叠 Sidebar、平台快捷键、keyboard/focus 行为、命令上下文可见性与实际导航，以及 Automation / Project access / Settings contextual navigation、旧深链和 Owner / Administrator Permission 下的真实可见性。完整浏览器发布门禁及 Computer Use 职责见 SPEC-0003；此节不改变底层 Domain / Contract 或 V0.1 Core Flows。

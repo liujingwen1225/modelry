@@ -207,11 +207,14 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   expect(settings.status).toBe(200);
   expect((JSON.parse(settings.text) as { data: { requestRetentionDays: { value: string } } }).data.requestRetentionDays.value).toBe('14');
 
-  await page.goto(runtimeURL + '/settings/portability');
-  await expect(page.getByRole('heading', { name: 'Developer and portability', level: 1 })).toBeVisible();
+  await page.goto(runtimeURL + '/settings/developer');
+  await expect(page.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
   const hash = await page.getByTestId('contract-hash').textContent();
   expect(hash).toMatch(/^[0-9a-f]{64}$/);
   latestContractHash = hash ?? '';
+
+  await page.goto(runtimeURL + '/settings/portability');
+  await expect(page.getByRole('heading', { name: 'Backup and restore', level: 1 })).toBeVisible();
 
   // Backup：Runtime 产生一个带 manifest 的 tar 归档。
   const downloadPromise = page.waitForEvent('download');
@@ -240,6 +243,8 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   await expect(page.getByText('Not compatible', { exact: true })).toBeVisible();
 
   // Export / Import：导出写入 NDJSON，导入通过 Record 语义创建记录。
+  await page.goto(runtimeURL + '/settings/data');
+  await expect(page.getByRole('heading', { name: 'Data import / export', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Export NDJSON' }).click();
   await expect(page.getByLabel('NDJSON stream')).toHaveValue(/portable/, { timeout: 15_000 });
   await page.getByLabel('NDJSON stream').fill(
@@ -298,8 +303,8 @@ test('WP28 a CLI restore of an Admin bundle restarts as a complete project', asy
   await expect(page).not.toHaveURL(/\/login/);
 
   // 恢复出来的项目必须在 Admin 上呈现同一个 Applied Model。
-  await page.goto(restored.url + '/settings/portability');
-  await expect(page.getByRole('heading', { name: 'Developer and portability', level: 1 })).toBeVisible();
+  await page.goto(restored.url + '/settings/developer');
+  await expect(page.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
   await expect(page.getByTestId('contract-hash')).toHaveText(latestContractHash);
 
   const listed = await requestJSON(page, 'GET', '/admin/api/v1/collections/' + latestCollectionId + '/records?limit=10');

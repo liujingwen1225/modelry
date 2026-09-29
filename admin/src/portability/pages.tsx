@@ -14,6 +14,7 @@ import './portability.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 type Collection = { id: string; name: string };
+type Surface = 'backup' | 'data' | 'contract';
 
 function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -26,7 +27,7 @@ function saveBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-export function PortabilityPage() {
+function PortabilitySurface({ surface }: { surface: Surface }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
@@ -43,35 +44,30 @@ export function PortabilityPage() {
   useEffect(() => {
     const controller = new AbortController();
     setState('loading');
-    Promise.all([
-      fetchApplicationAPIContract(controller.signal),
-      listAllCollections(controller.signal).catch(() => [] as Collection[]),
-    ]).then(
-      ([value, listed]) => {
-        if (controller.signal.aborted) return;
-        setContract(value);
-        setCollections(listed.map((item) => ({ id: item.id, name: item.name })));
-        setSelected(listed[0]?.id ?? '');
-        setState('ready');
-      },
-      (reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(reason);
-        setState('error');
-      },
+    const load = surface === 'contract'
+      ? fetchApplicationAPIContract(controller.signal).then((value) => { setContract(value); })
+      : surface === 'data'
+        ? listAllCollections(controller.signal).then((listed) => {
+          setCollections(listed.map((item) => ({ id: item.id, name: item.name })));
+          setSelected(listed[0]?.id ?? '');
+        })
+        : Promise.resolve();
+    void load.then(
+      () => { if (!controller.signal.aborted) setState('ready'); },
+      (reason: unknown) => { if (!controller.signal.aborted) { setError(reason); setState('error'); } },
     );
     return () => controller.abort();
-  }, []);
+  }, [surface]);
 
   const commands = useMemo<AdminCommand[]>(() => [
     {
-      id: 'surface.portability',
+      id: `surface.${surface}`,
       category: 'commands.categories.system',
-      label: () => t('commands.portability'),
+      label: () => t(surface === 'backup' ? 'commands.backupRestore' : surface === 'data' ? 'commands.dataTransfer' : 'commands.apiContract'),
       keywords: () => [t('portability.searchKeywords')],
-      execute: () => navigate('/settings/portability'),
+      execute: () => navigate(surface === 'backup' ? '/settings/backups' : surface === 'data' ? '/settings/data' : '/settings/developer'),
     },
-  ], [navigate, t]);
+  ], [navigate, surface, t]);
   useRegisterCommands(commands);
 
   async function backup() {
@@ -160,19 +156,22 @@ export function PortabilityPage() {
       </div>
     );
   }
-  if (!contract) return null;
+  if (surface === 'contract' && !contract) return null;
+
+  const titleKey = surface === 'backup' ? 'portability.surfaces.backupTitle' : surface === 'data' ? 'portability.surfaces.dataTitle' : 'portability.surfaces.contractTitle';
+  const descriptionKey = surface === 'backup' ? 'portability.surfaces.backupDescription' : surface === 'data' ? 'portability.surfaces.dataDescription' : 'portability.surfaces.contractDescription';
 
   return (
     <div className="page-stack portability-page">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">{t('portability.eyebrow')}</p>
-          <h1>{t('portability.title')}</h1>
-          <p className="page-description">{t('portability.description')}</p>
+          <p className="eyebrow">{t(surface === 'backup' ? 'settings.navigation.maintenance' : 'settings.navigation.developer')}</p>
+          <h1>{t(titleKey as TranslationKey)}</h1>
+          <p className="page-description">{t(descriptionKey as TranslationKey)}</p>
         </div>
       </header>
 
-      <Surface className="portability-card" variant="standard">
+      {surface === 'backup' && <Surface className="portability-card" variant="standard">
         <div className="portability-card__heading">
           <span className="scope-icon"><Package aria-hidden="true" size={17} /></span>
           <div>
@@ -222,9 +221,9 @@ export function PortabilityPage() {
             <p className="portability-hint">{t('portability.restore.adminHint')}</p>
           </div>
         )}
-      </Surface>
+      </Surface>}
 
-      <Surface className="portability-card" variant="standard">
+      {surface === 'data' && <Surface className="portability-card" variant="standard">
         <h2>{t('portability.transfer.title')}</h2>
         <p className="section-description">{t('portability.transfer.description')}</p>
         {collections.length === 0
@@ -261,9 +260,9 @@ export function PortabilityPage() {
               )}
             </>
           )}
-      </Surface>
+      </Surface>}
 
-      <Surface className="portability-card" variant="standard">
+      {surface === 'contract' && contract && <Surface className="portability-card" variant="standard">
         <h2>{t('portability.contract.title')}</h2>
         <p className="section-description">{t('portability.contract.description')}</p>
         <dl className="portability-facts">
@@ -291,10 +290,15 @@ export function PortabilityPage() {
             </li>
           ))}
         </ul>
-      </Surface>
+      </Surface>}
 
       {error !== undefined && <ErrorState description={actionMessage(error)} title={t('portability.actionFailed')} />}
       {notice !== null && <p role="status">{notice}</p>}
     </div>
   );
 }
+
+export function BackupRestorePage() { return <PortabilitySurface surface="backup" />; }
+export function DataTransferPage() { return <PortabilitySurface surface="data" />; }
+export function APIContractPage() { return <PortabilitySurface surface="contract" />; }
+export function PortabilityPage() { return <BackupRestorePage />; }
