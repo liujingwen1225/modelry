@@ -414,80 +414,157 @@ export function CreateCollectionPage() {
   }
 
   return (
-    <main className="focused-workspace collection-create-page">
-      <Link className="text-link text-link--muted collection-back" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
-      <div className="collection-create-intro"><p className="eyebrow">{t('collections.buildEyebrow')}</p><h1>{t('collections.create')}</h1><p>{t('collections.createDescription')}</p></div>
+    <main className="mx-auto flex w-full max-w-[880px] min-w-0 flex-col gap-6">
+      <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
+
+      <header className="min-w-0">
+        <p className="eyebrow">{t('collections.buildEyebrow')}</p>
+        <h1>{t('collections.create')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.createDescription')}</p>
+      </header>
+
       {requestError !== undefined && (() => {
         const copy = apiErrorCopy(requestError, t('collections.createFailed'), t, errorMessage);
         const api = requestError instanceof ApiClientError ? requestError.apiError : undefined;
-        return <ErrorState className="collection-form-error" description={copy.message} title={copy.title}>
-          {api?.details.violations && Array.isArray(api.details.violations) && <ul>{api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>
-            {typeof violation.code === 'string' && <code>{violation.code}</code>} {(typeof violation.code === 'string' ? validationMessage(violation.code) : undefined) ?? t('collections.validation.reviewField')}
-          </li>)}</ul>}
-        </ErrorState>;
+        return (
+          <ErrorState description={copy.message} title={copy.title}>
+            {api?.details.violations && Array.isArray(api.details.violations) && <ul className="mt-2 flex list-none flex-col gap-1 p-0">
+              {api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>
+                {typeof violation.code === 'string' && <code className="mr-1.5 text-[10px]">{violation.code}</code>}
+                {(typeof violation.code === 'string' ? validationMessage(violation.code) : undefined) ?? t('collections.validation.reviewField')}
+              </li>)}
+            </ul>}
+          </ErrorState>
+        );
       })()}
 
-      <form className="collection-create-form" noValidate onSubmit={(event) => void submit(event)}>
-        <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.detailsEyebrow')}</p><h2>{t('collections.detailsTitle')}</h2></div></div>
-          <fieldset className="collection-type-picker"><legend>{t('collections.type')}</legend>
-            {(['Normal', 'Auth'] as const).map((option) => <label className={`collection-type-card${type === option ? ' is-selected' : ''}`} key={option}>
-              <input aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} checked={type === option} name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
-              <span className="collection-type-card__check" aria-hidden="true"><Check size={14} /></span>
-              <span className="collection-type-card__text"><strong>{t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')}</strong><span>{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span></span>
-            </label>)}
+      <form className="flex min-w-0 flex-col gap-5" noValidate onSubmit={(event) => void submit(event)}>
+        <Surface className="flex min-w-0 flex-col gap-5 p-5" variant="standard">
+          <div><p className="eyebrow">{t('collections.detailsEyebrow')}</p><h2>{t('collections.detailsTitle')}</h2></div>
+
+          {/* Spec 0001 §6.2：类型选择留在名称旁边，Auth 选项随后就地出现。 */}
+          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend className="mb-1 text-[11px] font-semibold text-ink-secondary">{t('collections.type')}</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(['Normal', 'Auth'] as const).map((option) => {
+                const selected = type === option;
+                return (
+                  <label
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 transition-colors ${selected ? 'border-primary bg-accent' : 'border-input bg-card hover:border-subtle-foreground'}`}
+                    key={option}
+                  >
+                    <input aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} checked={selected} className="mt-0.5" name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
+                    <span className="min-w-0">
+                      <strong className="block text-xs font-semibold text-foreground">{t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')}</strong>
+                      <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </fieldset>
-          <div className="collection-form-grid">
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <FormField htmlFor="collection-name" label={t('collections.nameLabel')} hint={t('collections.nameHint')}>
               <input aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'collection-name-error' : undefined} autoComplete="off" id="collection-name" onChange={(event) => { setName(event.target.value); setNameError(''); setRequestError(undefined); }} value={name} />
             </FormField>
-            {nameError && <p className="collection-field-error" id="collection-name-error" role="alert">{nameError}</p>}
+            {nameError && <p className="m-0 self-start text-[11px] font-semibold text-danger" id="collection-name-error" role="alert">{nameError}</p>}
             <FormField htmlFor="collection-description" label={t('collections.descriptionLabel')} hint={t('collections.descriptionHint')}>
               <textarea id="collection-description" onChange={(event) => setDescription(event.target.value)} rows={2} value={description} />
             </FormField>
           </div>
         </Surface>
 
-        <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.systemEyebrow')}</p><h2>{t('collections.systemTitle')}</h2><p>{t('collections.systemDescription')}</p></div></div>
-          <div className="system-fields-table" role="table" aria-label={t('collections.systemTitle')}>
-            <div className="system-fields-table__head" role="row"><span role="columnheader">{t('collections.systemName')}</span><span role="columnheader">{t('collections.systemType')}</span><span role="columnheader">{t('collections.systemAccess')}</span></div>
-            {SYSTEM_FIELDS.map((field) => <div className="system-fields-table__row" key={field.name} role="row"><strong role="cell">{field.name}</strong><span role="cell">{t(field.name === 'id' ? 'collections.systemId' : field.name === 'createdAt' ? 'collections.systemCreatedTime' : 'collections.systemUpdatedTime')}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</span></div>)}
-            {type === 'Auth' && <div className="system-fields-table__row system-fields-table__row--auth" role="row"><strong role="cell">email</strong><span role="cell">{t('collections.emailIdentifier')}</span><span className="system-field-lock" role="cell"><Shield aria-hidden="true" size={13} />{t('collections.requiredUnique')}</span></div>}
+        <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+          <div><p className="eyebrow">{t('collections.systemEyebrow')}</p><h2>{t('collections.systemTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.systemDescription')}</p></div>
+          <Table aria-label={t('collections.systemTitle')}>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">{t('collections.systemName')}</TableHead>
+                <TableHead scope="col">{t('collections.systemType')}</TableHead>
+                <TableHead scope="col">{t('collections.systemAccess')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {SYSTEM_FIELDS.map((field) => (
+                <TableRow key={field.name}>
+                  <TableHead className="bg-transparent" scope="row"><strong className="font-mono font-semibold text-foreground">{field.name}</strong></TableHead>
+                  <TableCell>{t(field.name === 'id' ? 'collections.systemId' : field.name === 'createdAt' ? 'collections.systemCreatedTime' : 'collections.systemUpdatedTime')}</TableCell>
+                  <TableCell><Badge variant="outline"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {type === 'Auth' && (
+                <TableRow>
+                  <TableHead className="bg-transparent" scope="row"><strong className="font-mono font-semibold text-foreground">email</strong></TableHead>
+                  <TableCell>{t('collections.emailIdentifier')}</TableCell>
+                  <TableCell><Badge variant="outline"><Shield aria-hidden="true" size={13} />{t('collections.requiredUnique')}</Badge></TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Surface>
+
+        {type === 'Auth' && (
+          <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+            <div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2>{t('collections.authTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.authDescription')}</p></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
+                <span className="min-w-0">
+                  <strong className="block text-xs font-semibold text-foreground">{t('collections.emailPassword')}</strong>
+                  <small className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t('collections.emailPasswordHint')}</small>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-2 text-[11px] text-ink-secondary">
+                  <input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />
+                  {t('collections.enabled')}
+                </span>
+              </label>
+              <label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
+                <span className="min-w-0">
+                  <strong className="block text-xs font-semibold text-foreground">{t('collections.selfRegistration')}</strong>
+                  <small className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t('collections.selfRegistrationHint')}</small>
+                </span>
+                <input aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} className="mt-0.5 shrink-0" onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" />
+              </label>
+              <FormField htmlFor="session-duration" label={t('collections.sessionDuration')} hint={t('collections.sessionDurationHint')}>
+                <input id="session-duration" min={1} onChange={(event) => setAuthentication((value) => ({ ...value, sessionDurationDays: Number(event.target.value) }))} type="number" value={authentication.sessionDurationDays} />
+              </FormField>
+            </div>
+          </Surface>
+        )}
+
+        <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><p className="eyebrow">{t('collections.initialEyebrow')}</p><h2>{t('collections.initialTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.initialDescription')}</p></div>
+            <Badge variant="outline">{collectionCount(fields.length, 'field', t)}</Badge>
+          </div>
+          {targetsError && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning" role="status">
+              <CircleAlert aria-hidden="true" size={15} />
+              <span className="min-w-0 flex-1">{t('collections.targetsUnavailable')}</span>
+              <Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button>
+            </div>
+          )}
+          <div className="flex min-w-0 flex-col gap-3">
+            {fields.map((field, index) => <FieldEditorRow
+              errors={fieldErrors[field.key] ?? {}}
+              field={field}
+              index={index}
+              key={field.key}
+              onEnter={handleFieldEnter}
+              onRemove={() => { if (fields.length > 1) setFields((current) => current.filter((item) => item.key !== field.key)); }}
+              onUpdate={(patch) => updateField(field.key, patch)}
+              removable={fields.length > 1}
+              targets={targets}
+              targetsLoading={targetsLoading}
+            />)}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.addField')}</Button>
+            <p className="m-0 text-[10px] text-muted-foreground"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px]">Enter</kbd> {t('collections.enterHint')}</p>
           </div>
         </Surface>
 
-        {type === 'Auth' && <Surface className="collection-create-section auth-initial-settings" variant="standard">
-          <div className="collection-section-heading"><div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2>{t('collections.authTitle')}</h2><p>{t('collections.authDescription')}</p></div></div>
-          <div className="auth-default-grid">
-            <label className="auth-default-row"><span><strong>{t('collections.emailPassword')}</strong><small>{t('collections.emailPasswordHint')}</small></span><span className="auth-default-control"><input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />{t('collections.enabled')}</span></label>
-            <label className="auth-default-row"><span><strong>{t('collections.selfRegistration')}</strong><small>{t('collections.selfRegistrationHint')}</small></span><input aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" /></label>
-            <FormField htmlFor="session-duration" label={t('collections.sessionDuration')} hint={t('collections.sessionDurationHint')}>
-              <input id="session-duration" min={1} onChange={(event) => setAuthentication((value) => ({ ...value, sessionDurationDays: Number(event.target.value) }))} type="number" value={authentication.sessionDurationDays} />
-            </FormField>
-          </div>
-        </Surface>}
-
-        <Surface className="collection-create-section" variant="standard">
-          <div className="collection-section-heading collection-section-heading--fields"><div><p className="eyebrow">{t('collections.initialEyebrow')}</p><h2>{t('collections.initialTitle')}</h2><p>{t('collections.initialDescription')}</p></div><span className="collection-field-count">{collectionCount(fields.length, 'field', t)}</span></div>
-          {targetsError && <div className="collection-inline-warning" role="status"><CircleAlert aria-hidden="true" size={15} /><span>{t('collections.targetsUnavailable')}</span><Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button></div>}
-          {fields.map((field, index) => <FieldEditorRow
-            errors={fieldErrors[field.key] ?? {}}
-            field={field}
-            index={index}
-            key={field.key}
-            onEnter={handleFieldEnter}
-            onRemove={() => { if (fields.length > 1) setFields((current) => current.filter((item) => item.key !== field.key)); }}
-            onUpdate={(patch) => updateField(field.key, patch)}
-            removable={fields.length > 1}
-            targets={targets}
-            targetsLoading={targetsLoading}
-          />)}
-          <Button className="collection-add-field" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.addField')}</Button>
-          <p className="collection-enter-hint"><kbd>Enter</kbd> {t('collections.enterHint')}</p>
-        </Surface>
-
-        <footer className="collection-form-actions"><ButtonLink to="/collections">{t('collections.cancel')}</ButtonLink><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
+        <footer className="flex flex-wrap justify-end gap-2"><ButtonLink to="/collections">{t('collections.cancel')}</ButtonLink><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
       </form>
     </main>
   );
@@ -509,48 +586,52 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
   const { t } = useI18n();
   const detailsId = useId();
   return (
-    <section className="initial-field-row" aria-label={t('collections.initialFieldLabel', { index: index + 1 })}>
-      <div className="initial-field-row__main">
+    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_auto] lg:items-end">
         <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
           <input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
-          {errors.name && <span className="collection-field-error" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
+          {errors.name && <span className="text-[11px] font-semibold text-danger" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
         </FormField>
         <FormField htmlFor={`field-type-${field.key}`} label={t('collections.fieldType')}>
           <select id={`field-type-${field.key}`} onChange={(event) => onUpdate({ type: event.target.value as FieldType, ...(event.target.value === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type}>
             <option value="text">{t('schema.fieldTypes.text')}</option><option value="number">{t('schema.fieldTypes.number')}</option><option value="boolean">{t('schema.fieldTypes.boolean')}</option><option value="dateTime">{t('schema.fieldTypes.dateTime')}</option><option value="json">{t('schema.fieldTypes.json')}</option><option value="relation">{t('schema.fieldTypes.relation')}</option><option value="file">{t('schema.fieldTypes.file')}</option><option value="files">{t('schema.fieldTypes.files')}</option>
           </select>
         </FormField>
-        <label className="initial-field-toggle"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />{t('collections.fieldRequired')}</label>
-        <label className="initial-field-toggle"><input checked={field.unique} onChange={(event) => onUpdate({ unique: event.target.checked })} type="checkbox" />{t('collections.fieldUnique')}</label>
-        {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} className="initial-field-remove" onClick={onRemove} size="small" type="button" variant="quiet">{t('collections.remove')}</Button>}
+        <div className="flex flex-wrap items-center gap-4 pb-1 text-xs text-ink-secondary">
+          <label className="inline-flex items-center gap-2"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />{t('collections.fieldRequired')}</label>
+          <label className="inline-flex items-center gap-2"><input checked={field.unique} onChange={(event) => onUpdate({ unique: event.target.checked })} type="checkbox" />{t('collections.fieldUnique')}</label>
+          {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet">{t('collections.remove')}</Button>}
+        </div>
       </div>
-      {field.type === 'relation' && <div className="initial-relation-config">
-        <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
-          <select id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onChange={(event) => onUpdate({ targetCollectionId: event.target.value })} value={field.targetCollectionId}>
-            <option value="">{targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection')}</option>
-            {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-          </select>
-          {errors.target && <span className="collection-field-error" role="alert">{errors.target}</span>}
-        </FormField>
-        <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
-          <select id={`field-cardinality-${field.key}`} onChange={(event) => onUpdate({ cardinality: event.target.value })} value={field.cardinality}>
-            <option value="many-to-one">{t('collections.manyToOne')}</option><option value="one-to-one">{t('collections.oneToOne')}</option><option value="one-to-many">{t('collections.oneToMany')}</option><option value="many-to-many">{t('collections.manyToMany')}</option>
-          </select>
-        </FormField>
-      </div>}
-      <details className="initial-field-advanced" id={detailsId}>
-        <summary><ChevronDown aria-hidden="true" size={14} />{t('collections.advancedFieldSettings')}</summary>
-        <div className="initial-field-advanced__grid">
+      {field.type === 'relation' && (
+        <div className="grid gap-3 rounded-md border bg-secondary p-3 sm:grid-cols-2">
+          <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
+            <select id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onChange={(event) => onUpdate({ targetCollectionId: event.target.value })} value={field.targetCollectionId}>
+              <option value="">{targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection')}</option>
+              {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
+            </select>
+            {errors.target && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.target}</span>}
+          </FormField>
+          <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
+            <select id={`field-cardinality-${field.key}`} onChange={(event) => onUpdate({ cardinality: event.target.value })} value={field.cardinality}>
+              <option value="many-to-one">{t('collections.manyToOne')}</option><option value="one-to-one">{t('collections.oneToOne')}</option><option value="one-to-many">{t('collections.oneToMany')}</option><option value="many-to-many">{t('collections.manyToMany')}</option>
+            </select>
+          </FormField>
+        </div>
+      )}
+      <details className="rounded-md border bg-secondary px-3 py-2 text-xs [&[open]>summary]:mb-3" id={detailsId}>
+        <summary className="flex cursor-pointer items-center gap-1.5 font-semibold text-ink-secondary"><ChevronDown aria-hidden="true" size={14} />{t('collections.advancedFieldSettings')}</summary>
+        <div className="grid gap-3 sm:grid-cols-2">
           <FormField htmlFor={`field-description-${field.key}`} label={t('collections.fieldDescription')}>
             <input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder={t('collections.optional')} value={field.description} />
           </FormField>
           <FormField htmlFor={`field-default-${field.key}`} label={t('collections.defaultValue') + ' (JSON)'} hint={t('collections.defaultValueHint')}>
             <input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
-            {errors.defaultValue && <span className="collection-field-error" role="alert">{errors.defaultValue}</span>}
+            {errors.defaultValue && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.defaultValue}</span>}
           </FormField>
           <FormField htmlFor={`field-validation-${field.key}`} label={t('collections.validationLabel') + ' (JSON)'} hint={t('collections.validationHint')}>
             <textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
-            {errors.validation && <span className="collection-field-error" role="alert">{errors.validation}</span>}
+            {errors.validation && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.validation}</span>}
           </FormField>
         </div>
       </details>
