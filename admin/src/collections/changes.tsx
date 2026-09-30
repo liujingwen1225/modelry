@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Check, FileClock, RefreshCw, Search, ShieldA
 import { Link, useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
-import { Button, ButtonLink, EmptyState, ErrorState, LoadingState, PartialState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink, EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/ui';
 import { getChange, listAllChanges, listAllCollections, type ChangeDetail, type ChangeListItem, type Collection, type PendingChange, type PendingOperation } from './client';
 import './collections.css';
 
@@ -155,30 +155,63 @@ export function ChangesPage() {
   }, [collectionNames, items, query, t, view]);
 
   return (
-    <div className="page-stack collection-page changes-page">
-      <header className="page-heading collection-heading"><div><p className="eyebrow">{t('changes.eyebrow')}</p><h1>{t('changes.title')}</h1><p className="page-description">{t('changes.description')}</p></div></header>
-      {collectionError && state === 'ready' && <PartialState className="changes-partial">{t('changes.partial')}</PartialState>}
-      <Surface className="changes-toolbar" variant="standard">
-        <label className="collection-search"><Search aria-hidden="true" size={16} /><span className="sr-only">{t('changes.search')}</span><input aria-label={t('changes.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('changes.searchPlaceholder')} type="search" value={query} /></label>
-        <nav aria-label={t('changes.filterLabel')} className="changes-filter-tabs">
-          {(['all', 'pending', 'applied'] as const).map((filter) => <button aria-pressed={view === filter} key={filter} onClick={() => selectView(filter)} type="button">{filter === 'all' ? t('changes.filterAll') : filter === 'pending' ? t('changes.filterPending') : t('changes.filterApplied')}</button>)}
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="min-w-0">
+        <p className="eyebrow">{t('changes.eyebrow')}</p>
+        <h1>{t('changes.title')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('changes.description')}</p>
+      </header>
+      {collectionError && state === 'ready' && <PartialState>{t('changes.partial')}</PartialState>}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1 md:max-w-sm">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} />
+          <input
+            aria-label={t('changes.search')}
+            className="min-h-9 w-full rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-[color,border-color] placeholder:text-muted-foreground hover:border-subtle-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            onChange={(event) => updateQuery('q', event.target.value)}
+            placeholder={t('changes.searchPlaceholder')}
+            type="search"
+            value={query}
+          />
+        </div>
+        <nav aria-label={t('changes.filterLabel')} className="flex overflow-hidden rounded-lg border border-input">
+          {(['all', 'pending', 'applied'] as const).map((filter) => (
+            <button
+              aria-pressed={view === filter}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${view === filter ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
+              key={filter}
+              onClick={() => selectView(filter)}
+              type="button"
+            >{filter === 'all' ? t('changes.filterAll') : filter === 'pending' ? t('changes.filterPending') : t('changes.filterApplied')}</button>
+          ))}
         </nav>
-      </Surface>
+      </div>
       {state === 'loading' && <LoadingState label={t('changes.loading')} />}
-      {state === 'error' && (() => { const copy = changeError(error, t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('changes.retry')}</Button></ErrorState>; })()}
-      {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState description={t('changes.emptyDescription')} title={t('changes.emptyTitle')}><Link className="text-link" to="/collections">{t('changes.browseCollections')} <ArrowRight aria-hidden="true" size={14} /></Link></EmptyState>}
+      {state === 'error' && (() => { const copy = changeError(error, t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><div className="mt-3"><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('changes.retry')}</Button></div></ErrorState>; })()}
+      {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState description={t('changes.emptyDescription')} title={t('changes.emptyTitle')}><Link className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/collections">{t('changes.browseCollections')} <ArrowRight aria-hidden="true" size={14} /></Link></EmptyState>}
       {state === 'ready' && visible.length === 0 && items.length > 0 && <EmptyState description={t('changes.noMatchDescription')} title={t('changes.noMatchTitle')} />}
-      {state === 'ready' && visible.length > 0 && <div className={`changes-layout${selectedId ? ' changes-layout--selected' : ''}`}>
-        <section aria-label={t('changes.listLabel')} className="changes-list">
+      {state === 'ready' && visible.length > 0 && <div className={`grid min-w-0 items-start gap-5 ${selectedId ? 'lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]' : ''}`}>
+        <section aria-label={t('changes.listLabel')} className="flex min-w-0 flex-col gap-2">
           {visible.map((item) => {
             const pending = isPending(item);
             const collectionId = pending ? item.collectionId : item.collectionId;
             const label = collectionNames.get(collectionId ?? '') ?? t('changes.collection');
             const status = pending ? statusLabel(item.status, t) : t('changes.statuses.applied');
             const id = pending ? item.changeSetId : item.changeSetId;
-            return <Link aria-current={selectedId === id ? 'page' : undefined} className="changes-list-item" key={`${pending ? 'pending' : 'applied'}-${id}`} onClick={(event) => { event.preventDefault(); updateQuery('changeSet', id); }} to={`/changes?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(view !== 'all' ? { view } : {}), changeSet: id }).toString()}`}>
-              <span className={`changes-item-icon${pending && item.status === 'failed' ? ' changes-item-icon--failed' : ''}`}>{pending ? item.status === 'failed' ? <AlertTriangle aria-hidden="true" size={16} /> : <FileClock aria-hidden="true" size={16} /> : <Check aria-hidden="true" size={16} />}</span>
-              <span className="changes-item-copy"><strong>{label}</strong><span>{summaryFor(item, t)}</span><small>{pending ? t(item.operations.length === 1 ? 'changes.pendingOne' : 'changes.pendingMany', { count: item.operations.length }) : new Date(item.appliedAt).toLocaleString()}</small></span>
+            const failed = pending && item.status === 'failed';
+            return <Link
+              aria-current={selectedId === id ? 'page' : undefined}
+              className={`flex min-w-0 items-start gap-3 rounded-lg border bg-card p-3.5 transition-colors hover:border-subtle-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${selectedId === id ? 'border-primary' : 'border-input'}`}
+              key={`${pending ? 'pending' : 'applied'}-${id}`}
+              onClick={(event) => { event.preventDefault(); updateQuery('changeSet', id); }}
+              to={`/changes?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(view !== 'all' ? { view } : {}), changeSet: id }).toString()}`}
+            >
+              <span aria-hidden="true" className={`grid size-7 shrink-0 place-items-center rounded-md ${failed ? 'bg-danger-soft text-danger' : 'bg-muted text-ink-secondary'}`}>{pending ? failed ? <AlertTriangle size={16} /> : <FileClock size={16} /> : <Check size={16} />}</span>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <strong className="truncate text-xs font-semibold text-foreground">{label}</strong>
+                <span className="truncate text-[11px] text-ink-secondary">{summaryFor(item, t)}</span>
+                <small className="text-[10px] text-muted-foreground">{pending ? t(item.operations.length === 1 ? 'changes.pendingOne' : 'changes.pendingMany', { count: item.operations.length }) : new Date(item.appliedAt).toLocaleString()}</small>
+              </span>
               <StatusChip state={pending ? item.status : 'applied'}>{status}</StatusChip>
             </Link>;
           })}
@@ -199,28 +232,39 @@ function ChangeDetailPanel({
   collectionNames: Map<string, string>;
 }) {
   const { t, errorMessage } = useI18n();
-  if (detailState === 'loading') return <aside aria-label={t('changes.detailLabel')} className="changes-detail"><LoadingState label={t('changes.loadingDetail')} /></aside>;
+  if (detailState === 'loading') return <aside aria-label={t('changes.detailLabel')} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-4"><LoadingState label={t('changes.loadingDetail')} /></aside>;
   if (detailState === 'error' || !detail) {
     const copy = changeError(detailError, t, errorMessage);
-    return <aside aria-label={t('changes.detailLabel')} className="changes-detail"><ErrorState description={copy.message} title={copy.title}><Button onClick={onRetry} size="small">{t('changes.retry')}</Button></ErrorState></aside>;
+    return <aside aria-label={t('changes.detailLabel')} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-4"><ErrorState description={copy.message} title={copy.title}><div className="mt-3"><Button onClick={onRetry} size="small">{t('changes.retry')}</Button></div></ErrorState></aside>;
   }
   const failed = detail.status === 'failed';
   const recovery = safeRecord(detail.recoveryState);
   const recoveryActions = recovery.state === 'retryable'
     ? [t('changes.recoveryActions.reviewCurrentModel'), t('changes.recoveryActions.retryApply')]
     : [t('changes.recoveryActions.openDetails')];
-  return <aside aria-label={t('changes.detailLabel')} className="changes-detail">
-    <div className="changes-detail__heading"><div><p className="eyebrow">{t('changes.detailEyebrow')}</p><h2>{collectionNames.get(detail.collectionId) ?? t('changes.collection')}</h2><span>{statusLabel(detail.status, t)}</span></div><StatusChip state={detail.status}>{statusLabel(detail.status, t)}</StatusChip></div>
-    {failed && <div className="changes-detail__recovery" role="alert"><AlertTriangle aria-hidden="true" size={16} /><div><strong>{t('changes.recoveryNeeded')}</strong><span>{t('changes.recoverySummary')}</span></div></div>}
-    {detail.status === 'needsReview' && <div className="changes-detail__review" role="status"><ShieldAlert aria-hidden="true" size={15} /><span>{t('changes.reviewHint')}</span></div>}
-    {detail.operations && detail.operations.length > 0 && <section className="changes-detail-section"><h3>{t('changes.pendingChanges')}</h3><ul>{detail.operations.map((operation) => <li key={operation.id}>{operationSummary(operation, t)}</li>)}</ul></section>}
-    {detail.applyAttempts.length > 0 && <section className="changes-detail-section"><h3>{t('changes.applyAttempts')}</h3><ol className="changes-attempt-list">{detail.applyAttempts.map((rawAttempt, index) => {
+  return <aside aria-label={t('changes.detailLabel')} className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="eyebrow">{t('changes.detailEyebrow')}</p>
+        <h2 className="truncate">{collectionNames.get(detail.collectionId) ?? t('changes.collection')}</h2>
+        <span className="text-[11px] text-muted-foreground">{statusLabel(detail.status, t)}</span>
+      </div>
+      <StatusChip state={detail.status}>{statusLabel(detail.status, t)}</StatusChip>
+    </div>
+    {failed && <div className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2.5 text-xs text-danger" role="alert"><AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} /><div className="min-w-0"><strong className="block">{t('changes.recoveryNeeded')}</strong><span className="opacity-90">{t('changes.recoverySummary')}</span></div></div>}
+    {detail.status === 'needsReview' && <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs text-warning" role="status"><ShieldAlert aria-hidden="true" className="mt-0.5 shrink-0" size={15} /><span>{t('changes.reviewHint')}</span></div>}
+    {detail.operations && detail.operations.length > 0 && <section className="flex flex-col gap-1.5"><h3>{t('changes.pendingChanges')}</h3><ul className="m-0 flex list-none flex-col gap-1 p-0">{detail.operations.map((operation) => <li className="rounded-md border bg-secondary px-3 py-2 text-xs text-ink-secondary" key={operation.id}>{operationSummary(operation, t)}</li>)}</ul></section>}
+    {detail.applyAttempts.length > 0 && <section className="flex flex-col gap-1.5"><h3>{t('changes.applyAttempts')}</h3><ol className="m-0 flex list-none flex-col gap-2 p-0">{detail.applyAttempts.map((rawAttempt, index) => {
       const attempt = safeRecord(rawAttempt);
-      return <li key={String(attempt.id ?? index)}><div><strong>{typeof attempt.status === 'string' ? statusLabel(attempt.status, t) : t('changes.attempt')}</strong><time>{typeof attempt.startedAt === 'string' ? new Date(attempt.startedAt).toLocaleString() : ''}</time></div>{typeof attempt.errorCode === 'string' && <span className="changes-error-code">{attempt.errorCode}</span>}<details><summary>{t('changes.technicalDetails')}</summary><pre>{JSON.stringify(diagnosticDetails(rawAttempt), null, 2)}</pre></details></li>;
+      return <li className="flex flex-col gap-1 rounded-md border bg-secondary px-3 py-2" key={String(attempt.id ?? index)}>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><strong className="font-semibold text-foreground">{typeof attempt.status === 'string' ? statusLabel(attempt.status, t) : t('changes.attempt')}</strong><time className="text-[10px] text-muted-foreground">{typeof attempt.startedAt === 'string' ? new Date(attempt.startedAt).toLocaleString() : ''}</time></div>
+        {typeof attempt.errorCode === 'string' && <span className="w-fit rounded border border-danger/30 bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger">{attempt.errorCode}</span>}
+        <details className="text-[11px] text-muted-foreground [&_pre]:mt-1.5 [&_pre]:max-h-52 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-card [&_pre]:p-2 [&_pre]:text-[10px] [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary:hover]:text-foreground"><summary>{t('changes.technicalDetails')}</summary><pre>{JSON.stringify(diagnosticDetails(rawAttempt), null, 2)}</pre></details>
+      </li>;
     })}</ol></section>}
-    {detail.appliedMigration && <section className="changes-detail-section"><h3>{t('changes.appliedModel')}</h3><div className="changes-applied-state"><Check aria-hidden="true" size={15} /><span>{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span></div>{detail.appliedMigration.diff && <ul>{detail.appliedMigration.diff.map((diff, index) => <li key={index}>{String(diff.action ?? t('changes.changed'))} {String(diff.kind ?? t('changes.schema'))} {String(diff.name ?? '')}</li>)}</ul>}</section>}
-    {detail.recoveryState && <section className="changes-detail-section"><h3>{t('changes.recommendedSteps')}</h3><ul>{recoveryActions.map((action, index) => <li key={index}>{action}</li>)}</ul></section>}
-    {(detail.status === 'ready' || detail.status === 'needsReview' || detail.status === 'failed') && <ButtonLink className="changes-detail__action" to={`/collections/${encodeURIComponent(detail.collectionId)}/model`} variant="primary">{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></ButtonLink>}
-    {detail.appliedMigration && <details className="changes-technical"><summary>{t('changes.technicalDetails')}</summary><dl><div><dt>{t('changes.changeReference')}</dt><dd><code>{detail.changeSetId}</code></dd></div><div><dt>{t('changes.appliedModelRecord')}</dt><dd><code>{detail.appliedMigration.id}</code></dd></div><div><dt>{t('changes.applyAttempt')}</dt><dd><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></details>}
+    {detail.appliedMigration && <section className="flex flex-col gap-1.5"><h3>{t('changes.appliedModel')}</h3><div className="flex items-center gap-2 rounded-md border bg-secondary px-3 py-2 text-xs text-ink-secondary"><Check aria-hidden="true" className="shrink-0 text-success" size={15} /><span>{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span></div>{detail.appliedMigration.diff && <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-ink-secondary">{detail.appliedMigration.diff.map((diff, index) => <li key={index}>{String(diff.action ?? t('changes.changed'))} {String(diff.kind ?? t('changes.schema'))} {String(diff.name ?? '')}</li>)}</ul>}</section>}
+    {detail.recoveryState && <section className="flex flex-col gap-1.5"><h3>{t('changes.recommendedSteps')}</h3><ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-ink-secondary">{recoveryActions.map((action, index) => <li key={index}>{action}</li>)}</ul></section>}
+    {(detail.status === 'ready' || detail.status === 'needsReview' || detail.status === 'failed') && <div><ButtonLink to={`/collections/${encodeURIComponent(detail.collectionId)}/model`} variant="primary">{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></ButtonLink></div>}
+    {detail.appliedMigration && <details className="border-t pt-3 text-[11px] text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary:hover]:text-foreground"><summary>{t('changes.technicalDetails')}</summary><dl><div className="flex gap-2"><dt className="font-semibold">{t('changes.changeReference')}</dt><dd className="m-0"><code>{detail.changeSetId}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.appliedModelRecord')}</dt><dd className="m-0"><code>{detail.appliedMigration.id}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.applyAttempt')}</dt><dd className="m-0"><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></details>}
   </aside>;
 }

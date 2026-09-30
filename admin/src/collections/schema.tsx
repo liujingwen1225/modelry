@@ -618,7 +618,7 @@ export function CollectionSchemaPage() {
           <div className="flex flex-wrap justify-end gap-2">
             <Button disabled={working} onClick={() => void discard()} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={14} />{t('schema.discard')}</Button>
             <Button disabled={working} onClick={() => void previewAndApply()} size="small" type="button" variant="primary">
-              {working ? <><LoaderCircle aria-hidden="true" className="spin" size={14} />{t('schema.working')}</> : localPending.status === 'failed' ? t('schema.reviewAndRetry') : t('schema.reviewAndApply')}
+              {working ? <><LoaderCircle aria-hidden="true" className="animate-spin" size={14} />{t('schema.working')}</> : localPending.status === 'failed' ? t('schema.reviewAndRetry') : t('schema.reviewAndApply')}
               <ArrowRight aria-hidden="true" size={14} />
             </Button>
           </div>
