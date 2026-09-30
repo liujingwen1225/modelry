@@ -1,7 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, Plus, RefreshCw, Search, Shield, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Search, Shield } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
 import { useI18n } from '../i18n/i18n';
 import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
@@ -52,20 +56,6 @@ function apiErrorCopy(
   };
 }
 
-function PageTitle({ eyebrow, title, description, action }: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <header className="page-heading collection-heading">
-      <div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-description">{description}</p></div>
-      {action && <div className="collection-heading__action">{action}</div>}
-    </header>
-  );
-}
-
 export function CollectionsPage() {
   const { t, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -76,7 +66,8 @@ export function CollectionsPage() {
   const search = searchParams.get('q') ?? '';
   const type = searchParams.get('type') ?? 'all';
   const sort = searchParams.get('sort') ?? 'recent';
-  const view = searchParams.get('view') === 'list' ? 'list' : 'card';
+  // Spec 0001 §6.1：默认进入紧凑列表，不默认展示大图卡片墙。
+  const view = searchParams.get('view') === 'card' ? 'card' : 'list';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -111,35 +102,69 @@ export function CollectionsPage() {
     setSearchParams(next, { replace: true });
   }
 
+  const typeItems = [
+    { value: 'all', label: t('collections.allTypes') },
+    { value: 'Normal', label: t('collections.normal') },
+    { value: 'Auth', label: t('collections.auth') },
+  ];
+  const sortItems = [
+    { value: 'recent', label: t('collections.recentlyCreated') },
+    { value: 'name', label: t('collections.name') },
+  ];
+
   return (
-    <div className="page-stack collection-page">
-      <PageTitle
-        action={<ButtonLink to="/collections/new" variant="primary"><Plus aria-hidden="true" size={16} />{t('collections.create')}</ButtonLink>}
-        description={t('collections.description')}
-        eyebrow={t('collections.eyebrow')}
-        title={t('collections.title')}
-      />
-      <Surface className="collection-toolbar" variant="standard">
-        <label className="collection-search">
-          <Search aria-hidden="true" size={16} />
-          <span className="sr-only">{t('collections.search')}</span>
-          <input aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} type="search" value={search} />
-        </label>
-        <label className="collection-filter"><SlidersHorizontal aria-hidden="true" size={15} /><span>{t('collections.type')}</span>
-          <select aria-label={t('collections.type')} onChange={(event) => updateQuery('type', event.target.value === 'all' ? '' : event.target.value)} value={type}>
-            <option value="all">{t('collections.allTypes')}</option><option value="Normal">{t('collections.normal')}</option><option value="Auth">{t('collections.auth')}</option>
-          </select>
-        </label>
-        <label className="collection-filter"><span>{t('collections.sort')}</span>
-          <select aria-label={t('collections.sortLabel')} onChange={(event) => updateQuery('sort', event.target.value)} value={sort}>
-            <option value="recent">{t('collections.recentlyCreated')}</option><option value="name">{t('collections.name')}</option>
-          </select>
-        </label>
-        <div aria-label={t('collections.viewLabel')} className="collection-view-toggle" role="group">
-          <button aria-pressed={view === 'card'} onClick={() => updateQuery('view', '')} type="button">{t('collections.viewCards')}</button>
-          <button aria-pressed={view === 'list'} onClick={() => updateQuery('view', 'list')} type="button">{t('collections.viewList')}</button>
+    <div className="flex min-w-0 flex-col gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-5">
+        <div className="min-w-0">
+          <p className="eyebrow">{t('collections.eyebrow')}</p>
+          <h1>{t('collections.title')}</h1>
+          <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.description')}</p>
         </div>
-      </Surface>
+        <ButtonLink to="/collections/new" variant="primary"><Plus aria-hidden="true" size={16} />{t('collections.create')}</ButtonLink>
+      </header>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1 md:max-w-sm">
+          <Search aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label={t('collections.search')}
+            className="pl-9"
+            onChange={(event) => updateQuery('q', event.target.value)}
+            placeholder={t('collections.searchPlaceholder')}
+            type="search"
+            value={search}
+          />
+        </div>
+        <Select items={typeItems} onValueChange={(value) => updateQuery('type', String(value) === 'all' ? '' : String(value))} value={type}>
+          <SelectTrigger aria-label={t('collections.type')} className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('collections.allTypes')}</SelectItem>
+            <SelectItem value="Normal">{t('collections.normal')}</SelectItem>
+            <SelectItem value="Auth">{t('collections.auth')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select items={sortItems} onValueChange={(value) => updateQuery('sort', String(value))} value={sort}>
+          <SelectTrigger aria-label={t('collections.sortLabel')} className="w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recent">{t('collections.recentlyCreated')}</SelectItem>
+            <SelectItem value="name">{t('collections.name')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <div aria-label={t('collections.viewLabel')} className="ml-auto flex overflow-hidden rounded-lg border border-input" role="group">
+          {(['list', 'card'] as const).map((option) => (
+            <button
+              aria-pressed={view === option}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${view === option ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
+              key={option}
+              onClick={() => updateQuery('view', option === 'list' ? '' : 'card')}
+              type="button"
+            >
+              {option === 'list' ? <List aria-hidden="true" size={14} /> : <LayoutGrid aria-hidden="true" size={14} />}
+              {t(option === 'list' ? 'collections.viewList' : 'collections.viewCards')}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {state === 'loading' && <LoadingState label={t('collections.loading')} />}
       {state === 'error' && (() => {
@@ -156,49 +181,76 @@ export function CollectionsPage() {
       {state === 'ready' && visible.length === 0 && items.length > 0 && (
         <EmptyState description={t('collections.noMatchDescription')} title={t('collections.noMatchTitle')} />
       )}
-      {state === 'ready' && visible.length > 0 && view === 'card' && (
-        <div className="collection-grid">
-          {visible.map((collection) => <CollectionCard collection={collection} key={collection.id} />)}
-        </div>
-      )}
       {state === 'ready' && visible.length > 0 && view === 'list' && (
-        <div className="collection-list" role="list">
-          {visible.map((collection) => <CollectionListItem collection={collection} key={collection.id} />)}
+        <Surface className="overflow-hidden p-0" variant="standard">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-[42%]">{t('collections.nameLabel')}</TableHead>
+                <TableHead className="w-[16%]">{t('collections.type')}</TableHead>
+                <TableHead className="w-[22%]">{t('collections.recordsFieldsLabel')}</TableHead>
+                <TableHead className="w-[20%] text-right">{t('collections.updated')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((collection) => <CollectionListRow collection={collection} key={collection.id} />)}
+            </TableBody>
+          </Table>
+        </Surface>
+      )}
+      {state === 'ready' && visible.length > 0 && view === 'card' && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visible.map((collection) => <CollectionCard collection={collection} key={collection.id} />)}
         </div>
       )}
     </div>
   );
 }
 
-function CollectionCard({ collection }: { collection: CollectionSummary }) {
-  const { t } = useI18n();
+function CollectionListRow({ collection }: { collection: CollectionSummary }) {
+  const { t, formatDate } = useI18n();
   return (
-    <Link className="collection-card" to={`/collections/${encodeURIComponent(collection.id)}`}>
-      <div className="collection-card__top"><span className="collection-card__icon"><Database aria-hidden="true" size={18} /></span><StatusChip state={collection.type}>{collectionTypeName(collection.type, t)}</StatusChip></div>
-      <h2>{collection.name}</h2>
-      <p className="collection-card__description">{collection.description || t('collections.noDescription')}</p>
-      <div className="collection-card__meta">
-        <span>{collectionCount(collection.recordCount, 'record', t)}</span>
-        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}</span>
-        <CollectionChangeIndicator status={collection.pendingChangeStatus} />
-      </div>
-      <span className="collection-card__open">{t('collections.openWorkspace')} <ArrowRight aria-hidden="true" size={14} /></span>
-    </Link>
+    <TableRow className="group relative">
+      <TableCell className="min-w-0">
+        {/* 整行可点击：链接的伪元素铺满行，键盘焦点仍落在链接上（§13.4）。 */}
+        <Link className="flex min-w-0 flex-col gap-0.5 after:absolute after:inset-0" to={`/collections/${encodeURIComponent(collection.id)}`}>
+          <span className="truncate font-semibold text-foreground group-hover:text-primary">{collection.name}</span>
+          <span className="truncate text-xs text-muted-foreground">{collection.description || t('collections.noDescription')}</span>
+        </Link>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
+          <CollectionChangeIndicator status={collection.pendingChangeStatus} />
+        </div>
+      </TableCell>
+      <TableCell className="text-ink-secondary"><span>{collectionCount(collection.recordCount, 'record', t)}</span> · <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}</span></TableCell>
+      <TableCell className="text-right text-muted-foreground">{formatDate(collection.updatedAt ?? collection.createdAt ?? Date.now(), { dateStyle: 'medium' })}</TableCell>
+    </TableRow>
   );
 }
 
-function CollectionListItem({ collection }: { collection: CollectionSummary }) {
-  const { t } = useI18n();
-  return <Link className="collection-list__item" role="listitem" to={`/collections/${encodeURIComponent(collection.id)}`}>
-    <span className="collection-list__icon"><Database aria-hidden="true" size={17} /></span>
-    <span className="collection-list__identity"><strong>{collection.name}</strong><span>{collection.description || t('collections.noDescription')}</span></span>
-    <StatusChip state={collection.type}>{collectionTypeName(collection.type, t)}</StatusChip>
-    <span className="collection-list__meta">
-      {collectionCount(collection.recordCount, 'record', t)} · {collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}
-      <CollectionChangeIndicator status={collection.pendingChangeStatus} />
-    </span>
-    <ArrowRight aria-hidden="true" className="collection-list__arrow" size={15} />
-  </Link>;
+function CollectionCard({ collection }: { collection: CollectionSummary }) {
+  const { t, formatDate } = useI18n();
+  return (
+    <Link className="group relative flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary" to={`/collections/${encodeURIComponent(collection.id)}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span aria-hidden="true" className="grid size-9 place-items-center rounded-lg bg-muted text-ink-secondary"><Database size={18} /></span>
+        <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
+      </div>
+      <div className="min-w-0">
+        <h2 className="truncate text-sm font-semibold text-foreground group-hover:text-primary">{collection.name}</h2>
+        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{collection.description || t('collections.noDescription')}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+        <span>{collectionCount(collection.recordCount, 'record', t)}</span>
+        <span>{collectionCount(collection.fields.filter((field) => !field.system).length, 'field', t)}</span>
+        <CollectionChangeIndicator status={collection.pendingChangeStatus} />
+        <span className="ml-auto">{formatDate(collection.updatedAt ?? collection.createdAt ?? Date.now(), { dateStyle: 'medium' })}</span>
+      </div>
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">{t('collections.openWorkspace')} <ArrowRight aria-hidden="true" size={14} /></span>
+    </Link>
+  );
 }
 
 function collectionCount(count: number | undefined, noun: 'record' | 'field', translate: ReturnType<typeof useI18n>['t']) {
@@ -216,8 +268,7 @@ function CollectionChangeIndicator({ status }: { status?: CollectionSummary['pen
   const { t } = useI18n();
   if (!status) return null;
   const label = status === 'failed' ? t('collections.changeFailed') : status === 'needsReview' ? t('collections.changeReview') : t('collections.changePending');
-  const tone = status === 'failed' ? 'failed' : status === 'needsReview' ? 'needs-review' : 'pending';
-  return <span className={`collection-change collection-change--${tone}`}>{label}</span>;
+  return <Badge variant={status === 'failed' ? 'danger' : status === 'needsReview' ? 'warning' : 'default'}>{label}</Badge>;
 }
 
 function authDefaults(): AuthenticationConfiguration {

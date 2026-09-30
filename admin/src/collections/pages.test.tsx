@@ -33,7 +33,7 @@ describe('Collections pages', () => {
     expect(await screen.findByRole('link', { name: /posts/i })).toHaveAttribute('href', '/collections/col_posts');
     expect(screen.queryByRole('link', { name: /users/i })).not.toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Search collections' })).toHaveValue('post');
-    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveValue('Normal');
+    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('Normal');
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/collections?limit=100', expect.objectContaining({
       credentials: 'include', mode: 'same-origin',
     }));
@@ -58,14 +58,22 @@ describe('Collections pages', () => {
     expect(screen.getAllByText('1 field')).toHaveLength(2);
     expect(screen.getByText('Failed change')).toBeInTheDocument();
     expect(screen.queryByText('No pending changes')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /authors/i })).not.toHaveTextContent('change');
+    // §6.1 默认紧凑列表：行内包含名称、类型、记录数、字段数与待应用状态。
+    const postsRow = screen.getByText('posts').closest('tr');
+    expect(postsRow).toHaveTextContent('12 records · 2 fields');
+    expect(postsRow).toHaveTextContent('Pending change');
+    const authorsRow = screen.getByText('authors').closest('tr');
+    expect(authorsRow).toHaveTextContent('0 records · 1 field');
+    expect(authorsRow).not.toHaveTextContent('change');
 
-    await user.click(screen.getByRole('button', { name: 'List' }));
-    expect(screen.getByText('posts').closest('a')).toHaveTextContent('12 records · 2 fields');
+    // 密度切换：Cards 视图保留同一组事实。
+    await user.click(screen.getByRole('button', { name: 'Cards' }));
+    expect(screen.getByText('posts').closest('a')).toHaveTextContent('12 records');
     expect(screen.getByText('Pending change')).toBeInTheDocument();
     expect(screen.getByText('Failed change')).toBeInTheDocument();
-    expect(screen.getByText('authors').closest('a')).toHaveTextContent('0 records · 1 field');
     expect(screen.getByText('authors').closest('a')).not.toHaveTextContent('change');
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByText('posts').closest('tr')).toHaveTextContent('12 records · 2 fields');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
