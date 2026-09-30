@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
 import { useI18n } from '../i18n/i18n';
 import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
+import { usePendingChanges } from '../components/pending-changes-context';
 import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionSummary, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
 import './collections.css';
 import type { CollectionWorkspaceContext } from './workspace-context';
@@ -562,6 +563,9 @@ export function CollectionWorkspacePage() {
   const location = useLocation();
   const { t, errorMessage } = useI18n();
   const { rememberCollection } = useCommandRegistry();
+  // Shell 的 Changes 徽标与工作区共享同一个 pending 事实（spec §6.5）：
+  // 工作区一旦拿到权威 PendingChange，就原地覆盖概览缓存。
+  const { report: reportPendingChange } = usePendingChanges();
   const [collection, setCollection] = useState<Collection | null>(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [collectionError, setCollectionError] = useState<unknown>();
@@ -605,6 +609,7 @@ export function CollectionWorkspacePage() {
       const value = await getPendingChange(collectionId);
       setPending(value);
       setPendingError(undefined);
+      reportPendingChange(value);
       return value;
     } catch (error) { setPendingError(error); throw error; }
     finally { setLoadingPending(false); }
@@ -615,9 +620,9 @@ export function CollectionWorkspacePage() {
     setLoadingCollection(true);
     setLoadingPending(true);
     void getCollection(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setCollection(value); setCollectionError(undefined); } }).catch((error: unknown) => { if (!controller.signal.aborted) setCollectionError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingCollection(false); });
-    void getPendingChange(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setPending(value); setPendingError(undefined); } }).catch((error: unknown) => { if (!controller.signal.aborted) setPendingError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingPending(false); });
+    void getPendingChange(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setPending(value); setPendingError(undefined); reportPendingChange(value); } }).catch((error: unknown) => { if (!controller.signal.aborted) setPendingError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingPending(false); });
     return () => controller.abort();
-  }, [collectionId]);
+  }, [collectionId, reportPendingChange]);
 
   if (loadingCollection) return <div className="collection-page collection-workspace-page"><LoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {

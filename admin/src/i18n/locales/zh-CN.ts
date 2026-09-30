@@ -67,6 +67,8 @@ export const zhCN = {
     signOut: '退出登录',
     signingOut: '正在退出…',
     signOutFailed: '退出登录未完成。请检查 Runtime 后重试。',
+    pendingChangeOne: '1 项待应用变更',
+    pendingChangeMany: '{count} 项待应用变更',
     themeSwitchToDark: '切换为深色主题',
     themeSwitchToLight: '切换为浅色主题',
     paletteTrigger: '搜索命令',

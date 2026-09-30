@@ -346,4 +346,31 @@ describe('Modelry Admin shell', () => {
     expect(window.location.pathname).toBe('/login');
     expect(new URLSearchParams(window.location.search).get('returnTo')).toBe('/collections?search=draft#schema');
   });
+
+  // Spec 0001 §6.5：保存后的 Pending Change 是 durable 的，Shell 的 Changes
+  // 入口必须原地显示同一数量，而不是另一处“未保存”草稿。
+  it('shows the durable Pending Change count on the Changes navigation entry', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/collections');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith('/changes?limit=100')) {
+        return Promise.resolve(Response.json({ data: [
+          {
+            changeSetId: 'chg_posts', collectionId: 'col_posts', version: 2, status: 'ready',
+            operations: [
+              { id: 'op_1', kind: 'field', action: 'add', definition: { name: 'subtitle', type: 'text' } },
+              { id: 'op_2', kind: 'index', action: 'add', definition: { name: 'idx_title', fields: ['title'] } },
+            ],
+          },
+        ] }));
+      }
+      return Promise.resolve(diagnosticResponse(path));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
+    expect(await within(navigation).findByRole('link', { name: 'Changes · 2 pending changes' })).toBeInTheDocument();
+  });
 });

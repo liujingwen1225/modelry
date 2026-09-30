@@ -65,6 +65,8 @@ export const en = {
     signOut: 'Sign out',
     signingOut: 'Signing out…',
     signOutFailed: 'Sign out could not be completed. Retry after checking the Runtime.',
+    pendingChangeOne: '1 pending change',
+    pendingChangeMany: '{count} pending changes',
     themeSwitchToDark: 'Switch to dark theme',
     themeSwitchToLight: 'Switch to light theme',
     paletteTrigger: 'Search commands',

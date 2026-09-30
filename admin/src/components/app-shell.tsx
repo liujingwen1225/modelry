@@ -34,6 +34,8 @@ import {
 import {
   CommandRegistryProvider, useCommandRegistry, useRegisterCommands, type AdminCommand, type CommandContext } from './command-registry';
 import {
+  PendingChangesProvider, usePendingChanges } from './pending-changes-context';
+import {
   collectionIdFromPathname } from './route-context';
 import {
   useTheme } from './theme-context';
@@ -204,8 +206,13 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, formatPlural } = useI18n();
   const { pathname } = useLocation();
+  const { pendingOperations } = usePendingChanges();
+  const pendingLabel = formatPlural(pendingOperations, {
+    one: t('shell.pendingChangeOne'),
+    other: t('shell.pendingChangeMany'),
+  });
   const visibleGroups = useMemo(
     () => groups
       .map((group) => ({ ...group, items: group.items.filter((item) => canSeeNavigationItem(role, permission, item)) }))
@@ -231,20 +238,29 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
         {visibleGroups.map((group, groupIndex) => (
           <div className="nav-group" key={group.label ?? 'overview'}>
             {group.label && <p className="nav-group__label">{t(group.label)}</p>}
-            {group.items.map(({ label, to, icon: Icon }) => (
-              <NavLink
-                aria-label={t(label)}
-                aria-current={isPrimaryLinkActive(pathname, to) ? 'page' : undefined}
-                className={() => `nav-link${isPrimaryLinkActive(pathname, to) ? ' nav-link--active' : ''}`}
-                end={to === '/'}
-                key={to}
-                title={t(label)}
-                to={to}
-              >
-                <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
-                <span>{t(label)}</span>
-              </NavLink>
-            ))}
+            {group.items.map(({ label, to, icon: Icon }) => {
+              const showsPendingCount = to === '/changes' && pendingOperations > 0;
+              return (
+                <NavLink
+                  aria-label={showsPendingCount ? `${t(label)} · ${pendingLabel}` : t(label)}
+                  aria-current={isPrimaryLinkActive(pathname, to) ? 'page' : undefined}
+                  className={() => `nav-link${isPrimaryLinkActive(pathname, to) ? ' nav-link--active' : ''}`}
+                  end={to === '/'}
+                  key={to}
+                  title={t(label)}
+                  to={to}
+                >
+                  <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
+                  <span>{t(label)}</span>
+                  {showsPendingCount && (
+                    <span
+                      aria-hidden="true"
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground"
+                    >{pendingOperations}</span>
+                  )}
+                </NavLink>
+              );
+            })}
             {groupIndex < visibleGroups.length - 1 && <div className="nav-separator" />}
           </div>
         ))}
@@ -558,9 +574,11 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
 
 export function AppShell(props: AppShellProps) {
   return (
-    <CommandRegistryProvider>
-      <ShellCommands permission={props.permission} role={props.role} />
-      <AppShellLayout {...props} />
-    </CommandRegistryProvider>
+    <PendingChangesProvider>
+      <CommandRegistryProvider>
+        <ShellCommands permission={props.permission} role={props.role} />
+        <AppShellLayout {...props} />
+      </CommandRegistryProvider>
+    </PendingChangesProvider>
   );
 }
