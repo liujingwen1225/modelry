@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, Surface } from '../components/ui';
 import { useI18n } from '../i18n/i18n';
 import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { usePendingChanges } from '../components/pending-changes-context';
@@ -561,7 +561,7 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
 export function CollectionWorkspacePage() {
   const { collectionId = '' } = useParams();
   const location = useLocation();
-  const { t, errorMessage } = useI18n();
+  const { t, errorMessage, formatPlural } = useI18n();
   const { rememberCollection } = useCommandRegistry();
   // Shell 的 Changes 徽标与工作区共享同一个 pending 事实（spec §6.5）：
   // 工作区一旦拿到权威 PendingChange，就原地覆盖概览缓存。
@@ -624,30 +624,93 @@ export function CollectionWorkspacePage() {
     return () => controller.abort();
   }, [collectionId, reportPendingChange]);
 
-  if (loadingCollection) return <div className="collection-page collection-workspace-page"><LoadingState label={t('collections.loadingWorkspace')} /></div>;
+  if (loadingCollection) return <div className="collection-workspace-page flex min-w-0 flex-col gap-6"><LoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, t('collections.workspaceLoadFailed'), t, errorMessage);
-    return <div className="page-stack collection-page"><ErrorState description={copy.message} title={copy.title}><Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button><Link className="text-link" to="/collections">{t('collections.backToCollections')}</Link></ErrorState></div>;
+    return (
+      <div className="flex min-w-0 flex-col gap-6">
+        <ErrorState description={copy.message} title={copy.title}>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button onClick={() => void refreshCollection()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button>
+            <Link className="text-xs font-semibold text-primary hover:underline" to="/collections">{t('collections.backToCollections')}</Link>
+          </div>
+        </ErrorState>
+      </div>
+    );
   }
 
   const context: CollectionWorkspaceContext = { collection, pendingChange: pending, refreshCollection, refreshPendingChange };
+  const pendingOperationCount = pending?.operations.length ?? 0;
+  const pendingTone = pending?.status === 'failed' ? 'danger' : pending?.status === 'needsReview' ? 'warning' : 'default';
+  const tabs = [
+    { label: t('navigation.records'), to: `/collections/${collectionId}`, end: true },
+    { label: t('navigation.model'), to: `/collections/${collectionId}/model`, end: false },
+    { label: t('navigation.access'), to: `/collections/${collectionId}/access`, end: false },
+    { label: t('navigation.api'), to: `/collections/${collectionId}/api`, end: false },
+  ];
   return (
-    <div className="page-stack collection-page collection-workspace-page">
-      <div className="collection-breadcrumb"><Link to="/collections">{t('navigation.collections')}</Link><span aria-hidden="true">/</span><span>{collection.name}</span></div>
-      <header className="collection-workspace-header">
-        <div className="collection-workspace-identity"><span className="collection-workspace-icon"><Database aria-hidden="true" size={20} /></span><div><div className="collection-workspace-title"><h1>{collection.name}</h1><StatusChip state={collection.type}>{collectionTypeName(collection.type, t)}</StatusChip></div><p>{collection.description || t('collections.workspaceDescription')}</p></div></div>
-        <span className="collection-workspace-meta">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</span>
+    <div className="collection-workspace-page flex min-w-0 flex-col gap-6">
+      {/* Spec 0001 §6.3：标题区持续提供 Collection 名称、类型、状态与返回路径。 */}
+      <nav aria-label={t('collections.breadcrumbLabel')} className="flex flex-wrap items-center gap-2 text-xs">
+        <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground" to="/collections">{t('navigation.collections')}</Link>
+        <span aria-hidden="true" className="text-subtle-foreground">/</span>
+        <span className="font-semibold text-foreground">{collection.name}</span>
+      </nav>
+
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg border bg-card text-ink-secondary"><Database size={20} /></span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-xl font-semibold text-foreground">{collection.name}</h1>
+              <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
+              {pendingOperationCount > 0 && (
+                <Badge variant={pendingTone}>{formatPlural(pendingOperationCount, { one: t('shell.pendingChangeOne'), other: t('shell.pendingChangeMany') })}</Badge>
+              )}
+            </div>
+            <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{collection.description || t('collections.workspaceDescription')}</p>
+          </div>
+        </div>
+        <span className="text-xs text-muted-foreground">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</span>
       </header>
-      {newlyCreated && <div className="collection-created-notice" role="status"><Check aria-hidden="true" size={16} /><div><strong>{t('collections.readyNoticeTitle')}</strong><span>{t('collections.readyNoticeDescription')}</span></div><button aria-label={t('collections.dismissReadyNotice')} onClick={() => setNewlyCreated(false)} type="button">{t('common.dismissMessage')}</button></div>}
-      {!loadingPending && pendingError !== undefined && <ErrorState className="collection-workspace-error" description={apiErrorCopy(pendingError, t('collections.pendingStatusUnavailable'), t, errorMessage).message} title={t('collections.pendingChangeLoadFailed')}><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button></ErrorState>}
-      {!loadingPending && pending?.status === 'failed' && <div className="collection-recovery-banner" role="status"><CircleAlert aria-hidden="true" size={17} /><div><strong>{t('collections.recoveryTitle')}</strong><span>{t('collections.recoveryDescription')}</span></div><Link className="text-link" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>{t('collections.viewRecoveryDetails')} <ArrowRight aria-hidden="true" size={14} /></Link></div>}
-      <nav aria-label={t('navigation.collectionWorkspace')} className="collection-workspace-tabs">
-        {[
-          { label: t('navigation.records'), to: `/collections/${collectionId}`, end: true },
-          { label: t('navigation.model'), to: `/collections/${collectionId}/model` },
-          { label: t('navigation.access'), to: `/collections/${collectionId}/access` },
-          { label: t('navigation.api'), to: `/collections/${collectionId}/api` },
-        ].map((tab) => <NavLink end={tab.end} key={tab.to} to={tab.to}>{tab.label}</NavLink>)}
+
+      {newlyCreated && (
+        <div className="flex items-start gap-3 rounded-lg border bg-secondary px-3.5 py-3 text-xs text-ink-secondary" role="status">
+          <Check aria-hidden="true" className="mt-0.5 shrink-0 text-success" size={16} />
+          <div className="min-w-0 flex-1">
+            <strong className="block text-foreground">{t('collections.readyNoticeTitle')}</strong>
+            <span className="text-muted-foreground">{t('collections.readyNoticeDescription')}</span>
+          </div>
+          <Button aria-label={t('collections.dismissReadyNotice')} onClick={() => setNewlyCreated(false)} size="small" type="button" variant="quiet">{t('common.dismissMessage')}</Button>
+        </div>
+      )}
+
+      {!loadingPending && pendingError !== undefined && (
+        <ErrorState description={apiErrorCopy(pendingError, t('collections.pendingStatusUnavailable'), t, errorMessage).message} title={t('collections.pendingChangeLoadFailed')}>
+          <div className="mt-3"><Button onClick={() => void refreshPendingChange()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('collections.retry')}</Button></div>
+        </ErrorState>
+      )}
+
+      {!loadingPending && pending?.status === 'failed' && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/30 bg-danger-soft px-3.5 py-3 text-xs text-danger" role="status">
+          <CircleAlert aria-hidden="true" className="shrink-0" size={17} />
+          <div className="min-w-0 flex-1">
+            <strong className="block">{t('collections.recoveryTitle')}</strong>
+            <span className="opacity-90">{t('collections.recoveryDescription')}</span>
+          </div>
+          <Link className="inline-flex items-center gap-1 font-semibold hover:underline" to={`/changes?changeSet=${encodeURIComponent(pending.changeSetId)}`}>{t('collections.viewRecoveryDetails')} <ArrowRight aria-hidden="true" size={14} /></Link>
+        </div>
+      )}
+
+      <nav aria-label={t('navigation.collectionWorkspace')} className="flex gap-1 overflow-x-auto border-b">
+        {tabs.map((tab) => (
+          <NavLink
+            className={({ isActive }) => `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            end={tab.end}
+            key={tab.to}
+            to={tab.to}
+          >{tab.label}</NavLink>
+        ))}
       </nav>
       <Outlet context={context} />
     </div>

@@ -1530,6 +1530,7 @@ export const zhCN = {
     createAction: '创建集合',
     search: '搜索集合',
     searchPlaceholder: '搜索集合…',
+    breadcrumbLabel: '集合面包屑',
     type: '类型',
     allTypes: '全部类型',
     normal: '普通',

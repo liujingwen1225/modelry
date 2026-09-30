@@ -1529,6 +1529,7 @@ export const en = {
     createAction: 'Create Collection',
     search: 'Search collections',
     searchPlaceholder: 'Search collections…',
+    breadcrumbLabel: 'Collection breadcrumb',
     type: 'Type',
     allTypes: 'All types',
     normal: 'Normal',
