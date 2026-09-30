@@ -344,9 +344,9 @@ async function createRecord(page: Page, collectionId: string, title: string) {
     await page.getByRole('button', { name: 'Create record', exact: true }).first().click();
   }
   await page.getByLabel('title · Required').fill(title);
-  await page.locator('.record-editor').getByRole('button', { name: 'Create record', exact: true }).click();
+  await page.locator('[data-record-editor]').getByRole('button', { name: 'Create record', exact: true }).click();
   await expect(page.getByText('Record saved. The durable result is shown here.')).toBeVisible();
-  const recordId = await page.locator('.record-detail-identity code').textContent();
+  const recordId = await page.locator('[data-record-identity] code').textContent();
   expect(recordId).toMatch(/^rec_/);
   return recordId!;
 }

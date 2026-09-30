@@ -5,7 +5,6 @@ import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { Button, ButtonLink, EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/ui';
 import { getChange, listAllChanges, listAllCollections, type ChangeDetail, type ChangeListItem, type Collection, type PendingChange, type PendingOperation } from './client';
-import './collections.css';
 
 type ChangesView = 'all' | 'pending' | 'applied';
 

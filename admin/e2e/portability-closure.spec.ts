@@ -195,11 +195,11 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
     name: 'portable.txt', mimeType: 'text/plain', buffer: Buffer.from('portable attachment bytes'),
   });
   await expect(page.getByRole('status').filter({ hasText: 'File ready' })).toBeVisible();
-  await page.locator('.record-editor').getByRole('button', { name: 'Create record', exact: true }).click();
+  await page.locator('[data-record-editor]').getByRole('button', { name: 'Create record', exact: true }).click();
   await expect(page.getByText('Record saved. The durable result is shown here.')).toBeVisible();
-  latestRecordId = (await page.locator('.record-detail-identity code').textContent()) ?? '';
+  latestRecordId = (await page.locator('[data-record-identity] code').textContent()) ?? '';
   expect(latestRecordId).toMatch(/^rec_/);
-  await page.locator('.record-editor-actions').getByRole('button', { name: 'Close' }).click();
+  await page.locator('[data-record-editor-actions]').getByRole('button', { name: 'Close' }).click();
 
   const settings = await requestJSON(page, 'PUT', '/admin/api/v1/settings', {
     expectedRevision: 1, listenAddress: '127.0.0.1:0', requestRetentionDays: 14,

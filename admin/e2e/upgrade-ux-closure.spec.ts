@@ -142,12 +142,11 @@ async function expectNoHorizontalOverflow(page: Page, surface: string, width: nu
       '.command-palette-trigger kbd', '.runtime-badge', '.status-chip', '.locale-switcher',
       '.locale-switcher select', '.theme-button', '.owner-menu', '.owner-menu > summary',
       '.owner-menu__email', '.owner-menu__popover',
-      '.app-frame', '.workspace', '.page-area', '.page-stack', '.collection-workspace-header',
-      '.collection-workspace-identity', '.collection-workspace-title', '.api-page', '.api-page h1',
-      '.records-page .records-heading', '.records-page .records-heading > div',
-      '.records-page .records-heading .eyebrow', '.records-page .records-heading h1',
-      '.records-page .records-heading .page-description', '.records-page .records-heading > button',
-      '.records-page .records-heading .collection-heading__action',
+      '.app-frame', '.workspace', '.page-area', '.page-stack', '[data-collection-header]',
+      '[data-collection-identity]', '[data-collection-title]', '.api-page', '.api-page h1',
+      '[data-record-page]', '[data-record-heading]', '[data-record-heading] > div',
+      '[data-record-heading] .eyebrow', '[data-record-heading] h1',
+      '[data-record-heading] p', '[data-record-heading] > button',
       '.api-endpoint-heading', '.api-endpoint-heading > div', '.api-heading-actions', '.api-openapi',
       '.api-openapi summary', '.api-openapi pre', '.api-route', '.api-route code',
     ].map((selector) => {
@@ -208,7 +207,7 @@ async function expectNoHorizontalOverflow(page: Page, surface: string, width: nu
       document.body,
       document.querySelector<HTMLElement>('.page-area'),
       document.querySelector<HTMLElement>('.page-stack'),
-      document.querySelector<HTMLElement>('.collection-workspace-tabs'),
+      document.querySelector<HTMLElement>('[data-collection-tabs]'),
     ].filter((element): element is HTMLElement => element instanceof HTMLElement).map(describeElement) : [];
     return { scrollWidth: document.documentElement.scrollWidth, bodyScrollWidth: document.body.scrollWidth, clientWidth: document.documentElement.clientWidth, overflowingElements, diagnostics, pageStackChildren, scrollAreas, scrollRoots };
   });

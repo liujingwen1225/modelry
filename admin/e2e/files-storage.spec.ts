@@ -287,11 +287,11 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
 
   // Collection with a required text field and an ordered files field.
   await page.getByLabel('Collection name').fill('documents');
-  const titleFieldRow = page.locator('.initial-field-row').nth(0);
+  const titleFieldRow = page.locator('[data-initial-field-row]').nth(0);
   await titleFieldRow.getByLabel('Field name 1').fill('title');
   await titleFieldRow.getByLabel('Required', { exact: true }).check();
   await titleFieldRow.getByLabel('Field name 1').press('Enter');
-  const filesFieldRow = page.locator('.initial-field-row').nth(1);
+  const filesFieldRow = page.locator('[data-initial-field-row]').nth(1);
   await filesFieldRow.getByLabel('Field name 2').fill('attachments');
   await filesFieldRow.getByLabel('Type', { exact: true }).selectOption('files');
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
@@ -307,7 +307,7 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
     { name: 'second.txt', mimeType: 'text/plain', buffer: Buffer.from('second attachment bytes') },
   ]);
   await expect(page.getByText('first attachment bytes', { exact: false })).toHaveCount(0);
-  await page.locator('.record-editor-actions button[type="submit"]').click();
+  await page.locator('[data-record-editor-actions] button[type="submit"]').click();
   await expect(page.getByRole('heading', { name: /quarterly bundle|documents/ })).toBeVisible();
 
   const listed = await requestJSON(page, 'GET', '/admin/api/v1/collections/' + encodeURIComponent(collectionId) + '/records?limit=10');

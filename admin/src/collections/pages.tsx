@@ -11,7 +11,6 @@ import { useI18n } from '../i18n/i18n';
 import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { usePendingChanges } from '../components/pending-changes-context';
 import { createCollection, getCollection, getPendingChange, listAllCollections, type AuthenticationConfiguration, type Collection, type CollectionCreateRequest, type CollectionSummary, type CollectionType, type FieldDefinition, type FieldType, type PendingChange } from './client';
-import './collections.css';
 import type { CollectionWorkspaceContext } from './workspace-context';
 
 const SYSTEM_FIELDS = [
@@ -586,7 +585,7 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
   const { t } = useI18n();
   const detailsId = useId();
   return (
-    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5">
+    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-initial-field-row>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_auto] lg:items-end">
         <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
           <input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
@@ -705,7 +704,7 @@ export function CollectionWorkspacePage() {
     return () => controller.abort();
   }, [collectionId, reportPendingChange]);
 
-  if (loadingCollection) return <div className="collection-workspace-page flex min-w-0 flex-col gap-6"><LoadingState label={t('collections.loadingWorkspace')} /></div>;
+  if (loadingCollection) return <div className="flex min-w-0 flex-col gap-6" data-collection-workspace><LoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, t('collections.workspaceLoadFailed'), t, errorMessage);
     return (
@@ -730,7 +729,7 @@ export function CollectionWorkspacePage() {
     { label: t('navigation.api'), to: `/collections/${collectionId}/api`, end: false },
   ];
   return (
-    <div className="collection-workspace-page flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-6" data-collection-workspace>
       {/* Spec 0001 §6.3：标题区持续提供 Collection 名称、类型、状态与返回路径。 */}
       <nav aria-label={t('collections.breadcrumbLabel')} className="flex flex-wrap items-center gap-2 text-xs">
         <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground" to="/collections">{t('navigation.collections')}</Link>
@@ -738,10 +737,10 @@ export function CollectionWorkspacePage() {
         <span className="font-semibold text-foreground">{collection.name}</span>
       </nav>
 
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-4" data-collection-header>
+        <div className="flex min-w-0 items-start gap-3" data-collection-identity>
           <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg border bg-card text-ink-secondary"><Database size={20} /></span>
-          <div className="min-w-0">
+          <div className="min-w-0" data-collection-title>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-semibold text-foreground">{collection.name}</h1>
               <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
@@ -783,7 +782,7 @@ export function CollectionWorkspacePage() {
         </div>
       )}
 
-      <nav aria-label={t('navigation.collectionWorkspace')} className="flex gap-1 overflow-x-auto border-b">
+      <nav aria-label={t('navigation.collectionWorkspace')} className="flex gap-1 overflow-x-auto border-b" data-collection-tabs>
         {tabs.map((tab) => (
           <NavLink
             className={({ isActive }) => `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
