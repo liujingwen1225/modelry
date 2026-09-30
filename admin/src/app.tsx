@@ -10,7 +10,7 @@ import type { BootstrapStatus } from './auth/client';
 import { Button, ErrorState, LoadingState, Surface } from './components/ui';
 import { ChangesPage as GlobalChangesPage, CollectionRecordsPage, CollectionSchemaPage, CollectionSecurityPage, CollectionWorkspacePage, CollectionsPage, CreateCollectionPage } from './collections';
 import { AccessPage, AuditPage } from './access';
-import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage } from './api';
+import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage, RequestsPage } from './api';
 import { OverviewPage, SettingsPage } from './pages/pages';
 import { ExtensionsPage, SecretsPage } from './extensions/pages';
 import { AutomationPage } from './automation/pages';
@@ -109,6 +109,7 @@ function AuthenticatedWorkspace() {
         <Route element={<AutomationPage />} path="/automations/schedules" />
         <Route element={<AutomationPage />} path="/automations/deliveries" />
         {/* OBSERVE */}
+        <Route element={<RequestsPage />} path="/requests" />
         <Route element={<RequestDetailPage />} path="/requests/:requestId" />
         <Route element={<ActivityPage />} path="/activity" />
         <Route element={<AuditPage />} path="/activity/audit" />

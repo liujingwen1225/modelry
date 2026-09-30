@@ -60,4 +60,77 @@ describe('Changes page', () => {
       method: 'GET', credentials: 'include', mode: 'same-origin',
     }));
   });
+
+  it('applies a SAFE change directly from the review panel', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith('/changes?limit=100')) return Promise.resolve(Response.json({ data: [
+        { changeSetId: 'chg_safe', collectionId: 'col_posts', version: 4, status: 'ready', operations: [
+          { id: 'op_1', kind: 'field', action: 'add', definition: { name: 'publishedAt', type: 'dateTime' } },
+        ] },
+      ] }));
+      if (path.endsWith('/collections?limit=100')) return Promise.resolve(Response.json({ data: [{ id: 'col_posts', name: 'posts', type: 'Normal', fields: [] }] }));
+      if (path.endsWith('/changes/chg_safe')) return Promise.resolve(Response.json({ data: {
+        changeSetId: 'chg_safe', collectionId: 'col_posts', status: 'ready', version: 4,
+        operations: [{ id: 'op_1', kind: 'field', action: 'add', definition: { name: 'publishedAt', type: 'dateTime' } }],
+        applyAttempts: [],
+      } }));
+      if (path.endsWith('/schema/preview')) return Promise.resolve(Response.json({ data: {
+        risk: 'safe', version: 4, diff: [{ kind: 'field', action: 'add', name: 'publishedAt' }], preconditions: [], impact: {},
+      } }));
+      if (path.endsWith('/schema/apply')) return Promise.resolve(Response.json({ data: { state: 'applied', appliedMigrationId: 'mig_9', applyAttemptId: 'attempt_9' } }));
+      return Promise.resolve(Response.json({ data: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MemoryRouter initialEntries={['/changes?changeSet=chg_safe']}><ChangesPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'posts' })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Review changes' }));
+
+    // SAFE 变化不增加空确认步骤：预览后直接应用。
+    expect(await screen.findByText('Changes applied. The updated model is now in effect.')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/collections/col_posts/schema/apply', expect.objectContaining({
+      method: 'POST', credentials: 'include', mode: 'same-origin', body: JSON.stringify({ expectedVersion: 4, confirmRisk: false }),
+    }));
+  });
+
+  it('requires an in-page confirmation before applying a risky change', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith('/changes?limit=100')) return Promise.resolve(Response.json({ data: [
+        { changeSetId: 'chg_risky', collectionId: 'col_posts', version: 5, status: 'needsReview', operations: [
+          { id: 'op_1', kind: 'field', action: 'remove', targetId: 'fld_legacy', definition: {} },
+        ] },
+      ] }));
+      if (path.endsWith('/collections?limit=100')) return Promise.resolve(Response.json({ data: [{ id: 'col_posts', name: 'posts', type: 'Normal', fields: [] }] }));
+      if (path.endsWith('/changes/chg_risky')) return Promise.resolve(Response.json({ data: {
+        changeSetId: 'chg_risky', collectionId: 'col_posts', status: 'needsReview', version: 5,
+        operations: [{ id: 'op_1', kind: 'field', action: 'remove', targetId: 'fld_legacy', definition: {} }],
+        applyAttempts: [],
+      } }));
+      if (path.endsWith('/schema/preview')) return Promise.resolve(Response.json({ data: {
+        risk: 'review', version: 5, diff: [{ kind: 'field', action: 'remove', name: 'legacy' }],
+        preconditions: [{ status: 'passed', code: 'MODEL_COMPATIBLE' }],
+        impact: { summary: 'Existing records keep their values.', affectedRecords: 12 },
+      } }));
+      if (path.endsWith('/schema/apply')) return Promise.resolve(Response.json({ data: { state: 'applied', appliedMigrationId: 'mig_10', applyAttemptId: 'attempt_10' } }));
+      return Promise.resolve(Response.json({ data: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MemoryRouter initialEntries={['/changes?changeSet=chg_risky']}><ChangesPage /></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: 'Review changes' }));
+    expect(await screen.findByText('Review schema changes')).toBeInTheDocument();
+    expect(screen.getByText('Existing records keep their values.')).toBeInTheDocument();
+    expect(screen.getByText('12 records affected')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([path]) => String(path).endsWith('/schema/apply'))).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Confirm & apply' }));
+    expect(await screen.findByText('Changes applied. The updated model is now in effect.')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/collections/col_posts/schema/apply', expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ expectedVersion: 5, confirmRisk: true }),
+    }));
+  });
 });

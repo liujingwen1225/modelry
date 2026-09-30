@@ -4,6 +4,7 @@ import {
   Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   ChevronDown,
   Command,
   FileStack,
@@ -63,7 +64,10 @@ const groups: Array<{
   },
   {
     label: 'navigation.observe',
-    items: [{ label: 'navigation.activityAudit', to: '/activity', icon: ScrollText, operation: 'activity.read' }],
+    items: [
+      { label: 'navigation.requests', to: '/requests', icon: Activity, operation: 'requests.read' },
+      { label: 'navigation.activityAudit', to: '/activity', icon: ScrollText, operation: 'activity.read' },
+    ],
   },
   {
     label: 'navigation.evolve',

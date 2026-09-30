@@ -26,6 +26,7 @@ import {
   type PendingOperationRequest,
   type SchemaPreview,
 } from './client';
+import { diffLabel, preconditionMessage, preconditionStatus } from './preview-copy';
 import { useCollectionWorkspace } from './workspace-context';
 
 type SchemaView = 'fields' | 'relations' | 'indexes' | 'history';
@@ -46,31 +47,6 @@ function errorDetails(error: unknown, t: Translate, errorMessage: ReturnType<typ
     title: errorMessage(error.apiError.code) ?? t('errors.requestFailed'),
     message: [t('common.errorCode'), error.apiError.code, `${t('common.requestId')}: ${error.apiError.requestId}`, t('common.tryAgainWhenAvailable')].join(' · '),
   };
-}
-
-const preconditionMessageKeys: Record<string, TranslationKey> = {
-  INVALID_MODEL: 'schema.preconditionMessages.invalidModel',
-  REQUIRED_FIELD_NEEDS_DEFAULT: 'schema.preconditionMessages.requiredFieldNeedsDefault',
-  RELATION_TARGET_MISSING: 'schema.preconditionMessages.relationTargetMissing',
-  UNIQUE_VALUES_CONFLICT: 'schema.preconditionMessages.uniqueValuesConflict',
-  FIELD_VALUE_INCOMPATIBLE: 'schema.preconditionMessages.fieldValueIncompatible',
-  MODEL_COMPATIBLE: 'schema.preconditionMessages.modelCompatible',
-};
-
-function preconditionMessage(code: unknown, t: Translate) {
-  const key = typeof code === 'string' ? preconditionMessageKeys[code] : undefined;
-  return key ? t(key) : t('schema.preconditionMessages.fallback');
-}
-
-function preconditionStatus(status: unknown, t: Translate) {
-  if (status === 'passed' || status === 'failed') return t(`schema.preconditionStatuses.${status}` as TranslationKey);
-  return t('schema.preconditionStatuses.unknown');
-}
-
-function preconditionTone(status: unknown): BadgeVariant {
-  if (status === 'passed') return 'success';
-  if (status === 'failed') return 'danger';
-  return 'default';
 }
 
 function operationDefinition(operation: PendingOperation): Record<string, unknown> {
@@ -121,11 +97,10 @@ function operationName(operation: PendingOperation, t: Translate) {
   });
 }
 
-function diffLabel(change: Record<string, unknown>, t: Translate) {
-  if (typeof change.name === 'string') return change.name;
-  const kind = String(change.kind ?? '');
-  const action = String(change.action ?? '');
-  return kind && action ? t('schema.changeFallback', { kind, action }) : t('schema.itemFallback');
+function preconditionTone(status: unknown): BadgeVariant {
+  if (status === 'passed') return 'success';
+  if (status === 'failed') return 'danger';
+  return 'default';
 }
 
 function riskTone(risk: SchemaPreview['risk']): BadgeVariant {

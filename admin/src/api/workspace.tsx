@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, RefreshCw, Search } from 'lucide-react';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ArrowRight, RefreshCw, Search } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from './client';
 import { allApplicationEndpoints, endpointOpenApiSnippet, endpointsForCollection, type EndpointDefinition } from './endpoints';
-import { getRequestRecord, listRequestRecords, runApplicationRequest, type ApplicationRunResult, type RequestRecord } from './workspace-client';
+import { runApplicationRequest, type ApplicationRunResult } from './workspace-client';
 import { getAccessRules, listAllCollections, type AccessRuleMode, type AccessRulesState, type Collection } from '../collections/client';
 import { useCollectionWorkspace } from '../collections/workspace-context';
 import { Button, ButtonLink, CopyButton, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
-import { mapLegacyPath } from '../route-map';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -216,7 +214,7 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
             <div className="mt-5 flex flex-wrap gap-x-7 gap-y-3 border-y py-3" data-api-endpoint-meta><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.operationLabel')}</strong>{activeEndpoint.operationId}</span><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.collectionModelLabel')}</strong>{t('api.collectionModelValue', { version: selectedCollection.schemaVersion ?? 1, count: selectedCollection.fields.length })}</span>{accessOperation && <span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedAccessLabel')}</strong>{ruleReady ? accessRuleLabel(appliedAccessMode, t) : t('api.loadingAccess')}</span>}</div>
             <div className="my-4 flex flex-col gap-2"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedFields')}</strong><div className="flex flex-wrap gap-2">{selectedCollection.fields.map((field) => <span className="inline-flex items-center gap-2 rounded-full border bg-muted px-2 py-1" key={field.id ?? field.name}><code className="font-mono text-[11px] text-foreground">{field.name}</code><small className="text-[10px] text-muted-foreground">{field.type}{field.required ? t('api.fieldRequired') : ''}</small></span>)}</div></div>
             <section className="rounded-lg border bg-muted p-4">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={`/connect/api?tab=requests&filter=${encodeURIComponent(`collectionId eq "${selectedCollection.id}"`)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={`/requests?collection=${encodeURIComponent(selectedCollection.id)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
               <form className="flex flex-col gap-3.5" onSubmit={(event) => void run(event)}>
                 {activeEndpoint.template.includes('{recordId}') && <FormField htmlFor="api-record-id" label={t('api.recordIdLabel')}><input autoComplete="off" id="api-record-id" onChange={(event) => setPathValues((value) => ({ ...value, recordId: event.target.value }))} value={pathValues.recordId ?? ''} /></FormField>}
                 {activeEndpoint.template.includes('{sessionId}') && <FormField htmlFor="api-session-id" label={t('api.sessionIdLabel')}><input autoComplete="off" id="api-session-id" onChange={(event) => setPathValues((value) => ({ ...value, sessionId: event.target.value }))} value={pathValues.sessionId ?? ''} /></FormField>}
@@ -253,98 +251,6 @@ function ApplicationResponse({ result, location, endpoint }: { result: Applicati
       {result.requestId && result.requestRecordPersisted && <ButtonLink size="small" to={`/requests/${encodeURIComponent(result.requestId)}?from=${encodeURIComponent(from)}`}>{t('api.viewRequestDetails')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>}
       {result.requestId && !result.requestRecordPersisted && <span className="text-xs text-muted-foreground">{t('api.requestUnavailable')}</span>}
     </div>
-  </section>;
-}
-
-function paginationParams(current: URLSearchParams, cursor?: string) {
-  const next = new URLSearchParams(current);
-  next.delete('cursor');
-  next.delete('back');
-  if (cursor) next.set('cursor', cursor);
-  return next;
-}
-
-function RequestHistory({ collections }: { collections: Collection[] }) {
-  const { t, formatDate, formatNumber, errorMessage } = useI18n();
-  const [params, setParams] = useSearchParams();
-  const location = useLocation();
-  const [searchDraft, setSearchDraft] = useState(params.get('search') ?? '');
-  const [filterDraft, setFilterDraft] = useState(params.get('filter') ?? '');
-  const [sortDraft, setSortDraft] = useState(params.get('sort') ?? 'time desc');
-  const [page, setPage] = useState<{ data: RequestRecord[]; nextCursor?: string }>();
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<unknown>();
-  const [reload, setReload] = useState(0);
-  const search = params.get('search') ?? '';
-  const filter = params.get('filter') ?? '';
-  const sort = params.get('sort') ?? 'time desc';
-  const cursor = params.get('cursor') ?? undefined;
-  const collectionNames = useMemo(() => new Map(collections.map((item) => [item.id, item.name])), [collections]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setState('loading');
-    void listRequestRecords({ limit: 25, cursor, search, filter, sort }, controller.signal).then((value) => {
-      if (controller.signal.aborted) return;
-      setPage(value); setState('ready'); setError(undefined);
-    }).catch((reason: unknown) => {
-      if (controller.signal.aborted) return;
-      setError(reason); setState('error');
-    });
-    return () => controller.abort();
-  }, [cursor, filter, reload, search, sort]);
-
-  useEffect(() => {
-    setSearchDraft(search);
-    setFilterDraft(filter);
-    setSortDraft(sort);
-  }, [search, filter, sort]);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = paginationParams(params);
-    if (searchDraft.trim()) next.set('search', searchDraft.trim()); else next.delete('search');
-    if (filterDraft.trim()) next.set('filter', filterDraft.trim()); else next.delete('filter');
-    if (sortDraft.trim()) next.set('sort', sortDraft.trim()); else next.delete('sort');
-    setParams(next, { replace: true });
-  }
-
-  function nextPage() {
-    if (!page?.nextCursor) return;
-    const next = new URLSearchParams(params);
-    next.append('back', cursor ?? '');
-    next.set('cursor', page.nextCursor);
-    setParams(next, { replace: true });
-  }
-
-  function previousPage() {
-    const back = params.getAll('back');
-    if (!back.length) return;
-    const previous = back[back.length - 1];
-    const next = new URLSearchParams(params);
-    next.delete('back');
-    back.slice(0, -1).forEach((entry) => next.append('back', entry));
-    if (previous) next.set('cursor', previous); else next.delete('cursor');
-    setParams(next, { replace: true });
-  }
-
-  return <section aria-label={t('api.requestsLabel')} className="flex min-w-0 flex-col gap-4">
-    <form className="grid items-end gap-3 min-[681px]:grid-cols-2 min-[900px]:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={submit}>
-      <FormField htmlFor="request-search" label={t('api.searchLabel')}><input id="request-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('api.requestSearchPlaceholder')} value={searchDraft} /></FormField>
-      <FormField htmlFor="request-filter" hint={t('api.requestFilterHint')} label={t('api.filterLabel')}><input id="request-filter" onChange={(event) => setFilterDraft(event.target.value)} placeholder={t('api.requestFilterPlaceholder')} value={filterDraft} /></FormField>
-      <FormField htmlFor="request-sort" hint={t('api.requestSortHint')} label={t('api.sortLabel')}><input id="request-sort" onChange={(event) => setSortDraft(event.target.value)} value={sortDraft} /></FormField>
-      <Button type="submit" variant="primary">{t('api.applyFilters')}</Button>
-    </form>
-    {state === 'loading' && <LoadingState label={t('api.loadingRequests')} />}
-    {state === 'error' && (() => { const copy = errorCopy(error, t('api.requestsLoadFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
-    {state === 'ready' && (!page?.data.length ? <EmptyState title={t('api.noRequestsTitle')} description={t('api.noRequestsDescription')} /> : <Table><TableCaption>{t('api.requestsCaption')}</TableCaption><TableHeader><TableRow><TableHead scope="col">{t('api.columnRequest')}</TableHead><TableHead scope="col">{t('api.columnTime')}</TableHead><TableHead scope="col">{t('api.columnEndpoint')}</TableHead><TableHead scope="col">{t('api.columnResult')}</TableHead><TableHead scope="col">{t('api.columnAccess')}</TableHead></TableRow></TableHeader><TableBody>{page.data.map((record) => <TableRow key={record.requestId}>
-      <TableCell className="align-top"><Link className="font-semibold text-primary hover:underline" to={`/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}>{record.requestId}</Link></TableCell>
-      <TableCell className="align-top"><time dateTime={record.time}>{formatDate(record.time)}</time><small className="mt-1 block text-[10px] text-muted-foreground">{formatNumber(record.durationMs)} ms</small></TableCell>
-      <TableCell className="align-top"><div className="flex flex-wrap items-center gap-2"><MethodPill method={record.method} /><code className="font-mono text-[11px] break-all text-foreground">{record.endpoint}</code></div>{record.collectionId && <small className="mt-1 block text-[10px] text-muted-foreground">{collectionNames.get(record.collectionId) ?? t('api.collectionFallback')}</small>}</TableCell>
-      <TableCell className="align-top"><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip>{record.errorCode && <small className="mt-1 block text-[10px] text-muted-foreground">{record.errorCode}</small>}</TableCell>
-      <TableCell className="align-top">{record.authenticationOutcome ?? '—'}<small className="mt-1 block text-[10px] text-muted-foreground">{record.authorizationOutcome ?? '—'}</small></TableCell>
-    </TableRow>)}</TableBody></Table>)}
-    {state === 'ready' && page?.data.length ? <nav aria-label={t('api.requestPagesLabel')} className="flex flex-wrap items-center justify-between gap-2"><Button disabled={!params.getAll('back').length} onClick={previousPage} size="small"><ArrowLeft aria-hidden="true" size={14} /> {t('api.previous')}</Button><span className="text-xs text-muted-foreground">{t('api.cursorResults')}</span><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('api.next')} <ArrowRight aria-hidden="true" size={14} /></Button></nav> : null}
   </section>;
 }
 
@@ -524,12 +430,10 @@ function RealtimeWorkspace({ collection, example }: { collection: Collection; ex
 
 export function GlobalAPIPage() {
   const { t, errorMessage } = useI18n();
-  const [params, setParams] = useSearchParams();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<unknown>();
   const [reload, setReload] = useState(0);
-  const tab = params.get('tab') === 'requests' ? 'requests' : 'endpoints';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -538,93 +442,12 @@ export function GlobalAPIPage() {
     return () => controller.abort();
   }, [reload]);
 
-  return <div className="flex min-w-0 flex-col gap-6"><APIPageHeader description={t('api.workspaceDescription')} eyebrow="API" title={t('api.workspaceTitle')} />
-    <nav aria-label={t('api.workspaceLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b"><button aria-current={tab === 'endpoints' ? 'page' : undefined} className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${tab === 'endpoints' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => { const next = new URLSearchParams(params); next.set('tab', 'endpoints'); setParams(next, { replace: true }); }} type="button">{t('api.endpointsTab')}</button><button aria-current={tab === 'requests' ? 'page' : undefined} className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${tab === 'requests' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => { const next = new URLSearchParams(params); next.set('tab', 'requests'); setParams(next, { replace: true }); }} type="button">{t('api.requestsTab')}</button></nav>
-    {tab === 'requests' ? <RequestHistory collections={collections} /> : state === 'loading' ? <LoadingState label={t('api.loadingWorkspace')} /> : state === 'error' ? (() => { const copy = errorCopy(error, t('api.collectionsLoadFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })() : <EndpointWorkspace collections={collections} />}
-  </div>;
-}
-function internalReturnPath(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return undefined;
-  // 旧书签可能仍携带旧信息架构的 return path；经 route-map 映射到新导航后再使用。
-  const queryIndex = value.indexOf('?');
-  const pathname = queryIndex >= 0 ? value.slice(0, queryIndex) : value;
-  const search = queryIndex >= 0 ? value.slice(queryIndex) : '';
-  const mapped = mapLegacyPath(pathname, search);
-  if (mapped !== null) return `${mapped.pathname}${mapped.search}`;
-  if (value.startsWith('/connect/api') || value.startsWith('/collections/') || value.startsWith('/activity/audit')) return value;
-  return undefined;
-}
-
-function matchingEndpoint(collections: Collection[], record: RequestRecord) {
-  const collection = collections.find((item) => item.id === record.collectionId);
-  if (!collection) return undefined;
-  const candidate = record.endpoint.split('/');
-  // Durable telemetry stores route templates while callers may hold concrete paths; both must resolve.
-  return endpointsForCollection(collection).find((item) => {
-    if (item.method !== record.method) return false;
-    const pattern = item.template.split('/');
-    if (pattern.length !== candidate.length) return false;
-    return pattern.every((segment, index) => {
-      const value = candidate[index] ?? '';
-      if (segment === '{collectionName}') {
-        return value === collection.name || value === encodeURIComponent(collection.name) || value === '{collectionName}';
-      }
-      if (segment.startsWith('{') && segment.endsWith('}')) return value.length > 0;
-      return segment === value;
-    });
-  });
-}
-
-export function RequestDetailPage() {
-  const { t, formatDate, formatNumber, errorMessage } = useI18n();
-  const { requestId = '' } = useParams();
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
-  const [record, setRecord] = useState<RequestRecord>();
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<unknown>();
-  const [reload, setReload] = useState(0);
-  const from = internalReturnPath(params.get('from'));
-  const endpoint = useMemo(() => record ? matchingEndpoint(collections, record) : undefined, [collections, record]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setState('loading');
-    void getRequestRecord(requestId, controller.signal).then((value) => {
-      if (!controller.signal.aborted) { setRecord(value); setState('ready'); setError(undefined); }
-    }).catch((reason: unknown) => {
-      if (!controller.signal.aborted) { setError(reason); setState('error'); }
-    });
-    void listAllCollections(controller.signal).then((items) => { if (!controller.signal.aborted) setCollections(items); }).catch(() => { if (!controller.signal.aborted) setCollections([]); });
-    return () => controller.abort();
-  }, [requestId, reload]);
-
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('api.requestDetailLoading')} /></div>;
-  if (state === 'error' || !record) {
-    const copy = errorCopy(error, t('api.requestDetailLoadFailed'), t, errorMessage);
-    return <div className="flex min-w-0 flex-col gap-6"><ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="font-semibold text-primary hover:underline" to="/connect/api?tab=requests">{t('api.backToRequests')}</Link></ErrorState></div>;
-  }
-  const collection = collections.find((item) => item.id === record.collectionId);
-  const endpointLink = endpoint ? `/connect/api?tab=endpoints&collection=${encodeURIComponent(endpoint.collectionId)}&endpoint=${encodeURIComponent(endpoint.operationId)}` : '/connect/api?tab=endpoints';
-  const collectionLink = collection && endpoint ? `/collections/${encodeURIComponent(collection.id)}/api?endpoint=${encodeURIComponent(endpoint.operationId)}` : undefined;
-
-  return <div className="flex min-w-0 max-w-[64rem] flex-col gap-6">
-    <p className="m-0"><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-ink-secondary hover:text-foreground" to={from ?? '/connect/api?tab=requests'}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link></p>
-    <APIPageHeader description={t('api.requestDetailDescription')} eyebrow={t('api.requestDetailEyebrow')} title={t('api.requestDetailTitle')} />
-    <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
-      <header className="flex flex-wrap items-center gap-3 border-b pb-4"><div className="min-w-0 flex-1"><p className="eyebrow">{t('api.canonicalRequestId')}</p><h2 className="mt-1 mb-0 break-words"><code className="font-mono text-[0.9em]">{record.requestId}</code></h2></div><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip><CopyButton label={t('api.copyRequestId')} value={record.requestId} /></header>
-      <dl className="m-0 grid gap-4 min-[681px]:grid-cols-2">
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.columnTime')}</dt><dd className="m-0 break-words text-xs text-foreground"><time dateTime={record.time}>{formatDate(record.time)}</time></dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.durationLabel')}</dt><dd className="m-0 break-words text-xs text-foreground">{formatNumber(record.durationMs)} ms</dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.responseSize')}</dt><dd className="m-0 break-words text-xs text-foreground">{record.responseSizeBytes === undefined ? t('api.notRecorded') : t('api.bytes', { count: formatNumber(record.responseSizeBytes) })}</dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.methodAndRoute')}</dt><dd className="m-0 flex flex-wrap items-center gap-2 break-words text-xs text-foreground"><MethodPill method={record.method} /><code className="font-mono text-[11px] break-all">{record.endpoint}</code></dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.collectionLabel')}</dt><dd className="m-0 break-words text-xs text-foreground">{collection?.name ?? record.collectionId ?? '—'}</dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.authentication')}</dt><dd className="m-0 break-words text-xs text-foreground">{record.authenticationOutcome ?? t('api.notRecorded')}</dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.authorization')}</dt><dd className="m-0 break-words text-xs text-foreground">{record.authorizationOutcome ?? t('api.notRecorded')}</dd></div>
-        <div className="min-w-0"><dt className="mb-1 text-[11px] text-muted-foreground">{t('api.errorCode')}</dt><dd className="m-0 break-words text-xs text-foreground">{record.errorCode ?? '—'}</dd></div>
-      </dl>
-      <div className="flex flex-wrap gap-2 border-t pt-3.5"><ButtonLink size="small" to={endpointLink}>{t('api.openEndpoint')}</ButtonLink>{collectionLink && <ButtonLink size="small" to={collectionLink}>{t('api.openCollectionApi')}</ButtonLink>}{record.authorizationOutcome === 'denied' && record.collectionId && <ButtonLink size="small" to={`/collections/${encodeURIComponent(record.collectionId)}/access`}>{t('api.reviewAccessRules')}</ButtonLink>}<Button onClick={() => navigate('/connect/api?tab=requests&search=' + encodeURIComponent(record.requestId))} size="small">{t('api.findInRequests')}</Button></div>
-    </Surface>
+  // Spec 0001 §3.1：Request 日志属于 Observe，不在 Connect 内复制一份列表。
+  return <div className="flex min-w-0 flex-col gap-6">
+    <APIPageHeader description={t('api.workspaceDescription')} eyebrow="API" title={t('api.workspaceTitle')} />
+    <div className="flex flex-wrap items-center gap-2">
+      <ButtonLink size="small" to="/requests">{t('navigation.requests')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>
+    </div>
+    {state === 'loading' ? <LoadingState label={t('api.loadingWorkspace')} /> : state === 'error' ? (() => { const copy = errorCopy(error, t('api.collectionsLoadFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })() : <EndpointWorkspace collections={collections} />}
   </div>;
 }

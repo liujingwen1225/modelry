@@ -89,7 +89,7 @@ describe('Modelry Admin shell', () => {
 
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page'));
-    const primaryNavigationLabels = ['Home', 'Collections', 'API & SDK', 'Automations', 'Activity & Audit', 'Changes', 'Model health', 'Access & keys', 'Settings'];
+    const primaryNavigationLabels = ['Home', 'Collections', 'API & SDK', 'Automations', 'Requests', 'Activity & Audit', 'Changes', 'Model health', 'Access & keys', 'Settings'];
     const primaryNavigationLinks = within(navigation).getAllByRole('link');
     expect(primaryNavigationLinks.map((link) => link.textContent)).toEqual(primaryNavigationLabels);
     expect(primaryNavigationLinks.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);

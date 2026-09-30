@@ -53,7 +53,7 @@ describe('Access and Audit pages', () => {
     expect(await screen.findByText('No Service Accounts yet')).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('Control Plane');
     await user.click(screen.getAllByRole('button', { name: 'Create Service Account' })[0]!);
-    const createForm = document.querySelector<HTMLFormElement>('form.access-form')!;
+    const createForm = document.querySelector<HTMLFormElement>('[data-access-form]')!;
     await user.type(createForm.querySelector('#account-name')!, 'ci-readonly');
     await user.click(createForm.querySelector('button[type="submit"]')!);
 
@@ -80,11 +80,11 @@ describe('Access and Audit pages', () => {
     mocks.createServiceAccount.mockResolvedValue({ serviceAccount: { ...account, permission: 'custom', customPermissionVersion: 1, customOperations: ['collections.read'] } });
     renderAccess();
     await user.click(await screen.findByRole('button', { name: 'Create Service Account' }));
-    const form = document.querySelector<HTMLFormElement>('form.access-form')!;
+    const form = document.querySelector<HTMLFormElement>('[data-access-form]')!;
     await user.type(form.querySelector('#account-name')!, 'model-reader');
     await user.selectOptions(form.querySelector('#account-permission')!, 'custom');
     await user.click(form.querySelector('input[value="collections.read"]')!);
-    await user.click(form.querySelector('.access-checkbox input')!);
+    await user.click(form.querySelector('[data-access-create-key] input')!);
     await user.click(form.querySelector('button[type="submit"]')!);
     await waitFor(() => expect(mocks.createServiceAccount).toHaveBeenCalledWith(expect.objectContaining({ permission: 'custom', customPermissionVersion: 1, customOperations: ['collections.read'], createAPIKey: false })));
   });

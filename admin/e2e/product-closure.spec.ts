@@ -1008,7 +1008,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/access`);
     expect(await activePage.locator('body').innerText()).not.toContain(appSession);
 
-    await activePage.goto(`${runtimeURL}/api?tab=requests&search=${encodeURIComponent(deniedRequestId)}`);
+    await activePage.goto(`${runtimeURL}/requests?search=${encodeURIComponent(deniedRequestId)}`);
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
     await activePage.getByText(deniedRequestId, { exact: true }).first().click();
     await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
@@ -1045,7 +1045,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(await activePage.locator('[data-api-response-body]').count()).toBe(0);
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
     await expect(activePage).toHaveURL(/\/requests\/req_/);
-    await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
+    await expect(activePage.getByRole('region', { name: 'Request details' })).toContainText('/files/');
     await expect(activePage.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=' + encodeURIComponent(postsId) + '&endpoint=readApplicationRecordFile');
     await expect(activePage.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/api?endpoint=readApplicationRecordFile`);
   });
@@ -1059,7 +1059,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(accountDialog.getByLabel('Create API Key now')).toBeChecked();
     await accountDialog.getByRole('button', { name: 'Create Service Account', exact: true }).click();
     await expect(activePage.getByRole('heading', { name: 'Copy your API Key now' })).toBeVisible();
-    revokedAPIKey = (await activePage.locator('.access-reveal__secret code').textContent()) ?? '';
+    revokedAPIKey = (await activePage.locator('[data-access-reveal-secret] code').textContent()) ?? '';
     expect(revokedAPIKey).toMatch(/^mdl_/);
     await activePage.getByRole('button', { name: 'Done', exact: true }).click();
     expect(await activePage.locator('body').innerText()).not.toContain(revokedAPIKey);
@@ -1114,13 +1114,13 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(auditBody.status).toBe(200);
     expect(JSON.stringify(auditBody.body)).not.toContain(revokedAPIKey);
     await activePage.goto(`${runtimeURL}/access/audit?action=${encodeURIComponent('apiKey.revoked')}`);
-    const auditRow = activePage.locator('.data-table tbody tr').filter({ hasText: 'apiKey.revoked' });
+    const auditRow = activePage.locator('[data-audit-table] tbody tr').filter({ hasText: 'apiKey.revoked' });
     await expect(auditRow).toBeVisible();
     const auditLink = auditRow.getByRole('link').first();
     await auditLink.click();
     await expect(activePage).toHaveURL(/\/activity\/audit\/[^?]+\?from=/);
-    await expect(activePage.locator('.audit-detail-grid')).toContainText('apiKey.revoked');
-    await expect(activePage.locator('.audit-resource pre')).toContainText('apiKey');
+    await expect(activePage.locator('[data-audit-detail-grid]')).toContainText('apiKey.revoked');
+    await expect(activePage.locator('[data-audit-resource] pre')).toContainText('apiKey');
     expect(await activePage.locator('body').innerText()).not.toContain(revokedAPIKey);
   });
 
@@ -1201,7 +1201,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(beforeRestart?.projectId).toBe(firstReady.projectId);
     await activePage.goto(`${runtimeURL}/requests/${encodeURIComponent(attachmentRequestId)}`);
     await expect(activePage.getByText(attachmentRequestId, { exact: true }).first()).toBeVisible();
-    await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
+    await expect(activePage.getByRole('region', { name: 'Request details' })).toContainText('/files/');
     await activePage.close();
     await stopRuntime();
 
@@ -1226,7 +1226,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Sign in' }).click();
     await expect(activePage).toHaveURL(new RegExp(`/requests/${attachmentRequestId}`));
     await expect(activePage.getByText(attachmentRequestId, { exact: true }).first()).toBeVisible();
-    await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
+    await expect(activePage.getByRole('region', { name: 'Request details' })).toContainText('/files/');
 
     const runtimeStatus = unwrap((await requestJSON(activePage, 'GET', '/admin/api/v1/runtime/status')).body) as {
       state: string;

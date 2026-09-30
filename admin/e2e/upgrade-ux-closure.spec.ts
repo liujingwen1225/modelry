@@ -444,12 +444,12 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.locator('[data-api-endpoint-meta]')).toContainText('listApplicationRecords');
   await expect(page.locator('[data-api-endpoint-meta]')).toContainText('操作');
   await expect(page.locator('[data-api-endpoint-option]').first()).toContainText('/api/v1/posts');
-  await page.goto(runtimeURL + '/api?tab=requests');
-  await expect(page.getByRole('heading', { name: 'API 工作区', level: 1 })).toBeVisible();
+  await page.goto(runtimeURL + '/requests');
+  await expect(page.getByRole('heading', { name: '请求', level: 1 })).toBeVisible();
   await expect(page.getByRole('table', { name: '应用请求记录' })).toBeVisible();
   await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible();
   await page.locator('.locale-switcher select').selectOption('en');
-  await expect(page.getByRole('heading', { name: 'API Workspace', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Requests', level: 1 })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Application Request Records' })).toBeVisible();
 
   // 5c) 真实 Collection 的长名称、语言 / 深链上下文和主题在桌面及窄屏视口下保持可读。
