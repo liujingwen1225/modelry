@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, Clock3, Download, Plus, RefreshCw, Search, S
 import { useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, Sheet, Surface } from '../components/ui';
 import {
   createRecord,
@@ -26,6 +28,9 @@ import { useCollectionWorkspace } from './workspace-context';
 
 type Violation = { path?: string; message?: string; code?: string };
 type FilterDraft = { field: string; operator: string; value: string };
+
+// 工具栏内的筛选/排序控件共享同一套紧凑外观，直接对齐 FormField 中的原生 select/input 视觉。
+const toolbarControlClass = 'min-h-8 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none transition-[color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-55';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -109,8 +114,12 @@ function cursorHistory(searchParams: URLSearchParams) {
 function RecordPageTitle({ collection, onCreate }: { collection: Collection; onCreate: () => void }) {
   const { t } = useI18n();
   return (
-    <header className="page-heading collection-heading records-heading">
-      <div><p className="eyebrow">{collection.name} · {t('records.dataEyebrow')}</p><h1>{t('records.title')}</h1><p className="page-description">{t('records.description', { name: collection.name })}</p></div>
+    <header className="flex flex-wrap items-end justify-between gap-4" data-record-heading>
+      <div className="min-w-0">
+        <p className="eyebrow">{collection.name} · {t('records.dataEyebrow')}</p>
+        <h1>{t('records.title')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('records.description', { name: collection.name })}</p>
+      </div>
       <Button onClick={onCreate} variant="primary"><Plus aria-hidden="true" size={15} />{t(collection.type === 'Auth' ? 'records.createUser' : 'records.createRecord')}</Button>
     </header>
   );
@@ -291,23 +300,23 @@ export function CollectionRecordsPage() {
     }
   }
   return (
-    <div className="page-stack collection-page records-page">
+    <div className="flex min-w-0 flex-col gap-6" data-record-page>
       <RecordPageTitle collection={collection} onCreate={openCreate} />
-      {message && <div className="records-success" role="status"><span>{t(message)}</span><button aria-label={t('records.dismissMessage')} onClick={() => setMessage('')} type="button"><X aria-hidden="true" size={14} /></button></div>}
-      <Surface className="records-toolbar" variant="standard">
-        <label className="collection-search records-search">
-          <Search aria-hidden="true" size={15} />
+      {message && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><span className="min-w-0 flex-1">{t(message)}</span><Button aria-label={t('records.dismissMessage')} className="size-8 px-0" onClick={() => setMessage('')} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} /></Button></div>}
+      <Surface className="flex flex-wrap items-center gap-3 p-3" variant="standard">
+        <label className="relative flex min-w-[200px] flex-1 items-center md:max-w-sm">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 text-muted-foreground" size={15} />
           <span className="sr-only">{t('records.search')}</span>
-          <input aria-label={t('records.search')} onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} type="search" value={search} />
+          <Input aria-label={t('records.search')} className="pl-9" onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} type="search" value={search} />
         </label>
-        <label className="records-control"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
-          <select aria-label={t('records.filterField')} onChange={(event) => updateParams({ filterField: event.target.value || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field}>
+        <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
+          <select aria-label={t('records.filterField')} className={toolbarControlClass} onChange={(event) => updateParams({ filterField: event.target.value || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field}>
             <option value="">{t('records.noFilter')}</option>{availableFilterFields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}
           </select>
         </label>
         {filterDraft.field && <>
-          <label className="records-control"><span className="sr-only">{t('records.filterOperator')}</span>
-            <select aria-label={t('records.filterOperator')} onChange={(event) => {
+          <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterOperator')}</span>
+            <select aria-label={t('records.filterOperator')} className={toolbarControlClass} onChange={(event) => {
               const draft = { ...filterDraft, operator: event.target.value };
               updateParams({ filterOperator: draft.operator, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
             }} value={filterDraft.operator}>
@@ -317,14 +326,14 @@ export function CollectionRecordsPage() {
                   ? ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] : ['eq', 'ne']).map((operator) => <option key={operator} value={operator}>{operator}</option>)}
             </select>
           </label>
-          <label className="records-control records-filter-value"><span className="sr-only">{t('records.filterValue')}</span>
+          <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterValue')}</span>
             {availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'boolean'
-              ? <select aria-label={t('records.filterValue')} onChange={(event) => {
+              ? <select aria-label={t('records.filterValue')} className={toolbarControlClass} onChange={(event) => {
                 const value = event.target.value;
                 const draft = { ...filterDraft, value };
                 updateParams({ filterValue: value, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
               }} value={filterDraft.value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>
-              : <input aria-label={t('records.filterValue')} onChange={(event) => {
+              : <input aria-label={t('records.filterValue')} className={`${toolbarControlClass} w-[118px]`} onChange={(event) => {
                 const field = availableFilterFields.find((item) => item.name === filterDraft.field);
                 const draft = { ...filterDraft, value: event.target.value };
                 const syntax = filterSyntax(draft, field);
@@ -333,13 +342,13 @@ export function CollectionRecordsPage() {
           </label>
           <Button aria-label={t('records.clearFilter')} onClick={() => updateParams({ filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small" variant="quiet"><X aria-hidden="true" size={14} /></Button>
         </>}
-        <label className="records-control"><span>{t('records.sort')}</span>
-          <select aria-label={t('records.sortField')} onChange={(event) => updateParams({ sort: `${event.target.value} ${currentSortDirection}` }, true)} value={currentSortField}>
+        <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span>{t('records.sort')}</span>
+          <select aria-label={t('records.sortField')} className={toolbarControlClass} onChange={(event) => updateParams({ sort: `${event.target.value} ${currentSortDirection}` }, true)} value={currentSortField}>
             <option value="createdAt">{t('records.created')}</option><option value="updatedAt">{t('records.updated')}</option><option value="id">{t('records.id')}</option>{fields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}
           </select>
-          <select aria-label={t('records.sortDirection')} onChange={(event) => updateParams({ sort: `${currentSortField} ${event.target.value}` }, true)} value={currentSortDirection}><option value="desc">{t('records.newest')}</option><option value="asc">{t('records.oldest')}</option></select>
+          <select aria-label={t('records.sortDirection')} className={toolbarControlClass} onChange={(event) => updateParams({ sort: `${currentSortField} ${event.target.value}` }, true)} value={currentSortDirection}><option value="desc">{t('records.newest')}</option><option value="asc">{t('records.oldest')}</option></select>
         </label>
-        <details className="records-columns"><summary>{t('records.columns')}</summary><div>{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <label key={name}><input checked={visibleColumns.includes(name)} onChange={(event) => toggleColumn(name, event.target.checked)} type="checkbox" />{name}</label>)}</div></details>
+        <details className="relative ml-auto"><summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</summary><div className="absolute right-0 top-[calc(100%+5px)] z-30 grid min-w-[160px] gap-2 rounded-lg border bg-card p-2.5 text-xs shadow-floating">{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <label className="flex items-center gap-2 text-ink-secondary" key={name}><input checked={visibleColumns.includes(name)} className="accent-primary" onChange={(event) => toggleColumn(name, event.target.checked)} type="checkbox" />{name}</label>)}</div></details>
       </Surface>
 
       {state === 'loading' && <LoadingState label={t('records.loading')} />}
@@ -347,13 +356,21 @@ export function CollectionRecordsPage() {
       {state === 'ready' && page.data.length === 0 && !search && !filter && history.length === 0 && <EmptyState description={t('records.emptyDescription')} title={t('records.emptyTitle')}><Button onClick={openCreate} variant="primary"><Plus aria-hidden="true" size={14} />{t('records.createFirst')}</Button></EmptyState>}
       {state === 'ready' && page.data.length === 0 && (search || filter || history.length > 0) && <EmptyState description={t('records.noMatchDescription')} title={t('records.noMatchTitle')}><Button onClick={() => updateParams({ search: undefined, filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small">{t('records.clearSearchAndFilter')}</Button></EmptyState>}
       {state === 'ready' && page.data.length > 0 && <>
-        <div className="records-table-wrap"><table className="records-table"><caption>{t('records.tableCaption', { name: collection.name, page: history.length + 1 })}</caption><thead><tr>{visibleColumns.map((name) => <th key={name} scope="col">{name === 'id' ? t('records.id') : name === 'createdAt' ? t('records.created') : name === 'updatedAt' ? t('records.updated') : name}</th>)}<th scope="col"><span className="sr-only">{t('records.actions')}</span></th></tr></thead>
-          <tbody>{page.data.map((record) => <tr key={record.id}>
-            {visibleColumns.map((name) => <td key={name}><button className="records-cell-link" onClick={() => openRecord(record.id)} type="button">{name === 'createdAt' || name === 'updatedAt' ? displayDate(record[name], formatDate) : formatValue(record[name], t)}</button></td>)}
-            <td className="records-row-actions">{collection.type !== 'Auth' && <><Button onClick={() => openRecord(record.id, true)} size="small" variant="quiet">{t('records.edit')}</Button><Button aria-label={t('records.deleteRecordLabel', { id: record.id })} onClick={() => { setRowDeleteTarget(record); setRowDeleteError(undefined); }} size="small" variant="danger">{t('records.delete')}</Button></>}</td>
-          </tr>)}</tbody>
-        </table></div>
-        <nav aria-label={t('records.pages')} className="records-pagination"><span>{t('records.page', { page: history.length + 1 })}</span><div><Button disabled={!history.length} onClick={previousPage} size="small"><ChevronLeft aria-hidden="true" size={14} />{t('records.previous')}</Button><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('records.next')}<ChevronRight aria-hidden="true" size={14} /></Button></div></nav>
+        <Table aria-label={t('records.tableCaption', { name: collection.name, page: history.length + 1 })} data-record-table>
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              {visibleColumns.map((name) => <TableHead key={name} scope="col">{name === 'id' ? t('records.id') : name === 'createdAt' ? t('records.created') : name === 'updatedAt' ? t('records.updated') : name}</TableHead>)}
+              <TableHead scope="col"><span className="sr-only">{t('records.actions')}</span></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {page.data.map((record) => <TableRow key={record.id}>
+              {visibleColumns.map((name) => <TableCell className="max-w-[320px]" key={name}><button className={`block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-xs hover:text-primary ${name === visibleColumns[0] ? 'font-semibold text-primary' : 'text-ink-secondary'}`} onClick={() => openRecord(record.id)} type="button">{name === 'createdAt' || name === 'updatedAt' ? displayDate(record[name], formatDate) : formatValue(record[name], t)}</button></TableCell>)}
+              <TableCell className="w-px whitespace-nowrap"><div className="flex justify-end gap-1">{collection.type !== 'Auth' && <><Button onClick={() => openRecord(record.id, true)} size="small" variant="quiet">{t('records.edit')}</Button><Button aria-label={t('records.deleteRecordLabel', { id: record.id })} onClick={() => { setRowDeleteTarget(record); setRowDeleteError(undefined); }} size="small" variant="danger">{t('records.delete')}</Button></>}</div></TableCell>
+            </TableRow>)}
+          </TableBody>
+        </Table>
+        <nav aria-label={t('records.pages')} className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"><span>{t('records.page', { page: history.length + 1 })}</span><div className="flex gap-2"><Button disabled={!history.length} onClick={previousPage} size="small"><ChevronLeft aria-hidden="true" size={14} />{t('records.previous')}</Button><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('records.next')}<ChevronRight aria-hidden="true" size={14} /></Button></div></nav>
       </>}
 
       <Sheet closeLabel={t('records.close')} open={isCreating || Boolean(selectedId)} onClose={closeSheet} size="wide" title={isCreating ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : isEditing ? t('records.editRecord') : t('records.record')}>
@@ -363,9 +380,9 @@ export function CollectionRecordsPage() {
         {!isCreating && selectedId && recordState === 'ready' && activeRecord && <RecordEditor collection={collection} expandedFields={expandFields} fields={fields} key={`${activeRecord.id}-${isEditing ? 'edit' : 'view'}`} mode={isEditing ? 'edit' : 'view'} onCancel={closeSheet} onDelete={onRecordDeleted} onEdit={() => openRecord(activeRecord.id, true)} onSaved={onRecordSaved} record={activeRecord} />}
       </Sheet>
       <Dialog closeLabel={t('records.cancel')} open={Boolean(rowDeleteTarget)} onClose={() => { if (!rowDeleting) { setRowDeleteTarget(undefined); setRowDeleteError(undefined); } }} title={t('records.deleteTitle')}>
-        <p>{t('records.deleteBodyPrefix')}<code>{rowDeleteTarget?.id}</code>{t('records.deleteBodySuffix', { name: collection.name })}</p>
+        <p className="m-0 text-xs leading-relaxed text-ink-secondary [&_code]:font-mono [&_code]:text-foreground">{t('records.deleteBodyPrefix')}<code>{rowDeleteTarget?.id}</code>{t('records.deleteBodySuffix', { name: collection.name })}</p>
         {rowDeleteError !== undefined && (() => { const copy = errorCopy(rowDeleteError, t('records.deleteFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title} />; })()}
-        <div className="record-editor-actions"><Button disabled={rowDeleting} onClick={() => { setRowDeleteTarget(undefined); setRowDeleteError(undefined); }} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={rowDeleting} onClick={() => void confirmRowDelete()} type="button" variant="danger">{rowDeleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div>
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5"><Button disabled={rowDeleting} onClick={() => { setRowDeleteTarget(undefined); setRowDeleteError(undefined); }} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={rowDeleting} onClick={() => void confirmRowDelete()} type="button" variant="danger">{rowDeleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div>
       </Dialog>
     </div>
   );
@@ -598,18 +615,18 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
 
   const formCopy = formError ? errorCopy(formError, t('records.saveFailed'), t, errorMessage, validationMessage) : undefined;
   return (
-    <div className="record-editor">
+    <div className="grid gap-4" data-record-editor>
       {mode === 'view' && record ? <>
-        <div className="record-detail-identity"><span>{t('records.recordId')}</span><code>{record.id}</code><span><Clock3 aria-hidden="true" size={13} /> {t('records.updatedAt', { date: displayDate(record.updatedAt, formatDate) })}</span></div>
-        <dl className="record-detail-values">{fields.map((field) => <div key={field.name}><dt>{field.name}</dt><dd>
-          {field.type === 'file' && record[field.name] ? <><span>{t('records.fileAttached')}</span><Button onClick={() => void download(field)} size="small" variant="quiet"><Download aria-hidden="true" size={13} />{t('records.download')}</Button></> : <><span>{formatValue(record[field.name], t)}</span>{field.type === 'relation' && expandedRelationCopy(record, field.name, expandedFields, t) && <small className="record-relation-expand">{t('records.related', { value: expandedRelationCopy(record, field.name, expandedFields, t) })}</small>}</>}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1.5 border-b pb-2.5" data-record-identity><span className="text-[10px] font-semibold uppercase tracking-[0.7px] text-muted-foreground">{t('records.recordId')}</span><code className="break-words font-mono text-xs text-ink-secondary">{record.id}</code><span className="col-start-2 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Clock3 aria-hidden="true" size={13} /> {t('records.updatedAt', { date: displayDate(record.updatedAt, formatDate) })}</span></div>
+        <dl className="m-0 grid" data-record-values>{fields.map((field) => <div className="grid grid-cols-[minmax(95px,0.35fr)_minmax(0,1fr)] gap-2.5 border-b py-2.5" key={field.name}><dt className="text-xs font-semibold text-muted-foreground">{field.name}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-ink-secondary">
+          {field.type === 'file' && record[field.name] ? <><span>{t('records.fileAttached')}</span><Button onClick={() => void download(field)} size="small" variant="quiet"><Download aria-hidden="true" size={13} />{t('records.download')}</Button></> : <><span className="break-words">{formatValue(record[field.name], t)}</span>{field.type === 'relation' && expandedRelationCopy(record, field.name, expandedFields, t) && <small className="basis-full text-[11px] text-muted-foreground">{t('records.related', { value: expandedRelationCopy(record, field.name, expandedFields, t) })}</small>}</>}
         </dd></div>)}</dl>
         {recordErrorCopy(formCopy)}
-        {confirmDelete && <div className="record-delete-confirm" role="alert"><strong>{t('records.deleteTitle')}</strong><span>{t('records.confirmDeleteBody')}</span><div><Button disabled={deleting} onClick={() => setConfirmDelete(false)} size="small">{t('records.cancel')}</Button><Button disabled={deleting} onClick={() => void remove()} size="small" variant="danger">{deleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div></div>}
-        <div className="record-editor-actions"><Button onClick={onCancel} variant="quiet">{t('records.close')}</Button>{collection.type !== 'Auth' && <><Button onClick={onEdit} variant="primary">{t('records.edit')}</Button><Button onClick={() => setConfirmDelete(true)} size="small" variant="danger"><Trash2 aria-hidden="true" size={14} />{t('records.delete')}</Button></>}</div>
-      </> : <form onSubmit={(event) => void save(event)}>
+        {confirmDelete && <div className="grid gap-1.5 rounded-lg border border-danger/30 bg-danger-soft p-2.5" role="alert"><strong className="text-xs text-danger">{t('records.deleteTitle')}</strong><span className="text-[11px] text-ink-secondary">{t('records.confirmDeleteBody')}</span><div className="flex justify-end gap-2 pt-1"><Button disabled={deleting} onClick={() => setConfirmDelete(false)} size="small">{t('records.cancel')}</Button><Button disabled={deleting} onClick={() => void remove()} size="small" variant="danger">{deleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div></div>}
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5" data-record-editor-actions><Button onClick={onCancel} variant="quiet">{t('records.close')}</Button>{collection.type !== 'Auth' && <><Button onClick={onEdit} variant="primary">{t('records.edit')}</Button><Button onClick={() => setConfirmDelete(true)} size="small" variant="danger"><Trash2 aria-hidden="true" size={14} />{t('records.delete')}</Button></>}</div>
+      </> : <form className="grid gap-3.5" onSubmit={(event) => void save(event)}>
         {formCopy && <ErrorState description={formCopy.message} title={formCopy.title} />}
-        {collection.type === 'Auth' && isNew && <section className="record-auth-fields"><h3>{t('records.profile')}</h3><p>{t('records.profileHint')}</p></section>}
+        {collection.type === 'Auth' && isNew && <section className="grid gap-2 border-b pb-2.5"><h3 className="m-0 text-xs font-semibold text-foreground">{t('records.profile')}</h3><p className="m-0 text-[11px] text-muted-foreground">{t('records.profileHint')}</p></section>}
         {fields.map((field) => <RecordField
           disabled={saving || readOnly}
           error={fieldErrors[field.name]}
@@ -627,12 +644,12 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
           uploading={Boolean(uploading[field.name])}
           value={values[field.name] ?? ''}
         />)}
-        {collection.type === 'Auth' && isNew && <section className="record-auth-fields"><h3>{t('records.authentication')}</h3>
+        {collection.type === 'Auth' && isNew && <section className="grid gap-2 border-b pb-2.5"><h3 className="m-0 text-xs font-semibold text-foreground">{t('records.authentication')}</h3>
           <FormField htmlFor="record-user-password" label={t('records.password')}><input autoComplete="new-password" disabled={saving} id="record-user-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField>
           <FormField htmlFor="record-user-confirm-password" label={t('records.confirmPassword')}><input autoComplete="new-password" disabled={saving} id="record-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>
-          {fieldErrors.confirmPassword && <span className="record-field-error" role="alert">{fieldErrors.confirmPassword}</span>}
+          {fieldErrors.confirmPassword && <span className="text-[11px] font-semibold text-danger" role="alert">{fieldErrors.confirmPassword}</span>}
         </section>}
-        <div className="record-editor-actions"><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={saving || Object.values(uploading).some(Boolean)} type="submit" variant="primary">{saving ? t('records.saving') : isNew ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : t('records.saveChanges')}</Button></div>
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5" data-record-editor-actions><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={saving || Object.values(uploading).some(Boolean)} type="submit" variant="primary">{saving ? t('records.saving') : isNew ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : t('records.saveChanges')}</Button></div>
       </form>}
     </div>
   );
@@ -670,35 +687,37 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
       const rules = fileRules(field);
       if (field.type === 'files') {
         const list = fileList ?? [];
-        control = <div className="record-file-control" data-testid={'record-files-' + field.name}>
-          <ul className="record-file-list">
+        control = <div className="grid gap-2" data-testid={'record-files-' + field.name}>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
             {list.map((entry, index) => {
               const meta = fileMeta?.find((item) => item.temporaryId === entry) ?? upload;
               const staged = entry.startsWith('tmp_');
-              return <li key={entry + '-' + index}>
-                <span>#{index}</span>
-                <code>{entry}</code>
-                {meta && <small>{t('records.fileMeta', { type: meta.contentType, size: formatNumber(meta.size) })}</small>}
-                {!staged && !disabled && onDownloadAt && <Button onClick={() => onDownloadAt(index)} size="small" type="button" variant="quiet">{t('records.download')}</Button>}
-                {!disabled && onRemoveFile && <Button onClick={() => onRemoveFile(index)} size="small" type="button" variant="quiet">{t('records.remove')}</Button>}
+              return <li className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-[11px] text-ink-secondary" key={entry + '-' + index}>
+                <span className="text-muted-foreground">#{index}</span>
+                <code className="break-all font-mono">{entry}</code>
+                {meta && <small className="text-[11px] text-muted-foreground">{t('records.fileMeta', { type: meta.contentType, size: formatNumber(meta.size) })}</small>}
+                <span className="ml-auto flex gap-1">
+                  {!staged && !disabled && onDownloadAt && <Button onClick={() => onDownloadAt(index)} size="small" type="button" variant="quiet">{t('records.download')}</Button>}
+                  {!disabled && onRemoveFile && <Button onClick={() => onRemoveFile(index)} size="small" type="button" variant="quiet">{t('records.remove')}</Button>}
+                </span>
               </li>;
             })}
           </ul>
-          <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFilesLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
-          <small>{t('records.filesHint', { max: rules.maxFiles, size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
-          {list.length >= rules.maxFiles && <span className="record-field-error" role="alert">{t('records.maxFilesReached')}</span>}
-          {uploading && <span role="status">{t('records.uploading')}</span>}
-          {uploadError && <span className="record-field-error" role="alert">{uploadError}</span>}
+          <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFilesLabel', { name: field.name })} className="w-full rounded-lg border border-dashed! border-input !bg-secondary p-1.5 text-[11px] text-ink-secondary file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px] file:font-semibold" disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
+          <small className="text-[11px] text-muted-foreground">{t('records.filesHint', { max: rules.maxFiles, size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
+          {list.length >= rules.maxFiles && <span className="text-[11px] font-semibold text-danger" role="alert">{t('records.maxFilesReached')}</span>}
+          {uploading && <span className="text-[11px] text-muted-foreground" role="status">{t('records.uploading')}</span>}
+          {uploadError && <span className="text-[11px] font-semibold text-danger" role="alert">{uploadError}</span>}
         </div>;
         break;
       }
-      control = <div className="record-file-control">
-        {Boolean(record?.[field.name]) && <span className="record-file-current">{t('records.fileAttachedToRecord')} <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">{t('records.replace')}</Button></span>}
-        <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFileLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
-        <small>{t('records.fileHint', { size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
-        {uploading && <span role="status">{t('records.uploading')}</span>}
-        {upload && <span role="status">{t('records.fileReady', { type: upload.contentType, size: formatNumber(upload.size) })}</span>}
-        {uploadError && <span className="record-field-error" role="alert">{uploadError}</span>}
+      control = <div className="grid gap-2">
+        {Boolean(record?.[field.name]) && <span className="flex items-center justify-between gap-2 text-[11px] text-ink-secondary">{t('records.fileAttachedToRecord')} <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">{t('records.replace')}</Button></span>}
+        <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFileLabel', { name: field.name })} className="w-full rounded-lg border border-dashed! border-input !bg-secondary p-1.5 text-[11px] text-ink-secondary file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px] file:font-semibold" disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
+        <small className="text-[11px] text-muted-foreground">{t('records.fileHint', { size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
+        {uploading && <span className="text-[11px] text-muted-foreground" role="status">{t('records.uploading')}</span>}
+        {upload && <span className="text-[11px] text-muted-foreground" role="status">{t('records.fileReady', { type: upload.contentType, size: formatNumber(upload.size) })}</span>}
+        {uploadError && <span className="text-[11px] font-semibold text-danger" role="alert">{uploadError}</span>}
       </div>;
       break;
     }
@@ -706,6 +725,6 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
   }
   return <FormField htmlFor={inputId} hint={hint} label={`${field.name}${field.required ? t('records.required') : ''}`}>
     {control}
-    {error && <span className="record-field-error" role="alert">{error}</span>}
+    {error && <span className="text-[11px] font-semibold text-danger" role="alert">{error}</span>}
   </FormField>;
 }

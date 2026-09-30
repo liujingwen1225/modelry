@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, KeyRound, RefreshCw, Search, Shield, ShieldCheck, UserRound } from 'lucide-react';
 import { ApiClientError } from '../api/client';
+import { Badge } from '@/components/ui/badge';
 import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, Surface } from '../components/ui';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import {
@@ -110,13 +111,14 @@ function parsePrimitive(value: unknown, field: FieldDefinition): { valid: boolea
 }
 
 function predicateValueControl(field: FieldDefinition, operator: string, value: string, onChange: (value: string) => void, t: Translate) {
+  const controlClassName = 'w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-55';
   if (operator === 'in' || field.type === 'json') {
-    return <textarea aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} placeholder={operator === 'in' ? '["one", "two"]' : '{"status":"active"}'} rows={2} value={value} />;
+    return <textarea aria-label={t('security.conditionValue')} className={controlClassName} onChange={(event) => onChange(event.target.value)} placeholder={operator === 'in' ? '["one", "two"]' : '{"status":"active"}'} rows={2} value={value} />;
   }
-  if (field.type === 'boolean') return <select aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} value={value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option><option value="">{t('security.nullOption')}</option></select>;
-  if (field.type === 'number') return <input aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} type="number" value={value} />;
-  if (field.type === 'dateTime') return <input aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} placeholder="2026-09-24T10:00:00Z" type="text" value={value} />;
-  return <input aria-label={t('security.conditionValue')} onChange={(event) => onChange(event.target.value)} type="text" value={value} />;
+  if (field.type === 'boolean') return <select aria-label={t('security.conditionValue')} className={controlClassName} onChange={(event) => onChange(event.target.value)} value={value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option><option value="">{t('security.nullOption')}</option></select>;
+  if (field.type === 'number') return <input aria-label={t('security.conditionValue')} className={controlClassName} onChange={(event) => onChange(event.target.value)} type="number" value={value} />;
+  if (field.type === 'dateTime') return <input aria-label={t('security.conditionValue')} className={controlClassName} onChange={(event) => onChange(event.target.value)} placeholder="2026-09-24T10:00:00Z" type="text" value={value} />;
+  return <input aria-label={t('security.conditionValue')} className={controlClassName} onChange={(event) => onChange(event.target.value)} type="text" value={value} />;
 }
 
 export function CollectionSecurityPage() {
@@ -222,51 +224,117 @@ export function CollectionSecurityPage() {
   }
 
   return (
-    <div className="page-stack collection-page security-page">
-      <header className="page-heading collection-heading"><div><p className="eyebrow">{collection.name} · {t('security.eyebrow')}</p><h1>{t('security.title')}</h1><p className="page-description">{t('security.description')}</p></div><span className="security-heading-icon"><Shield aria-hidden="true" size={19} /></span></header>
-      <nav aria-label={t('security.sectionsLabel')} className="security-tabs" role="tablist">
-        <button aria-controls="security-panel-rules" aria-selected={activePanel === 'rules'} id="security-tab-rules" onClick={() => selectPanel('rules')} role="tab" type="button">{t('security.tabs.rules')}</button>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="eyebrow">{collection.name} · {t('security.eyebrow')}</p>
+          <h1>{t('security.title')}</h1>
+          <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('security.description')}</p>
+        </div>
+        <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><Shield size={19} /></span>
+      </header>
+      <nav aria-label={t('security.sectionsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" role="tablist">
+        <button
+          aria-controls="security-panel-rules"
+          aria-selected={activePanel === 'rules'}
+          className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activePanel === 'rules' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          id="security-tab-rules"
+          onClick={() => selectPanel('rules')}
+          role="tab"
+          type="button"
+        >{t('security.tabs.rules')}</button>
         {authTabs && <>
-          <button aria-controls="security-panel-authentication" aria-selected={activePanel === 'authentication'} id="security-tab-authentication" onClick={() => selectPanel('authentication')} role="tab" type="button">{t('security.tabs.authentication')}</button>
-          <button aria-controls="security-panel-users" aria-selected={activePanel === 'users'} id="security-tab-users" onClick={() => selectPanel('users')} role="tab" type="button">{t('security.tabs.users')}</button>
-          <button aria-controls="security-panel-sessions" aria-selected={activePanel === 'sessions'} id="security-tab-sessions" onClick={() => selectPanel('sessions')} role="tab" type="button">{t('security.tabs.sessions')}</button>
+          <button
+            aria-controls="security-panel-authentication"
+            aria-selected={activePanel === 'authentication'}
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activePanel === 'authentication' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            id="security-tab-authentication"
+            onClick={() => selectPanel('authentication')}
+            role="tab"
+            type="button"
+          >{t('security.tabs.authentication')}</button>
+          <button
+            aria-controls="security-panel-users"
+            aria-selected={activePanel === 'users'}
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activePanel === 'users' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            id="security-tab-users"
+            onClick={() => selectPanel('users')}
+            role="tab"
+            type="button"
+          >{t('security.tabs.users')}</button>
+          <button
+            aria-controls="security-panel-sessions"
+            aria-selected={activePanel === 'sessions'}
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activePanel === 'sessions' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            id="security-tab-sessions"
+            onClick={() => selectPanel('sessions')}
+            role="tab"
+            type="button"
+          >{t('security.tabs.sessions')}</button>
         </>}
       </nav>
-      {activePanel === 'rules' && <div aria-labelledby="security-tab-rules" className="page-stack security-panel" id="security-panel-rules" role="tabpanel">
+      {activePanel === 'rules' && <div aria-labelledby="security-tab-rules" className="flex min-w-0 flex-col gap-4" id="security-panel-rules" role="tabpanel">
       {loadState === 'ready' && <AccessRuleSimulation collectionId={collection.id} />}
       {loadState === 'loading' && <LoadingState label={t('security.loadingRules')} />}
       {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.loadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {loadState === 'ready' && state && <>
-        {referenceError && <div className="security-dependency-error" role="status">{t('security.referencesUnavailable')} <Button onClick={() => setReloadKey((value) => value + 1)} size="small">{t('common.retry')}</Button></div>}
-        {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
+        {referenceError && <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs text-warning" role="status">{t('security.referencesUnavailable')} <Button onClick={() => setReloadKey((value) => value + 1)} size="small">{t('common.retry')}</Button></div>}
+        {message && <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status"><Check aria-hidden="true" className="shrink-0 text-success" size={15} />{t(message)}</div>}
         {actionError && (() => { const copy = errorCopy(actionError, t('security.changeFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.reloadRules')}</Button></ErrorState>; })()}
-        <Surface className="security-rules-card" variant="standard">
-          <div className="security-rules-heading"><div><h2>{t('security.appliedTitle')}</h2><p>{t('security.appliedDescription')}</p></div><span className="security-version">{t('security.version', { version: state.version })}</span></div>
-          <div className="security-rule-list" role="list">{OPERATIONS.map((operation) => {
+        <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
+            <div className="min-w-0">
+              <h2>{t('security.appliedTitle')}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{t('security.appliedDescription')}</p>
+            </div>
+            <Badge variant="outline">{t('security.version', { version: state.version })}</Badge>
+          </div>
+          <div className="flex min-w-0 flex-col" role="list">{OPERATIONS.map((operation) => {
             const current = pending.find((rule) => rule.operation === operation)!;
             const previous = applied.find((rule) => rule.operation === operation)!;
             const isChanged = JSON.stringify(current) !== JSON.stringify(previous);
             const ownerField = collection.fields.find((field) => field.id === current.ownerFieldId);
-            return <article className="security-rule-row" key={operation} role="listitem">
-              <div className="security-rule-operation"><span>{t(`security.operations.${operation}`)}</span>{isChanged && <span className="security-pending-mark">{t('security.pendingMark')}</span>}</div>
-              <div className="security-rule-summary"><strong>{t(`accessModes.${current.mode}.label`)}</strong>{current.mode === 'recordOwner' && <span>{ownerField?.name ?? t('security.relationField')}</span>}{current.mode === 'custom' && <span>{t('security.conditionCount', { count: expressionConditions(current.expression).length })}</span>}</div>
+            return <article className="flex flex-wrap items-center gap-3 border-b px-1 py-2.5 last:border-b-0" key={operation} role="listitem">
+              <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><Shield size={16} /></span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="text-xs font-semibold text-foreground">{t(`security.operations.${operation}`)}</strong>
+                  {isChanged && <Badge variant="warning">{t('security.pendingMark')}</Badge>}
+                </div>
+                <div className="mt-0.5 grid gap-0.5">
+                  <strong className="text-xs font-medium text-ink-secondary">{t(`accessModes.${current.mode}.label`)}</strong>
+                  {current.mode === 'recordOwner' && <span className="text-[11px] text-muted-foreground">{ownerField?.name ?? t('security.relationField')}</span>}
+                  {current.mode === 'custom' && <span className="text-[11px] text-muted-foreground">{t('security.conditionCount', { count: expressionConditions(current.expression).length })}</span>}
+                </div>
+              </div>
               <Button aria-label={t('security.editAccess', { operation: t(`security.operations.${operation}`) })} disabled={busy || editing === operation} onClick={() => { setActionError(undefined); setEditing(operation); }} size="small">{t('security.edit')}</Button>
             </article>;
           })}</div>
           {editing && <AccessRuleEditor
-          busy={busy}
+            busy={busy}
             customFields={customFields}
             onCancel={() => setEditing(undefined)}
             onSave={(rule) => void saveRule(rule)}
             ownerFields={ownerFields}
             rule={cloneRule(pending.find((item) => item.operation === editing)!)}
           />}
-          {changedCount > 0 ? <div aria-label={t('security.pendingPanelLabel')} className="security-pending-panel" role="region">
-            <div><strong>{t(changedCount === 1 ? 'security.pendingOne' : 'security.pendingMany', { count: changedCount })}</strong><span>{t('security.pendingHint')}</span></div>
-            <div className="security-pending-actions"><Button disabled={busy} onClick={() => setConfirmDiscard(true)} size="small">{t('security.discard')}</Button><Button disabled={busy} onClick={() => setConfirmApply(true)} variant="primary">{t(changedCount === 1 ? 'security.applyOne' : 'security.applyMany', { count: changedCount })}</Button></div>
-          </div> : <div className="security-applied-state"><ShieldCheck aria-hidden="true" size={15} />{t('security.allApplied')}</div>}
-          {confirmApply && <div className="security-confirm-panel" role="alert"><strong>{t('security.confirmApplyTitle')}</strong><span>{t('security.confirmApplyBody')}</span><div><Button disabled={busy} onClick={() => setConfirmApply(false)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void apply()} size="small" variant="primary">{busy ? t('security.applying') : t('security.confirmAndApply')}</Button></div></div>}
-          {confirmDiscard && <div className="security-confirm-panel" role="alert"><strong>{t('security.discardConfirmTitle')}</strong><span>{t('security.discardConfirmBody')}</span><div><Button disabled={busy} onClick={() => setConfirmDiscard(false)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void discard()} size="small" variant="danger">{busy ? t('security.discarding') : t('security.discardPending')}</Button></div></div>}
+          {changedCount > 0 ? <div aria-label={t('security.pendingPanelLabel')} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3" role="region">
+            <div className="grid gap-0.5">
+              <strong className="text-xs font-semibold text-warning">{t(changedCount === 1 ? 'security.pendingOne' : 'security.pendingMany', { count: changedCount })}</strong>
+              <span className="text-[11px] text-ink-secondary">{t('security.pendingHint')}</span>
+            </div>
+            <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => setConfirmDiscard(true)} size="small">{t('security.discard')}</Button><Button disabled={busy} onClick={() => setConfirmApply(true)} variant="primary">{t(changedCount === 1 ? 'security.applyOne' : 'security.applyMany', { count: changedCount })}</Button></div>
+          </div> : <div className="flex items-center gap-2 text-[11px] text-success"><ShieldCheck aria-hidden="true" size={15} />{t('security.allApplied')}</div>}
+          {confirmApply && <div className="grid gap-2 rounded-lg border border-input bg-secondary p-3.5" role="alert">
+            <strong className="text-xs font-semibold text-foreground">{t('security.confirmApplyTitle')}</strong>
+            <span className="text-[11px] leading-relaxed text-muted-foreground">{t('security.confirmApplyBody')}</span>
+            <div className="flex justify-end gap-1.5 pt-0.5"><Button disabled={busy} onClick={() => setConfirmApply(false)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void apply()} size="small" variant="primary">{busy ? t('security.applying') : t('security.confirmAndApply')}</Button></div>
+          </div>}
+          {confirmDiscard && <div className="grid gap-2 rounded-lg border border-input bg-secondary p-3.5" role="alert">
+            <strong className="text-xs font-semibold text-foreground">{t('security.discardConfirmTitle')}</strong>
+            <span className="text-[11px] leading-relaxed text-muted-foreground">{t('security.discardConfirmBody')}</span>
+            <div className="flex justify-end gap-1.5 pt-0.5"><Button disabled={busy} onClick={() => setConfirmDiscard(false)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void discard()} size="small" variant="danger">{busy ? t('security.discarding') : t('security.discardPending')}</Button></div>
+          </div>}
         </Surface>
         {customFields.length === 0 && <EmptyState description={t('security.customNeedsFieldDescription')} title={t('security.customNeedsFieldTitle')} />}
       </>}
@@ -332,32 +400,44 @@ function AccessRuleEditor({ rule, ownerFields, customFields, busy, onSave, onCan
     onSave(next);
   }
 
-  return <form className="security-rule-editor" onSubmit={submit}>
-    <div className="security-rule-editor-heading"><div><p className="eyebrow">{t('security.editorEyebrow')}</p><h3>{t('security.editAccess', { operation: t(`security.operations.${rule.operation}`) })}</h3></div><span>{t('security.editorDescription')}</span></div>
-    <fieldset className="security-mode-options"><legend>{t('security.whoCan', { operation: t(`security.operationVerbs.${rule.operation}`) })}</legend>
-      {MODES.map((value) => <label className="security-mode-option" key={value}>
-        <input checked={mode === value} disabled={value === 'recordOwner' && !canUseRecordOwner} name={`access-${rule.operation}`} onChange={() => setMode(value)} type="radio" value={value} />
-        <span><strong>{t(`accessModes.${value}.label`)}</strong><small>{t(`accessModes.${value}.description`)}</small></span>
+  return <form className="flex min-w-0 flex-col gap-4 rounded-lg border bg-secondary p-4" onSubmit={submit}>
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
+      <div className="min-w-0">
+        <p className="eyebrow">{t('security.editorEyebrow')}</p>
+        <h3>{t('security.editAccess', { operation: t(`security.operations.${rule.operation}`) })}</h3>
+      </div>
+      <span className="text-[11px] text-muted-foreground">{t('security.editorDescription')}</span>
+    </div>
+    <fieldset className="m-0 grid gap-2 border-0 p-0"><legend className="mb-1.5 text-xs font-semibold text-ink-secondary">{t('security.whoCan', { operation: t(`security.operationVerbs.${rule.operation}`) })}</legend>
+      {MODES.map((value) => <label className="grid cursor-pointer grid-cols-[16px_minmax(0,1fr)] items-start gap-2 rounded-lg border border-input bg-card p-2.5 transition-colors has-[:checked]:border-primary has-[:checked]:bg-accent-cta-soft" key={value}>
+        <input checked={mode === value} className="mt-0.5 accent-primary" disabled={value === 'recordOwner' && !canUseRecordOwner} name={`access-${rule.operation}`} onChange={() => setMode(value)} type="radio" value={value} />
+        <span className="grid gap-0.5"><strong className="text-xs font-medium text-ink-secondary">{t(`accessModes.${value}.label`)}</strong><small className="text-[11px] text-muted-foreground">{t(`accessModes.${value}.description`)}</small></span>
       </label>)}
-      {!canUseRecordOwner && <p className="security-form-hint">{t('security.recordOwnerNeedsField')}</p>}
+      {!canUseRecordOwner && <p className="m-0 text-[11px] text-warning">{t('security.recordOwnerNeedsField')}</p>}
     </fieldset>
     {mode === 'recordOwner' && <FormField htmlFor="access-owner-field" label={t('security.ownerField')} hint={t('security.ownerFieldHint')}>
       <select id="access-owner-field" onChange={(event) => setOwnerFieldId(event.target.value)} value={ownerFieldId}><option value="">{t('security.chooseField')}</option>{ownerFields.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}</select>
     </FormField>}
-    {mode === 'custom' && <section aria-label={t('security.conditionsLabel')} className="security-custom-editor">
-      <div className="security-custom-heading"><div><h4>{t('security.conditionsTitle')}</h4><p>{t('security.conditionsDescription')}</p></div><Button disabled={conditions.length >= 16 || customFields.length === 0} onClick={addCondition} size="small" type="button">{t('security.addCondition')}</Button></div>
+    {mode === 'custom' && <section aria-label={t('security.conditionsLabel')} className="grid gap-3 border-t pt-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h4 className="text-xs font-semibold text-ink-secondary">{t('security.conditionsTitle')}</h4>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t('security.conditionsDescription')}</p>
+        </div>
+        <Button disabled={conditions.length >= 16 || customFields.length === 0} onClick={addCondition} size="small" type="button">{t('security.addCondition')}</Button>
+      </div>
       {conditions.map((condition, index) => {
         const field = conditionField(condition.fieldId);
-        return <div className="security-condition" key={`${index}-${condition.fieldId}`}>
-          <label><span>{t('security.field')}</span><select aria-label={t('security.conditionField', { index: index + 1 })} onChange={(event) => updateCondition(index, { fieldId: event.target.value, value: '' })} value={condition.fieldId}>{customFields.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
-          <label><span>{t('security.operator')}</span><select aria-label={t('security.conditionOperator', { index: index + 1 })} onChange={(event) => updateCondition(index, { operator: event.target.value as ConditionDraft['operator'], value: '' })} value={condition.operator}><option value="eq">{t('security.operators.eq')}</option><option value="neq">{t('security.operators.neq')}</option><option value="in">{t('security.operators.in')}</option></select></label>
-          <label className="security-condition-value"><span>{condition.operator === 'in' ? t('security.valueJsonArray') : t('security.value')}</span>{field ? predicateValueControl(field, condition.operator, condition.value, (value) => updateCondition(index, { value }), t) : <input aria-label={t('security.conditionValue')} disabled value="" />}</label>
+        return <div className="grid items-end gap-2.5 rounded-lg border border-input bg-card p-2.5 min-[761px]:grid-cols-[minmax(110px,1fr)_minmax(115px,0.8fr)_minmax(140px,1.2fr)_auto]" key={`${index}-${condition.fieldId}`}>
+          <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground"><span>{t('security.field')}</span><select aria-label={t('security.conditionField', { index: index + 1 })} className="min-h-9 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => updateCondition(index, { fieldId: event.target.value, value: '' })} value={condition.fieldId}>{customFields.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+          <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground"><span>{t('security.operator')}</span><select aria-label={t('security.conditionOperator', { index: index + 1 })} className="min-h-9 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => updateCondition(index, { operator: event.target.value as ConditionDraft['operator'], value: '' })} value={condition.operator}><option value="eq">{t('security.operators.eq')}</option><option value="neq">{t('security.operators.neq')}</option><option value="in">{t('security.operators.in')}</option></select></label>
+          <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground min-[761px]:col-span-1 max-[760px]:col-span-full"><span>{condition.operator === 'in' ? t('security.valueJsonArray') : t('security.value')}</span>{field ? predicateValueControl(field, condition.operator, condition.value, (value) => updateCondition(index, { value }), t) : <input aria-label={t('security.conditionValue')} className="min-h-9 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none disabled:opacity-55" disabled value="" />}</label>
           <Button aria-label={t('security.removeCondition', { index: index + 1 })} disabled={conditions.length === 1} onClick={() => setConditions((current) => current.filter((_, itemIndex) => itemIndex !== index))} size="small" type="button" variant="quiet">{t('security.remove')}</Button>
         </div>;
       })}
     </section>}
-    {validationError && <div className="record-field-error" role="alert">{t(validationError, validationValues)}</div>}
-    <div className="security-rule-editor-actions"><Button disabled={busy} onClick={onCancel} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={busy || (mode === 'custom' && customFields.length === 0)} type="submit" variant="primary">{busy ? t('security.saving') : t('security.save')}</Button></div>
+    {validationError && <div className="text-[11px] font-semibold text-danger" role="alert">{t(validationError, validationValues)}</div>}
+    <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3"><Button disabled={busy} onClick={onCancel} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={busy || (mode === 'custom' && customFields.length === 0)} type="submit" variant="primary">{busy ? t('security.saving') : t('security.save')}</Button></div>
   </form>;
 }
 
@@ -454,30 +534,39 @@ function AuthenticationPanel({ collectionId }: { collectionId: string }) {
     finally { setSaving(false); }
   }
 
-  return <div aria-labelledby="security-tab-authentication" className="page-stack security-panel" id="security-panel-authentication" role="tabpanel">
+  return <div aria-labelledby="security-tab-authentication" className="flex min-w-0 flex-col gap-4" id="security-panel-authentication" role="tabpanel">
     {loadState === 'loading' && <LoadingState label={t('security.authenticationLoading')} />}
     {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.authenticationLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
     {loadState === 'ready' && state && draft && <>
-      {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
+      {message && <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status"><Check aria-hidden="true" className="shrink-0 text-success" size={15} />{t(message)}</div>}
       {actionError && (() => { const copy = errorCopy(actionError, t('security.authenticationChangeFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('security.authenticationReload')}</Button></ErrorState>; })()}
-      <Surface className="security-auth-card" variant="standard">
-        <div className="security-rules-heading"><div><h2>{t('security.authenticationTitle')}</h2><p>{t('security.authenticationDescription')}</p></div><span className="security-version">{t('security.version', { version: state.version })}</span></div>
-        {!editing ? <dl className="security-auth-values">
-          <div><dt>{t('security.emailPassword')}</dt><dd><strong>{t(state.pending.emailPasswordEnabled ? 'security.enabled' : 'security.disabled')}</strong><span>{t(state.pending.emailPasswordEnabled ? 'security.emailPasswordEnabled' : 'security.emailPasswordDisabled')}</span></dd></div>
-          <div><dt>{t('security.selfRegistration')}</dt><dd><strong>{t(state.pending.selfRegistration ? 'security.enabled' : 'security.disabled')}</strong><span>{t(state.pending.selfRegistration ? 'security.selfRegistrationEnabled' : 'security.selfRegistrationDisabled')}</span></dd></div>
-          <div><dt>{t('security.sessionDuration')}</dt><dd><strong>{t('security.sessionDurationValue', { count: state.pending.sessionDurationDays })}</strong><span>{t('security.sessionDurationExpiry')}</span></dd></div>
-          <div><dt>{t('security.emailVerification')}</dt><dd><strong>{emailVerificationLabel(state.pending.emailVerification, t)}</strong><span>{emailVerificationHint(state.pending.emailVerification, t)}</span></dd></div>
-        </dl> : <form className="security-auth-editor" onSubmit={(event) => void save(event)}>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
+          <div className="min-w-0">
+            <h2>{t('security.authenticationTitle')}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t('security.authenticationDescription')}</p>
+          </div>
+          <Badge variant="outline">{t('security.version', { version: state.version })}</Badge>
+        </div>
+        {!editing ? <dl className="m-0 grid gap-0">
+          <div className="grid gap-1 border-b px-0.5 py-2.5 min-[561px]:grid-cols-[minmax(130px,0.5fr)_minmax(0,1.5fr)] min-[561px]:gap-3"><dt className="text-[11px] font-semibold text-muted-foreground">{t('security.emailPassword')}</dt><dd className="m-0 grid gap-0.5"><strong className="text-xs font-medium text-foreground">{t(state.pending.emailPasswordEnabled ? 'security.enabled' : 'security.disabled')}</strong><span className="text-[11px] text-muted-foreground">{t(state.pending.emailPasswordEnabled ? 'security.emailPasswordEnabled' : 'security.emailPasswordDisabled')}</span></dd></div>
+          <div className="grid gap-1 border-b px-0.5 py-2.5 min-[561px]:grid-cols-[minmax(130px,0.5fr)_minmax(0,1.5fr)] min-[561px]:gap-3"><dt className="text-[11px] font-semibold text-muted-foreground">{t('security.selfRegistration')}</dt><dd className="m-0 grid gap-0.5"><strong className="text-xs font-medium text-foreground">{t(state.pending.selfRegistration ? 'security.enabled' : 'security.disabled')}</strong><span className="text-[11px] text-muted-foreground">{t(state.pending.selfRegistration ? 'security.selfRegistrationEnabled' : 'security.selfRegistrationDisabled')}</span></dd></div>
+          <div className="grid gap-1 border-b px-0.5 py-2.5 min-[561px]:grid-cols-[minmax(130px,0.5fr)_minmax(0,1.5fr)] min-[561px]:gap-3"><dt className="text-[11px] font-semibold text-muted-foreground">{t('security.sessionDuration')}</dt><dd className="m-0 grid gap-0.5"><strong className="text-xs font-medium text-foreground">{t('security.sessionDurationValue', { count: state.pending.sessionDurationDays })}</strong><span className="text-[11px] text-muted-foreground">{t('security.sessionDurationExpiry')}</span></dd></div>
+          <div className="grid gap-1 border-b px-0.5 py-2.5 min-[561px]:grid-cols-[minmax(130px,0.5fr)_minmax(0,1.5fr)] min-[561px]:gap-3"><dt className="text-[11px] font-semibold text-muted-foreground">{t('security.emailVerification')}</dt><dd className="m-0 grid gap-0.5"><strong className="text-xs font-medium text-foreground">{emailVerificationLabel(state.pending.emailVerification, t)}</strong><span className="text-[11px] text-muted-foreground">{emailVerificationHint(state.pending.emailVerification, t)}</span></dd></div>
+        </dl> : <form className="grid max-w-[600px] gap-3" onSubmit={(event) => void save(event)}>
           <FormField htmlFor="auth-email-password" hint={t('security.authEmailPasswordHint')} label={t('security.emailPassword')}><select id="auth-email-password" onChange={(event) => setDraft({ ...draft, emailPasswordEnabled: event.target.value === 'enabled' })} value={draft.emailPasswordEnabled ? 'enabled' : 'disabled'}><option value="enabled">{t('security.enabled')}</option><option value="disabled">{t('security.disabled')}</option></select></FormField>
           <FormField htmlFor="auth-self-registration" label={t('security.selfRegistration')}><select id="auth-self-registration" onChange={(event) => setDraft({ ...draft, selfRegistration: event.target.value === 'enabled' })} value={draft.selfRegistration ? 'enabled' : 'disabled'}><option value="disabled">{t('security.disabled')}</option><option value="enabled">{t('security.enabled')}</option></select></FormField>
           <FormField htmlFor="auth-session-days" hint={t('security.authSessionDaysHint')} label={t('security.authSessionDays')}><input id="auth-session-days" min="1" onChange={(event) => setDraft({ ...draft, sessionDurationDays: Number(event.target.value) })} type="number" value={draft.sessionDurationDays} /></FormField>
           <FormField htmlFor="auth-email-verification" hint={t('security.authEmailVerificationHint')} label={t('security.emailVerification')}><select id="auth-email-verification" onChange={(event) => setDraft({ ...draft, emailVerification: event.target.value as EmailVerificationMode })} value={draft.emailVerification ?? 'off'}><option value="off">{t('security.emailVerificationLabels.off')}</option><option value="optional">{t('security.emailVerificationLabels.optional')}</option><option value="required">{t('security.emailVerificationLabels.required')}</option></select></FormField>
-          <div className="security-rule-editor-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(false); }} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={saving || draft.sessionDurationDays < 1 || !Number.isInteger(draft.sessionDurationDays)} type="submit" variant="primary">{saving ? t('security.saving') : t('security.authSave')}</Button></div>
+          <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(false); }} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={saving || draft.sessionDurationDays < 1 || !Number.isInteger(draft.sessionDurationDays)} type="submit" variant="primary">{saving ? t('security.saving') : t('security.authSave')}</Button></div>
         </form>}
-        {!editing && <div className="security-auth-actions"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(true); }} size="small">{t('security.edit')}</Button></div>}
-        {hasPending ? <div aria-label={t('security.authPendingPanelLabel')} className="security-pending-panel" role="region"><div><strong>{t('security.authPendingTitle')}</strong><span>{t('security.authPendingHint')}</span></div><div className="security-pending-actions"><Button disabled={saving} onClick={() => setConfirmDiscard(true)} size="small">{t('security.discard')}</Button><Button disabled={saving} onClick={() => setConfirmApply(true)} size="small" variant="primary">{t('security.authApply')}</Button></div></div> : <div className="security-applied-state"><ShieldCheck aria-hidden="true" size={15} />{t('security.authAllApplied')}</div>}
-        {confirmApply && <div className="security-confirm-panel" role="alert"><strong>{t('security.authApplyConfirmTitle')}</strong><span>{t('security.authApplyConfirmBody')}</span><div><Button disabled={saving} onClick={() => setConfirmApply(false)} size="small">{t('common.cancel')}</Button><Button disabled={saving} onClick={() => void apply()} size="small" variant="primary">{saving ? t('security.applying') : t('security.confirmAndApply')}</Button></div></div>}
-        {confirmDiscard && <div className="security-confirm-panel" role="alert"><strong>{t('security.authDiscardConfirmTitle')}</strong><span>{t('security.authDiscardConfirmBody')}</span><div><Button disabled={saving} onClick={() => setConfirmDiscard(false)} size="small">{t('common.cancel')}</Button><Button disabled={saving} onClick={() => void discard()} size="small" variant="danger">{saving ? t('security.discarding') : t('security.authDiscardPending')}</Button></div></div>}
+        {!editing && <div className="flex justify-end"><Button disabled={saving} onClick={() => { setDraft(state.pending); setEditing(true); }} size="small">{t('security.edit')}</Button></div>}
+        {hasPending ? <div aria-label={t('security.authPendingPanelLabel')} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3" role="region">
+          <div className="grid gap-0.5"><strong className="text-xs font-semibold text-warning">{t('security.authPendingTitle')}</strong><span className="text-[11px] text-ink-secondary">{t('security.authPendingHint')}</span></div>
+          <div className="flex flex-wrap gap-2"><Button disabled={saving} onClick={() => setConfirmDiscard(true)} size="small">{t('security.discard')}</Button><Button disabled={saving} onClick={() => setConfirmApply(true)} size="small" variant="primary">{t('security.authApply')}</Button></div>
+        </div> : <div className="flex items-center gap-2 text-[11px] text-success"><ShieldCheck aria-hidden="true" size={15} />{t('security.authAllApplied')}</div>}
+        {confirmApply && <div className="grid gap-2 rounded-lg border border-input bg-secondary p-3.5" role="alert"><strong className="text-xs font-semibold text-foreground">{t('security.authApplyConfirmTitle')}</strong><span className="text-[11px] leading-relaxed text-muted-foreground">{t('security.authApplyConfirmBody')}</span><div className="flex justify-end gap-1.5 pt-0.5"><Button disabled={saving} onClick={() => setConfirmApply(false)} size="small">{t('common.cancel')}</Button><Button disabled={saving} onClick={() => void apply()} size="small" variant="primary">{saving ? t('security.applying') : t('security.confirmAndApply')}</Button></div></div>}
+        {confirmDiscard && <div className="grid gap-2 rounded-lg border border-input bg-secondary p-3.5" role="alert"><strong className="text-xs font-semibold text-foreground">{t('security.authDiscardConfirmTitle')}</strong><span className="text-[11px] leading-relaxed text-muted-foreground">{t('security.authDiscardConfirmBody')}</span><div className="flex justify-end gap-1.5 pt-0.5"><Button disabled={saving} onClick={() => setConfirmDiscard(false)} size="small">{t('common.cancel')}</Button><Button disabled={saving} onClick={() => void discard()} size="small" variant="danger">{saving ? t('security.discarding') : t('security.authDiscardPending')}</Button></div></div>}
       </Surface>
     </>}
   </div>;
@@ -601,20 +690,49 @@ function ApplicationUsersPanel({ collection }: { collection: Collection }) {
   const filtered = users.filter((user) => `${user.email} ${user.recordId}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const selectedEmail = users.find((user) => user.recordId === selectedUserId)?.email ?? (typeof profile?.email === 'string' ? profile.email : t('security.profileFallback'));
 
-  return <div aria-labelledby="security-tab-users" className="page-stack security-panel" id="security-panel-users" role="tabpanel">
-    <Surface className="security-users-toolbar" variant="standard"><div><h2>{t('security.usersTitle')}</h2><p>{t('security.usersDescription')}</p></div><ButtonLink size="small" to={`/collections/${encodeURIComponent(collection.id)}?new=1`} variant="primary"><UserRound aria-hidden="true" size={14} />{t('security.createUser')}</ButtonLink></Surface>
-    <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">{t('security.searchUsers')}</span><input aria-label={t('security.searchUsers')} onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUsersPlaceholder')} type="search" value={search} /></label>
+  return <div aria-labelledby="security-tab-users" className="flex min-w-0 flex-col gap-4" id="security-panel-users" role="tabpanel">
+    <Surface className="flex flex-wrap items-center justify-between gap-3 p-4" variant="standard">
+      <div className="grid min-w-0 gap-0.5">
+        <h2>{t('security.usersTitle')}</h2>
+        <p className="text-xs text-muted-foreground">{t('security.usersDescription')}</p>
+      </div>
+      <ButtonLink size="small" to={`/collections/${encodeURIComponent(collection.id)}?new=1`} variant="primary"><UserRound aria-hidden="true" size={14} />{t('security.createUser')}</ButtonLink>
+    </Surface>
+    <label className="flex h-9 w-full max-w-[420px] items-center gap-2 rounded-lg border border-input bg-secondary px-3 text-muted-foreground focus-within:border-primary focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-ring">
+      <Search aria-hidden="true" size={15} />
+      <span className="sr-only">{t('security.searchUsers')}</span>
+      <input aria-label={t('security.searchUsers')} className="min-w-0 flex-1 border-0 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground" onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUsersPlaceholder')} type="search" value={search} />
+    </label>
     {loadState === 'loading' && <LoadingState label={t('security.usersLoading')} />}
     {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.usersLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
     {loadState === 'ready' && filtered.length === 0 && <EmptyState description={users.length ? t('security.usersNoMatchDescription') : t('security.usersEmptyDescription')} title={users.length ? t('security.usersNoMatchTitle') : t('security.usersEmptyTitle')}>{!users.length && <ButtonLink to={`/collections/${encodeURIComponent(collection.id)}?new=1`} variant="primary">{t('security.createUser')}</ButtonLink>}</EmptyState>}
-    {loadState === 'ready' && filtered.length > 0 && <Surface className="security-users-list" variant="standard"><div className="security-users-list-heading"><span>{t('security.usersPageSummary', { count: filtered.length })}</span><span>{t('security.usersSearchHint')}</span></div><div role="list">{filtered.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => selectUser(user.recordId)} size="small">{selectedUserId === user.recordId ? t('security.selected') : t('security.viewUser')}</Button><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', user.recordId); setSearchParams(next); }} size="small" variant="quiet">{t('security.sessions')}</Button></article>)}</div><div className="records-pagination"><span>{t('security.page', { page: cursorStack.length + 1 })}</span><div><Button disabled={!cursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!nextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div></Surface>}
-    {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
-    {selectedUserId && <Surface className="security-user-detail" variant="standard">
-      <div className="security-rules-heading"><div><h2>{selectedEmail}</h2><p>{selectedUserId}</p></div><Button onClick={() => updateQuery({ user: undefined })} size="small" variant="quiet">{t('security.close')}</Button></div>
+    {loadState === 'ready' && filtered.length > 0 && <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+      <div className="flex flex-wrap justify-between gap-2.5 text-[11px] text-muted-foreground"><span>{t('security.usersPageSummary', { count: filtered.length })}</span><span>{t('security.usersSearchHint')}</span></div>
+      <div className="flex min-w-0 flex-col" role="list">{filtered.map((user) => <article className="flex flex-wrap items-center gap-3 border-b px-1 py-2.5 last:border-b-0" data-user-row key={user.recordId} role="listitem">
+        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><UserRound aria-hidden="true" size={15} /></div>
+        <div className="grid min-w-0 flex-1 gap-0.5"><strong className="truncate text-xs font-medium text-ink-secondary">{user.email}</strong><span className="truncate text-[11px] text-muted-foreground">{user.recordId}</span></div>
+        <Button onClick={() => selectUser(user.recordId)} size="small">{selectedUserId === user.recordId ? t('security.selected') : t('security.viewUser')}</Button>
+        <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', user.recordId); setSearchParams(next); }} size="small" variant="quiet">{t('security.sessions')}</Button>
+      </article>)}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground"><span>{t('security.page', { page: cursorStack.length + 1 })}</span><div className="flex gap-1.5"><Button disabled={!cursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!nextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div>
+    </Surface>}
+    {message && <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status"><Check aria-hidden="true" className="shrink-0 text-success" size={15} />{t(message)}</div>}
+    {selectedUserId && <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
+        <div className="min-w-0"><h2>{selectedEmail}</h2><p className="mt-1 text-xs text-muted-foreground">{selectedUserId}</p></div>
+        <Button onClick={() => updateQuery({ user: undefined })} size="small" variant="quiet">{t('security.close')}</Button>
+      </div>
       {profileState === 'loading' && <LoadingState label={t('security.profileLoading')} />}
       {profileState === 'error' && (() => { const copy = errorCopy(profileError, t('security.profileLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => selectUser(selectedUserId)} size="small">{t('common.retry')}</Button></ErrorState>; })()}
-      {profileState === 'ready' && profile && <dl className="security-profile-values">{Object.entries(profile).filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key)).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{formatSecurityValue(value)}</dd></div>)}</dl>}
-      <form className="security-password-form" onSubmit={(event) => void changePassword(event)}><div><KeyRound aria-hidden="true" size={15} /><strong>{t('security.changePassword')}</strong><span>{t('security.changePasswordHint')}</span></div><FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField><FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>{passwordError && <span className="record-field-error" role="alert">{passwordError}</span>}{passwordErrorDetails && <span className="field-hint">{passwordErrorDetails}</span>}<div className="security-rule-editor-actions"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div></form>
+      {profileState === 'ready' && profile && <dl className="m-0 grid gap-0">{Object.entries(profile).filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key)).map(([key, value]) => <div className="grid gap-1 border-b px-0.5 py-2 last:border-b-0 min-[561px]:grid-cols-[minmax(100px,0.35fr)_minmax(0,1fr)] min-[561px]:gap-2.5" key={key}><dt className="text-[11px] font-semibold text-muted-foreground">{key}</dt><dd className="m-0 break-words text-[11px] text-ink-secondary">{formatSecurityValue(value)}</dd></div>)}</dl>}
+      <form className="grid max-w-[520px] gap-3 border-t pt-3" onSubmit={(event) => void changePassword(event)}>
+        <div className="grid grid-cols-[18px_minmax(0,1fr)] items-center gap-x-1.5 gap-y-1 text-ink-secondary"><KeyRound aria-hidden="true" size={15} /><strong className="text-xs font-semibold">{t('security.changePassword')}</strong><span className="col-start-2 text-[11px] text-muted-foreground">{t('security.changePasswordHint')}</span></div>
+        <FormField htmlFor="app-user-new-password" label={t('security.newPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-new-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField>
+        <FormField htmlFor="app-user-confirm-password" label={t('security.confirmPassword')}><input autoComplete="new-password" disabled={busy} id="app-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>
+        {passwordError && <span className="block text-[11px] font-semibold text-danger" role="alert">{passwordError}</span>}
+        {passwordErrorDetails && <span className="text-[11px] text-muted-foreground">{passwordErrorDetails}</span>}
+        <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3"><Button disabled={busy} type="submit" variant="primary">{busy ? t('security.changing') : t('security.changePassword')}</Button></div>
+      </form>
       <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'sessions'); next.set('user', selectedUserId); setSearchParams(next); }} size="small" variant="quiet">{t('security.viewSessions')}</Button>
     </Surface>}
   </div>;
@@ -729,27 +847,53 @@ function ApplicationSessionsPanel({ collection }: { collection: Collection }) {
     finally { setBusy(false); }
   }
 
-  return <div aria-labelledby="security-tab-sessions" className="page-stack security-panel" id="security-panel-sessions" role="tabpanel">
+  return <div aria-labelledby="security-tab-sessions" className="flex min-w-0 flex-col gap-4" id="security-panel-sessions" role="tabpanel">
     {!selectedUserId ? <>
-      <Surface className="security-users-toolbar" variant="standard"><div><h2>{t('security.sessions')}</h2><p>{t('security.sessionsDescription')}</p></div><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" type="button" variant="quiet">{t('security.manageUsers')}</Button></Surface>
-      <label className="collection-search security-users-search"><Search aria-hidden="true" size={15} /><span className="sr-only">{t('security.searchUser')}</span><input aria-label={t('security.searchUser')} onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUserPlaceholder')} type="search" value={search} /></label>
+      <Surface className="flex flex-wrap items-center justify-between gap-3 p-4" variant="standard">
+        <div className="grid min-w-0 gap-0.5">
+          <h2>{t('security.sessions')}</h2>
+          <p className="text-xs text-muted-foreground">{t('security.sessionsDescription')}</p>
+        </div>
+        <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" type="button" variant="quiet">{t('security.manageUsers')}</Button>
+      </Surface>
+      <label className="flex h-9 w-full max-w-[420px] items-center gap-2 rounded-lg border border-input bg-secondary px-3 text-muted-foreground focus-within:border-primary focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-ring">
+        <Search aria-hidden="true" size={15} />
+        <span className="sr-only">{t('security.searchUser')}</span>
+        <input aria-label={t('security.searchUser')} className="min-w-0 flex-1 border-0 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground" onChange={(event) => updateQuery({ userSearch: event.target.value || undefined })} placeholder={t('security.searchUserPlaceholder')} type="search" value={search} />
+      </label>
       {usersLoadState === 'loading' && <LoadingState label={t('security.usersLoading')} />}
       {usersLoadState === 'error' && (() => { const copy = errorCopy(usersError, t('security.usersLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setUsersReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
-      {usersLoadState === 'ready' && <Surface className="security-users-list" variant="standard">
+      {usersLoadState === 'ready' && <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
         {filteredUsers.length === 0 ? <EmptyState description={users.length ? t('security.sessionsNoUsersMatchDescription') : t('security.sessionsNoUsersDescription')} title={users.length ? t('security.sessionsNoUsersMatchTitle') : t('security.sessionsNoUsersTitle')} /> : <>
-          <div className="security-users-list-heading"><span>{t('security.usersPageSummary', { count: filteredUsers.length })}</span><span>{t('security.sessionsSearchHint')}</span></div>
-          <div role="list">{filteredUsers.map((user) => <article className="security-user-row" key={user.recordId} role="listitem"><div className="security-user-avatar"><UserRound aria-hidden="true" size={15} /></div><div><strong>{user.email}</strong><span>{user.recordId}</span></div><Button onClick={() => updateQuery({ user: user.recordId })} size="small">{t('security.viewSessions')}</Button></article>)}</div>
+          <div className="flex flex-wrap justify-between gap-2.5 text-[11px] text-muted-foreground"><span>{t('security.usersPageSummary', { count: filteredUsers.length })}</span><span>{t('security.sessionsSearchHint')}</span></div>
+          <div className="flex min-w-0 flex-col" role="list">{filteredUsers.map((user) => <article className="flex flex-wrap items-center gap-3 border-b px-1 py-2.5 last:border-b-0" data-user-row key={user.recordId} role="listitem"><div className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><UserRound aria-hidden="true" size={15} /></div><div className="grid min-w-0 flex-1 gap-0.5"><strong className="truncate text-xs font-medium text-ink-secondary">{user.email}</strong><span className="truncate text-[11px] text-muted-foreground">{user.recordId}</span></div><Button onClick={() => updateQuery({ user: user.recordId })} size="small">{t('security.viewSessions')}</Button></article>)}</div>
         </>}
-        {(filteredUsers.length > 0 || usersCursorStack.length > 0 || usersNextCursor) && <div className="records-pagination"><span>{t('security.page', { page: usersCursorStack.length + 1 })}</span><div><Button disabled={!usersCursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!usersNextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div>}
+        {(filteredUsers.length > 0 || usersCursorStack.length > 0 || usersNextCursor) && <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground"><span>{t('security.page', { page: usersCursorStack.length + 1 })}</span><div className="flex gap-1.5"><Button disabled={!usersCursorStack.length} onClick={previousUsersPage} size="small">{t('security.previous')}</Button><Button disabled={!usersNextCursor} onClick={nextUsersPage} size="small">{t('security.next')}</Button></div></div>}
       </Surface>}
     </> : <>
-      <Surface className="security-session-toolbar" variant="standard"><div><h2>{t('security.sessions')}</h2><p>{identity || selectedUserId}</p></div><div><Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" variant="quiet">{t('security.changeUser')}</Button><Button disabled={busy} onClick={() => setConfirm('all')} size="small" variant="danger">{t('security.sessionRevokeAll')}</Button></div></Surface>
-      {message && <div className="records-success" role="status"><Check aria-hidden="true" size={14} />{t(message)}</div>}
+      <Surface className="flex flex-wrap items-start justify-between gap-3 p-4" variant="standard">
+        <div className="grid min-w-0 gap-0.5">
+          <h2>{t('security.sessions')}</h2>
+          <p className="text-xs text-muted-foreground">{identity || selectedUserId}</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button onClick={() => { const next = new URLSearchParams(searchParams); next.set('panel', 'users'); setSearchParams(next); }} size="small" variant="quiet">{t('security.changeUser')}</Button>
+          <Button disabled={busy} onClick={() => setConfirm('all')} size="small" variant="danger">{t('security.sessionRevokeAll')}</Button>
+        </div>
+      </Surface>
+      {message && <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status"><Check aria-hidden="true" className="shrink-0 text-success" size={15} />{t(message)}</div>}
       {loadState === 'loading' && <LoadingState label={t('security.sessionsLoading')} />}
       {loadState === 'error' && (() => { const copy = errorCopy(error, t('security.sessionsLoadFailed'), t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('common.retry')}</Button></ErrorState>; })()}
       {loadState === 'ready' && sessions.length === 0 && <EmptyState description={t('security.sessionsEmptyDescription')} title={t('security.sessionsEmptyTitle')} />}
-      {loadState === 'ready' && sessions.length > 0 && <Surface className="security-session-list" variant="standard"><div className="security-session-list-heading"><span>{t('security.sessionsActive', { count: sessions.filter((session) => session.status === 'active').length })}</span><span>{t('security.sessionsTotal', { count: sessions.length })}</span></div><div role="list">{sessions.map((session) => <article className="security-session-row" key={session.id} role="listitem"><div className={`security-session-status security-session-status--${session.status}`}><span aria-hidden="true" />{session.status === 'active' || session.status === 'revoked' || session.status === 'expired' ? t(`security.sessionStatuses.${session.status}` as TranslationKey) : session.status}</div><dl><div><dt>{t('security.sessionCreated')}</dt><dd>{displaySecurityDate(session.createdAt, formatDate)}</dd></div><div><dt>{t('security.sessionLastUsed')}</dt><dd>{displaySecurityDate(session.lastUsedAt, formatDate)}</dd></div><div><dt>{t('security.sessionExpires')}</dt><dd>{displaySecurityDate(session.expiresAt, formatDate)}</dd></div></dl>{session.status === 'active' && <Button disabled={busy} onClick={() => setConfirm(session.id)} size="small" variant="danger">{t('security.sessionRevoke')}</Button>}</article>)}</div></Surface>}
-      {confirm && <div className="security-confirm-panel" role="alert"><strong>{confirm === 'all' ? t('security.sessionConfirmAllTitle') : t('security.sessionConfirmOneTitle')}</strong><span>{t('security.sessionConfirmBody')}</span><div><Button disabled={busy} onClick={() => setConfirm(undefined)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void revoke(confirm === 'all' ? undefined : confirm)} size="small" variant="danger">{busy ? t('security.sessionRevoking') : t('security.sessionConfirm')}</Button></div></div>}
+      {loadState === 'ready' && sessions.length > 0 && <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+        <div className="flex flex-wrap justify-between gap-2.5 text-[11px] text-muted-foreground"><span>{t('security.sessionsActive', { count: sessions.filter((session) => session.status === 'active').length })}</span><span>{t('security.sessionsTotal', { count: sessions.length })}</span></div>
+        <div className="flex min-w-0 flex-col" role="list">{sessions.map((session) => <article className="flex flex-wrap items-center gap-3 border-b px-1 py-2.5 last:border-b-0" data-session-row key={session.id} role="listitem">
+          <div className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[11px] capitalize ${session.status === 'active' ? 'bg-success-soft text-success' : session.status === 'revoked' ? 'bg-danger-soft text-danger' : 'bg-secondary text-muted-foreground'}`}><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />{session.status === 'active' || session.status === 'revoked' || session.status === 'expired' ? t(`security.sessionStatuses.${session.status}` as TranslationKey) : session.status}</div>
+          <dl className="m-0 grid min-w-0 flex-1 grid-cols-1 gap-2 min-[561px]:grid-cols-3"><div className="grid gap-0.5"><dt className="text-[10px] uppercase text-muted-foreground">{t('security.sessionCreated')}</dt><dd className="m-0 text-[11px] text-ink-secondary">{displaySecurityDate(session.createdAt, formatDate)}</dd></div><div className="grid gap-0.5"><dt className="text-[10px] uppercase text-muted-foreground">{t('security.sessionLastUsed')}</dt><dd className="m-0 text-[11px] text-ink-secondary">{displaySecurityDate(session.lastUsedAt, formatDate)}</dd></div><div className="grid gap-0.5"><dt className="text-[10px] uppercase text-muted-foreground">{t('security.sessionExpires')}</dt><dd className="m-0 text-[11px] text-ink-secondary">{displaySecurityDate(session.expiresAt, formatDate)}</dd></div></dl>
+          {session.status === 'active' && <Button disabled={busy} onClick={() => setConfirm(session.id)} size="small" variant="danger">{t('security.sessionRevoke')}</Button>}
+        </article>)}</div>
+      </Surface>}
+      {confirm && <div className="grid gap-2 rounded-lg border border-input bg-secondary p-3.5" role="alert"><strong className="text-xs font-semibold text-foreground">{confirm === 'all' ? t('security.sessionConfirmAllTitle') : t('security.sessionConfirmOneTitle')}</strong><span className="text-[11px] leading-relaxed text-muted-foreground">{t('security.sessionConfirmBody')}</span><div className="flex justify-end gap-1.5 pt-0.5"><Button disabled={busy} onClick={() => setConfirm(undefined)} size="small">{t('common.cancel')}</Button><Button disabled={busy} onClick={() => void revoke(confirm === 'all' ? undefined : confirm)} size="small" variant="danger">{busy ? t('security.sessionRevoking') : t('security.sessionConfirm')}</Button></div></div>}
     </>}
   </div>;
 }

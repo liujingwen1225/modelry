@@ -328,7 +328,7 @@ export function AdministratorsPage() {
           {createPermission.preset === 'custom' && (
             <fieldset className="administrators-operations">
               <legend>{t('administrators.create.operations')}</legend>
-              <p className="form-hint">{t('administrators.create.operationsHint')}</p>
+              <p className="m-0 text-[10px] text-muted-foreground">{t('administrators.create.operationsHint')}</p>
               {administratorOperations.map((operation) => (
                 <label key={operation}>
                   <input
