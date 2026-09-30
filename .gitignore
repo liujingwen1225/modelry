@@ -10,3 +10,6 @@ admin/coverage/
 .workbuddy
 .idea
 .agents/
+.modelry-dev/
+/modelry
+/modelry.exe
