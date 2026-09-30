@@ -94,22 +94,23 @@ describe('Modelry Admin shell', () => {
     expect(primaryNavigationLinks.map((link) => link.textContent)).toEqual(primaryNavigationLabels);
     expect(primaryNavigationLinks.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);
     expect(primaryNavigationLinks.map((link) => link.getAttribute('title'))).toEqual(primaryNavigationLabels);
-    expect(await screen.findByRole('heading', { name: 'Your backend is ready' })).toBeInTheDocument();
-    const buildLinks = document.querySelector('.overview-build-links');
-    expect(buildLinks).not.toBeNull();
-    expect(within(buildLinks as HTMLElement).getByRole('link', { name: 'API' })).toHaveAttribute('href', '/connect/api');
-    expect(within(buildLinks as HTMLElement).getByRole('link', { name: 'Hooks' })).toHaveAttribute('href', '/automations/hooks');
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument();
+    const status = await screen.findByRole('region', { name: 'Workspace status' });
+    for (const label of ['Runtime', 'Database', 'File storage', 'Model']) {
+      expect(status).toHaveTextContent(label);
+    }
+    const nextStep = screen.getByRole('region', { name: 'Next step' });
+    expect(within(nextStep).getByRole('link', { name: /Create Collection/ })).toHaveAttribute('href', '/collections/new');
     expect(screen.getByRole('heading', { name: 'Connect a coding agent' })).toBeInTheDocument();
     const englishAgentGuidance = 'Model Context Protocol (MCP) lets your coding agent connect to Modelry through a Service Account API Key. The agent can perform only operations granted to that account. Start with Read only; if the task needs more, grant only its required custom operations. Application data remains governed by each Collection’s Access Rules. Model changes go through review and apply, and actions are audited.';
     const chineseAgentGuidance = '模型上下文协议（MCP）让编码智能体通过服务账号 API Key 连接 Modelry。智能体只能执行该账号获准的操作。建议从“只读”开始；若任务需要更多权限，只授予其必需的自定义操作。应用数据仍由各集合的访问规则管控。模型变更需要经过复核和应用，操作会写入审计记录。';
     expect(screen.getByText(englishAgentGuidance)).toBeInTheDocument();
-    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'zh-CN');
+    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'zh-CN');
     expect(await screen.findByText(chineseAgentGuidance)).toBeInTheDocument();
-    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'en');
+    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'en');
     expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
-    expect(screen.getByRole('region', { name: 'Runtime & storage' })).toHaveTextContent('Runtime');
-    expect(screen.queryByRole('heading', { name: 'Runtime & storage' })).not.toBeInTheDocument();
+    // Home 不复制诊断详情：诊断卡片只出现在 Settings → Status（spec §5.1/§9.3）。
     expect(document.querySelector('.diagnostics-grid')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/runtime/status', expect.any(Object));
@@ -150,11 +151,11 @@ describe('Modelry Admin shell', () => {
     expect(within(settingsNavigation).getByText('Maintenance')).toBeInTheDocument();
     expect(within(settingsNavigation).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
     expect(within(settingsNavigation).queryByRole('link', { name: 'Storage consistency' })).not.toBeInTheDocument();
-    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'zh-CN');
+    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'zh-CN');
     expect(await screen.findByRole('heading', { name: '状态' })).toBeInTheDocument();
     expect(screen.getByText(/移动已有文件/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('迁移');
-    await user.selectOptions(document.querySelector('.locale-switcher select') as HTMLSelectElement, 'en');
+    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'en');
 
     await user.click(within(primaryNavigation).getByRole('link', { name: 'Access & keys' }));
     const accessNavigation = await screen.findByRole('navigation', { name: 'Access & keys' });
@@ -189,8 +190,8 @@ describe('Modelry Admin shell', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     const mounted = render(<App />);
     const darkThemeButton = await screen.findByRole('button', { name: 'Switch to dark theme' });
-    const ownerMenu = document.querySelector('.owner-menu');
-    expect(ownerMenu?.querySelector('.theme-button')).toBeNull();
+    const ownerMenu = document.querySelector('[data-owner-menu]');
+    expect(ownerMenu?.querySelector('[data-theme-button]')).toBeNull();
     await user.click(ownerMenu?.querySelector('summary') as HTMLElement);
     expect(within(ownerMenu as HTMLElement).getByText('Session active')).toBeInTheDocument();
     expect(ownerMenu).not.toHaveTextContent('Control Plane');
@@ -227,8 +228,8 @@ describe('Modelry Admin shell', () => {
       expect(document.documentElement).toHaveAttribute('lang', 'zh-CN');
       expect(window.localStorage.getItem('modelry-admin-locale')).toBe('zh-CN');
     });
-    await user.click(document.querySelector('.owner-menu summary') as HTMLElement);
-    expect(document.querySelector('.owner-menu')).not.toHaveTextContent(/控制面|控制平面/);
+    await user.click(document.querySelector('[data-owner-menu] summary') as HTMLElement);
+    expect(document.querySelector('[data-owner-menu]')).not.toHaveTextContent(/控制面|控制平面/);
 
     mounted.unmount();
     render(<App />);

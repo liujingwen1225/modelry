@@ -6,7 +6,7 @@ import { useI18n } from '../i18n/i18n';
 import { fuzzyMatch, isCommandVisible, useCommandRegistry, type AdminCommand, type CommandContext } from './command-registry';
 import { collectionIdFromPathname } from './route-context';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
-import { Button } from './ui';
+import { Button } from './button';
 import { Input } from '@/components/ui/input';
 
 function isMacPlatform(platform: string): boolean {
@@ -215,15 +215,16 @@ export function CommandPaletteControl() {
     <>
       <button
         aria-keyshortcuts={shortcutName}
-        className="command-palette-trigger"
+        className="flex min-h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-card px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:min-h-[34px] min-[681px]:gap-[7px] min-[681px]:px-2"
+        data-command-palette-trigger
         onClick={showPalette}
         ref={triggerRef}
         title={`${t('shell.paletteTrigger')} (${shortcut})`}
         type="button"
       >
         <Command aria-hidden="true" size={15} />
-        <span className="command-palette-trigger__label">{t('shell.paletteTrigger')}</span>
-        <kbd>{shortcut}</kbd>
+        <span className="hidden min-[901px]:inline">{t('shell.paletteTrigger')}</span>
+        <kbd className="hidden rounded border border-border bg-secondary px-[5px] py-[3px] font-[inherit] text-[10px] leading-[1.2] whitespace-nowrap text-muted-foreground min-[901px]:inline-block">{shortcut}</kbd>
       </button>
       {open && <CommandPaletteDialog commands={commands} context={context} onClose={closePalette} shortcut={shortcut} />}
     </>

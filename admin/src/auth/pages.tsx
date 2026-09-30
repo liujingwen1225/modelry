@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, Check, CircleAlert, Command, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { ApiClientError } from '../api/client';
-import { Button, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import {
   createOwner,
@@ -10,9 +13,12 @@ import {
   type AuthenticatedOwner,
   type OwnerCredentials,
 } from './client';
-import './auth.css';
 
 type AuthViolation = { path: string; code: string; message: string };
+
+const titleClass = 'm-0 text-2xl font-bold leading-tight tracking-tight text-foreground';
+const copyClass = 'mt-2 text-xs leading-relaxed text-muted-foreground';
+const submitClass = 'min-h-10 w-full [&_svg]:ml-auto';
 
 const authViolationKeys: Record<string, TranslationKey> = {
   INVALID_EMAIL: 'ownerAuth.invalidEmail',
@@ -45,22 +51,26 @@ function AuthError({ error, fallback, title }: { error: unknown; fallback: strin
   const violations = readViolations(error);
   const { errorMessage, t } = useI18n();
   return (
-    <section aria-label={title} className="auth-error" role="alert">
-      <span aria-hidden="true" className="auth-error__icon"><CircleAlert size={17} /></span>
-      <div className="auth-error__content">
-        <h2>{title}</h2>
-        <p>{apiError ? errorMessage(apiError.code) ?? fallback : fallback}</p>
-        {apiError && <p className="auth-error__code">{t('ownerAuth.errorCode')} <code>{apiError.code}</code></p>}
+    <section
+      aria-label={title}
+      className="mb-3.5 flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft p-3 text-danger"
+      role="alert"
+    >
+      <span aria-hidden="true" className="grid shrink-0 place-items-center pt-px"><CircleAlert size={17} /></span>
+      <div className="min-w-0">
+        <h2 className="m-0 mb-1 text-[11px] font-bold text-danger">{title}</h2>
+        <p className="m-0 break-words text-[10px] leading-relaxed text-ink-secondary">{apiError ? errorMessage(apiError.code) ?? fallback : fallback}</p>
+        {apiError && <p className="mt-1.5 text-[10px] text-muted-foreground">{t('ownerAuth.errorCode')} <code className="text-[10px] font-bold text-danger">{apiError.code}</code></p>}
         {violations.length > 0 && (
-          <ul className="auth-error__violations">
+          <ul className="mt-2 grid list-disc gap-1 break-words pl-4 text-[10px] text-ink-secondary">
             {violations.map((violation, index) => (
-              <li key={`${violation.path}-${violation.code}-${index}`}>
-                <code>{violation.path}</code> <code>{violation.code}</code> {authViolationMessage(violation, t)}
+              <li className="min-w-0" key={`${violation.path}-${violation.code}-${index}`}>
+                <code className="text-[10px] font-bold text-danger">{violation.path}</code> <code className="text-[10px] font-bold text-danger">{violation.code}</code> {authViolationMessage(violation, t)}
               </li>
             ))}
           </ul>
         )}
-        {apiError && <p className="auth-error__request">{t('ownerAuth.requestId')} <code>{apiError.requestId}</code></p>}
+        {apiError && <p className="mt-2 text-[10px] text-muted-foreground">{t('ownerAuth.requestId')} <code className="text-[10px] font-bold text-danger">{apiError.requestId}</code></p>}
       </div>
     </section>
   );
@@ -69,16 +79,16 @@ function AuthError({ error, fallback, title }: { error: unknown; fallback: strin
 function AuthFrame({ children, eyebrow, mode }: { children: ReactNode; eyebrow: string; mode: 'setup' | 'login' }) {
   const { t } = useI18n();
   return (
-    <main className="auth-screen">
-      <div className="auth-layout">
-        <a aria-label="Modelry" className="auth-brand" href="/">
-          <span aria-hidden="true" className="auth-brand__mark"><Command size={18} strokeWidth={2.2} /></span>
-          <span className="auth-brand__word">modelry</span>
+    <main className="grid min-h-screen place-items-center bg-background px-[18px] py-[clamp(24px,6vh,56px)]">
+      <div className="mx-auto w-full max-w-[420px]">
+        <a aria-label="Modelry" className="mx-auto mb-6 flex w-fit items-center gap-2.5 text-foreground" href="/">
+          <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-muted text-ink-secondary"><Command size={18} strokeWidth={2.2} /></span>
+          <span className="text-xl font-bold tracking-[-1.1px]">modelry</span>
           <StatusChip state="ready">{t('shell.localContext')}</StatusChip>
         </a>
-        <Surface className="auth-card" variant="raised">
-          <div className="auth-card__heading">
-            <span aria-hidden="true" className="auth-card__icon">
+        <Surface className="p-6 shadow-soft" variant="raised">
+          <div className="mb-2 flex items-center gap-2.5">
+            <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-muted text-ink-secondary">
               {mode === 'setup' ? <ShieldCheck size={20} /> : <LockKeyhole size={20} />}
             </span>
             <p className="eyebrow">{eyebrow}</p>
@@ -120,7 +130,7 @@ function AuthInput({
         type={type}
         value={value}
       />
-      {error && <span className="auth-field-error" id={errorId}>{error}</span>}
+      {error && <span className="text-[10px] text-danger" id={errorId}>{error}</span>}
     </FormField>
   );
 }
@@ -140,17 +150,17 @@ function AuthSuccess({
 }) {
   const { t } = useI18n();
   return (
-    <div className="auth-success" role="status">
-      <span aria-hidden="true" className="auth-success__icon"><Check size={19} /></span>
-      <h1>{title}</h1>
-      <p className="auth-success__description">{description}</p>
-      <dl className="auth-identity">
-        <div><dt>{t('ownerAuth.ownerAccount')}</dt><dd>{result.owner.email}</dd></div>
-        <div><dt>{t('ownerAuth.session')}</dt><dd><StatusChip state="ready">{t('ownerAuth.active')}</StatusChip></dd></div>
-        <div><dt>{t('ownerAuth.sessionExpires')}</dt><dd><time dateTime={result.session.expiresAt}>{result.session.expiresAt}</time></dd></div>
+    <div className="grid justify-items-start" role="status">
+      <span aria-hidden="true" className="mb-3 grid size-9 place-items-center rounded-xl border border-success/20 bg-success-soft text-success"><Check size={19} /></span>
+      <h1 className={titleClass}>{title}</h1>
+      <p className={copyClass}>{description}</p>
+      <dl className="my-5 grid w-full gap-0 rounded-lg border bg-secondary px-3 py-0.5">
+        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-[10px] text-muted-foreground">{t('ownerAuth.ownerAccount')}</dt><dd className="m-0 min-w-0 break-words text-[10px] font-semibold text-ink-secondary">{result.owner.email}</dd></div>
+        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-[10px] text-muted-foreground">{t('ownerAuth.session')}</dt><dd className="m-0 min-w-0"><StatusChip state="ready">{t('ownerAuth.active')}</StatusChip></dd></div>
+        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-[10px] text-muted-foreground">{t('ownerAuth.sessionExpires')}</dt><dd className="m-0 min-w-0 break-words text-[10px] font-semibold text-ink-secondary"><time dateTime={result.session.expiresAt}>{result.session.expiresAt}</time></dd></div>
       </dl>
       {onContinue && (
-        <Button className="auth-submit" onClick={onContinue} type="button" variant="primary">
+        <Button className={submitClass} onClick={onContinue} type="button" variant="primary">
           {actionLabel}<ArrowRight aria-hidden="true" size={16} />
         </Button>
       )}
@@ -220,9 +230,9 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
   if (state === 'unavailable') {
     return (
       <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
-        <div className="auth-copy"><h1>{t('ownerAuth.connectTitle')}</h1><p>{t('ownerAuth.setupUnavailable')}</p></div>
+        <div className="mb-5"><h1 className={titleClass}>{t('ownerAuth.connectTitle')}</h1><p className={copyClass}>{t('ownerAuth.setupUnavailable')}</p></div>
         <AuthError error={statusError} fallback={t('ownerAuth.runtimeUnavailable')} title={t('ownerAuth.setupLoadFailed')} />
-        <Button className="auth-submit" onClick={() => void checkStatus()} type="button" variant="primary">{t('ownerAuth.retrySetup')}</Button>
+        <Button className={submitClass} onClick={() => void checkStatus()} type="button" variant="primary">{t('ownerAuth.retrySetup')}</Button>
       </AuthFrame>
     );
   }
@@ -230,8 +240,8 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
   if (state === 'closed') {
     return (
       <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
-        <div className="auth-copy"><h1>{t('ownerAuth.setupAlreadyComplete')}</h1><p>{t('ownerAuth.setupAlreadyCompleteDescription')}</p></div>
-        <a className="auth-link auth-link--button" href={loginHref}>{t('ownerAuth.signIn')} <ArrowRight aria-hidden="true" size={15} /></a>
+        <div className="mb-5"><h1 className={titleClass}>{t('ownerAuth.setupAlreadyComplete')}</h1><p className={copyClass}>{t('ownerAuth.setupAlreadyCompleteDescription')}</p></div>
+        <a className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-input bg-card px-3.5 text-xs font-semibold text-ink-secondary transition-colors hover:border-primary hover:bg-accent-cta-soft hover:text-accent-cta-ink" href={loginHref}>{t('ownerAuth.signIn')} <ArrowRight aria-hidden="true" size={15} /></a>
       </AuthFrame>
     );
   }
@@ -252,17 +262,17 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
 
   return (
     <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
-      <div className="auth-copy">
-        <h1>{t('ownerAuth.createOwner')}</h1>
-        <p>{t('ownerAuth.createOwnerDescription')}</p>
+      <div className="mb-5">
+        <h1 className={titleClass}>{t('ownerAuth.createOwner')}</h1>
+        <p className={copyClass}>{t('ownerAuth.createOwnerDescription')}</p>
       </div>
       {submitError !== undefined && (
         <>
           <AuthError error={submitError} fallback={t('ownerAuth.setupFailedDescription')} title={t('ownerAuth.setupFailed')} />
-          <Button className="auth-recheck" disabled={submitting} onClick={() => void checkStatus()} type="button" variant="quiet">{t('ownerAuth.checkSetup')}</Button>
+          <Button className="-ml-2 -mt-2 mb-2" disabled={submitting} onClick={() => void checkStatus()} size="small" type="button" variant="quiet">{t('ownerAuth.checkSetup')}</Button>
         </>
       )}
-      <form className="auth-form" onSubmit={(event) => void handleSubmit(event)}>
+      <form className="grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
         <AuthInput
           autoComplete="email"
           error={fieldViolation(submitError, 'email', t)}
@@ -281,12 +291,12 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
           type="password"
           value={password}
         />
-        <Button className="auth-submit" disabled={submitting} type="submit" variant="primary">
+        <Button className={submitClass} disabled={submitting} type="submit" variant="primary">
           {submitting ? t('ownerAuth.creatingOwner') : t('ownerAuth.completeSetup')}
           {!submitting && <ArrowRight aria-hidden="true" size={16} />}
         </Button>
       </form>
-      <p className="auth-note"><KeyRound aria-hidden="true" size={14} /> {t('ownerAuth.bootstrapNotice')}</p>
+      <p className="mt-4 flex items-center gap-2 text-[10px] text-subtle-foreground"><KeyRound aria-hidden="true" className="shrink-0 text-ink-secondary" size={14} /> {t('ownerAuth.bootstrapNotice')}</p>
     </AuthFrame>
   );
 }
@@ -362,10 +372,10 @@ export function LoginPage({ onAuthenticated, returnTo, sessionExpired = false }:
 
   return (
     <AuthFrame eyebrow={t('ownerAuth.signInEyebrow')} mode="login">
-      <div className="auth-copy"><h1>{t('ownerAuth.signInTitle')}</h1><p>{t('ownerAuth.signInDescription')}</p></div>
-      {sessionExpired && <p className="auth-session-notice" role="status">{t('ownerAuth.sessionExpired')}</p>}
+      <div className="mb-5"><h1 className={titleClass}>{t('ownerAuth.signInTitle')}</h1><p className={copyClass}>{t('ownerAuth.signInDescription')}</p></div>
+      {sessionExpired && <p className="mb-3.5 rounded-lg border border-info/30 bg-info-soft px-3 py-2.5 text-[11px] text-info" role="status">{t('ownerAuth.sessionExpired')}</p>}
       {error !== undefined && <AuthError error={error} fallback={t('ownerAuth.signInFailedDescription')} title={t('ownerAuth.signInFailed')} />}
-      <form className="auth-form" onSubmit={(event) => void handleSubmit(event)}>
+      <form className="grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
         <AuthInput
           autoComplete="username"
           error={fieldViolation(error, 'email', t)}
@@ -384,7 +394,7 @@ export function LoginPage({ onAuthenticated, returnTo, sessionExpired = false }:
           type="password"
           value={password}
         />
-        <Button className="auth-submit" disabled={submitting} type="submit" variant="primary">
+        <Button className={submitClass} disabled={submitting} type="submit" variant="primary">
           {submitting ? t('ownerAuth.signingIn') : t('ownerAuth.signIn')}
           {!submitting && <ArrowRight aria-hidden="true" size={16} />}
         </Button>

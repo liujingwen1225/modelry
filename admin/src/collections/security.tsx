@@ -3,7 +3,10 @@ import { useSearchParams } from 'react-router-dom';
 import { Check, KeyRound, RefreshCw, Search, Shield, ShieldCheck, UserRound } from 'lucide-react';
 import { ApiClientError } from '../api/client';
 import { Badge } from '@/components/ui/badge';
-import { Button, ButtonLink, EmptyState, ErrorState, FormField, LoadingState, Surface } from '../components/ui';
+import { Button, ButtonLink } from '../components/button';
+import { FormField } from '../components/form-field';
+import { EmptyState, ErrorState, LoadingState } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import {
   applyAccessRules,

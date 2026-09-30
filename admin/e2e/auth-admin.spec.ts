@@ -272,7 +272,7 @@ test.afterAll(async () => {
 });
 
 async function signOut(page: Page) {
-  await page.locator('.owner-menu summary').click();
+  await page.locator('[data-owner-menu] summary').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 }
@@ -281,7 +281,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('.topbar')).toBeVisible();
+  await expect(page.locator('[data-shell-topbar]')).toBeVisible();
 }
 
 test('WP26 Administrators, mail delivery, and account recovery stay product-complete', async ({ page }) => {
@@ -379,7 +379,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   await signOut(page);
   expectRestrictedAdministratorDenials();
   await signIn(page, administratorEmail, administratorPassword);
-  await expect(page.locator('.owner-menu summary')).toHaveAttribute('aria-label', 'Owner menu for ' + administratorEmail);
+  await expect(page.locator('[data-owner-menu] summary')).toHaveAttribute('aria-label', 'Owner menu for ' + administratorEmail);
 
 
   const navigation = page.getByRole('navigation', { name: 'Project navigation' });

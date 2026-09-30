@@ -634,10 +634,10 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
   await expect(page.getByText(interruptedDelivery.id, { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(privateRecordMarker);
-  await page.locator('.locale-switcher select').selectOption('zh-CN');
+  await page.locator('[data-locale-switcher] select').selectOption('zh-CN');
   await expect(page.getByRole('heading', { name: '自动化', exact: true })).toBeVisible();
   const themeBefore = await page.locator('html').getAttribute('data-theme');
-  await page.locator('.theme-button').click();
+  await page.locator('[data-theme-button]').click();
   await expect.poll(() => page.locator('html').getAttribute('data-theme')).not.toBe(themeBefore);
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog')).toBeVisible();

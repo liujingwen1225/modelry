@@ -7,7 +7,9 @@ import { LocaleProvider, useI18n } from './i18n/i18n';
 import { OwnerSessionProvider, useOwnerSession } from './auth/owner-session';
 import { BootstrapPage, LoginPage, fetchBootstrapStatus, resolveOwnerReturnTo } from './auth';
 import type { BootstrapStatus } from './auth/client';
-import { Button, ErrorState, LoadingState, Surface } from './components/ui';
+import { Button } from './components/button';
+import { Surface } from './components/surface';
+import { ErrorState, LoadingState } from './components/states';
 import { ChangesPage as GlobalChangesPage, CollectionRecordsPage, CollectionSchemaPage, CollectionSecurityPage, CollectionWorkspacePage, CollectionsPage, CreateCollectionPage } from './collections';
 import { AccessPage, AuditPage } from './access';
 import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage, RequestsPage } from './api';
@@ -27,10 +29,10 @@ import { mapLegacyPath } from './route-map';
 function NotFoundPage() {
   const { t } = useI18n();
   return (
-    <div className="not-found" role="status">
+    <div className="mx-auto mt-[9vh] flex max-w-[620px] flex-col gap-2" role="status">
       <p className="eyebrow">{t('notFound.eyebrow')}</p>
       <h1>{t('notFound.title')}</h1>
-      <a className="text-link" href="/">{t('notFound.back')}</a>
+      <a className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" href="/">{t('notFound.back')}</a>
     </div>
   );
 }
@@ -48,13 +50,13 @@ function SessionRecovery({ error, onRetry }: { error: unknown; onRetry: () => vo
   const { t } = useI18n();
   const message = error instanceof Error ? error.message : t('recovery.unknownError');
   return (
-    <main className="auth-screen">
-      <Surface className="session-recovery" variant="raised">
+    <main className="grid min-h-screen place-items-center bg-background px-[18px] py-[clamp(24px,6vh,56px)]">
+      <Surface className="mx-auto flex w-full max-w-[460px] flex-col gap-3 p-6 shadow-soft" variant="raised">
         <p className="eyebrow">{t('recovery.eyebrow')}</p>
         <h1>{t('recovery.title')}</h1>
         <ErrorState description={message} title={t('recovery.errorTitle')} />
-        <p>{t('recovery.description')}</p>
-        <Button onClick={onRetry} type="button" variant="primary">{t('recovery.retry')}</Button>
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('recovery.description')}</p>
+        <div><Button onClick={onRetry} type="button" variant="primary">{t('recovery.retry')}</Button></div>
       </Surface>
     </main>
   );
@@ -62,13 +64,13 @@ function SessionRecovery({ error, onRetry }: { error: unknown; onRetry: () => vo
 
 function AuthLoading({ label }: { label: string }) {
   return (
-    <main className="auth-screen">
-      <div className="auth-layout">
-        <a className="auth-brand" href="/">
-          <span aria-hidden="true" className="auth-brand__mark">m</span>
-          <span className="auth-brand__word">modelry</span>
+    <main className="grid min-h-screen place-items-center bg-background px-[18px] py-[clamp(24px,6vh,56px)]">
+      <div className="mx-auto flex w-full max-w-[420px] flex-col items-center gap-5">
+        <a className="inline-flex items-center gap-2 text-foreground" href="/">
+          <span aria-hidden="true" className="grid size-8 place-items-center rounded-lg bg-muted font-mono text-sm font-bold text-ink-secondary">m</span>
+          <span className="text-xl font-bold tracking-[-1.1px]">modelry</span>
         </a>
-        <Surface className="auth-card session-recovery" variant="raised">
+        <Surface className="w-full p-6 shadow-soft" variant="raised">
           <LoadingState label={label} />
         </Surface>
       </div>

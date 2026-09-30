@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HardDrive, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
@@ -10,7 +13,6 @@ import {
   saveFileStorageProvider, startFileMigration, testFileStorageProvider,
   type FileMigration, type FileStorageStatus, type ProviderKind, type S3Input, type SecretOption,
 } from './client';
-import './storage.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
@@ -186,14 +188,14 @@ export function FileStoragePage() {
     }
   }
 
-  if (state === 'loading') return <div className="page-stack"><LoadingState label={t('storage.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('storage.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="page-stack">
+      <div className="flex min-w-0 flex-col gap-6">
         <ErrorState title={t('storage.loadFailed')} description={t('storage.loadFailedDescription')}>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('storage.retry')}</Button>
         </ErrorState>
-        {loadError instanceof ApiClientError && loadError.apiError.code === 'UNAUTHENTICATED' && <p>{t('storage.errors.unauthenticated')}</p>}
+        {loadError instanceof ApiClientError && loadError.apiError.code === 'UNAUTHENTICATED' && <p className="m-0 text-xs text-danger">{t('storage.errors.unauthenticated')}</p>}
       </div>
     );
   }
@@ -202,44 +204,55 @@ export function FileStoragePage() {
   const activeMigration = migrations.find((item) => item.status === 'running' || item.status === 'pending')
   const targetLabel = status.activeProvider === 'local' ? 'S3-compatible' : 'Local';
   return (
-    <div className="page-stack storage-page">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{t('storage.eyebrow')}</p>
-          <h1>{t('storage.title')}</h1>
-          <p className="page-description">{t('storage.description')}</p>
-        </div>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="min-w-0">
+        <p className="eyebrow">{t('storage.eyebrow')}</p>
+        <h1>{t('storage.title')}</h1>
+        <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('storage.description')}</p>
       </header>
 
-      <Surface className="storage-status" variant="standard">
-        <div className="storage-status__heading">
-          <span className="scope-icon"><HardDrive aria-hidden="true" size={17} /></span>
-          <div>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="flex flex-wrap items-center gap-3">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><HardDrive size={17} /></span>
+          <div className="min-w-0">
             <p className="eyebrow">{t('storage.status.eyebrow')}</p>
             <h2>{t('storage.status.title')}</h2>
           </div>
-          <StatusChip state={stateChipState(status.providerState)}>{t(providerStateKey(status.providerState))}</StatusChip>
+          <div className="ml-auto">
+            <StatusChip state={stateChipState(status.providerState)}>{t(providerStateKey(status.providerState))}</StatusChip>
+          </div>
         </div>
-        <dl className="storage-status__facts">
-          <div><dt>{t('storage.status.provider')}</dt><dd>{status.provider}</dd></div>
-          <div><dt>{t('storage.status.referencedObjects')}</dt><dd>{status.health.referencedObjects}</dd></div>
-          <div><dt>{t('storage.status.revision')}</dt><dd>{status.revision}</dd></div>
+        <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" data-storage-status-facts>
+          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
+            <dt className="text-[11px] font-semibold text-muted-foreground">{t('storage.status.provider')}</dt>
+            <dd className="m-0 break-words text-xs font-semibold text-ink-secondary">{status.provider}</dd>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
+            <dt className="text-[11px] font-semibold text-muted-foreground">{t('storage.status.referencedObjects')}</dt>
+            <dd className="m-0 break-words text-xs font-semibold text-ink-secondary">{status.health.referencedObjects}</dd>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
+            <dt className="text-[11px] font-semibold text-muted-foreground">{t('storage.status.revision')}</dt>
+            <dd className="m-0 break-words text-xs font-semibold text-ink-secondary">{status.revision}</dd>
+          </div>
         </dl>
-        {status.providerMessage && <p role="status">{status.providerMessage}</p>}
-        {status.providerHint && <p className="storage-hint">{status.providerHint}</p>}
-        {status.activeProvider === 'local' && <p className="storage-path"><span>{t('storage.status.localPath')}</span><code>{status.configuration.local.path}</code></p>}
+        {status.providerMessage && <p className="m-0 text-xs text-ink-secondary" role="status">{status.providerMessage}</p>}
+        {status.providerHint && <p className="m-0 max-w-[720px] text-[11px] leading-relaxed text-muted-foreground">{status.providerHint}</p>}
+        {status.activeProvider === 'local' && <p className="m-0 flex min-w-0 flex-col gap-0.5 text-[11px] text-muted-foreground"><span>{t('storage.status.localPath')}</span><code className="break-words font-mono text-ink-secondary">{status.configuration.local.path}</code></p>}
       </Surface>
 
-      <Surface className="storage-provider" variant="standard">
-        <h2>{t('storage.provider.title')}</h2>
-        <p className="section-description">{t('storage.provider.description')}</p>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="min-w-0">
+          <h2>{t('storage.provider.title')}</h2>
+          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('storage.provider.description')}</p>
+        </div>
         <FormField htmlFor="storage-provider" label={t('storage.provider.label')}>
           <select id="storage-provider" onChange={(event) => setProvider(event.target.value === 's3' ? 's3' : 'local')} value={provider}>
             <option value="local">{t('storage.provider.local')}</option>
             <option value="s3">{t('storage.provider.s3')}</option>
           </select>
         </FormField>
-        {provider === 's3' && <div className="storage-provider__fields">
+        {provider === 's3' && <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <FormField htmlFor="storage-endpoint" label={t('storage.provider.endpoint')} hint={t('storage.provider.endpointHint')}>
             <input id="storage-endpoint" onChange={(event) => setS3({ ...s3, endpoint: event.target.value })} placeholder="https://s3.example.com" type="url" value={s3.endpoint} />
           </FormField>
@@ -273,54 +286,56 @@ export function FileStoragePage() {
               {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
             </select>
           </FormField>
-          {secrets.length === 0
-            ? <p className="storage-hint">{t('storage.provider.noSecrets')} <Link to="/settings/secrets">{t('storage.provider.createSecret')}</Link></p>
-            : <p className="storage-hint"><Link to="/settings/secrets">{t('storage.provider.manageSecrets')}</Link></p>}
+          <div className="min-w-0 sm:col-span-2 xl:col-span-3">
+            {secrets.length === 0
+              ? <p className="m-0 text-[11px] text-muted-foreground">{t('storage.provider.noSecrets')} <Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('storage.provider.createSecret')}</Link></p>
+              : <p className="m-0 text-[11px] text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('storage.provider.manageSecrets')}</Link></p>}
+          </div>
         </div>}
-        <div className="storage-actions">
+        <div className="flex flex-wrap items-center gap-2">
           {provider === 's3' && <Button disabled={busy !== null} onClick={() => void testConnection()} size="small" type="button" variant="secondary">{t('storage.provider.test')}</Button>}
           <Button disabled={busy !== null} onClick={() => void saveProvider()} size="small" type="button" variant="primary">{t('storage.provider.save')}</Button>
         </div>
-        {testResult !== null && <p role="status">{testResult.state === 'ready' ? t('storage.provider.testReady') : t('storage.provider.testUnavailable')} · {testResult.message}</p>}
+        {testResult !== null && <p className="m-0 text-xs text-ink-secondary" role="status">{testResult.state === 'ready' ? t('storage.provider.testReady') : t('storage.provider.testUnavailable')} · {testResult.message}</p>}
       </Surface>
-      <Surface className="storage-migration" variant="standard">
-        <div className="storage-status__heading">
-          <span className="scope-icon"><ShieldCheck aria-hidden="true" size={17} /></span>
-          <div>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="flex flex-wrap items-center gap-3">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><ShieldCheck size={17} /></span>
+          <div className="min-w-0">
             <p className="eyebrow">{t('storage.migration.eyebrow')}</p>
             <h2>{t('storage.migration.title')}</h2>
           </div>
         </div>
-        <p className="section-description">{t('storage.migration.description')}</p>
-        {status.migration.latest && <div className="storage-migration__state">
+        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('storage.migration.description')}</p>
+        {status.migration.latest && <div className="flex flex-wrap items-center gap-2.5">
           <StatusChip state={status.migration.latest.status === 'completed' ? 'ready' : status.migration.latest.status === 'failed' ? 'unavailable' : 'degraded'}>
             {t(migrationStateKey(status.migration.latest.status))}
           </StatusChip>
-          <span>{t('storage.migration.progress', { copied: status.migration.latest.copiedObjects, total: status.migration.latest.totalObjects })}</span>
-          {status.migration.latest.targetEndpointHost && <span>{status.migration.latest.targetEndpointHost}</span>}
+          <span className="text-xs text-ink-secondary">{t('storage.migration.progress', { copied: status.migration.latest.copiedObjects, total: status.migration.latest.totalObjects })}</span>
+          {status.migration.latest.targetEndpointHost && <span className="text-xs text-ink-secondary">{status.migration.latest.targetEndpointHost}</span>}
         </div>}
-        {status.migration.latest?.status === 'interrupted' && <p role="status">{t('storage.migration.interruptedHint')}</p>}
-        {status.migration.latest?.status === 'failed' && <p role="alert">{t('storage.migration.failedHint')}</p>}
-        {status.migration.latest?.status === 'completed' && <p role="status">{t('storage.migration.completedHint')}</p>}
-        <div className="storage-actions">
+        {status.migration.latest?.status === 'interrupted' && <p className="m-0 text-xs text-warning" role="status">{t('storage.migration.interruptedHint')}</p>}
+        {status.migration.latest?.status === 'failed' && <p className="m-0 text-xs text-danger" role="alert">{t('storage.migration.failedHint')}</p>}
+        {status.migration.latest?.status === 'completed' && <p className="m-0 text-xs text-success" role="status">{t('storage.migration.completedHint')}</p>}
+        <div className="flex flex-wrap items-center gap-2">
           <Button disabled={busy !== null || status.migration.active} onClick={() => void migrate()} size="small" type="button" variant="primary">
             {t('storage.migration.start')} · {targetLabel}
           </Button>
           {activeMigration && <Button disabled={busy !== null} onClick={() => void cancelMigration(activeMigration.id)} size="small" type="button" variant="quiet">{t('storage.migration.cancel')}</Button>}
           <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('storage.refresh')}</Button>
         </div>
-        {migrations.length > 0 && <ul className="storage-migration__history">
-          {migrations.slice(0, 5).map((item) => <li key={item.id}>
-            <code>{item.id}</code>
-            <span>{item.sourceProvider} → {item.targetProvider}</span>
-            <span>{t(migrationStateKey(item.status))}</span>
-            <span>{item.copiedObjects}/{item.totalObjects}</span>
+        {migrations.length > 0 && <ul className="m-0 grid list-none gap-1.5 p-0 text-[11px]">
+          {migrations.slice(0, 5).map((item) => <li className="flex flex-wrap items-center gap-2.5 border-b py-1.5 last:border-b-0" key={item.id}>
+            <code className="font-mono text-muted-foreground">{item.id}</code>
+            <span className="text-ink-secondary">{item.sourceProvider} → {item.targetProvider}</span>
+            <span className="text-ink-secondary">{t(migrationStateKey(item.status))}</span>
+            <span className="text-ink-secondary">{item.copiedObjects}/{item.totalObjects}</span>
           </li>)}
         </ul>}
       </Surface>
 
       {actionError !== undefined && <ErrorState title={t('storage.actionFailed')} description={actionMessage(actionError, t)} />}
-      {notice !== null && <p role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
     </div>
   );
 }

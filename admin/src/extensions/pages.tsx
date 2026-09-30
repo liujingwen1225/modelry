@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { ArrowLeft, ArrowRight, Plus, RefreshCw, Save, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { Dialog } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { listAllCollections } from '../collections/client';
 import { useI18n } from '../i18n/i18n';
 import {

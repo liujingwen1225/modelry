@@ -223,14 +223,41 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
       .filter((group) => group.items.length > 0),
     [role, permission],
   );
+  // 侧栏布局：≤680px 是横向顶栏；681–1023px 展开为 210px 栏、≥1024px 展开为 248px 栏；
+  // 折叠后统一收成 72px 图标轨道。状态仍由上层 sidebarCollapsed 驱动，宽度只用响应式变体表达。
+  const collapsedBlock = collapsed ? 'hidden' : 'hidden min-[681px]:block';
+  const navLinkClassName = (isActive: boolean) => [
+    'flex min-h-[35px] shrink-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+    collapsed
+      ? 'min-[681px]:min-h-[39px] min-[681px]:justify-center min-[681px]:gap-0 min-[681px]:rounded-[5px] min-[681px]:px-0 min-[681px]:text-[13px]'
+      : 'min-[681px]:min-h-[39px] min-[681px]:gap-[11px] min-[681px]:rounded-[5px] min-[681px]:px-2.5 min-[681px]:text-[13px]',
+    isActive ? 'border-sidebar-accent bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : '',
+  ].filter(Boolean).join(' ');
   return (
-    <aside className="sidebar" aria-label={t('navigation.projectNavigation')}>
-      <div className="sidebar__brand">
-        <span className="brand-mark" aria-hidden="true"><Command size={17} strokeWidth={2.2} /></span>
-        <span className="brand-word">modelry</span>
+    <aside
+      aria-label={t('navigation.projectNavigation')}
+      className={[
+        'sticky top-0 z-[5] flex w-full flex-col border-b border-sidebar-border bg-sidebar px-2.5 pt-2 pb-2.5 text-sidebar-foreground',
+        'min-[681px]:fixed min-[681px]:inset-y-0 min-[681px]:left-0 min-[681px]:h-dvh min-[681px]:border-r min-[681px]:border-b-0 min-[681px]:pt-[27px] min-[681px]:pb-[15px]',
+        collapsed
+          ? 'min-[681px]:w-[72px] min-[681px]:px-2.5'
+          : 'min-[681px]:w-[210px] min-[681px]:px-[15px] lg:w-[248px]',
+      ].filter(Boolean).join(' ')}
+      data-shell-sidebar
+    >
+      <div
+        className={[
+          'flex items-center gap-[9px] px-[7px] pt-px pb-2.25',
+          collapsed
+            ? 'min-[681px]:flex-col min-[681px]:gap-[9px] min-[681px]:px-0 min-[681px]:pb-5'
+            : 'min-[681px]:px-2.5 min-[681px]:pt-0 min-[681px]:pb-[29px]',
+        ].filter(Boolean).join(' ')}
+      >
+        <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground min-[681px]:size-[27px]" aria-hidden="true"><Command size={17} strokeWidth={2.2} /></span>
+        <span className={['text-[17px] font-extrabold tracking-[-0.8px] min-[681px]:text-[19px]', collapsed ? 'min-[681px]:hidden' : ''].filter(Boolean).join(' ')}>modelry</span>
         <button
           aria-label={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
-          className="sidebar__toggle"
+          className="hidden size-8 shrink-0 cursor-pointer place-items-center rounded-lg border border-input bg-card text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:grid"
           onClick={onToggleCollapsed}
           title={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
           type="button"
@@ -238,24 +265,27 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
           {collapsed ? <PanelLeftOpen aria-hidden="true" size={17} /> : <PanelLeftClose aria-hidden="true" size={17} />}
         </button>
       </div>
-      <nav aria-label={t('navigation.projectNavigation')} className="side-navigation">
+      <nav
+        aria-label={t('navigation.projectNavigation')}
+        className="flex min-h-0 flex-1 flex-row gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:thin] min-[681px]:flex-col min-[681px]:gap-2 min-[681px]:overflow-x-hidden min-[681px]:overflow-y-auto"
+      >
         {visibleGroups.map((group, groupIndex) => (
-          <div className="nav-group" key={group.label ?? 'overview'}>
-            {group.label && <p className="nav-group__label">{t(group.label)}</p>}
+          <div className="contents min-[681px]:grid min-[681px]:gap-[3px]" key={group.label ?? 'overview'}>
+            {group.label && <p className={['mx-2.5 mt-2.25 mb-1 text-[10px] font-bold uppercase tracking-[1.2px] text-subtle-foreground', collapsedBlock].join(' ')} data-nav-group-label>{t(group.label)}</p>}
             {group.items.map(({ label, to, icon: Icon }) => {
               const showsPendingCount = to === '/changes' && pendingOperations > 0;
               return (
                 <NavLink
                   aria-label={showsPendingCount ? `${t(label)} · ${pendingLabel}` : t(label)}
                   aria-current={isPrimaryLinkActive(pathname, to) ? 'page' : undefined}
-                  className={() => `nav-link${isPrimaryLinkActive(pathname, to) ? ' nav-link--active' : ''}`}
+                  className={() => navLinkClassName(isPrimaryLinkActive(pathname, to))}
                   end={to === '/'}
                   key={to}
                   title={t(label)}
                   to={to}
                 >
                   <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
-                  <span>{t(label)}</span>
+                  <span className={collapsed ? 'hidden min-[391px]:inline min-[681px]:hidden' : 'hidden min-[391px]:inline'}>{t(label)}</span>
                   {showsPendingCount && (
                     <span
                       aria-hidden="true"
@@ -265,12 +295,12 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
                 </NavLink>
               );
             })}
-            {groupIndex < visibleGroups.length - 1 && <div className="nav-separator" />}
+            {groupIndex < visibleGroups.length - 1 && <div className={['mx-2.25 mt-3 mb-1.25 h-px bg-border', collapsedBlock].join(' ')} />}
           </div>
         ))}
       </nav>
-      <div className="sidebar__bottom">
-        <div className="project-presence"><span className="project-presence__dot" />{t('navigation.localProject')}</div>
+      <div className={['gap-2.25 border-t border-sidebar-border px-2 pt-3.5 pb-0.5', collapsed ? 'hidden' : 'hidden min-[681px]:grid'].join(' ')}>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-[7px] shrink-0 rounded-full bg-primary shadow-[0_0_0_3px_var(--accent-cta-soft)]" />{t('navigation.localProject')}</div>
       </div>
     </aside>
   );
@@ -282,7 +312,14 @@ function ThemeButton() {
   const nextLabel = theme === 'dark' ? t('shell.themeSwitchToLight') : t('shell.themeSwitchToDark');
   const Icon = theme === 'dark' ? Sun : Moon;
   return (
-    <button aria-label={nextLabel} className="theme-button" onClick={toggleTheme} title={nextLabel} type="button">
+    <button
+      aria-label={nextLabel}
+      className="grid size-[30px] shrink-0 cursor-pointer place-items-center rounded-lg border border-transparent text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:size-[34px]"
+      data-theme-button
+      onClick={toggleTheme}
+      title={nextLabel}
+      type="button"
+    >
       <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
     </button>
   );
@@ -303,14 +340,21 @@ function ProductAreaNavigation({ area, role, permission, pathname }: {
   const activeLinks = sections.flatMap((section) => section.links).filter((link) => isAreaLinkMatch(link, pathname));
   const activeLink = activeLinks.sort((a, b) => b.to.length - a.to.length)[0];
   return (
-    <nav aria-label={t(area.label)} className={`area-navigation area-navigation--${area.id}`}>
-      {sections.map((section, index) => <div className="area-navigation__section" key={section.label ?? `section-${index}`}>
-        {section.label && <span className="area-navigation__label">{t(section.label)}</span>}
+    <nav
+      aria-label={t(area.label)}
+      className="flex min-h-[43px] items-center gap-2.25 overflow-x-auto border-b bg-card px-2.5 py-1.25 [scrollbar-width:thin] min-[681px]:min-h-12 min-[681px]:gap-3.75 min-[681px]:px-[clamp(25px,4.2vw,64px)] min-[681px]:py-1.5"
+    >
+      {sections.map((section, index) => <div className="flex shrink-0 items-center gap-1 border-l border-border pl-2 first:border-l-0 first:pl-0 min-[681px]:pl-[13px]" key={section.label ?? `section-${index}`}>
+        {section.label && <span className="mx-1.5 ml-0.5 text-[9px] font-bold uppercase tracking-[0.8px] text-subtle-foreground">{t(section.label)}</span>}
         {section.links.map((link) => {
           const active = link === activeLink;
           return <Link
             aria-current={active ? 'page' : undefined}
-            className={`area-navigation__link${active ? ' area-navigation__link--active' : ''}`}
+            className={[
+              'inline-flex min-h-[30px] shrink-0 items-center rounded-[7px] border border-transparent px-[7px] text-[10px] font-medium whitespace-nowrap text-muted-foreground no-underline hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              'min-[681px]:min-h-[31px] min-[681px]:px-2.25 min-[681px]:text-[11px]',
+              active ? 'border-accent-cta-soft bg-accent-cta-soft font-bold text-accent-cta-ink' : '',
+            ].filter(Boolean).join(' ')}
             key={link.to}
             to={areaLinkTarget(link)}
           >{t(link.label)}</Link>;
@@ -323,9 +367,14 @@ function ProductAreaNavigation({ area, role, permission, pathname }: {
 function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n();
   return (
-    <label className="locale-switcher">
+    <label className="flex items-center" data-locale-switcher>
       <span className="sr-only">{t('shell.language')}</span>
-      <select aria-label={t('shell.language')} onChange={(event) => setLocale(event.target.value as 'en' | 'zh-CN')} value={locale}>
+      <select
+        aria-label={t('shell.language')}
+        className="min-h-[30px] max-w-[88px] cursor-pointer rounded-lg border border-input bg-card px-1 text-[10px] text-ink-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:min-h-8 min-[681px]:max-w-[116px] min-[681px]:px-2 min-[681px]:text-[11px] max-[390px]:max-w-[74px]"
+        onChange={(event) => setLocale(event.target.value as 'en' | 'zh-CN')}
+        value={locale}
+      >
         <option value="en">{t('shell.english')}</option>
         <option value="zh-CN">{t('shell.simplifiedChinese')}</option>
       </select>
@@ -359,28 +408,37 @@ function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout, role }: AppShellPro
   }
 
   return (
-    <details className="owner-menu">
-      <summary aria-label={ownerLabel}>
-        <span className="owner-menu__avatar" aria-hidden="true">{ownerEmail?.slice(0, 1).toUpperCase() ?? 'O'}</span>
-        <span className="owner-menu__email">{ownerEmail ?? t('shell.owner')}</span>
+    <details className="relative flex items-center" data-owner-menu>
+      <summary
+        aria-label={ownerLabel}
+        className="flex cursor-pointer list-none items-center gap-[7px] rounded-full border border-transparent py-1 pr-2 pl-1 text-[11px] font-semibold text-ink-secondary hover:border-border hover:bg-accent open:border-border open:bg-accent [&::-webkit-details-marker]:hidden"
+      >
+        <span className="grid size-[25px] shrink-0 place-items-center rounded-full bg-accent-cta-soft text-[10px] font-bold text-accent-cta-ink" aria-hidden="true">{ownerEmail?.slice(0, 1).toUpperCase() ?? 'O'}</span>
+        <span className="max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap max-[680px]:max-w-[110px] max-[390px]:hidden">{ownerEmail ?? t('shell.owner')}</span>
         <ChevronDown aria-hidden="true" size={14} />
       </summary>
-      <div className="owner-menu__popover">
-        <div className="owner-menu__identity">
-          <strong>{ownerEmail ?? t('shell.owner')}</strong>
-          <span>{t(role === 'administrator' ? 'shell.roleAdministrator' : 'shell.roleOwner')}</span>
-          <span>{t('shell.ownerSessionActive')}</span>
-          {sessionExpiresAt && <span>{t('shell.expires', { date: formatDate(sessionExpiresAt) })}</span>}
+      <div className="absolute top-[calc(100%+8px)] right-0 z-[8] w-[min(290px,calc(100vw-24px))] rounded-md border border-border bg-card p-3.25 shadow-floating">
+        <div className="grid gap-[3px] border-b border-border px-[3px] pt-0.5 pb-2.75">
+          <strong className="text-[11px] text-foreground [overflow-wrap:anywhere]">{ownerEmail ?? t('shell.owner')}</strong>
+          <span className="text-[10px] text-muted-foreground">{t(role === 'administrator' ? 'shell.roleAdministrator' : 'shell.roleOwner')}</span>
+          <span className="text-[10px] text-muted-foreground">{t('shell.ownerSessionActive')}</span>
+          {sessionExpiresAt && <span className="text-[10px] text-muted-foreground">{t('shell.expires', { date: formatDate(sessionExpiresAt) })}</span>}
         </div>
-        <div className="owner-menu__actions">
+        <div className="flex items-center gap-[7px] pt-2 text-[10px] text-muted-foreground">
           {onLogout && (
-            <button aria-disabled={signOutState === 'loading'} className="owner-menu__logout" disabled={signOutState === 'loading'} onClick={() => void signOut()} type="button">
+            <button
+              aria-disabled={signOutState === 'loading'}
+              className="ml-auto flex min-h-8 cursor-pointer items-center gap-[7px] rounded-[7px] border border-input bg-card px-2.25 text-[10px] text-ink-secondary enabled:hover:border-danger/40 enabled:hover:bg-danger-soft enabled:hover:text-danger disabled:cursor-wait disabled:opacity-65"
+              disabled={signOutState === 'loading'}
+              onClick={() => void signOut()}
+              type="button"
+            >
               <LogOut aria-hidden="true" size={15} />
               {signOutState === 'loading' ? t('shell.signingOut') : t('shell.signOut')}
             </button>
           )}
         </div>
-        {signOutState === 'error' && <p className="owner-menu__error" role="alert">{t('shell.signOutFailed')}</p>}
+        {signOutState === 'error' && <p className="mt-2.25 mb-0 text-[10px] text-danger" role="alert">{t('shell.signOutFailed')}</p>}
       </div>
     </details>
   );
@@ -546,29 +604,51 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
   const area = productAreaNavigation(location.pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   return (
-    <div className={`app-frame${sidebarCollapsed ? ' app-frame--sidebar-collapsed' : ''}`} data-product-area={area?.id}>
-      <a className="skip-link" href="#main-content">{t('shell.skipToMainContent')}</a>
+    <div className="app-frame min-h-screen" data-product-area={area?.id}>
+      <a
+        className="fixed top-2 left-2 z-20 -translate-y-[150%] rounded-md bg-card px-3 py-2.25 text-xs font-bold text-accent-cta-ink shadow-soft focus:translate-y-0"
+        href="#main-content"
+      >{t('shell.skipToMainContent')}</a>
       <Sidebar collapsed={sidebarCollapsed} onToggleCollapsed={() => setSidebarCollapsed((value) => !value)} permission={permission} role={role} />
-      <div className="workspace">
-        <header className="topbar">
-          <div className="topbar__identity">
-            <Command aria-hidden="true" className="mobile-brand-mark" size={18} />
-            <span className="topbar__project">{t('shell.projectWorkspace')}</span>
-            <span className="topbar__divider" aria-hidden="true">/</span>
-            <span className="topbar__context">{t('shell.localContext')}</span>
+      <div
+        className={[
+          'flex min-w-0 flex-col',
+          'min-[681px]:min-h-screen',
+          sidebarCollapsed
+            ? 'min-[681px]:ml-[72px]'
+            : 'min-[681px]:ml-[210px] lg:ml-[248px]',
+        ].filter(Boolean).join(' ')}
+        data-shell-workspace
+      >
+        <header
+          className="flex min-h-[50px] items-center justify-between gap-3 border-b bg-card px-4 py-2 min-[681px]:sticky min-[681px]:top-0 min-[681px]:z-[4] min-[681px]:min-h-16 min-[681px]:gap-3.25 min-[681px]:px-[clamp(25px,4.2vw,64px)] max-[680px]:[&_[data-slot=badge]]:min-h-[23px] max-[680px]:[&_[data-slot=badge]]:px-[7px] max-[680px]:[&_[data-slot=badge]]:text-[9px]"
+          data-shell-topbar
+        >
+          <div className="flex min-w-0 items-center gap-2 min-[681px]:gap-3.25">
+            <Command aria-hidden="true" className="shrink-0 text-primary min-[681px]:hidden" size={18} />
+            <span className="text-[10px] font-semibold text-ink-secondary min-[681px]:text-xs max-[390px]:hidden">{t('shell.projectWorkspace')}</span>
+            <span className="text-[10px] text-subtle-foreground min-[681px]:text-xs max-[390px]:hidden" aria-hidden="true">/</span>
+            <span className="truncate text-[10px] text-muted-foreground min-[681px]:text-xs max-[390px]:hidden">{t('shell.localContext')}</span>
           </div>
-          <div className="topbar__actions">
+          <div
+            className="flex min-w-0 items-center gap-1.5 min-[681px]:gap-1.25 lg:gap-3.25"
+            data-shell-topbar-actions
+          >
             <CommandPaletteControl />
-            <span className="topbar__action-divider" aria-hidden="true" />
+            <span className="h-5.5 w-px shrink-0 bg-border" aria-hidden="true" />
             <RuntimeBadge />
             <LanguageSwitcher />
             <ThemeButton />
-            <span className="topbar__action-divider" aria-hidden="true" />
+            <span className="h-5.5 w-px shrink-0 bg-border" aria-hidden="true" />
             <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} role={role} sessionExpiresAt={sessionExpiresAt} />
           </div>
         </header>
         {area && <ProductAreaNavigation area={area} pathname={location.pathname} permission={permission} role={role} />}
-        <main className="page-area" id="main-content" tabIndex={-1}>
+        <main
+          className="mx-auto w-full min-w-0 max-w-[1440px] flex-1 px-4 pt-[27px] pb-[41px] min-[681px]:px-[clamp(25px,4.2vw,64px)] min-[681px]:pt-[43px] min-[681px]:pb-[62px]"
+          id="main-content"
+          tabIndex={-1}
+        >
           <Outlet />
         </main>
       </div>

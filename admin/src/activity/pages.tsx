@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity as ActivityIcon, RefreshCw } from 'lucide-react';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';

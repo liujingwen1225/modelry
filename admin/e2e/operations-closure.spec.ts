@@ -142,7 +142,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('.topbar')).toBeVisible();
+  await expect(page.locator('[data-shell-topbar]')).toBeVisible();
 }
 
 test.beforeAll(async () => {
@@ -293,7 +293,7 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   expectFailure(401, '/admin/api/v1/auth/session');
   await page.goto(runtimeURL);
   // Cookie 不区分端口：同一主机的耐久会话可能仍然有效，此时无需再次登录。
-  if (await page.locator('.topbar').count() === 0) {
+  if (await page.locator('[data-shell-topbar]').count() === 0) {
     await signIn(page, ownerEmail, ownerPassword);
   }
   const afterRestart = await requestJSON(page, 'GET', '/admin/api/v1/settings');

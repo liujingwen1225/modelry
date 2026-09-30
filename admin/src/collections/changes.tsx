@@ -3,7 +3,8 @@ import { AlertTriangle, ArrowRight, Check, FileClock, LoaderCircle, RefreshCw, S
 import { Link, useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
-import { Button, ButtonLink, EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/ui';
+import { Button, ButtonLink } from '../components/button';
+import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/states';
 import { diffLabel, preconditionMessage, preconditionStatus } from './preview-copy';
 import { applySchemaChange, discardSchemaChange, getChange, listAllChanges, listAllCollections, previewSchemaChange, type ChangeDetail, type ChangeListItem, type Collection, type PendingChange, type PendingOperation, type SchemaPreview } from './client';
 

@@ -5,7 +5,11 @@ import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, Sheet, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { Dialog, Sheet } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState } from '../components/states';
+import { Surface } from '../components/surface';
 import {
   createRecord,
   createApplicationUser,

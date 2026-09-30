@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, RefreshCw, Send } from 'lucide-react';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
@@ -10,7 +14,6 @@ import {
   fetchMailProvider, listMailDeliveries, retryMailDelivery, saveMailProvider, sendMailTest,
   type MailDelivery, type MailProvider, type MailSecurity,
 } from './client';
-import './mail.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
@@ -171,10 +174,10 @@ export function MailPage() {
     }
   }
 
-  if (state === 'loading') return <div className="page-stack"><LoadingState label={t('mail.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('mail.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="page-stack">
+      <div className="flex min-w-0 flex-col gap-6">
         <ErrorState description={t('mail.loadFailedDescription')} title={t('mail.loadFailed')}>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('mail.retry')}</Button>
         </ErrorState>
@@ -184,33 +187,35 @@ export function MailPage() {
   if (!provider || !input) return null;
 
   return (
-    <div className="page-stack mail-page">
-      <header className="page-heading">
-        <div>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
           <p className="eyebrow">{t('mail.eyebrow')}</p>
           <h1>{t('mail.title')}</h1>
-          <p className="page-description">{t('mail.description')}</p>
+          <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.description')}</p>
         </div>
-        <div className="mail-page__actions">
+        <div className="flex flex-wrap items-center gap-2">
           <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary">
             <RefreshCw aria-hidden="true" size={14} /> {t('mail.refresh')}
           </Button>
         </div>
       </header>
 
-      <Surface className="mail-provider" variant="standard">
-        <div className="mail-provider__heading">
-          <span className="scope-icon"><Mail aria-hidden="true" size={17} /></span>
-          <div>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="flex flex-wrap items-center gap-3">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><Mail size={17} /></span>
+          <div className="min-w-0">
             <p className="eyebrow">{t('mail.provider.title')}</p>
             <h2>{t('mail.title')}</h2>
           </div>
-          <StatusChip state={provider.enabled ? 'ready' : 'unavailable'}>
-            {t(provider.enabled ? 'mail.provider.on' : 'mail.provider.off')}
-          </StatusChip>
+          <div className="ml-auto">
+            <StatusChip state={provider.enabled ? 'ready' : 'unavailable'}>
+              {t(provider.enabled ? 'mail.provider.on' : 'mail.provider.off')}
+            </StatusChip>
+          </div>
         </div>
-        <p className="section-description">{t('mail.provider.description')}</p>
-        <form className="mail-provider__fields" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.provider.description')}</p>
+        <form className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <FormField htmlFor="mail-enabled" label={t('mail.provider.enabled')}>
             <select id="mail-enabled" onChange={(event) => setInput({ ...input, enabled: event.target.value === 'enabled' })} value={input.enabled ? 'enabled' : 'disabled'}>
               <option value="disabled">{t('mail.provider.off')}</option>
@@ -248,85 +253,85 @@ export function MailPage() {
               {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
             </select>
           </FormField>
-          {secrets.length === 0
-            ? <p className="mail-hint">{t('mail.provider.noSecrets')} <Link to="/settings/secrets">{t('mail.provider.createSecret')}</Link></p>
-            : <p className="mail-hint"><Link to="/settings/secrets">{t('mail.provider.manageSecrets')}</Link></p>}
-          <div className="mail-actions">
+          <div className="min-w-0 sm:col-span-2 xl:col-span-3">
+            {secrets.length === 0
+              ? <p className="m-0 text-[11px] text-muted-foreground">{t('mail.provider.noSecrets')} <Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('mail.provider.createSecret')}</Link></p>
+              : <p className="m-0 text-[11px] text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('mail.provider.manageSecrets')}</Link></p>}
+          </div>
+          <div className="flex flex-wrap items-end gap-2 sm:col-span-2 xl:col-span-3">
             <Button disabled={busy !== null} type="submit" size="small" variant="primary">
               {busy === 'save' ? t('mail.provider.saving') : t('mail.provider.save')}
             </Button>
           </div>
         </form>
-        <div className="mail-test">
-          <FormField htmlFor="mail-test-recipient" label={t('mail.provider.testRecipient')}>
-            <input id="mail-test-recipient" onChange={(event) => setTestRecipient(event.target.value)} type="email" value={testRecipient} />
-          </FormField>
+        <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+          <div className="min-w-[220px] flex-1">
+            <FormField htmlFor="mail-test-recipient" label={t('mail.provider.testRecipient')}>
+              <input id="mail-test-recipient" onChange={(event) => setTestRecipient(event.target.value)} type="email" value={testRecipient} />
+            </FormField>
+          </div>
           <Button disabled={busy !== null || testRecipient.trim() === ''} onClick={() => void sendTest()} size="small" type="button" variant="secondary">
             <Send aria-hidden="true" size={14} /> {busy === 'test' ? t('mail.provider.testing') : t('mail.provider.test')}
           </Button>
         </div>
-        {testResult !== null && <p role="status">{testResult}</p>}
+        {testResult !== null && <p className="m-0 text-xs text-ink-secondary" role="status">{testResult}</p>}
       </Surface>
 
-      <Surface className="mail-deliveries" variant="standard">
-        <div className="mail-deliveries__heading">
-          <div>
-            <p className="eyebrow">{t('mail.deliveries.title')}</p>
-            <h2>{t('mail.deliveries.title')}</h2>
-          </div>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="min-w-0">
+          <p className="eyebrow">{t('mail.deliveries.title')}</p>
+          <h2>{t('mail.deliveries.title')}</h2>
         </div>
-        <p className="section-description">{t('mail.deliveries.description')}</p>
+        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.deliveries.description')}</p>
         {deliveries.length === 0
           ? <EmptyState description={t('mail.deliveries.description')} title={t('mail.deliveries.empty')} />
           : (
-            <div className="table-scroll">
-              <table className="data-table mail-deliveries__table">
-                <caption>{t('mail.deliveries.caption')}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t('mail.deliveries.columns.kind')}</th>
-                    <th scope="col">{t('mail.deliveries.columns.recipient')}</th>
-                    <th scope="col">{t('mail.deliveries.columns.status')}</th>
-                    <th scope="col">{t('mail.deliveries.columns.attempts')}</th>
-                    <th scope="col">{t('mail.deliveries.columns.created')}</th>
-                    <th scope="col">{t('mail.deliveries.columns.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveries.map((delivery) => (
-                    <tr data-delivery-id={delivery.id} key={delivery.id}>
-                      <td>{t(deliveryKindKey(delivery.kind))}</td>
-                      <td>{delivery.recipient}</td>
-                      <td>
-                        <StatusChip state={delivery.status === 'succeeded' ? 'ready' : delivery.status === 'failed' || delivery.status === 'interrupted' ? 'unavailable' : 'degraded'}>
-                          {t(deliveryStateKey(delivery.status))}
-                        </StatusChip>
-                        {delivery.errorCode !== '' && <span className="mail-delivery-error">{delivery.errorCode}</span>}
-                      </td>
-                      <td>{delivery.attempts}</td>
-                      <td>{new Date(delivery.createdAt).toLocaleString()}</td>
-                      <td>
-                        <Button
-                          aria-label={t('mail.deliveries.retry') + ' ' + delivery.recipient}
-                          disabled={busy !== null || delivery.status === 'succeeded'}
-                          onClick={() => void retry(delivery.id)}
-                          size="small"
-                          type="button"
-                          variant="secondary"
-                        >
-                          {busy === delivery.id ? t('mail.deliveries.retrying') : t('mail.deliveries.retry')}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableCaption>{t('mail.deliveries.caption')}</TableCaption>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead scope="col">{t('mail.deliveries.columns.kind')}</TableHead>
+                  <TableHead scope="col">{t('mail.deliveries.columns.recipient')}</TableHead>
+                  <TableHead scope="col">{t('mail.deliveries.columns.status')}</TableHead>
+                  <TableHead scope="col">{t('mail.deliveries.columns.attempts')}</TableHead>
+                  <TableHead scope="col">{t('mail.deliveries.columns.created')}</TableHead>
+                  <TableHead scope="col">{t('mail.deliveries.columns.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliveries.map((delivery) => (
+                  <TableRow data-delivery-id={delivery.id} key={delivery.id}>
+                    <TableCell>{t(deliveryKindKey(delivery.kind))}</TableCell>
+                    <TableCell>{delivery.recipient}</TableCell>
+                    <TableCell>
+                      <StatusChip state={delivery.status === 'succeeded' ? 'ready' : delivery.status === 'failed' || delivery.status === 'interrupted' ? 'unavailable' : 'degraded'}>
+                        {t(deliveryStateKey(delivery.status))}
+                      </StatusChip>
+                      {delivery.errorCode !== '' && <span className="mt-1 block text-[11px] text-muted-foreground">{delivery.errorCode}</span>}
+                    </TableCell>
+                    <TableCell>{delivery.attempts}</TableCell>
+                    <TableCell>{new Date(delivery.createdAt).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Button
+                        aria-label={t('mail.deliveries.retry') + ' ' + delivery.recipient}
+                        disabled={busy !== null || delivery.status === 'succeeded'}
+                        onClick={() => void retry(delivery.id)}
+                        size="small"
+                        type="button"
+                        variant="secondary"
+                      >
+                        {busy === delivery.id ? t('mail.deliveries.retrying') : t('mail.deliveries.retry')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
       </Surface>
 
       {actionError !== undefined && <ErrorState description={actionMessage(actionError, t)} title={t('mail.actionFailed')} />}
-      {notice !== null && <p role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
     </div>
   );
 }

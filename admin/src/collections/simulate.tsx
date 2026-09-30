@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Button, FormField, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { ApiClientError } from '../api/client';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import type { AccessRuleMode } from './client';

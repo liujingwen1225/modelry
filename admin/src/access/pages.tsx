@@ -4,7 +4,12 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ApiClientError } from '../api/client';
 import { useOwnerSession } from '../auth/owner-session';
-import { Button, CopyButton, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { CopyButton } from '../components/copy-button';
+import { FormField } from '../components/form-field';
+import { Dialog } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import {
   createAPIKey, createServiceAccount, getAuditRecord, getServiceAccount, listAPIKeys, listAuditRecords, listServiceAccounts,
@@ -149,7 +154,7 @@ function DangerDialog({ open, title, description, busy, error, onClose, onConfir
 function AccessTabs({ active }: { active: 'access' | 'audit' }) {
   const { t } = useI18n();
   const tabClassName = (isActive: boolean) => `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`;
-  return <nav aria-label={t('access.tabsLabel')} className="access-tabs" data-access-tabs><div className="flex flex-wrap items-center gap-1 overflow-x-auto border-b"><Link aria-current={active === 'access' ? 'page' : undefined} className={tabClassName(active === 'access')} to="/access">{t('access.tabs.access')}</Link><Link aria-current={active === 'audit' ? 'page' : undefined} className={tabClassName(active === 'audit')} to="/activity/audit">{t('access.tabs.audit')}</Link></div></nav>;
+  return <nav aria-label={t('access.tabsLabel')} data-access-tabs><div className="flex flex-wrap items-center gap-1 overflow-x-auto border-b"><Link aria-current={active === 'access' ? 'page' : undefined} className={tabClassName(active === 'access')} to="/access">{t('access.tabs.access')}</Link><Link aria-current={active === 'audit' ? 'page' : undefined} className={tabClassName(active === 'audit')} to="/activity/audit">{t('access.tabs.audit')}</Link></div></nav>;
 }
 
 function PageTitle({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {

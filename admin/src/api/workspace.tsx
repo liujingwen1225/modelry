@@ -6,7 +6,11 @@ import { allApplicationEndpoints, endpointOpenApiSnippet, endpointsForCollection
 import { runApplicationRequest, type ApplicationRunResult } from './workspace-client';
 import { getAccessRules, listAllCollections, type AccessRuleMode, type AccessRulesState, type Collection } from '../collections/client';
 import { useCollectionWorkspace } from '../collections/workspace-context';
-import { Button, ButtonLink, CopyButton, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink } from '../components/button';
+import { CopyButton } from '../components/copy-button';
+import { FormField } from '../components/form-field';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 
 type Translate = ReturnType<typeof useI18n>['t'];

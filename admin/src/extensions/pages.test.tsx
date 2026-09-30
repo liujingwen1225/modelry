@@ -60,8 +60,8 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
     // 新版 IA：Hooks 属于 Automations 组，侧栏 Automations 项保持高亮。
     const automationLink = within(navigation).getByRole('link', { name: 'Automations' });
+    // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
     expect(automationLink).toHaveAttribute('aria-current', 'page');
-    expect(automationLink).toHaveClass(/nav-link--active/);
     expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
     expect(await screen.findByRole('link', { name: /Normalize Profile/ })).toBeInTheDocument();
 
@@ -72,8 +72,8 @@ describe('Extension and write-only Secret Admin surfaces', () => {
 
     await userEvent.click(automationLink);
     expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
+    // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
     expect(automationLink).toHaveAttribute('aria-current', 'page');
-    expect(automationLink).toHaveClass(/nav-link--active/);
   });
 
   it('loads, edits, and saves the complete Extension configuration', async () => {

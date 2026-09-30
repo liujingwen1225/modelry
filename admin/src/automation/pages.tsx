@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, Check, CircleAlert, Clock3, Radio, Search, Webhook as WebhookIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { Dialog } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';

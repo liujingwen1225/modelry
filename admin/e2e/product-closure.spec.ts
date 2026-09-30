@@ -388,18 +388,19 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(await productNavigation.getByRole('link').allTextContents()).toEqual([
       'Home', 'Collections', 'API & SDK', 'Automations', 'Activity & Audit', 'Changes', 'Model health', 'Access & keys', 'Settings',
     ]);
-    await expect(activePage.locator('.nav-group__label')).toHaveText(['Build', 'Connect', 'Automate', 'Observe', 'Evolve', 'Project']);
-    await expect(activePage.locator('.overview-recent-work')).toContainText('authors');
-    await expect(activePage.locator('.overview-build-links').getByRole('link')).toHaveCount(4);
+    await expect(activePage.locator('[data-nav-group-label]')).toHaveText(['Build', 'Connect', 'Automate', 'Observe', 'Evolve', 'Project']);
+    // Spec 0001 §5.1：Home 按 状态 → 下一步 → 最近工作 → 需要处理 组织，不复制诊断详情。
+    await expect(activePage.locator('[data-home-status]')).toContainText('Model');
+    await expect(activePage.locator('[data-home-next-step]')).toContainText('Next step');
+    await expect(activePage.locator('[data-home-recent-work]')).toContainText('authors');
     expect(await activePage.evaluate(() => {
-      const recentWork = document.querySelector('.overview-recent-work');
-      const buildLinks = document.querySelector('.overview-build-links');
-      return Boolean(recentWork && buildLinks && (recentWork.compareDocumentPosition(buildLinks) & Node.DOCUMENT_POSITION_FOLLOWING));
+      const status = document.querySelector('[data-home-status]');
+      const recentWork = document.querySelector('[data-home-recent-work]');
+      return Boolean(status && recentWork && (status.compareDocumentPosition(recentWork) & Node.DOCUMENT_POSITION_FOLLOWING));
     })).toBe(true);
     await expect(activePage.getByRole('heading', { name: 'Connect a coding agent' })).toBeVisible();
-    await expect(activePage.locator('.overview-agent-card__command')).toContainText('modelry mcp --api-url');
-    await expect(activePage.locator('.overview-agent-card').getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
-    await expect(activePage.getByRole('region', { name: 'Runtime & storage' })).toBeVisible();
+    await expect(activePage.locator('[data-home-agent-command]')).toContainText('modelry mcp --api-url');
+    await expect(activePage.locator('[data-home-agent]').getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
     await expect(activePage.locator('.diagnostics-grid')).toHaveCount(0);
     await expect(activePage.getByRole('heading', { name: 'Needs attention' })).toHaveCount(0);
     await expect(activePage.getByText('Modelry Community', { exact: true })).toHaveCount(0);
@@ -490,15 +491,15 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       const cookieHeader = `${ownerCookie!.name}=${ownerCookie!.value}`;
       expect((await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } })).status()).toBe(200);
 
-      await activePage.locator('.owner-menu summary').click();
+      await activePage.locator('[data-owner-menu] summary').click();
       const logoutResponsePromise = activePage.waitForResponse((response) =>
         new URL(response.url()).pathname === '/admin/api/v1/auth/logout' && response.request().method() === 'POST',
       );
       await activePage.getByRole('button', { name: 'Sign out', exact: true }).click();
       expect((await logoutResponsePromise).status()).toBe(204);
       await expect(activePage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-      await expect(activePage.locator('.topbar')).toHaveCount(0);
-      await expect(activePage.locator('.command-palette-trigger')).toHaveCount(0);
+      await expect(activePage.locator('[data-shell-topbar]')).toHaveCount(0);
+      await expect(activePage.locator('[data-command-palette-trigger]')).toHaveCount(0);
 
       const revokedSession = await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } });
       expect(revokedSession.status()).toBe(401);
@@ -513,12 +514,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.goto(shellDeepLink);
       await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
 
-      const ownerMenu = activePage.locator('.owner-menu');
+      const ownerMenu = activePage.locator('[data-owner-menu]');
       await ownerMenu.locator('summary').click();
       await expect(ownerMenu.getByRole('button', { name: /theme|主题/i })).toHaveCount(0);
       await ownerMenu.locator('summary').click();
 
-      const darkThemeButton = activePage.locator('.topbar').getByRole('button', { name: 'Switch to dark theme' });
+      const darkThemeButton = activePage.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to dark theme' });
       await expect(darkThemeButton).toBeVisible();
       await darkThemeButton.click();
       await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -576,7 +577,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
       await activePage.getByRole('combobox', { name: '语言' }).selectOption('en');
       await expect(activePage.getByRole('navigation', { name: 'Project navigation' })).toBeVisible();
-      await activePage.locator('.topbar').getByRole('button', { name: 'Switch to light theme' }).click();
+      await activePage.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to light theme' }).click();
       await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'light');
     } finally {
       await sessionClient.dispose();

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, CircleAlert, RefreshCw, ShieldCheck, Wrench } from 'lucide-react';
-import { Button, EmptyState, ErrorState, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';

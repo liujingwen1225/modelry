@@ -299,7 +299,7 @@ async function expectOwnerSessionAfterRestart(page: Page) {
   await page.goto(runtimeURL);
   expect((await restoredSession).status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await expect(page.locator('.topbar')).toContainText(ownerEmail);
+  await expect(page.locator('[data-shell-topbar]')).toContainText(ownerEmail);
 }
 
 test.beforeAll(async () => {
@@ -389,7 +389,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await expect(page.locator('[data-api-realtime-metadata]')).toContainText(`/api/v1/posts/events`);
   await expect(page.locator('[data-api-realtime-example] code')).toContainText("headers['Last-Event-ID']");
 
-  await page.locator('.topbar').getByRole('button', { name: 'Search commands' }).click();
+  await page.locator('[data-shell-topbar]').getByRole('button', { name: 'Search commands' }).click();
   let palette = page.getByRole('dialog', { name: 'Command palette' });
   let paletteInput = palette.getByRole('combobox', { name: 'Search commands' });
   await paletteInput.fill('Open current Collection Realtime events');
@@ -408,7 +408,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await expect(page.getByRole('heading', { name: '已提交的记录事件' })).toBeVisible();
   await page.getByRole('combobox', { name: '语言' }).selectOption('en');
   await expect(page.getByRole('heading', { name: 'Committed Record Events' })).toBeVisible();
-  await page.locator('.topbar').getByRole('button', { name: 'Switch to dark theme' }).click();
+  await page.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   await startStream(page);

@@ -1,93 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Bot, CircleDot, HardDrive, HeartPulse, Layers3, LockKeyhole, Network, Puzzle, RefreshCw, Webhook } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, HardDrive, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { DiagnosticsCards } from '../components/runtime-status';
-import { Button, ButtonLink, CopyButton, PartialState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink } from '../components/button';
+import { CopyButton } from '../components/copy-button';
+import { StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n } from '../i18n/i18n';
 import type { TranslationKey } from '../i18n/i18n';
 import { listAllCollections, type CollectionSummary } from '../collections/client';
 
+type HealthState = 'ready' | 'degraded' | 'unavailable' | 'unknown' | 'loading';
+
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
-    <div className="page-heading">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="page-description">{description}</p>
-      </div>
-    </div>
+    <header className="min-w-0">
+      <p className="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+    </header>
   );
 }
 
-function HealthSummary() {
-  const { t } = useI18n();
-  const { runtime, storage } = useDiagnostics();
-  const runtimeReady = runtime.state === 'ready' && runtime.value.state === 'ready';
-  const storageReady = storage.state === 'ready' && storage.value.localStorage.state === 'ready';
-  const partial = runtime.state === 'error' || storage.state === 'error';
-
-  if (partial) {
-    return (
-      <PartialState className="notice notice--partial">
-        <CircleDot aria-hidden="true" size={17} />
-        <div><strong>{t('health.partialTitle')}</strong><span>{t('health.partialDescription')}</span></div>
-      </PartialState>
-    );
-  }
-  if (runtime.state === 'loading' || storage.state === 'loading') {
-    return <div className="notice notice--loading" role="status"><span className="pulse-dot" />{t('health.connecting')}</div>;
-  }
-
-  const ready = runtimeReady && storageReady;
-  return (
-    <div className={`notice ${ready ? 'notice--ready' : 'notice--degraded'}`} role="status">
-      {ready ? <HeartPulse aria-hidden="true" size={17} /> : <CircleDot aria-hidden="true" size={17} />}
-      <div>
-        <strong>{t(ready ? 'health.readyTitle' : 'health.attentionTitle')}</strong>
-        <span>{t(ready ? 'health.readyDescription' : 'health.attentionDescription')}</span>
-      </div>
-      <StatusChip state={ready ? 'ready' : 'degraded'}>{t(ready ? 'health.readyChip' : 'health.attentionChip')}</StatusChip>
-    </div>
-  );
+function translatedHealthState(state: HealthState, t: (key: TranslationKey) => string): string {
+  return t(`diagnostics.states.${state}` as TranslationKey);
 }
 
-function translatedHealthState(state: string, t: (key: TranslationKey) => string): string {
-  const known = ['ready', 'degraded', 'unavailable', 'unknown', 'loading'];
-  return known.includes(state) ? t(`diagnostics.states.${state}` as TranslationKey) : t('diagnostics.unknown');
-}
+type NextStep = { title: string; description: string; action: string; to: string };
 
-function CompactDiagnostics() {
-  const { t } = useI18n();
-  const { runtime, storage } = useDiagnostics();
-  const runtimeState = runtime.state === 'ready' ? runtime.value.state : runtime.state === 'error' ? 'unavailable' : 'loading';
-  const databaseState = storage.state === 'ready' ? storage.value.database.state
-    : runtime.state === 'ready' ? runtime.value.database.state
-      : storage.state === 'error' || runtime.state === 'error' ? 'unavailable' : 'loading';
-  const fileState = storage.state === 'ready' ? storage.value.localStorage.state
-    : runtime.state === 'ready' ? runtime.value.localStorage.state
-      : storage.state === 'error' || runtime.state === 'error' ? 'unavailable' : 'loading';
-  const statuses = [
-    { label: t('diagnostics.runtime.eyebrow'), state: runtimeState },
-    { label: t('diagnostics.database'), state: databaseState },
-    { label: t('diagnostics.localStorage'), state: fileState },
-  ];
-
-  return (
-    <section aria-label={t('overview.diagnosticsTitle')} className="overview-diagnostics">
-      <span className="overview-diagnostics__label">{t('overview.diagnosticsEyebrow')}</span>
-      <div className="overview-diagnostics__statuses">
-        {statuses.map(({ label, state }) => <span className="overview-diagnostics__item" key={label}>
-          <span>{label}</span>
-          <StatusChip state={state}>{translatedHealthState(state, t)}</StatusChip>
-        </span>)}
-      </div>
-    </section>
-  );
-}
-
+// Spec 0001 §5.1：Home 回答「项目现在能否正常工作、我可以继续做什么」。
+// 这里只从真实状态生成一条下一步引导；完成后该引导自动消失。
 export function OverviewPage() {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
   const { runtime, storage } = useDiagnostics();
   const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
   const [overviewLoaded, setOverviewLoaded] = useState(false);
@@ -109,110 +54,236 @@ export function OverviewPage() {
     return () => controller.abort();
   }, []);
 
-  const recentCollections = useMemo(() => (collections ?? [])
-    .slice()
-    .sort((left, right) => (right.updatedAt ?? right.createdAt ?? '').localeCompare(left.updatedAt ?? left.createdAt ?? ''))
-    .slice(0, 3), [collections]);
+  const runtimeState: HealthState = runtime.state === 'ready' ? runtime.value.state as HealthState : runtime.state === 'error' ? 'unavailable' : 'loading';
+  const databaseState: HealthState = storage.state === 'ready' ? storage.value.database.state
+    : runtime.state === 'ready' ? runtime.value.database.state
+      : storage.state === 'error' || runtime.state === 'error' ? 'unavailable' : 'loading';
+  const fileState: HealthState = storage.state === 'ready' ? storage.value.localStorage.state
+    : runtime.state === 'ready' ? runtime.value.localStorage.state
+      : storage.state === 'error' || runtime.state === 'error' ? 'unavailable' : 'loading';
+
+  const collectionsUnavailable = overviewLoaded && collections === null;
   const emptyProject = collections?.length === 0;
   const failedCollections = (collections ?? []).filter((collection) => collection.pendingChangeStatus === 'failed');
   const pendingCollections = (collections ?? []).filter((collection) => collection.pendingChangeStatus === 'ready' || collection.pendingChangeStatus === 'needsReview');
-  const runtimeUnavailable = runtime.state === 'error' || (runtime.state === 'ready' && runtime.value.state !== 'ready');
-  const storageUnavailable = storage.state === 'error' || (storage.state === 'ready' && storage.value.localStorage.state !== 'ready');
-  const databaseUnavailable = (runtime.state === 'ready' && runtime.value.database.state !== 'ready') || (storage.state === 'ready' && storage.value.database.state !== 'ready');
-  const collectionsUnavailable = overviewLoaded && collections === null;
-  const needsAttention = runtimeUnavailable || databaseUnavailable || storageUnavailable || collectionsUnavailable || failedCollections.length > 0;
+  const emptyCollection = (collections ?? []).find((collection) => (collection.recordCount ?? 0) === 0);
+
+  const modelState: HealthState = collectionsUnavailable ? 'unavailable'
+    : !overviewLoaded ? 'loading'
+      : failedCollections.length > 0 ? 'degraded'
+        : pendingCollections.length > 0 ? 'degraded'
+          : 'ready';
+  const modelLabel = !overviewLoaded ? t('home.statusChecking')
+    : collectionsUnavailable ? t('home.statusUnavailable')
+      : failedCollections.length > 0 ? t('home.statusFailed')
+        : pendingCollections.length === 1 ? t('home.statusPendingOne')
+          : pendingCollections.length > 1 ? t('home.statusPendingMany', { count: pendingCollections.length })
+            : t('home.statusUpToDate');
+
+  const statusRows: Array<{ key: string; label: string; state: HealthState; value: string }> = [
+    { key: 'runtime', label: t('home.statusRuntime'), state: runtimeState, value: runtimeState === 'ready' ? '' : translatedHealthState(runtimeState, t) },
+    { key: 'database', label: t('home.statusDatabase'), state: databaseState, value: databaseState === 'ready' ? '' : translatedHealthState(databaseState, t) },
+    { key: 'storage', label: t('home.statusStorage'), state: fileState, value: fileState === 'ready' ? '' : translatedHealthState(fileState, t) },
+    { key: 'model', label: t('home.statusModel'), state: modelState, value: modelLabel },
+  ];
+
+  const nextStep = useMemo<NextStep>(() => {
+    if (collectionsUnavailable) return { title: t('home.nextUnavailableTitle'), description: t('home.nextUnavailableDescription'), action: t('home.nextSettingsAction'), to: '/settings' };
+    if (runtimeState === 'unavailable' || runtimeState === 'degraded') return { title: t('home.nextRuntimeTitle'), description: t('home.nextRuntimeDescription'), action: t('home.nextSettingsAction'), to: '/settings' };
+    if (databaseState === 'unavailable' || databaseState === 'degraded') return { title: t('home.nextDatabaseTitle'), description: t('home.nextDatabaseDescription'), action: t('home.nextSettingsAction'), to: '/settings' };
+    if (fileState === 'unavailable' || fileState === 'degraded') return { title: t('home.nextStorageTitle'), description: t('home.nextStorageDescription'), action: t('home.nextSettingsAction'), to: '/settings/storage' };
+    if (emptyProject) return { title: t('home.nextCreateCollectionTitle'), description: t('home.nextCreateCollectionDescription'), action: t('overview.createCollection'), to: '/collections/new' };
+    if (failedCollections.length > 0) return { title: t('home.nextRecoverTitle'), description: t('home.nextRecoverDescription', { name: failedCollections[0]!.name }), action: t('home.nextReviewAction'), to: '/changes?view=pending' };
+    if (pendingCollections.length > 0) return { title: t('home.nextReviewTitle'), description: t('home.nextReviewDescription'), action: t('home.nextReviewAction'), to: '/changes?view=pending' };
+    if (emptyCollection) return { title: t('home.nextCreateRecordTitle', { name: emptyCollection.name }), description: t('home.nextCreateRecordDescription'), action: t('home.nextCreateRecordAction'), to: `/collections/${encodeURIComponent(emptyCollection.id)}` };
+    return { title: t('home.nextApiTitle'), description: t('home.nextApiDescription'), action: t('home.nextApiAction'), to: '/connect/api' };
+  }, [collectionsUnavailable, databaseState, emptyCollection, emptyProject, failedCollections, fileState, pendingCollections.length, runtimeState, t]);
+
+  const recentCollections = useMemo(() => (collections ?? [])
+    .slice()
+    .sort((left, right) => (right.updatedAt ?? right.createdAt ?? '').localeCompare(left.updatedAt ?? left.createdAt ?? ''))
+    .slice(0, 5), [collections]);
+
+  const attention: Array<{ key: string; text: string; action: string; to: string }> = [];
+  for (const collection of failedCollections) {
+    attention.push({ key: `failed-${collection.id}`, text: t('home.attentionFailedChange', { name: collection.name }), action: t('home.attentionOpen'), to: `/collections/${encodeURIComponent(collection.id)}/model` });
+  }
+  if (collectionsUnavailable) attention.push({ key: 'collections', text: t('home.attentionCollections'), action: t('overview.openCollections'), to: '/collections' });
+  if (runtimeState === 'unavailable' || runtimeState === 'degraded') attention.push({ key: 'runtime', text: t('home.attentionRuntime'), action: t('home.attentionSettingsAction'), to: '/settings' });
+  if (databaseState === 'unavailable' || databaseState === 'degraded') attention.push({ key: 'database', text: t('home.attentionDatabase'), action: t('home.attentionSettingsAction'), to: '/settings' });
+  if (fileState === 'unavailable' || fileState === 'degraded') attention.push({ key: 'storage', text: t('home.attentionStorage'), action: t('home.attentionStorageAction'), to: '/settings/storage' });
 
   return (
-    <div className="page-stack overview-page">
-      <PageHeading
-        description={t('overview.description')}
-        eyebrow={t('overview.eyebrow')}
-        title={t('overview.title')}
-      />
-      {emptyProject && <Surface className="overview-empty" variant="raised">
-        <div><h2>{t('overview.emptyTitle')}</h2><p>{t('overview.emptyDescription')}</p></div>
-        <ButtonLink to="/collections/new" variant="primary"><Layers3 aria-hidden="true" size={15} />{t('overview.createCollection')}</ButtonLink>
-      </Surface>}
-      {recentCollections.length > 0 && <section aria-labelledby="recent-work-heading" className="overview-recent-work">
-        <div className="section-heading-row">
-          <div>
-            <p className="eyebrow">{t('overview.recentEyebrow')}</p>
-            <h2 id="recent-work-heading">{t('overview.recentTitle')}</h2>
+    <div className="flex min-w-0 flex-col gap-6">
+      <PageHeading description={t('home.description')} eyebrow={t('home.eyebrow')} title={t('home.title')} />
+
+      {/* 状态：正常时每行只保留标签与状态，不铺成 KPI 瓷砖墙。 */}
+      <section aria-labelledby="home-status-heading" className="flex min-w-0 flex-col gap-3" data-home-status>
+        <h2 id="home-status-heading">{t('home.statusTitle')}</h2>
+        <dl className="m-0 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {statusRows.map((row) => (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3.5 py-2.5" key={row.key}>
+              <dt className="text-xs font-medium text-muted-foreground">{row.label}</dt>
+              <dd className="m-0">
+                <StatusChip state={row.state}>{row.value || t('diagnostics.states.ready')}</StatusChip>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section aria-labelledby="home-next-heading" className="flex min-w-0 flex-col gap-3" data-home-next-step>
+        <h2 id="home-next-heading">{t('home.nextTitle')}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-4">
+          <div className="min-w-0">
+            <strong className="block text-sm font-semibold text-foreground">{nextStep.title}</strong>
+            <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{nextStep.description}</p>
+          </div>
+          <ButtonLink to={nextStep.to} variant="primary">{nextStep.action}<ArrowRight aria-hidden="true" size={15} /></ButtonLink>
+        </div>
+      </section>
+
+      <section aria-labelledby="home-recent-heading" className="flex min-w-0 flex-col gap-3" data-home-recent-work>
+        <h2 id="home-recent-heading">{t('home.recentTitle')}</h2>
+        {!overviewLoaded && <p className="m-0 text-xs text-muted-foreground">{t('home.recentLoading')}</p>}
+        {overviewLoaded && recentCollections.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t('overview.emptyDescription')}</p>}
+        {recentCollections.length > 0 && (
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {recentCollections.map((collection) => (
+              <li className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5" key={collection.id}>
+                <span className="grid min-w-0 flex-1 gap-0.5">
+                  <strong className="truncate text-xs font-semibold text-foreground">{collection.name}</strong>
+                  <small className="text-[11px] text-muted-foreground">
+                    {t(collection.type === 'Auth' ? 'overview.authCollection' : 'overview.collection')}
+                    {collection.updatedAt ? ` · ${t('home.recentUpdated')} ${formatDate(collection.updatedAt)}` : ''}
+                  </small>
+                </span>
+                {collection.pendingChangeStatus && (
+                  <StatusChip state={collection.pendingChangeStatus === 'failed' ? 'unavailable' : 'degraded'}>
+                    {t(collection.pendingChangeStatus === 'failed' ? 'home.statusFailed' : 'overview.schemaPending')}
+                  </StatusChip>
+                )}
+                <Link className="text-xs font-semibold text-primary hover:underline" to={collection.type === 'Auth' ? `/collections/${encodeURIComponent(collection.id)}/access` : `/collections/${encodeURIComponent(collection.id)}`}>
+                  {t('home.recentOpen')}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {attention.length > 0 && (
+        <section aria-labelledby="home-attention-heading" className="flex min-w-0 flex-col gap-3 rounded-lg border border-danger/30 bg-danger-soft p-4" data-home-attention>
+          <h2 id="home-attention-heading" className="m-0 text-danger">{t('home.attentionTitle')}</h2>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {attention.map((item) => (
+              <li className="flex flex-wrap items-center gap-2 text-xs text-ink-secondary" key={item.key}>
+                <AlertTriangle aria-hidden="true" className="shrink-0 text-danger" size={16} />
+                <span className="min-w-0 flex-1">{item.text}</span>
+                <Link className="font-semibold text-danger hover:underline" to={item.to}>{item.action}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Agent 接入保持低权重：可复制的真实命令 + 通往 Access & keys 与 MCP 文档的入口。 */}
+      <Surface className="flex min-w-0 items-start gap-3 p-4" variant="standard" data-home-agent>
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><Bot size={17} /></span>
+        <div className="grid min-w-0 flex-1 gap-2">
+          <h2 className="m-0">{t('overview.agentTitle')}</h2>
+          <p className="m-0 max-w-[680px] text-xs leading-relaxed text-muted-foreground">{t('overview.agentDescription')}</p>
+          <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-muted px-3 py-2.5" data-home-agent-command>
+            <code className="min-w-0 break-words font-mono text-xs text-ink-secondary">{t('overview.agentSetup')}</code>
+            <CopyButton label={t('common.copy')} value={t('overview.agentSetup')} />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/access">{t('overview.agentAccessLink')}<ArrowRight aria-hidden="true" size={14} /></Link>
+            <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/connect/mcp">{t('mcp.title')}<ArrowRight aria-hidden="true" size={14} /></Link>
           </div>
         </div>
-        <div className="overview-recent-work__list">
-          {recentCollections.map((collection) => <Surface className="overview-recent-work__item" key={collection.id} variant="standard">
-            <span><strong>{collection.name}</strong><small>{t(collection.type === 'Auth' ? 'overview.authCollection' : 'overview.collection')}</small></span>
-            <Link to={collection.type === 'Auth' ? `/collections/${encodeURIComponent(collection.id)}/access` : `/collections/${encodeURIComponent(collection.id)}`}>
-              {t(collection.type === 'Auth' ? 'overview.editSecurity' : 'overview.openRecords')}<ArrowRight aria-hidden="true" size={14} />
-            </Link>
-          </Surface>)}
-        </div>
-      </section>}
-      <section aria-label={t('navigation.build')} className="overview-build-links">
-        <Link className="overview-build-link" to="/collections"><Layers3 aria-hidden="true" size={17} /><span>{t('navigation.collections')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-        <Link className="overview-build-link" to="/connect/api"><Network aria-hidden="true" size={17} /><span>{t('navigation.api')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-        <Link className="overview-build-link" to="/automations/hooks"><Puzzle aria-hidden="true" size={17} /><span>{t('navigation.hooks')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-        <Link className="overview-build-link" to="/automations"><Webhook aria-hidden="true" size={17} /><span>{t('navigation.automations')}</span><ArrowRight aria-hidden="true" size={14} /></Link>
-      </section>
-      {pendingCollections.length > 0 && <div className="overview-pending-summary" role="status">
-        <span>{pendingCollections.length === 1 ? t('overview.schemaPendingOne') : t('overview.schemaPendingMany', { count: pendingCollections.length })}</span>
-        <Link to="/changes?view=pending">{t('overview.reviewChanges')}<ArrowRight aria-hidden="true" size={14} /></Link>
-      </div>}
-      {needsAttention && <section aria-labelledby="overview-attention-heading" className="overview-attention">
-        <div><p className="eyebrow">{t('overview.attentionEyebrow')}</p><h2 id="overview-attention-heading">{t('overview.attentionTitle')}</h2></div>
-        <ul>
-          {failedCollections.map((collection) => <li key={collection.id}>
-            <AlertTriangle aria-hidden="true" size={16} />
-            <span>{t('overview.failedChange', { name: collection.name })}</span>
-            <Link to={`/collections/${encodeURIComponent(collection.id)}/model`}>{t('overview.view')}</Link>
-          </li>)}
-          {collectionsUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.collectionsUnavailable')}</span><Link to="/collections">{t('overview.openCollections')}</Link></li>}
-          {runtimeUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.runtimeUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
-          {databaseUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.databaseUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
-          {storageUnavailable && <li><CircleDot aria-hidden="true" size={16} /><span>{t('overview.storageUnavailable')}</span><Link to="/settings">{t('overview.openSettings')}</Link></li>}
-        </ul>
-      </section>}
-      <Surface className="overview-agent-card" variant="standard">
-        <span className="overview-agent-card__icon"><Bot aria-hidden="true" size={18} /></span>
-        <div className="overview-agent-card__content">
-          <h2>{t('overview.agentTitle')}</h2>
-          <p>{t('overview.agentDescription')}</p>
-          <p className="overview-agent-card__setup">{t('overview.agentInstruction')}</p>
-          <div className="overview-agent-card__command"><code>{t('overview.agentSetup')}</code><CopyButton label={t('common.copy')} value={t('overview.agentSetup')} /></div>
-          <Link className="text-link" to="/access">{t('overview.agentAccessLink')}<ArrowRight aria-hidden="true" size={14} /></Link>
-        </div>
       </Surface>
-      <CompactDiagnostics />
     </div>
   );
 }
 
+// Spec 0001 §11.2：Settings 按「用户要完成的设置任务」组织，不复制 Connect 的开发者接口页，
+// 也不重复 Activity / Drift / 身份管理。诊断详情与刷新入口保留在本页（§9.3）。
 export function SettingsPage() {
   const { t } = useI18n();
   const { refresh } = useDiagnostics();
+  const groups: Array<{ key: TranslationKey; links: Array<{ label: TranslationKey; to: string }> }> = [
+    {
+      key: 'settings.navigation.project',
+      links: [
+        { label: 'settings.navigation.status', to: '/settings' },
+        { label: 'settings.navigation.runtime', to: '/settings/runtime' },
+      ],
+    },
+    {
+      key: 'settings.navigation.service',
+      links: [
+        { label: 'settings.navigation.filesStorage', to: '/settings/storage' },
+        { label: 'settings.navigation.mail', to: '/settings/mail' },
+        { label: 'settings.navigation.secrets', to: '/settings/secrets' },
+      ],
+    },
+    {
+      key: 'settings.navigation.maintenance',
+      links: [
+        { label: 'settings.navigation.dataTransfer', to: '/settings/data' },
+        { label: 'settings.navigation.backupRestore', to: '/settings/backups' },
+      ],
+    },
+  ];
+
   return (
-    <div className="page-stack">
+    <div className="flex min-w-0 flex-col gap-6">
       <PageHeading description={t('settings.description')} eyebrow={t('settings.eyebrow')} title={t('settings.title')} />
-      <section aria-labelledby="settings-status-heading" className="health-section">
-        <div className="section-heading-row">
-          <div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {groups.map((group) => (
+          <Surface className="flex min-w-0 flex-col gap-2 p-4" key={group.key} variant="standard">
+            <h2 className="m-0 text-xs font-semibold uppercase tracking-[0.6px] text-muted-foreground">{t(group.key)}</h2>
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {group.links.map((link) => (
+                <li key={link.to}>
+                  <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to={link.to}>
+                    {t(link.label)}<ArrowRight aria-hidden="true" size={13} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Surface>
+        ))}
+      </div>
+
+      <section aria-labelledby="settings-status-heading" className="flex min-w-0 flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
             <p className="eyebrow">{t('settings.diagnosticsEyebrow')}</p>
             <h2 id="settings-status-heading">{t('settings.diagnosticsTitle')}</h2>
-            <p className="section-description">{t('settings.diagnosticsDescription')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('settings.diagnosticsDescription')}</p>
           </div>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={15} /> {t('settings.refresh')}</Button>
         </div>
-        <HealthSummary />
         <DiagnosticsCards />
       </section>
-      <Surface className="settings-note" variant="inset">
-        <span className="scope-icon"><HardDrive aria-hidden="true" size={17} /></span>
-        <div><strong>{t('settings.storageTitle')}</strong><p>{t('settings.storageDescription')}</p><Link className="text-link" to="/settings/storage">{t('settings.storageLink')}</Link></div>
+
+      <Surface className="flex items-start gap-3 p-4" variant="inset">
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><HardDrive size={17} /></span>
+        <div className="min-w-0">
+          <strong className="block text-xs font-semibold text-foreground">{t('settings.storageTitle')}</strong>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('settings.storageDescription')}</p>
+          <Link className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/settings/storage">{t('settings.storageLink')}</Link>
+        </div>
       </Surface>
-      <Surface className="settings-note" variant="inset">
-        <span className="scope-icon"><LockKeyhole aria-hidden="true" size={17} /></span>
-        <div><strong>{t('settings.readOnlyTitle')}</strong><p>{t('settings.readOnlyDescription')}</p></div>
+      <Surface className="flex items-start gap-3 p-4" variant="inset">
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><LockKeyhole size={17} /></span>
+        <div className="min-w-0">
+          <strong className="block text-xs font-semibold text-foreground">{t('settings.readOnlyTitle')}</strong>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('settings.readOnlyDescription')}</p>
+        </div>
       </Surface>
     </div>
   );

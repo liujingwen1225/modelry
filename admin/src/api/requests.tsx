@@ -4,7 +4,10 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
-import { Button, ButtonLink, CopyButton, EmptyState, ErrorState, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink } from '../components/button';
+import { CopyButton } from '../components/copy-button';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from './client';
 import { getRequestRecord, listRequestRecords, type RequestRecord } from './workspace-client';

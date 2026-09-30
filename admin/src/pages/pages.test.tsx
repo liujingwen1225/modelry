@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app';
 
@@ -32,55 +32,71 @@ function setupOverview(collections: unknown[], failCollections = false) {
   return fetchMock;
 }
 
-describe('Overview action center', () => {
+describe('Home workspace', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('gives an empty project one direct action and keeps healthy status quiet', async () => {
+  it('gives an empty project one direct next step and keeps healthy status to a single row each', async () => {
     setupOverview([]);
 
-    expect(await screen.findByRole('heading', { name: 'Your backend is ready' })).toBeInTheDocument();
-    const diagnostics = await screen.findByRole('region', { name: 'Runtime & storage' });
-    expect(diagnostics).toHaveTextContent('Runtime');
-    expect(diagnostics).toHaveTextContent('Database');
-    expect(diagnostics).toHaveTextContent('Local storage');
-    expect(screen.getByRole('link', { name: 'Create Collection' })).toHaveAttribute('href', '/collections/new');
-    const build = screen.getByRole('region', { name: 'Build' });
-    expect(build.querySelectorAll('a')).toHaveLength(4);
-    expect(build.querySelector('a[href="/automations/hooks"]')).toHaveTextContent('Hooks');
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument();
+    // 状态与下一步都来自真实运行时快照，先等到加载完成再断言。
+    await screen.findByText('Up to date');
+    const status = screen.getByRole('region', { name: 'Workspace status' });
+    for (const label of ['Runtime', 'Database', 'File storage', 'Model']) {
+      expect(status).toHaveTextContent(label);
+    }
+
+    const nextStep = screen.getByRole('region', { name: 'Next step' });
+    expect(nextStep).toHaveTextContent('Create your first Collection');
+    expect(within(nextStep).getByRole('link', { name: /Create Collection/ })).toHaveAttribute('href', '/collections/new');
     expect(document.querySelector('.diagnostics-grid')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Continue recent work' })).not.toBeInTheDocument();
   });
 
-  it('links failed schema recovery and the most recent Collections to their next action', async () => {
+  it('links failed schema recovery and recent Collections to their next action', async () => {
     setupOverview([
-      { id: 'col_posts', name: 'posts', type: 'Normal', fields: [], updatedAt: '2026-09-22T00:00:00Z', pendingChangeStatus: 'failed' },
-      { id: 'col_users', name: 'users', type: 'Auth', fields: [], updatedAt: '2026-09-23T00:00:00Z' },
+      { id: 'col_posts', name: 'posts', type: 'Normal', fields: [], recordCount: 4, updatedAt: '2026-09-22T00:00:00Z', pendingChangeStatus: 'failed' },
+      { id: 'col_users', name: 'users', type: 'Auth', fields: [], recordCount: 2, updatedAt: '2026-09-23T00:00:00Z' },
     ]);
 
-    expect(await screen.findByRole('heading', { name: 'Needs attention' })).toBeInTheDocument();
-    expect(screen.getByText('A schema change needs recovery in posts.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/collections/col_posts/model');
-    expect(screen.getByRole('heading', { name: 'Continue recent work' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Edit security/ })).toHaveAttribute('href', '/collections/col_users/access');
-    expect(screen.getByRole('link', { name: /Open records/ })).toHaveAttribute('href', '/collections/col_posts');
-    const recentWork = screen.getByRole('region', { name: 'Continue recent work' });
-    const buildLinks = screen.getByRole('region', { name: 'Build' });
-    expect(recentWork.compareDocumentPosition(buildLinks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const attention = await screen.findByRole('region', { name: 'Needs attention' });
+    expect(attention).toHaveTextContent('A saved change in posts needs recovery.');
+    expect(within(attention).getByRole('link', { name: 'View' })).toHaveAttribute('href', '/collections/col_posts/model');
+
+    const nextStep = screen.getByRole('region', { name: 'Next step' });
+    expect(nextStep).toHaveTextContent('Recover the failed change');
+    expect(within(nextStep).getByRole('link', { name: /Review changes/ })).toHaveAttribute('href', '/changes?view=pending');
+
+    const recentWork = screen.getByRole('region', { name: 'Recent work' });
+    expect(recentWork).toHaveTextContent('users');
+    expect(within(recentWork).getAllByRole('link', { name: 'Open' })).toHaveLength(2);
   });
 
-  it('shows pending changes and their review path', async () => {
-    setupOverview([{ id: 'col_posts', name: 'posts', type: 'Normal', fields: [], pendingChangeStatus: 'needsReview' }]);
+  it('suggests reviewing pending changes before anything else', async () => {
+    setupOverview([{ id: 'col_posts', name: 'posts', type: 'Normal', fields: [], recordCount: 3, pendingChangeStatus: 'needsReview' }]);
 
-    expect(await screen.findByText('1 Collection has changes to review.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Review changes/ })).toHaveAttribute('href', '/changes?view=pending');
+    expect(await screen.findByText('1 change to review')).toBeInTheDocument();
+    const nextStep = screen.getByRole('region', { name: 'Next step' });
+    expect(nextStep).toHaveTextContent('Review pending changes');
+    expect(within(nextStep).getByRole('link', { name: /Review changes/ })).toHaveAttribute('href', '/changes?view=pending');
   });
 
-  it('shows unavailable schema health when the Collection summary cannot load', async () => {
+  it('points a healthy project with an empty Collection at its first record', async () => {
+    setupOverview([{ id: 'col_posts', name: 'posts', type: 'Normal', fields: [], recordCount: 0 }]);
+
+    expect(await screen.findByText('Create the first record in posts')).toBeInTheDocument();
+    const nextStep = screen.getByRole('region', { name: 'Next step' });
+    expect(within(nextStep).getByRole('link', { name: 'Open records' })).toHaveAttribute('href', '/collections/col_posts');
+  });
+
+  it('shows unavailable status instead of a healthy project when the Collection summary cannot load', async () => {
     setupOverview([], true);
 
     expect(await screen.findByRole('heading', { name: 'Needs attention' })).toBeInTheDocument();
     expect(screen.getByText('Collection status is unavailable.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Collections' })).toHaveAttribute('href', '/collections');
+    const status = screen.getByRole('region', { name: 'Workspace status' });
+    expect(status).toHaveTextContent('Unavailable');
+    expect(status).not.toHaveTextContent('Up to date');
   });
 });

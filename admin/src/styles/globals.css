@@ -280,6 +280,21 @@
 }
 
 /*
+ * 共享排版基元：`eyebrow` 是唯一保留的语义类名（规格 §17.3 的小号大写标签），
+ * 由设计系统而不是各页面重复实现；其余布局全部由 Tailwind 工具类承担。
+ */
+@layer components {
+  .eyebrow {
+    margin: 0 0 7px;
+    color: var(--subtle-foreground);
+    font-size: 9px;
+    font-weight: 750;
+    line-height: 1.4;
+    letter-spacing: 1.3px;
+  }
+}
+
+/*
  * Spec 0001 §3.2：全局 Shell 已经为 Automations 和 Project access 渲染了区域子导航，
  * 页面内的同义兜底导航不再重复出现。独立渲染页面（组件测试、深链接落地前）仍保留它，
  * 所以这里用 Shell 容器上的 data-product-area 作为作用域，而不是删除页面内的导航。

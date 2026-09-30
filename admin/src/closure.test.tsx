@@ -107,17 +107,17 @@ describe('Community V0.1.x closure', () => {
     setupFetch();
     render(<App />);
 
-    const topbar = await screen.findByRole('banner').catch(() => null) ?? document.querySelector('.topbar');
+    const topbar = await screen.findByRole('banner').catch(() => null) ?? document.querySelector('[data-shell-topbar]');
     expect(topbar).not.toBeNull();
-    const actions = (topbar as HTMLElement).querySelector('.topbar__actions') as HTMLElement;
+    const actions = (topbar as HTMLElement).querySelector('[data-shell-topbar-actions]') as HTMLElement;
     expect(actions).not.toBeNull();
     const order = Array.from(actions.children)
-      .filter((child) => !child.classList.contains('topbar__action-divider'))
+      .filter((child) => child.getAttribute('aria-hidden') !== 'true')
       .map((child) => {
-        if (child.classList.contains('command-palette-trigger')) return 'palette';
-        if (child.classList.contains('locale-switcher')) return 'language';
-        if (child.classList.contains('theme-button')) return 'theme';
-        if (child.classList.contains('owner-menu')) return 'user';
+        if (child.matches('[data-command-palette-trigger]')) return 'palette';
+        if (child.matches('[data-locale-switcher]')) return 'language';
+        if (child.matches('[data-theme-button]')) return 'theme';
+        if (child.matches('[data-owner-menu]')) return 'user';
         return 'runtime';
       });
     expect(order[0]).toBe('palette');
@@ -129,9 +129,9 @@ describe('Community V0.1.x closure', () => {
     expect(order.indexOf('language')).toBeLessThan(order.indexOf('theme'));
     expect(order.indexOf('theme')).toBeLessThan(order.indexOf('user'));
 
-    const themeButton = (topbar as HTMLElement).querySelector('.theme-button');
+    const themeButton = (topbar as HTMLElement).querySelector('[data-theme-button]');
     expect(themeButton).not.toBeNull();
-    expect(themeButton?.closest('.owner-menu')).toBeNull();
+    expect(themeButton?.closest('[data-owner-menu]')).toBeNull();
   });
 
   it('persists the theme choice outside the user menu', async () => {
@@ -142,7 +142,7 @@ describe('Community V0.1.x closure', () => {
     render(<App />);
 
     const themeButton = await waitFor(() => {
-      const button = document.querySelector('.theme-button');
+      const button = document.querySelector('[data-theme-button]');
       expect(button).not.toBeNull();
       return button as HTMLElement;
     });
@@ -159,7 +159,7 @@ describe('Community V0.1.x closure', () => {
     setupFetch('owner');
     const { unmount } = render(<App />);
 
-    await waitFor(() => expect(document.querySelector('.command-palette-trigger')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-command-palette-trigger]')).not.toBeNull());
     await userEvent.click(await screen.findByRole('link', { name: 'Settings' }));
     const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
     // Activity 是 OBSERVE 组的一级入口，不再作为 Settings 子页。
@@ -178,7 +178,7 @@ describe('Community V0.1.x closure', () => {
 
     setupFetch('administrator');
     render(<App />);
-    await waitFor(() => expect(document.querySelector('.command-palette-trigger')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-command-palette-trigger]')).not.toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 0));
     await userEvent.keyboard('{Control>}k{/Control}');
     const restricted = await screen.findByRole('dialog');

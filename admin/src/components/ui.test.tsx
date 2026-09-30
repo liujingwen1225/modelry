@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, PartialState, StatusChip } from './ui';
+import { Button } from './button';
+import { FormField } from './form-field';
+import { Dialog } from './overlays';
+import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from './states';
 
 describe('Admin interface primitives', () => {
   it('exposes the status with its visual state and readable label', () => {

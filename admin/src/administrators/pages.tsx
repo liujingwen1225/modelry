@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
+import { Check, RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { Dialog } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
@@ -10,7 +15,6 @@ import {
   listAdministrators, revokeAdministratorSessions, setAdministratorEnabled, setAdministratorPassword,
   type Administrator, type AdministratorPermission, type AdministratorSession, type PermissionPreset,
 } from './client';
-import './administrators.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
@@ -179,10 +183,10 @@ export function AdministratorsPage() {
     }
   }
 
-  if (state === 'loading') return <div className="page-stack"><LoadingState label={t('administrators.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('administrators.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="page-stack">
+      <div className="flex min-w-0 flex-col gap-6">
         <ErrorState description={t('administrators.loadFailedDescription')} title={t('administrators.loadFailed')}>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('administrators.retry')}</Button>
         </ErrorState>
@@ -190,14 +194,14 @@ export function AdministratorsPage() {
     );
   }
   return (
-    <div className="page-stack administrators-page">
-      <header className="page-heading">
-        <div>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
           <p className="eyebrow">{t('administrators.eyebrow')}</p>
           <h1>{t('administrators.title')}</h1>
-          <p className="page-description">{t('administrators.description')}</p>
+          <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
         </div>
-        <div className="administrators-page__actions">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
             <UserPlus aria-hidden="true" size={14} /> {t('administrators.createAction')}
           </Button>
@@ -207,107 +211,109 @@ export function AdministratorsPage() {
         </div>
       </header>
 
-      <Surface className="administrators-list" variant="standard">
-        <div className="administrators-list__heading">
-          <span className="scope-icon"><ShieldCheck aria-hidden="true" size={17} /></span>
-          <div>
+      <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+        <div className="flex flex-wrap items-center gap-3">
+          <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={17} /></span>
+          <div className="min-w-0">
             <p className="eyebrow">{t('administrators.list.eyebrow')}</p>
             <h2>{t('administrators.list.title')}</h2>
           </div>
         </div>
-        <p className="section-description">{t('administrators.list.description')}</p>
+        <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.list.description')}</p>
         {administrators.length === 0
           ? <EmptyState description={t('administrators.empty.description')} title={t('administrators.empty.title')} />
           : (
-            <div className="table-scroll">
-              <table className="data-table administrators-table">
-                <caption>{t('administrators.list.caption')}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t('administrators.columns.email')}</th>
-                    <th scope="col">{t('administrators.columns.permission')}</th>
-                    <th scope="col">{t('administrators.columns.status')}</th>
-                    <th scope="col">{t('administrators.columns.lastSignIn')}</th>
-                    <th scope="col">{t('administrators.columns.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {administrators.map((item) => (
-                    <tr data-administrator-email={item.email} key={item.id}>
-                      <td><span className="administrator-email">{item.email}</span></td>
-                      <td>
-                        <StatusChip state={item.permission.preset === 'readOnly' ? 'degraded' : 'ready'}>
-                          {t(permissionLabelKey(item.permission.preset))}
-                        </StatusChip>
-                        {item.permission.preset === 'custom' && (
-                          <span className="administrator-operations-summary">
-                            {t('administrators.permission.operationCount', { count: item.permission.customOperations?.length ?? 0 })}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <StatusChip state={item.status === 'active' ? 'ready' : 'unavailable'}>
-                          {t(item.status === 'active' ? 'administrators.status.active' : 'administrators.status.disabled')}
-                        </StatusChip>
-                      </td>
-                      <td>{item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleString() : t('administrators.never')}</td>
-                      <td>
-                        <div className="administrator-row-actions">
-                          <Button
-                            aria-label={`${item.status === 'active' ? t('administrators.actions.disable') : t('administrators.actions.enable')} ${item.email}`}
-                            disabled={busy !== null}
-                            onClick={() => void toggleEnabled(item)}
-                            size="small"
-                            type="button"
-                            variant="secondary"
-                          >
-                            {item.status === 'active' ? t('administrators.actions.disable') : t('administrators.actions.enable')}
-                          </Button>
-                          <Button
-                            aria-label={`${t('administrators.actions.setPassword')} ${item.email}`}
-                            disabled={busy !== null}
-                            onClick={() => { setNewPassword(''); setPasswordTarget(item); }}
-                            size="small"
-                            type="button"
-                            variant="secondary"
-                          >
-                            {t('administrators.actions.setPassword')}
-                          </Button>
-                          <Button
-                            aria-label={`${t('administrators.actions.sessions')} ${item.email}`}
-                            disabled={busy !== null}
-                            onClick={() => void openSessions(item)}
-                            size="small"
-                            type="button"
-                            variant="secondary"
-                          >
-                            {t('administrators.actions.sessions')}
-                          </Button>
-                          <Button
-                            aria-label={`${t('administrators.actions.remove')} ${item.email}`}
-                            disabled={busy !== null}
-                            onClick={() => setDeleteTarget(item)}
-                            size="small"
-                            type="button"
-                            variant="danger"
-                          >
-                            {t('administrators.actions.remove')}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableCaption>{t('administrators.list.caption')}</TableCaption>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead scope="col">{t('administrators.columns.email')}</TableHead>
+                  <TableHead scope="col">{t('administrators.columns.permission')}</TableHead>
+                  <TableHead scope="col">{t('administrators.columns.status')}</TableHead>
+                  <TableHead scope="col">{t('administrators.columns.lastSignIn')}</TableHead>
+                  <TableHead scope="col">{t('administrators.columns.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {administrators.map((item) => (
+                  <TableRow data-administrator-email={item.email} key={item.id}>
+                    <TableCell><span className="break-words font-semibold text-foreground">{item.email}</span></TableCell>
+                    <TableCell>
+                      <StatusChip state={item.permission.preset === 'readOnly' ? 'degraded' : 'ready'}>
+                        {t(permissionLabelKey(item.permission.preset))}
+                      </StatusChip>
+                      {item.permission.preset === 'custom' && (
+                        <span className="mt-1 block text-[11px] text-muted-foreground">
+                          {t('administrators.permission.operationCount', { count: item.permission.customOperations?.length ?? 0 })}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <StatusChip state={item.status === 'active' ? 'ready' : 'unavailable'}>
+                        {t(item.status === 'active' ? 'administrators.status.active' : 'administrators.status.disabled')}
+                      </StatusChip>
+                    </TableCell>
+                    <TableCell>{item.lastLoginAt ? <time dateTime={item.lastLoginAt}>{new Date(item.lastLoginAt).toLocaleString()}</time> : t('administrators.never')}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          aria-label={`${item.status === 'active' ? t('administrators.actions.disable') : t('administrators.actions.enable')} ${item.email}`}
+                          disabled={busy !== null}
+                          onClick={() => void toggleEnabled(item)}
+                          size="small"
+                          type="button"
+                          variant="secondary"
+                        >
+                          {item.status === 'active' ? t('administrators.actions.disable') : t('administrators.actions.enable')}
+                        </Button>
+                        <Button
+                          aria-label={`${t('administrators.actions.setPassword')} ${item.email}`}
+                          disabled={busy !== null}
+                          onClick={() => { setNewPassword(''); setPasswordTarget(item); }}
+                          size="small"
+                          type="button"
+                          variant="secondary"
+                        >
+                          {t('administrators.actions.setPassword')}
+                        </Button>
+                        <Button
+                          aria-label={`${t('administrators.actions.sessions')} ${item.email}`}
+                          disabled={busy !== null}
+                          onClick={() => void openSessions(item)}
+                          size="small"
+                          type="button"
+                          variant="secondary"
+                        >
+                          {t('administrators.actions.sessions')}
+                        </Button>
+                        <Button
+                          aria-label={`${t('administrators.actions.remove')} ${item.email}`}
+                          disabled={busy !== null}
+                          onClick={() => setDeleteTarget(item)}
+                          size="small"
+                          type="button"
+                          variant="danger"
+                        >
+                          {t('administrators.actions.remove')}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
       </Surface>
 
       {actionError !== undefined && <ErrorState title={t('administrators.actionFailed')} description={actionMessage(actionError, t)} />}
-      {notice !== null && <p role="status">{notice}</p>}
+      {notice !== null && (
+        <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status">
+          <Check aria-hidden="true" className="shrink-0 text-success" size={15} />{notice}
+        </div>
+      )}
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setCreateOpen(false)} open={createOpen} title={t('administrators.create.title')}>
-        <form className="administrators-form" onSubmit={(event) => { event.preventDefault(); void create(); }}>
+        <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void create(); }}>
           <FormField htmlFor="administrator-email" label={t('administrators.create.email')}>
             <input autoComplete="off" id="administrator-email" onChange={(event) => setCreateEmail(event.target.value)} type="email" value={createEmail} />
           </FormField>
@@ -326,13 +332,14 @@ export function AdministratorsPage() {
             </select>
           </FormField>
           {createPermission.preset === 'custom' && (
-            <fieldset className="administrators-operations">
-              <legend>{t('administrators.create.operations')}</legend>
+            <fieldset className="m-0 grid max-h-60 gap-1.5 overflow-y-auto rounded-lg border bg-secondary px-3 py-2.5">
+              <legend className="px-1 text-xs font-semibold text-ink-secondary">{t('administrators.create.operations')}</legend>
               <p className="m-0 text-[10px] text-muted-foreground">{t('administrators.create.operationsHint')}</p>
               {administratorOperations.map((operation) => (
-                <label key={operation}>
+                <label className="flex items-center gap-2 text-xs text-ink-secondary" key={operation}>
                   <input
                     checked={(createPermission.customOperations ?? []).includes(operation)}
+                    className="accent-primary"
                     onChange={(event) => setCreatePermission((current) => {
                       const selected = current.customOperations ?? [];
                       const next = event.target.checked ? [...selected, operation] : selected.filter((entry) => entry !== operation);
@@ -340,12 +347,12 @@ export function AdministratorsPage() {
                     })}
                     type="checkbox"
                   />
-                  <span>{operation}</span>
+                  <span className="break-words font-mono text-[11px]">{operation}</span>
                 </label>
               ))}
             </fieldset>
           )}
-          <div className="administrators-form__actions">
+          <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3">
             <Button onClick={() => setCreateOpen(false)} type="button" variant="quiet">{t('administrators.cancel')}</Button>
             <Button disabled={busy !== null || createEmail.trim() === '' || createPassword === ''} type="submit" variant="primary">
               {busy === 'create' ? t('administrators.create.submitting') : t('administrators.create.submit')}
@@ -355,12 +362,12 @@ export function AdministratorsPage() {
       </Dialog>
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setPasswordTarget(null)} open={passwordTarget !== null} title={t('administrators.password.title')}>
-        <form className="administrators-form" onSubmit={(event) => { event.preventDefault(); void savePassword(); }}>
-          <p className="section-description">{t('administrators.password.description', { email: passwordTarget?.email ?? '' })}</p>
+        <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void savePassword(); }}>
+          <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.password.description', { email: passwordTarget?.email ?? '' })}</p>
           <FormField hint={t('administrators.create.passwordHint')} htmlFor="administrator-new-password" label={t('administrators.password.label')}>
             <input autoComplete="new-password" id="administrator-new-password" onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
           </FormField>
-          <div className="administrators-form__actions">
+          <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3">
             <Button onClick={() => setPasswordTarget(null)} type="button" variant="quiet">{t('administrators.cancel')}</Button>
             <Button disabled={busy !== null || newPassword === ''} type="submit" variant="primary">
               {busy === 'password' ? t('administrators.password.submitting') : t('administrators.password.submit')}
@@ -370,23 +377,25 @@ export function AdministratorsPage() {
       </Dialog>
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setSessionsTarget(null)} open={sessionsTarget !== null} title={t('administrators.sessions.title')}>
-        <p className="section-description">{t('administrators.sessions.description', { email: sessionsTarget?.email ?? '' })}</p>
+        <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.sessions.description', { email: sessionsTarget?.email ?? '' })}</p>
         {sessions.length === 0
-          ? <p role="status">{t('administrators.sessions.empty')}</p>
+          ? <p className="mt-3 mb-0 text-[11px] text-muted-foreground" role="status">{t('administrators.sessions.empty')}</p>
           : (
-            <ul className="administrators-sessions">
+            <ul className="m-0 mt-3 grid list-none gap-1.5 p-0 text-[11px]">
               {sessions.map((session) => (
-                <li key={session.id}>
+                <li className="flex flex-wrap items-center gap-2.5 border-b py-1.5 last:border-b-0" key={session.id}>
                   <span>{t('administrators.sessions.created', { date: new Date(session.createdAt).toLocaleString() })}</span>
                   <span>{t('administrators.sessions.expires', { date: new Date(session.expiresAt).toLocaleString() })}</span>
-                  <StatusChip state={session.status === 'active' ? 'ready' : 'unavailable'}>
-                    {t(session.status === 'active' ? 'administrators.sessions.active' : session.status === 'revoked' ? 'administrators.sessions.revoked' : 'administrators.sessions.expired')}
-                  </StatusChip>
+                  <span className="ml-auto">
+                    <StatusChip state={session.status === 'active' ? 'ready' : 'unavailable'}>
+                      {t(session.status === 'active' ? 'administrators.sessions.active' : session.status === 'revoked' ? 'administrators.sessions.revoked' : 'administrators.sessions.expired')}
+                    </StatusChip>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-        <div className="administrators-form__actions">
+        <div className="mt-3 flex flex-wrap justify-end gap-1.5 border-t pt-3">
           <Button onClick={() => setSessionsTarget(null)} type="button" variant="quiet">{t('administrators.dialogs.close')}</Button>
           <Button disabled={busy !== null || sessions.length === 0} onClick={() => void revokeSessions()} type="button" variant="danger">
             {busy === 'sessions' ? t('administrators.sessions.revoking') : t('administrators.sessions.revokeAll')}
@@ -395,8 +404,8 @@ export function AdministratorsPage() {
       </Dialog>
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setDeleteTarget(null)} open={deleteTarget !== null} title={t('administrators.remove.title')}>
-        <p className="section-description">{t('administrators.remove.description', { email: deleteTarget?.email ?? '' })}</p>
-        <div className="administrators-form__actions">
+        <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.remove.description', { email: deleteTarget?.email ?? '' })}</p>
+        <div className="mt-3 flex flex-wrap justify-end gap-1.5 border-t pt-3">
           <Button onClick={() => setDeleteTarget(null)} type="button" variant="quiet">{t('administrators.cancel')}</Button>
           <Button disabled={busy !== null} onClick={() => void remove()} type="button" variant="danger">
             {busy === 'delete' ? t('administrators.remove.submitting') : t('administrators.remove.submit')}

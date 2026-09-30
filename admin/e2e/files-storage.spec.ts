@@ -335,7 +335,7 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
   await expect(page.getByRole('heading', { name: 'Files & storage' })).toBeVisible();
   await expect(page.getByText('Local', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Referenced files')).toBeVisible();
-  await expect(page.locator('.storage-status__facts')).toContainText('2');
+  await expect(page.locator('[data-storage-status-facts]')).toContainText('2');
 
   // Two write-only Secrets hold the S3 credentials.
   await page.goto(runtimeURL + '/secrets');
