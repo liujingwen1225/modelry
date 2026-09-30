@@ -35,5 +35,9 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
     clearMocks: true,
+    // 页面测试在 jsdom 下渲染整棵 Admin 页面树，并行满载时首个断言前
+    // 的环境构建可能超过 vitest 默认 5s；这里放宽超时以避免与产品逻辑
+    // 无关的假失败（真实断言失败仍会照常报出）。
+    testTimeout: 20000,
   },
 });

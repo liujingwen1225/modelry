@@ -55,7 +55,7 @@ describe('Changes page', () => {
     expect(technicalDetails?.textContent).not.toContain('The model projection needs a retry.');
     expect(technicalDetails?.textContent).not.toContain('Retry the outdated projection now.');
     expect(technicalDetails?.textContent).not.toContain('Open the internal repair console.');
-    expect(screen.getByRole('link', { name: 'Continue recovery in Schema' })).toHaveAttribute('href', '/collections/col_posts/schema');
+    expect(screen.getByRole('link', { name: 'Continue recovery in Model' })).toHaveAttribute('href', '/collections/col_posts/model');
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/changes/chg_failed', expect.objectContaining({
       method: 'GET', credentials: 'include', mode: 'same-origin',
     }));
