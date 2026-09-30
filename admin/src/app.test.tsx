@@ -177,10 +177,9 @@ describe('Modelry Admin shell', () => {
     await user.click(within(connectNavigation).getByRole('link', { name: 'MCP' }));
 
     expect(await screen.findByRole('heading', { name: 'MCP', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText(/only operations granted to that account/)).toBeInTheDocument();
-    expect(screen.getByText(/Model changes go through review and apply, and actions are audited/)).toBeInTheDocument();
+    expect(screen.getByText(/Connect a coding agent through a Service Account API Key/)).toBeInTheDocument();
     expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
+    expect(screen.getByRole('link', { name: 'Manage Access & keys' })).toHaveAttribute('href', '/access');
     expect(within(connectNavigation).getByRole('link', { name: 'MCP' })).toHaveAttribute('aria-current', 'page');
   });
 

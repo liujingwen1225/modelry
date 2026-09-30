@@ -147,8 +147,8 @@ async function expectNoHorizontalOverflow(page: Page, surface: string, width: nu
       '[data-record-page]', '[data-record-heading]', '[data-record-heading] > div',
       '[data-record-heading] .eyebrow', '[data-record-heading] h1',
       '[data-record-heading] p', '[data-record-heading] > button',
-      '.api-endpoint-heading', '.api-endpoint-heading > div', '.api-heading-actions', '.api-openapi',
-      '.api-openapi summary', '.api-openapi pre', '.api-route', '.api-route code',
+      '[data-api-endpoint-heading]', '[data-api-endpoint-heading] > div', '[data-api-heading-actions]', '[data-api-openapi]',
+      '[data-api-openapi] summary', '[data-api-openapi] pre', '.api-route', '.api-route code',
     ].map((selector) => {
       const element = document.querySelector<HTMLElement>(selector);
       if (!element) return { selector, missing: true };
@@ -441,9 +441,9 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('heading', { name: '试一试该端点' })).toBeVisible();
   await expect(page.getByText('View OpenAPI')).toHaveCount(0);
   // operationId 与路由是契约标识，任何时候都不翻译，只有它们周围的产品文案切换语言。
-  await expect(page.locator('.api-endpoint-meta')).toContainText('listApplicationRecords');
-  await expect(page.locator('.api-endpoint-meta')).toContainText('操作');
-  await expect(page.locator('.api-endpoint-option').first()).toContainText('/api/v1/posts');
+  await expect(page.locator('[data-api-endpoint-meta]')).toContainText('listApplicationRecords');
+  await expect(page.locator('[data-api-endpoint-meta]')).toContainText('操作');
+  await expect(page.locator('[data-api-endpoint-option]').first()).toContainText('/api/v1/posts');
   await page.goto(runtimeURL + '/api?tab=requests');
   await expect(page.getByRole('heading', { name: 'API 工作区', level: 1 })).toBeVisible();
   await expect(page.getByRole('table', { name: '应用请求记录' })).toBeVisible();

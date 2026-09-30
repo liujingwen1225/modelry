@@ -237,7 +237,7 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.locator('#secret-name').fill('Lifecycle secret');
   await page.locator('#secret-value').fill(secretMarker);
   const secretResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/secrets');
-  await page.locator('.extension-secret-create form button[type="submit"]').click();
+  await page.locator('[data-extension-secret-create] form button[type="submit"]').click();
   const createdSecret = await secretResponse;
   expect(createdSecret.status()).toBe(201);
   expect(await createdSecret.text()).not.toContain(secretMarker);
@@ -254,7 +254,7 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.locator('#extension-create-name').fill('Lifecycle guard');
   await page.locator('#extension-create-language').selectOption('typescript');
   await page.locator('#extension-create-source').fill('export function beforeCreate() { return { action: "reject" }; }');
-  await page.locator('.extension-create-card form button[type="submit"]').click();
+  await page.locator('[data-extension-create-card] form button[type="submit"]').click();
   await expect(page.getByRole('heading', { name: 'Lifecycle guard' })).toBeVisible();
   const extensionId = decodeURIComponent(new URL(page.url()).pathname.split('/').at(-1) ?? '');
   expect(extensionId).toMatch(/^ext_/);
@@ -268,7 +268,7 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.locator('#secret-alias-0').fill('MAIL_KEY');
   const secretId = await page.locator('#secret-id-0').inputValue();
   expect(secretId).toMatch(/^sec_/);
-  await page.locator('.extension-editor button[type="submit"]').click();
+  await page.locator('[data-extension-editor] button[type="submit"]').click();
   await expect(page.getByRole('button', { name: 'Enable' })).toBeEnabled();
   await page.getByRole('button', { name: 'Enable' }).click();
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
@@ -290,7 +290,7 @@ export function afterCommitCreate() {
   if (typeof secret !== "string" || secret.length !== ${secretMarker.length}) throw new Error("secret lookup failed");
 }`;
   await page.locator('#extension-source').fill(allowedSource);
-  await page.locator('.extension-editor button[type="submit"]').click();
+  await page.locator('[data-extension-editor] button[type="submit"]').click();
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
   const allowed = await requestJSON(page, 'POST', `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records`, {
     values: { title: 'ALLOWED_MARKER' },
@@ -331,7 +331,7 @@ export function afterCommitCreate() {
 }
 export function afterCommitCreate() { while (true) {} }`;
   await page.locator('#extension-source').fill(longRunningSource);
-  await page.locator('.extension-editor button[type="submit"]').click();
+  await page.locator('[data-extension-editor] button[type="submit"]').click();
   const interruptedWrite = await requestJSON(page, 'POST', `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records`, {
     values: { title: 'RESTART_MARKER' },
   });

@@ -99,7 +99,7 @@ describe('API Workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Committed Record Events' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Collection API sections' })).toBeInTheDocument();
     expect(await screen.findByText('Anyone')).toBeInTheDocument();
-    const sample = document.querySelector('.api-realtime__example pre code')?.textContent ?? '';
+    const sample = document.querySelector('[data-api-realtime-example] pre code')?.textContent ?? '';
     expect(sample).toContain('/api/v1/posts/events');
     expect(sample).toContain("headers['Last-Event-ID']");
     expect(sample).toContain('AbortController');
@@ -129,7 +129,7 @@ describe('API Workspace', () => {
 
     expect(await screen.findByRole('heading', { name: '已提交的记录事件' })).toBeInTheDocument();
     expect(screen.getByText('服务器发送事件流')).toBeInTheDocument();
-    expect(document.querySelector('.api-realtime__example pre code')?.textContent).toContain('设置应用会话 token');
+    expect(document.querySelector('[data-api-realtime-example] pre code')?.textContent).toContain('设置应用会话 token');
     expect(screen.getByRole('button', { name: '复制 JavaScript 示例' })).toBeInTheDocument();
   });
 

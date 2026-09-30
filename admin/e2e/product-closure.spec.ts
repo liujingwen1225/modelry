@@ -979,17 +979,17 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
   await test.step('FLOW-007 — Real API Runner, correlated Request Detail and Requests search', async () => {
     await activePage.goto(`${runtimeURL}/api?collection=${encodeURIComponent(postsId)}`);
-    await activePage.locator('.api-endpoint-option').filter({ hasText: 'List records' }).click();
-    await expect(activePage.locator('.api-endpoint-meta')).toContainText('Signed-in users');
+    await activePage.locator('[data-api-endpoint-option]').filter({ hasText: 'List records' }).click();
+    await expect(activePage.locator('[data-api-endpoint-meta]')).toContainText('Signed-in users');
     await activePage.getByText('View OpenAPI', { exact: true }).click();
-    await expect(activePage.locator('.api-openapi pre')).toContainText('x-modelry-access-rule');
-    await expect(activePage.locator('.api-openapi pre')).toContainText('signedInUsers');
+    await expect(activePage.locator('[data-api-openapi] pre')).toContainText('x-modelry-access-rule');
+    await expect(activePage.locator('[data-api-openapi] pre')).toContainText('signedInUsers');
     await activePage.getByLabel('App Session token (optional)').fill(appSession);
     const listResponsePromise = activePage.waitForResponse((response) => new URL(response.url()).pathname === '/api/v1/posts' && response.request().method() === 'GET');
     await activePage.getByRole('button', { name: 'Send GET request' }).click();
     expect((await listResponsePromise).status()).toBe(200);
 
-    await activePage.locator('.api-endpoint-option').filter({ hasText: 'Read a record' }).click();
+    await activePage.locator('[data-api-endpoint-option]').filter({ hasText: 'Read a record' }).click();
     await activePage.getByLabel('Record ID').fill(firstPostId);
     await activePage.getByLabel('App Session token (optional)').fill('');
     const deniedPath = `/api/v1/posts/${firstPostId}`;
@@ -998,7 +998,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Send GET request' }).click();
     expect((await deniedResponsePromise).status()).toBe(403);
     await expect(activePage.getByText('403', { exact: true })).toBeVisible();
-    const responseCodes = await activePage.locator('.api-response__metadata code').allTextContents();
+    const responseCodes = await activePage.locator('[data-api-response-metadata] code').allTextContents();
     deniedRequestId = responseCodes.find((value) => /^req_[A-Za-z0-9_-]{8,}$/.test(value)) ?? '';
     expect(deniedRequestId).toBeTruthy();
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
@@ -1014,7 +1014,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
 
     await activePage.goto(`${runtimeURL}/api?collection=${encodeURIComponent(postsId)}`);
-    await activePage.locator('.api-endpoint-option').filter({ hasText: 'Read a file attachment' }).click();
+    await activePage.locator('[data-api-endpoint-option]').filter({ hasText: 'Read a file attachment' }).click();
     await activePage.getByLabel('Record ID').fill(firstPostId);
     await activePage.getByLabel('File field').selectOption('attachment');
     await activePage.getByLabel('App Session token (optional)').fill(appSession);
@@ -1042,7 +1042,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await fileClient.dispose();
     }
     await expect(activePage.getByText('Response content is hidden because it is not JSON.')).toBeVisible();
-    expect(await activePage.locator('.api-response__body').count()).toBe(0);
+    expect(await activePage.locator('[data-api-response-body]').count()).toBe(0);
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
     await expect(activePage).toHaveURL(/\/requests\/req_/);
     await expect(activePage.getByText(`${Buffer.byteLength(fileContents)} bytes`, { exact: true })).toBeVisible();
@@ -1182,6 +1182,18 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       values: { title: 'duplicate-check', category: sharedCategory },
     }, undefined, 'include', [400, 409, 422]);
     expect([400, 409, 422]).toContain(duplicateAfterApply.status);
+
+    // Spec 0001 §7.1/§18.5-4：MCP 子页必须展示真实命令、绑定账号的权限摘要，
+    // 以及来自 Activity 的最近操作；它不复制配置，也从不回显 API Key 明文。
+    await activePage.goto(`${runtimeURL}/connect/mcp`);
+    await expect(activePage.getByRole('heading', { name: 'MCP', level: 1 })).toBeVisible();
+    await expect(activePage.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeVisible();
+    const mcpAccountRow = activePage.locator('[data-mcp-account-row]').filter({ hasText: 'ci-readonly' });
+    await expect(mcpAccountRow).toBeVisible();
+    await expect(mcpAccountRow).toContainText('Read only');
+    await expect(mcpAccountRow).toContainText('Active');
+    await expect(activePage.getByRole('link', { name: 'Manage Access & keys' })).toHaveAttribute('href', '/access');
+    expect(await activePage.locator('body').innerText()).not.toContain(revokedAPIKey);
   });
 
   await test.step('FLOW-010 — Close page, gracefully restart same Project Root and verify durable state', async () => {

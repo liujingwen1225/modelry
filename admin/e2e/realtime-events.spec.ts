@@ -385,9 +385,9 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
 
   await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/api?tab=realtime`);
   await expect(page.getByRole('heading', { name: 'Committed Record Events' })).toBeVisible();
-  await expect(page.locator('.api-realtime__metadata')).toContainText('Custom rule');
-  await expect(page.locator('.api-realtime__metadata')).toContainText(`/api/v1/posts/events`);
-  await expect(page.locator('.api-realtime__example code')).toContainText("headers['Last-Event-ID']");
+  await expect(page.locator('[data-api-realtime-metadata]')).toContainText('Custom rule');
+  await expect(page.locator('[data-api-realtime-metadata]')).toContainText(`/api/v1/posts/events`);
+  await expect(page.locator('[data-api-realtime-example] code')).toContainText("headers['Last-Event-ID']");
 
   await page.locator('.topbar').getByRole('button', { name: 'Search commands' }).click();
   let palette = page.getByRole('dialog', { name: 'Command palette' });
@@ -397,7 +397,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await page.keyboard.press('Escape');
   await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN');
   await expect(page.getByRole('heading', { name: '已提交的记录事件' })).toBeVisible();
-  await expect(page.locator('.api-realtime__example code')).toContainText('设置应用会话 token');
+  await expect(page.locator('[data-api-realtime-example] code')).toContainText('设置应用会话 token');
   await page.getByRole('button', { name: '搜索命令' }).click();
   palette = page.getByRole('dialog', { name: '命令面板' });
   paletteInput = palette.getByRole('combobox', { name: '搜索命令' });

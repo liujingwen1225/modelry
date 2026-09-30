@@ -344,7 +344,7 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
     await page.locator('#secret-name').fill(secret.name);
     await page.locator('#secret-value').fill(secret.value);
     const created2 = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/secrets');
-    await page.locator('.extension-secret-create form button[type="submit"]').click();
+    await page.locator('[data-extension-secret-create] form button[type="submit"]').click();
     expect((await created2).status()).toBe(201);
     await expect(page.locator('body')).not.toContainText(secret.value);
   }

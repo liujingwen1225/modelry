@@ -282,7 +282,7 @@ async function createSecret(page: Page, name: string, value: string): Promise<st
   await page.locator('#secret-name').fill(name);
   await page.locator('#secret-value').fill(value);
   const responsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/secrets');
-  await page.locator('.extension-secret-create form button[type="submit"]').click();
+  await page.locator('[data-extension-secret-create] form button[type="submit"]').click();
   const response = await responsePromise;
   expect(response.status()).toBe(201);
   const responseBody = await response.text();
@@ -301,7 +301,7 @@ async function createWebhook(page: Page, name: string, pathname: string, secretI
   await page.getByLabel('HTTPS destination').fill(`https://hooks.modelry.test${pathname}`);
   await page.getByLabel('Signing Secret').selectOption(secretId);
   await page.getByRole('button', { name: 'Save Webhook' }).click();
-  const card = page.locator('.automation-card').filter({ hasText: name });
+  const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
   const result = await requestJSON(page, 'GET', '/admin/api/v1/webhooks');
   expect(result.status).toBe(200);
@@ -324,7 +324,7 @@ async function createEventHook(page: Page, name: string, collectionId: string, w
   await page.getByLabel('Record Event').selectOption('record.created');
   await page.getByLabel('Webhook').selectOption(webhookId);
   await page.getByRole('button', { name: 'Save Event Hook' }).click();
-  const card = page.locator('.automation-card').filter({ hasText: name });
+  const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
   const response = await requestJSON(page, 'GET', '/admin/api/v1/event-hooks');
   expect(response.status).toBe(200);
@@ -480,7 +480,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(preview).toBeVisible();
   await expect(preview).toContainText('UTC');
   await page.getByRole('button', { name: 'Save Job' }).click();
-  const createdJobCard = page.locator('.automation-card').filter({ hasText: 'UTC maturity check' });
+  const createdJobCard = page.locator('[data-automation-card]').filter({ hasText: 'UTC maturity check' });
   await expect(createdJobCard).toBeVisible();
   await expect(createdJobCard).toContainText('UTC');
   await expect(createdJobCard).toContainText('Next run');
@@ -549,7 +549,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(disableEventId).toMatch(/^evt_/);
   const disableDelivery = await deliveryForEvent(page, cancelHook.id, disableEventId!, 'running');
   await page.goto(`${runtimeURL}/automations/webhooks`);
-  const cancelCard = page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' });
+  const cancelCard = page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' });
   await cancelCard.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Disable Webhook?' })).toBeVisible();
   await page.getByRole('dialog', { name: 'Disable Webhook?' }).getByRole('button', { name: 'Disable Webhook' }).click();
@@ -561,8 +561,8 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(disableRecord).toMatch(/^rec_/);
 
   await page.goto(`${runtimeURL}/automations/webhooks`);
-  await page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' }).getByRole('button', { name: 'Enable', exact: true }).click();
-  await expect(page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' }).getByText('Enabled', { exact: true })).toBeVisible();
+  await page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' }).getByRole('button', { name: 'Enable', exact: true }).click();
+  await expect(page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' }).getByText('Enabled', { exact: true })).toBeVisible();
   const revokeGate = fixture!.blockNext('/cancel-hook');
   await createRecord(page, collectionId, 'revoke while receiving');
   const revokeRequest = await revokeGate.received;

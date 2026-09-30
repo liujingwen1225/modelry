@@ -278,3 +278,13 @@
     }
   }
 }
+
+/*
+ * Spec 0001 §3.2：全局 Shell 已经为 Automations 和 Project access 渲染了区域子导航，
+ * 页面内的同义兜底导航不再重复出现。独立渲染页面（组件测试、深链接落地前）仍保留它，
+ * 所以这里用 Shell 容器上的 data-product-area 作为作用域，而不是删除页面内的导航。
+ */
+.app-frame[data-product-area='automation'] [data-automation-tabs],
+.app-frame[data-product-area='access'] [data-access-tabs] {
+  display: none;
+}

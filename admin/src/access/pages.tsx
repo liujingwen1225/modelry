@@ -148,7 +148,7 @@ function DangerDialog({ open, title, description, busy, error, onClose, onConfir
 
 function AccessTabs({ active }: { active: 'access' | 'audit' }) {
   const { t } = useI18n();
-  return <nav aria-label={t('access.tabsLabel')} className="access-tabs"><Link aria-current={active === 'access' ? 'page' : undefined} to="/access">{t('access.tabs.access')}</Link><Link aria-current={active === 'audit' ? 'page' : undefined} to="/activity/audit">{t('access.tabs.audit')}</Link></nav>;
+  return <nav aria-label={t('access.tabsLabel')} className="access-tabs" data-access-tabs><Link aria-current={active === 'access' ? 'page' : undefined} to="/access">{t('access.tabs.access')}</Link><Link aria-current={active === 'audit' ? 'page' : undefined} to="/activity/audit">{t('access.tabs.audit')}</Link></nav>;
 }
 
 function PageTitle({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
