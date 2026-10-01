@@ -232,7 +232,9 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
   expect(collectionId).toMatch(/^col_/);
 
+  // 旧 `/secrets` 深链归一为系统设置的 Secrets 分节。
   await page.goto(`${runtimeURL}/secrets`);
+  await expect(page).toHaveURL(`${runtimeURL}/settings/secrets`);
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   await page.locator('#secret-name').fill('Lifecycle secret');
   await page.locator('#secret-value').fill(secretMarker);
@@ -250,7 +252,10 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 
+  // 旧 `/automations/hooks` 深链归一为 Hooks & Events 的 Hooks 工作面。
   await page.goto(`${runtimeURL}/automations/hooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=hooks`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await page.locator('#extension-create-name').fill('Lifecycle guard');
   await page.locator('#extension-create-language').selectOption('typescript');
   await page.locator('#extension-create-source').fill('export function beforeCreate() { return { action: "reject" }; }');
@@ -324,6 +329,7 @@ export function afterCommitCreate() {
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await page.goto(`${runtimeURL}/automations/hooks/${encodeURIComponent(extensionId)}`);
+  await expect(page).toHaveURL(`${runtimeURL}/events/hooks/${encodeURIComponent(extensionId)}`);
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
 
   const longRunningSource = `export function beforeCreate(context: { values: Record<string, unknown> }) {
@@ -348,12 +354,14 @@ export function afterCommitCreate() { while (true) {} }`;
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await page.goto(`${runtimeURL}/automations/hooks/${encodeURIComponent(extensionId)}?tab=runs`);
+  await expect(page).toHaveURL(`${runtimeURL}/events/hooks/${encodeURIComponent(extensionId)}?tab=runs`);
   await expect(page.getByRole('heading', { name: 'Lifecycle guard' })).toBeVisible();
   await expect.poll(async () => {
     const runs = await listRuns(page, extensionId);
     return runs.find((run) => run.recordId === interruptedRecordId && run.phase === 'afterCommit')?.status;
   }, { timeout: 10_000 }).toBe('interrupted');
-  await expect(page.getByRole('tab', { name: 'Runs' })).toHaveAttribute('aria-selected', 'true');
+  // Hook 详情的二级工作面也是真实链接，当前 Tab 用 aria-current 表达。
+  await expect(page.getByRole('navigation', { name: 'Hook sections' }).getByRole('link', { name: 'Hook Runs' })).toHaveAttribute('aria-current', 'page');
 
   await page.getByRole('button', { name: 'Disable' }).click();
   await expect(page.getByRole('button', { name: 'Enable' })).toBeVisible();

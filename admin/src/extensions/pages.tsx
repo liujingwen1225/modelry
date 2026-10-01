@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Plus, RefreshCw, Save, Search, ShieldAlert, Trash2 } from 'lucide-react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Button } from '../components/button';
 import { FormField } from '../components/form-field';
@@ -123,12 +123,9 @@ function PageHeading({ eyebrow, title, description, action }: { eyebrow: string;
   );
 }
 
-export function ExtensionsPage() {
-  const { extensionId } = useParams();
-  return extensionId ? <ExtensionEditor extensionId={extensionId} /> : <ExtensionList />;
-}
-
-function ExtensionList() {
+// Hook 列表工作面：由 `/events?tab=hooks` 复用，因此只提供工作面标题与说明，
+// 页面级 header 与二级 Tab 由 EventsPage 负责（spec 0001 §3.1）。
+export function HooksPanel() {
   const { t, formatDate } = useI18n();
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<ExtensionSummary[]>([]);
@@ -176,13 +173,16 @@ function ExtensionList() {
     setCreateError(undefined);
     try {
       const created = await createExtension({ name: name.trim(), language, source });
-      navigate(`/automations/hooks/${encodeURIComponent(created.id)}`);
+      navigate(`/events/hooks/${encodeURIComponent(created.id)}`);
     } catch (reason) { setCreateError(reason); }
     finally { setSaving(false); }
   }
 
-  return <div className="flex min-w-0 flex-col gap-6">
-    <PageHeading eyebrow={t('extensions.eyebrow')} title={t('extensions.title')} description={t('extensions.description')} action={<Link className={LINK_CLASS} to="/settings/secrets">{t('extensions.manageSecrets')}</Link>} />
+  return <section aria-labelledby="events-hooks-heading" className="flex min-w-0 flex-col gap-4">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0"><h2 id="events-hooks-heading">{t('events.tabs.hooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('extensions.description')}</p></div>
+      <Link className={LINK_CLASS} to="/settings/secrets">{t('extensions.manageSecrets')}</Link>
+    </div>
     <Surface className="flex flex-wrap items-center gap-3 p-3" variant="standard">
       <label className="flex min-h-9 min-w-[180px] max-w-[450px] flex-1 items-center gap-2 rounded-lg border border-input bg-secondary px-3 text-muted-foreground focus-within:border-primary focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-ring">
         <Search aria-hidden="true" size={15} />
@@ -196,7 +196,7 @@ function ExtensionList() {
     {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState title={t('extensions.emptyTitle')} description={t('extensions.emptyDescription')} />}
     {state === 'ready' && visible.length === 0 && items.length > 0 && <EmptyState title={t('extensions.noMatches')} description={t('extensions.noMatchesDescription')} />}
     {visible.length > 0 && <nav className="grid gap-2.5" aria-label={t('extensions.list')}>
-      {visible.map((item) => <Link className="group flex flex-wrap items-center gap-4 rounded-xl border bg-card px-4 py-3.5 shadow-soft transition-colors hover:border-primary" key={item.id} to={`/automations/hooks/${encodeURIComponent(item.id)}`}>
+      {visible.map((item) => <Link className="group flex flex-wrap items-center gap-4 rounded-xl border bg-card px-4 py-3.5 shadow-soft transition-colors hover:border-primary" key={item.id} to={`/events/hooks/${encodeURIComponent(item.id)}`}>
         <span className="grid min-w-0 flex-1 gap-1">
           <strong className="truncate text-sm font-semibold text-foreground group-hover:text-primary">{item.name}</strong>
           <span className="truncate text-xs text-muted-foreground">{t('extensions.listMeta', { language: t(`extensions.languages.${item.language}`), revision: item.activeRevision, date: formatDate(item.updatedAt) })}</span>
@@ -219,12 +219,14 @@ function ExtensionList() {
         </form>
       </Surface>
     </div>
-  </div>;
+  </section>;
 }
 
-function ExtensionEditor({ extensionId }: { extensionId: string }) {
+// Hook 编辑器：`/events/hooks/:extensionId` 的页面主体（spec 0001 §3.1）。
+export function ExtensionEditor({ extensionId }: { extensionId: string }) {
   const { t } = useI18n();
-  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const [params] = useSearchParams();
   const [detail, setDetail] = useState<ExtensionDetail>();
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
@@ -262,11 +264,16 @@ function ExtensionEditor({ extensionId }: { extensionId: string }) {
   }, [extensionId, reload]);
 
   const tab = params.get('tab') === 'runs' ? 'runs' : 'settings';
-  function selectTab(nextTab: 'settings' | 'runs') {
+  // Hook 详情内部的二级 Tab 同样由 URL 表达：可分享、可新标签页打开（spec 0001 §3.1、§17.4）。
+  function tabTarget(nextTab: 'settings' | 'runs') {
     const next = new URLSearchParams(params);
-    if (nextTab === 'settings') { next.delete('tab'); next.delete('cursor'); next.delete('back'); next.delete('run'); }
-    else { next.set('tab', 'runs'); next.delete('cursor'); next.delete('back'); next.delete('run'); }
-    setParams(next, { replace: true });
+    // 运行面板的分页与详情参数只属于 `?tab=runs`。
+    next.delete('cursor');
+    next.delete('back');
+    next.delete('run');
+    if (nextTab === 'settings') next.delete('tab'); else next.set('tab', 'runs');
+    const serialized = next.toString();
+    return `${location.pathname}${serialized ? `?${serialized}` : ''}`;
   }
 
   function updateDraft<T extends keyof ExtensionDraft>(key: T, value: ExtensionDraft[T]) {
@@ -323,16 +330,21 @@ function ExtensionEditor({ extensionId }: { extensionId: string }) {
   }
 
   if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('extensions.loadingDetail')} /></div>;
-  if (state === 'error' || !detail || !draft) return <div className="flex min-w-0 flex-col gap-6"><ErrorState description={errorDetails(error, t)} title={t('extensions.loadFailed')}><div className="mt-3 flex flex-wrap items-center gap-3"><Link className="text-xs font-semibold text-primary hover:underline" to="/automations/hooks">{t('extensions.backToList')}</Link><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.retry')}</Button></div></ErrorState></div>;
+  if (state === 'error' || !detail || !draft) return <div className="flex min-w-0 flex-col gap-6"><ErrorState description={errorDetails(error, t)} title={t('extensions.loadFailed')}><div className="mt-3 flex flex-wrap items-center gap-3"><Link className="text-xs font-semibold text-primary hover:underline" to="/events?tab=hooks">{t('extensions.backToList')}</Link><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.retry')}</Button></div></ErrorState></div>;
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <Link className={LINK_CLASS} to="/automations/hooks"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
+    <Link className={LINK_CLASS} to="/events?tab=hooks"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
     <PageHeading eyebrow={t('extensions.eyebrow')} title={detail.name} description={t('extensions.detailDescription', { revision: detail.activeRevision })} action={<div className="grid justify-items-end gap-1.5"><Button disabled={busy || hasUnsavedChanges} onClick={() => void toggleEnabled()} variant={detail.enabled ? 'danger' : 'primary'}>{detail.enabled ? t('extensions.disable') : t('extensions.enable')}</Button>{hasUnsavedChanges && <span className="max-w-[240px] text-right text-[10px] leading-relaxed text-muted-foreground" role="status">{t('extensions.saveBeforeStateChange')}</span>}</div>} />
     {actionError !== undefined ? <ErrorState description={errorDetails(actionError, t)} title={t('extensions.actionFailed')} /> : null}
-    <div className="flex gap-1 overflow-x-auto border-b" aria-label={t('extensions.tabs')} role="tablist">
-      <button aria-selected={tab === 'settings'} className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${tab === 'settings' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('settings')} role="tab" type="button">{t('extensions.configuration')}</button>
-      <button aria-selected={tab === 'runs'} className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${tab === 'runs' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('runs')} role="tab" type="button">{t('extensions.runs')}</button>
-    </div>
+    <nav aria-label={t('extensions.tabs')} className="flex gap-1 overflow-x-auto border-b">
+      {(['settings', 'runs'] as const).map((nextTab) => <Link
+        aria-current={tab === nextTab ? 'page' : undefined}
+        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${tab === nextTab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        key={nextTab}
+        replace
+        to={tabTarget(nextTab)}
+      >{nextTab === 'settings' ? t('extensions.configuration') : t('extensions.runs')}</Link>)}
+    </nav>
     {tab === 'settings' ? <form className="flex min-w-0 flex-col gap-3.5" data-extension-editor onSubmit={(event) => void save(event)}>
       <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
         <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.sourceEyebrow')}</p><h2>{t('extensions.sourceSection')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.sourceDescription')}</p></div></div>

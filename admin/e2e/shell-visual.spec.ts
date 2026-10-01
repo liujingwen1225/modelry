@@ -169,7 +169,14 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   const consoleErrors: string[] = [];
   const unexpectedFailures: string[] = [];
   const expectedFailures = new Set<string>();
-  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    // 未登录时的 /auth/session 401 是正常的引导探测（其它规格同样登记为预期失败），
+    // 不属于控制台健康问题。
+    if (text.includes('401') && (message.location()?.url ?? '').includes('/auth/session')) return;
+    consoleErrors.push(text);
+  });
   page.on('pageerror', (error) => { consoleErrors.push(String(error)); });
   page.on('response', (response) => {
     const url = new URL(response.url());
@@ -180,7 +187,11 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   });
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript(() => localStorage.setItem('modelry-admin-locale', 'en'));
+  // 只在没有已保存偏好时给一个起点：否则每次 reload 都会把用户刚选的 locale 覆盖回 en，
+  // 后面的「偏好跨刷新保持」断言就没有意义了。
+  await page.addInitScript(() => {
+    if (!window.localStorage.getItem('modelry-admin-locale')) window.localStorage.setItem('modelry-admin-locale', 'en');
+  });
   await page.goto(runtimeURL, { timeout: 20_000 });
   await signIn(page);
   const collectionId = await createCollection(page, 'shell_visual_records');
@@ -190,31 +201,35 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}`, { timeout: 20_000 });
-    await expect(page.getByRole('heading', { name: 'Records', level: 1 })).toBeVisible();
+    // exact：集合名（如 shell_visual_records）也包含 "records" 子串。
+    await expect(page.getByRole('heading', { name: 'Records', level: 1, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create record', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Collection workspace' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth), `no horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
   }
 
   // 刷新与深链接保留当前页面；返回回到上一页。
+  // 旧 `/changes?view=pending` 仍可深链，但会被 route mapper 归一为 canonical `?tab=pending`。
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${runtimeURL}/changes?view=pending`, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/changes\?tab=pending$/);
   await page.reload({ timeout: 20_000 });
-  await expect(page).toHaveURL(/\/changes\?view=pending$/);
-  await expect(page.getByRole('heading', { name: 'Model changes', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/changes\?tab=pending$/);
+  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Change sections' })).toBeVisible();
   await page.goto(`${runtimeURL}/activity/audit`, { timeout: 20_000 });
   await page.goBack({ timeout: 20_000 });
-  await expect(page).toHaveURL(/\/changes\?view=pending$/);
+  await expect(page).toHaveURL(/\/changes\?tab=pending$/);
 
   // locale + theme 选择在刷新后保持，且不改变当前深链接。
   await page.getByLabel('Language').selectOption('zh-CN');
-  await expect(page.getByRole('heading', { name: '模型变更', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: '切换为深色主题' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload({ timeout: 20_000 });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('heading', { name: '模型变更', level: 1 })).toBeVisible();
-  await expect(page).toHaveURL(/\/changes\?view=pending$/);
+  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/changes\?tab=pending$/);
   await page.getByLabel('语言').selectOption('en');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -228,7 +243,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   await page.keyboard.press('Control+k');
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   await expect(palette).toBeVisible();
-  await palette.getByRole('combobox', { name: 'Search commands' }).fill('Settings');
+  await palette.getByRole('combobox', { name: 'Search commands' }).fill('System settings');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/settings$/);
   await paletteTrigger.focus();

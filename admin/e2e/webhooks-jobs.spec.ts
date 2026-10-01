@@ -277,7 +277,9 @@ async function waitForDeliveryStatus(page: Page, id: string, expected: string): 
 }
 
 async function createSecret(page: Page, name: string, value: string): Promise<string> {
+  // 旧 `/secrets` 深链归一为系统设置的 Secrets 分节。
   await page.goto(`${runtimeURL}/secrets`);
+  await expect(page).toHaveURL(`${runtimeURL}/settings/secrets`);
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   await page.locator('#secret-name').fill(name);
   await page.locator('#secret-value').fill(value);
@@ -295,7 +297,10 @@ async function createSecret(page: Page, name: string, value: string): Promise<st
 }
 
 async function createWebhook(page: Page, name: string, pathname: string, secretId: string) {
+  // 旧 `/automations/webhooks` 深链归一为 Hooks & Events 的 Webhooks 工作面。
   await page.goto(`${runtimeURL}/automations/webhooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=webhooks`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Create Webhook' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await page.getByLabel('HTTPS destination').fill(`https://hooks.modelry.test${pathname}`);
@@ -317,13 +322,15 @@ async function createWebhook(page: Page, name: string, pathname: string, secretI
 }
 
 async function createEventHook(page: Page, name: string, collectionId: string, webhookId: string) {
+  // 旧 `/automations/triggers` 深链归一为 Hooks & Events 的 Event triggers 工作面。
   await page.goto(`${runtimeURL}/automations/triggers`);
-  await page.getByRole('button', { name: 'Create Event Hook' }).click();
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=triggers`);
+  await page.getByRole('button', { name: 'Create event trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
-  await page.getByLabel('Collection').selectOption(collectionId);
+  await page.getByLabel('Collection', { exact: true }).selectOption(collectionId);
   await page.getByLabel('Record Event').selectOption('record.created');
-  await page.getByLabel('Webhook').selectOption(webhookId);
-  await page.getByRole('button', { name: 'Save Event Hook' }).click();
+  await page.getByLabel('Webhook', { exact: true }).selectOption(webhookId);
+  await page.getByRole('button', { name: 'Save event trigger' }).click();
   const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
   const response = await requestJSON(page, 'GET', '/admin/api/v1/event-hooks');
@@ -357,8 +364,10 @@ async function deliveryForEvent(page: Page, hookId: string, eventId: string, sta
 }
 
 async function deliveryPage(page: Page, id: string) {
+  // 旧 `/automations/deliveries` 深链归一为 Hooks & Events 的 Delivery history 工作面。
   await page.goto(`${runtimeURL}/automations/deliveries?deliveryId=${encodeURIComponent(id)}`);
-  await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=deliveries&deliveryId=${encodeURIComponent(id)}`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await expect(page.getByText(id, { exact: true })).toBeVisible();
 }
 
@@ -470,16 +479,19 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   const primaryWebhook = await createWebhook(page, 'Primary receiver', '/record-hook', primarySecretId);
   const primaryHook = await createEventHook(page, 'Record event receiver', collectionId, primaryWebhook.id);
 
+  // 定时任务是独立一级入口：旧 `/automations/schedules` 深链归一为 `/schedules?tab=jobs`。
   await page.goto(`${runtimeURL}/automations/schedules`);
-  await page.getByRole('button', { name: 'Create Job' }).click();
+  await expect(page).toHaveURL(`${runtimeURL}/schedules?tab=jobs`);
+  await expect(page.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Create scheduled trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('UTC maturity check');
-  await page.getByLabel('Webhook').selectOption(primaryWebhook.id);
+  await page.getByLabel('Webhook', { exact: true }).selectOption(primaryWebhook.id);
   const cronInput = page.getByRole('textbox', { name: /Cron schedule/ });
   await cronInput.fill('0 9 * * *');
   const preview = page.getByText(/Next run preview \(UTC\)/);
   await expect(preview).toBeVisible();
   await expect(preview).toContainText('UTC');
-  await page.getByRole('button', { name: 'Save Job' }).click();
+  await page.getByRole('button', { name: 'Save scheduled trigger' }).click();
   const createdJobCard = page.locator('[data-automation-card]').filter({ hasText: 'UTC maturity check' });
   await expect(createdJobCard).toBeVisible();
   await expect(createdJobCard).toContainText('UTC');
@@ -549,6 +561,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(disableEventId).toMatch(/^evt_/);
   const disableDelivery = await deliveryForEvent(page, cancelHook.id, disableEventId!, 'running');
   await page.goto(`${runtimeURL}/automations/webhooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=webhooks`);
   const cancelCard = page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' });
   await cancelCard.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Disable Webhook?' })).toBeVisible();
@@ -561,6 +574,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(disableRecord).toMatch(/^rec_/);
 
   await page.goto(`${runtimeURL}/automations/webhooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=webhooks`);
   await page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' }).getByRole('button', { name: 'Enable', exact: true }).click();
   await expect(page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' }).getByText('Enabled', { exact: true })).toBeVisible();
   const revokeGate = fixture!.blockNext('/cancel-hook');
@@ -570,6 +584,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(revokeEventId).toMatch(/^evt_/);
   const revokeDelivery = await deliveryForEvent(page, cancelHook.id, revokeEventId!, 'running');
   await page.goto(`${runtimeURL}/secrets`);
+  await expect(page).toHaveURL(`${runtimeURL}/settings/secrets`);
   const secretRow = page.getByRole('listitem').filter({ hasText: 'Revocation test key' });
   await secretRow.getByRole('button', { name: 'Revoke', exact: true }).click();
   await page.getByRole('dialog', { name: 'Revoke “Revocation test key”?' }).getByRole('button', { name: 'Revoke Secret' }).click();
@@ -631,11 +646,12 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(replay[1]!.idempotencyKey).toBe(interruptedDelivery.id);
 
   await page.goto(`${runtimeURL}/automations/deliveries?deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
-  await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=deliveries&deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await expect(page.getByText(interruptedDelivery.id, { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(privateRecordMarker);
   await page.locator('[data-locale-switcher] select').selectOption('zh-CN');
-  await expect(page.getByRole('heading', { name: '自动化', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', exact: true })).toBeVisible();
   const themeBefore = await page.locator('html').getAttribute('data-theme');
   await page.locator('[data-theme-button]').click();
   await expect.poll(() => page.locator('html').getAttribute('data-theme')).not.toBe(themeBefore);
@@ -643,6 +659,34 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // 手动运行（Run now）：服务器接受后，执行记录耐久进入执行历史，并标明触发方式。
+  // 目标 Webhook 已启用且签名 Secret 已配置，因此这里走的是成功路径。
+  await page.locator('[data-locale-switcher] select').selectOption('en');
+  await page.goto(`${runtimeURL}/schedules?tab=jobs`);
+  await expect(page.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
+  const runNowCard = page.locator('[data-automation-card]').filter({ hasText: 'UTC maturity check' });
+  await expect(runNowCard).toBeVisible();
+  await runNowCard.getByRole('button', { name: 'Run now', exact: true }).click();
+  const runResultPanel = page.getByRole('status').filter({ hasText: 'UTC maturity check' });
+  await expect(runResultPanel).toBeVisible();
+  await expect(runResultPanel).toContainText('Manual run requested. Execution');
+  const executionLink = runResultPanel.getByRole('link', { name: 'Open execution history' });
+  const executionHref = await executionLink.getAttribute('href');
+  expect(executionHref).toMatch(/^\/schedules\?tab=history&deliveryId=dlv_/);
+  const manualRunDeliveryId = decodeURIComponent(new URL(executionHref!, runtimeURL).searchParams.get('deliveryId') ?? '');
+  expect(manualRunDeliveryId).toMatch(/^dlv_/);
+  await executionLink.click();
+  await expect(page).toHaveURL(`${runtimeURL}/schedules?tab=history&deliveryId=${encodeURIComponent(manualRunDeliveryId)}`);
+  // 执行历史固定为 Job 投递，并额外显示「触发方式」。
+  const manualRunCard = page.locator('[data-automation-card]').filter({ hasText: 'Manual run' });
+  await expect(manualRunCard).toBeVisible();
+  await expect(manualRunCard).toContainText('Trigger');
+  await expect(page.getByText(manualRunDeliveryId, { exact: true })).toBeVisible();
+  const manualRunDelivery = await waitForDeliveryStatus(page, manualRunDeliveryId, 'succeeded');
+  expect(manualRunDelivery.sourceType).toBe('job');
+  expect(manualRunDelivery.eventType).toBe('job.manual');
+
   await expectNoSensitiveDiagnostics(page, [primarySecret, revokeSecret, privateRecordMarker, manualRetryMarker, responseBodyMarker, 'https://hooks.modelry.test/record-hook', 'https://hooks.modelry.test/cancel-hook', ...fixture!.requests.map((request) => request.signature)]);
   const durableJob = await requestJSON(page, 'GET', `/admin/api/v1/jobs/${encodeURIComponent(job!.id)}`);
   expect(durableJob.status).toBe(200);

@@ -1,15 +1,14 @@
 import {
   useMemo, useState } from 'react';
 import {
-  Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+  Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity,
   ChevronDown,
+  Clock3,
   Command,
   FileStack,
   GitBranch,
-  HeartPulse,
   Home,
   LogOut,
   Moon,
@@ -31,9 +30,13 @@ import {
 import {
   useDiagnostics } from './diagnostics-context';
 import {
+  useOverview, OverviewProvider } from './overview-context';
+import {
   CommandPaletteControl } from './command-palette';
 import {
   CommandRegistryProvider, useCommandRegistry, useRegisterCommands, type AdminCommand, type CommandContext } from './command-registry';
+import { allowsOperation, canSeeNavigationItem } from './permissions';
+import { mapLegacyPath } from '../route-map';
 import {
   PendingChangesProvider, usePendingChanges } from './pending-changes-context';
 import {
@@ -41,132 +44,52 @@ import {
 import {
   useTheme } from './theme-context';
 
-// 新版信息架构（spec 0001 §3.1）：按开发者完成后的工作顺序排列——
-// Home；BUILD/Collections；CONNECT/API & SDK；AUTOMATE/Automations；
-// OBSERVE/Requests + Activity & Audit；EVOLVE/Changes + Model health；
-// PROJECT/Access & keys + Settings。Requests 导航项随 M4 Requests 页交付。
+// Spec 0001 §3.1 一级导航：按开发者实际管理的业务对象组织，只用视觉分组，
+// 不形成额外页面层级。二级工作面由各页面自己的 Tab / 本地导航承担。
 const groups: Array<{
   label: TranslationKey | null;
-  items: Array<{ label: TranslationKey; to: string; icon: LucideIcon; operation?: string }>;
+  items: Array<{ label: TranslationKey; to: string; icon: LucideIcon; operation?: string; count?: 'collections' | 'events' | 'schedules' }>;
 }> = [
-  { label: null, items: [{ label: 'navigation.home', to: '/', icon: Home, operation: 'runtime.read' }] },
+  {
+    label: 'navigation.workspace',
+    items: [{ label: 'navigation.overview', to: '/', icon: Home, operation: 'runtime.read' }],
+  },
   {
     label: 'navigation.build',
-    items: [{ label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read' }],
-  },
-  {
-    label: 'navigation.connect',
-    items: [{ label: 'navigation.apiSdk', to: '/connect', icon: Network, operation: 'collections.read' }],
-  },
-  {
-    label: 'navigation.automate',
-    items: [{ label: 'navigation.automations', to: '/automations', icon: Webhook }],
-  },
-  {
-    label: 'navigation.observe',
     items: [
-      { label: 'navigation.requests', to: '/requests', icon: Activity, operation: 'requests.read' },
-      { label: 'navigation.activityAudit', to: '/activity', icon: ScrollText, operation: 'activity.read' },
+      { label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read', count: 'collections' },
+      { label: 'navigation.apiWorkspace', to: '/api', icon: Network, operation: 'collections.read' },
+      { label: 'navigation.hooksEvents', to: '/events', icon: Webhook, count: 'events' },
+      { label: 'navigation.scheduledJobs', to: '/schedules', icon: Clock3, count: 'schedules' },
     ],
   },
   {
-    label: 'navigation.evolve',
+    label: 'navigation.operate',
     items: [
       { label: 'navigation.changes', to: '/changes', icon: GitBranch, operation: 'schema.read' },
-      { label: 'navigation.modelHealth', to: '/health', icon: HeartPulse, operation: 'drift.read' },
+      { label: 'navigation.accessAuth', to: '/access', icon: ShieldCheck, operation: 'serviceAccounts.read' },
+      { label: 'navigation.activity', to: '/activity', icon: ScrollText, operation: 'activity.read' },
     ],
   },
   {
-    label: 'navigation.project',
-    items: [
-      { label: 'navigation.accessKeys', to: '/access', icon: ShieldCheck, operation: 'serviceAccounts.read' },
-      { label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' },
-    ],
+    label: 'navigation.system',
+    items: [{ label: 'navigation.settings', to: '/settings', icon: Settings2, operation: 'runtime.read' }],
   },
 ];
 
-type AreaLink = { label: TranslationKey; to: string; operation?: string };
-type AreaSection = { label?: TranslationKey | null; links: AreaLink[] };
-type ProductAreaNavigation = {
-  id: 'automation' | 'connect' | 'access' | 'settings';
-  label: TranslationKey;
-  sections: AreaSection[];
-};
-
-function productAreaNavigation(pathname: string): ProductAreaNavigation | null {
-  if (pathname.startsWith('/automations')) {
-    return {
-      id: 'automation',
-      label: 'navigation.automations',
-      sections: [
-        { label: 'automation.navigation.triggers', links: [
-          { label: 'automation.subnav.hooks', to: '/automations/hooks' },
-          { label: 'automation.subnav.webhooks', to: '/automations/webhooks' },
-          { label: 'automation.subnav.triggers', to: '/automations/triggers' },
-          { label: 'automation.subnav.schedules', to: '/automations/schedules' },
-        ] },
-        { label: 'automation.navigation.runHistory', links: [
-          { label: 'automation.subnav.deliveries', to: '/automations/deliveries' },
-        ] },
-      ],
-    };
-  }
-  if (pathname.startsWith('/connect')) {
-    return {
-      id: 'connect',
-      label: 'navigation.apiSdk',
-      sections: [
-        { label: null, links: [
-          { label: 'navigation.connectApi', to: '/connect/api', operation: 'collections.read' },
-          { label: 'navigation.connectSdk', to: '/connect/sdk' },
-          { label: 'navigation.connectMcp', to: '/connect/mcp' },
-        ] },
-      ],
-    };
-  }
-  if (pathname.startsWith('/access')) {
-    return {
-      id: 'access',
-      label: 'navigation.accessKeys',
-      sections: [
-        { label: 'access.navigation.identity', links: [
-          { label: 'access.tabs.serviceAccounts', to: '/access', operation: 'serviceAccounts.read' },
-          { label: 'navigation.administrators', to: '/access/administrators', operation: 'administrators.read' },
-        ] },
-        { label: 'access.navigation.security', links: [
-          { label: 'access.tabs.audit', to: '/activity/audit', operation: 'audit.read' },
-        ] },
-      ],
-    };
-  }
-  if (pathname.startsWith('/settings')) {
-    return {
-      id: 'settings',
-      label: 'navigation.settings',
-      sections: [
-        { label: 'settings.navigation.project', links: [
-          { label: 'settings.navigation.status', to: '/settings', operation: 'runtime.read' },
-          { label: 'settings.navigation.runtime', to: '/settings/runtime', operation: 'settings.read' },
-        ] },
-        { label: 'settings.navigation.service', links: [
-          { label: 'settings.navigation.filesStorage', to: '/settings/storage', operation: 'storage.read' },
-          { label: 'settings.navigation.mail', to: '/settings/mail', operation: 'mail.read' },
-          { label: 'settings.navigation.secrets', to: '/settings/secrets' },
-        ] },
-        { label: 'settings.navigation.maintenance', links: [
-          { label: 'settings.navigation.backupRestore', to: '/settings/backups' },
-          { label: 'settings.navigation.dataTransfer', to: '/settings/data' },
-        ] },
-      ],
-    };
-  }
-  return null;
-}
-
-// 子导航为纯路径形态（query 参数仅保留在页面内部状态）。
-// 命中多个前缀时只高亮最具体的那个（如 /access 与 /access/administrators）。
-function isAreaLinkMatch(link: AreaLink, pathname: string): boolean {
-  return pathname === link.to || pathname.startsWith(`${link.to}/`);
+// 顶栏面包屑：显示当前目的地名称（spec 0001 §3.4）。
+function destinationKey(pathname: string): TranslationKey {
+  if (pathname === '/') return 'navigation.overview';
+  if (pathname.startsWith('/collections')) return 'navigation.collections';
+  if (pathname.startsWith('/api')) return 'navigation.apiWorkspace';
+  if (pathname.startsWith('/events')) return 'navigation.hooksEvents';
+  if (pathname.startsWith('/schedules')) return 'navigation.scheduledJobs';
+  if (pathname.startsWith('/changes')) return 'navigation.changes';
+  if (pathname.startsWith('/access')) return 'navigation.accessAuth';
+  if (pathname.startsWith('/activity')) return 'navigation.activity';
+  if (pathname.startsWith('/settings')) return 'navigation.settings';
+  if (pathname.startsWith('/mcp')) return 'mcp.title';
+  return 'navigation.overview';
 }
 
 function isPrimaryLinkActive(pathname: string, to: string): boolean {
@@ -174,57 +97,51 @@ function isPrimaryLinkActive(pathname: string, to: string): boolean {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function areaLinkTarget(link: AreaLink): string {
-  return link.to;
+// Spec 0001 §15：路径已经是 canonical、但 query 仍是历史写法时（例如 `/changes?view=pending`），
+// 真实路由会直接命中而绕过 `*` 兜底，因此这里在 Shell 内再归一一次：
+// 命中 route-map 就 replace 到 canonical URL（归一后返回 null，不会循环），否则原样渲染。
+export function NormalizedOutlet() {
+  const location = useLocation();
+  const mapped = mapLegacyPath(location.pathname, location.search);
+  if (mapped === null) return <Outlet />;
+  return <Navigate replace to={{ pathname: mapped.pathname, search: mapped.search, hash: location.hash }} />;
 }
 
-const readOnlyControlPlaneOperations = new Set([
-  'runtime.read', 'storage.read', 'collections.read', 'records.read', 'files.read', 'schema.read',
-  'accessRules.read', 'authentication.read', 'users.read', 'sessions.read', 'serviceAccounts.read',
-  'apiKeys.read', 'requests.read', 'audit.read', 'administrators.read', 'mail.read',
-  // #27/#28 新增的只读操作必须与后端 readOnly preset 保持一致。
-  'activity.read', 'drift.read', 'policy.simulate', 'settings.read', 'records.export',
-]);
-
-// allowsOperation 在 Admin Shell 中复现 Control Plane 的 fail closed 语义。
-// 没有显式 operation 的导航项只对 Owner 可见。
-function allowsOperation(role: AppShellProps['role'], permission: ControlPlanePermission | undefined, operation: string): boolean {
-  if (role === undefined || role === 'owner') return true;
-  if (!permission) return false;
-  switch (permission.preset) {
-    case 'fullAccess': return true;
-    case 'readOnly': return readOnlyControlPlaneOperations.has(operation);
-    case 'custom': return (permission.customOperations ?? []).includes(operation);
-    default: return false;
-  }
-}
-
-// canSeeNavigationItem 让没有显式 operation 的导航项只对 Owner 可见。
-function canSeeNavigationItem(role: AppShellProps['role'], permission: ControlPlanePermission | undefined, item: { operation?: string }): boolean {
-  if (item.operation === undefined) return role === undefined || role === 'owner';
-  return allowsOperation(role, permission, item.operation);
-}
 function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
   role?: AppShellProps['role'];
   permission?: ControlPlanePermission;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
-  const { t, formatPlural } = useI18n();
+  const { t, formatNumber, formatPlural } = useI18n();
   const { pathname } = useLocation();
   const { pendingOperations } = usePendingChanges();
   const pendingLabel = formatPlural(pendingOperations, {
     one: t('shell.pendingChangeOne'),
     other: t('shell.pendingChangeMany'),
   });
+  const { overview } = useOverview();
+  const { runtime } = useDiagnostics();
+
   const visibleGroups = useMemo(
     () => groups
       .map((group) => ({ ...group, items: group.items.filter((item) => canSeeNavigationItem(role, permission, item)) }))
       .filter((group) => group.items.length > 0),
     [role, permission],
   );
-  // 侧栏布局：≤680px 是横向顶栏；681–1023px 展开为 210px 栏、≥1024px 展开为 248px 栏；
-  // 折叠后统一收成 72px 图标轨道。状态仍由上层 sidebarCollapsed 驱动，宽度只用响应式变体表达。
+
+  // 计数只来自真实快照；section 缺失时不显示 0，也不显示猜测值。
+  const counts = useMemo(() => {
+    const snapshot = overview.value;
+    const events = snapshot?.events;
+    return {
+      collections: snapshot?.collections ? snapshot.collections.count : undefined,
+      events: events ? events.enabledHooks + events.enabledWebhooks + events.enabledEventHooks : undefined,
+      schedules: events ? events.enabledJobs : undefined,
+    } as Record<string, number | undefined>;
+  }, [overview.value]);
+
+  const runtimeState = runtime.state === 'ready' ? runtime.value.state : runtime.state === 'error' ? 'unavailable' : 'loading';
   const collapsedBlock = collapsed ? 'hidden' : 'hidden min-[681px]:block';
   const navLinkClassName = (isActive: boolean) => [
     'flex min-h-[35px] shrink-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
@@ -233,6 +150,7 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
       : 'min-[681px]:min-h-[39px] min-[681px]:gap-[11px] min-[681px]:rounded-[5px] min-[681px]:px-2.5 min-[681px]:text-[13px]',
     isActive ? 'border-sidebar-accent bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : '',
   ].filter(Boolean).join(' ');
+
   return (
     <aside
       aria-label={t('navigation.projectNavigation')}
@@ -272,8 +190,9 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
         {visibleGroups.map((group, groupIndex) => (
           <div className="contents min-[681px]:grid min-[681px]:gap-[3px]" key={group.label ?? 'overview'}>
             {group.label && <p className={['mx-2.5 mt-2.25 mb-1 text-[10px] font-bold uppercase tracking-[1.2px] text-subtle-foreground', collapsedBlock].join(' ')} data-nav-group-label>{t(group.label)}</p>}
-            {group.items.map(({ label, to, icon: Icon }) => {
+            {group.items.map(({ label, to, icon: Icon, count }) => {
               const showsPendingCount = to === '/changes' && pendingOperations > 0;
+              const countValue = count ? counts[count] : undefined;
               return (
                 <NavLink
                   aria-label={showsPendingCount ? `${t(label)} · ${pendingLabel}` : t(label)}
@@ -286,12 +205,19 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
                 >
                   <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
                   <span className={collapsed ? 'hidden min-[391px]:inline min-[681px]:hidden' : 'hidden min-[391px]:inline'}>{t(label)}</span>
-                  {showsPendingCount && (
+                  {showsPendingCount ? (
                     <span
                       aria-hidden="true"
-                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground"
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-warning-soft px-1.5 text-[10px] font-semibold tabular-nums text-warning"
+                      data-nav-count="changes"
                     >{pendingOperations}</span>
-                  )}
+                  ) : countValue !== undefined ? (
+                    <span
+                      aria-hidden="true"
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-subtle-foreground"
+                      data-nav-count={count}
+                    >{formatNumber(countValue)}</span>
+                  ) : null}
                 </NavLink>
               );
             })}
@@ -300,7 +226,13 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
         ))}
       </nav>
       <div className={['gap-2.25 border-t border-sidebar-border px-2 pt-3.5 pb-0.5', collapsed ? 'hidden' : 'hidden min-[681px]:grid'].join(' ')}>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-[7px] shrink-0 rounded-full bg-primary shadow-[0_0_0_3px_var(--accent-cta-soft)]" />{t('navigation.localProject')}</div>
+        <Link className="flex items-center gap-2.25 rounded-lg border bg-sidebar-accent px-2.5 py-2.5 text-xs no-underline" data-shell-runtime-card to="/settings">
+          <span aria-hidden="true" className={['size-[7px] shrink-0 rounded-full', runtimeState === 'ready' ? 'bg-success shadow-[0_0_0_3px_var(--success-soft)]' : runtimeState === 'loading' ? 'bg-info shadow-[0_0_0_3px_var(--info-soft)]' : 'bg-danger shadow-[0_0_0_3px_var(--danger-soft)]'].join(' ')} />
+          <span className="grid min-w-0 gap-0.5">
+            <span className="text-[11.5px] font-semibold text-foreground">{t('navigation.localProject')}</span>
+            <small className="truncate font-mono text-[10px] text-muted-foreground">{window.location.host} · {runtimeState === 'ready' ? t('diagnostics.states.ready') : runtimeState === 'loading' ? t('diagnostics.states.loading') : t(`diagnostics.states.${runtimeState}` as TranslationKey)}</small>
+          </span>
+        </Link>
       </div>
     </aside>
   );
@@ -322,45 +254,6 @@ function ThemeButton() {
     >
       <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
     </button>
-  );
-}
-
-function ProductAreaNavigation({ area, role, permission, pathname }: {
-  area: ProductAreaNavigation;
-  role?: AppShellProps['role'];
-  permission?: ControlPlanePermission;
-  pathname: string;
-}) {
-  const { t } = useI18n();
-  const sections = area.sections
-    .map((section) => ({ ...section, links: section.links.filter((link) => canSeeNavigationItem(role, permission, link)) }))
-    .filter((section) => section.links.length > 0);
-
-  if (!sections.length) return null;
-  const activeLinks = sections.flatMap((section) => section.links).filter((link) => isAreaLinkMatch(link, pathname));
-  const activeLink = activeLinks.sort((a, b) => b.to.length - a.to.length)[0];
-  return (
-    <nav
-      aria-label={t(area.label)}
-      className="flex min-h-[43px] items-center gap-2.25 overflow-x-auto border-b bg-card px-2.5 py-1.25 [scrollbar-width:thin] min-[681px]:min-h-12 min-[681px]:gap-3.75 min-[681px]:px-[clamp(25px,4.2vw,64px)] min-[681px]:py-1.5"
-    >
-      {sections.map((section, index) => <div className="flex shrink-0 items-center gap-1 border-l border-border pl-2 first:border-l-0 first:pl-0 min-[681px]:pl-[13px]" key={section.label ?? `section-${index}`}>
-        {section.label && <span className="mx-1.5 ml-0.5 text-[9px] font-bold uppercase tracking-[0.8px] text-subtle-foreground">{t(section.label)}</span>}
-        {section.links.map((link) => {
-          const active = link === activeLink;
-          return <Link
-            aria-current={active ? 'page' : undefined}
-            className={[
-              'inline-flex min-h-[30px] shrink-0 items-center rounded-[7px] border border-transparent px-[7px] text-[10px] font-medium whitespace-nowrap text-muted-foreground no-underline hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-              'min-[681px]:min-h-[31px] min-[681px]:px-2.25 min-[681px]:text-[11px]',
-              active ? 'border-accent-cta-soft bg-accent-cta-soft font-bold text-accent-cta-ink' : '',
-            ].filter(Boolean).join(' ')}
-            key={link.to}
-            to={areaLinkTarget(link)}
-          >{t(link.label)}</Link>;
-        })}
-      </div>)}
-    </nav>
   );
 }
 
@@ -408,13 +301,15 @@ function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout, role }: AppShellPro
   }
 
   return (
-    <details className="relative flex items-center" data-owner-menu>
+    // 窄屏只保留头像：完整邮箱仍在 aria-label 与展开后的菜单里，
+    // 但不再把顶栏撑出视口（spec 0001 §16.1 不允许横向溢出）。
+    <details className="relative flex min-w-0 items-center" data-owner-menu>
       <summary
         aria-label={ownerLabel}
-        className="flex cursor-pointer list-none items-center gap-[7px] rounded-full border border-transparent py-1 pr-2 pl-1 text-[11px] font-semibold text-ink-secondary hover:border-border hover:bg-accent open:border-border open:bg-accent [&::-webkit-details-marker]:hidden"
+        className="flex min-w-0 cursor-pointer list-none items-center gap-[7px] rounded-full border border-transparent py-1 pr-2 pl-1 text-[11px] font-semibold text-ink-secondary hover:border-border hover:bg-accent open:border-border open:bg-accent [&::-webkit-details-marker]:hidden"
       >
         <span className="grid size-[25px] shrink-0 place-items-center rounded-full bg-accent-cta-soft text-[10px] font-bold text-accent-cta-ink" aria-hidden="true">{ownerEmail?.slice(0, 1).toUpperCase() ?? 'O'}</span>
-        <span className="max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap max-[680px]:max-w-[110px] max-[390px]:hidden">{ownerEmail ?? t('shell.owner')}</span>
+        <span className="hidden min-w-0 max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap min-[1024px]:inline">{ownerEmail ?? t('shell.owner')}</span>
         <ChevronDown aria-hidden="true" size={14} />
       </summary>
       <div className="absolute top-[calc(100%+8px)] right-0 z-[8] w-[min(290px,calc(100vw-24px))] rounded-md border border-border bg-card p-3.25 shadow-floating">
@@ -472,23 +367,24 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
     });
 
     const result: AdminCommand[] = [
-      go('navigate.overview', 'commands.overview', '/'),
-      go('navigate.collections', 'commands.collections', '/collections', ['build']),
-      go('navigate.api', 'commands.api', '/connect/api'),
-      go('navigate.changes', 'commands.changes', '/changes'),
-      go('navigate.access', 'commands.access', '/access'),
-      go('navigate.automations', 'commands.automations', '/automations', ['webhook', 'event hook', 'cron', 'delivery']),
-      go('navigate.extensions', 'commands.extensions', '/automations/hooks', ['hooks', 'lifecycle', 'runtime', 'extension', '扩展']),
+      go('navigate.overview', 'navigation.overview', '/'),
+      go('navigate.collections', 'navigation.collections', '/collections', ['build']),
+      go('navigate.api', 'navigation.apiWorkspace', '/api?tab=endpoints', ['endpoint', 'runner', 'openapi']),
+      go('navigate.events', 'navigation.hooksEvents', '/events?tab=hooks', ['webhook', 'event hook', 'delivery', 'hooks']),
+      go('navigate.schedules', 'navigation.scheduledJobs', '/schedules?tab=jobs', ['cron', 'job', 'schedule']),
+      go('navigate.changes', 'navigation.changes', '/changes?tab=pending'),
+      go('navigate.access', 'navigation.accessAuth', '/access?tab=administrators'),
       go('navigate.secrets', 'commands.secrets', '/settings/secrets', ['write-only', 'secret']),
-      go('navigate.settings', 'commands.settings', '/settings'),
+      go('navigate.settings', 'navigation.settings', '/settings'),
       ...(allowsOperation(role, permission, 'activity.read') ? [go('navigate.activity', 'commands.activity', '/activity', ['timeline', 'operations', 'audit'])] : []),
-      ...(allowsOperation(role, permission, 'drift.read') ? [go('navigate.drift', 'commands.drift', '/health', ['consistency', 'projection', 'reconcile'])] : []),
+      ...(allowsOperation(role, permission, 'drift.read') ? [go('navigate.drift', 'commands.drift', '/changes?tab=drift', ['consistency', 'projection', 'reconcile'])] : []),
       ...(allowsOperation(role, permission, 'settings.read') ? [go('navigate.runtimeSettings', 'commands.runtimeSettings', '/settings/runtime', ['runtime', 'configuration', 'restart'])] : []),
       ...(role === undefined || role === 'owner' ? [
         go('navigate.backupRestore', 'commands.backupRestore', '/settings/backups', ['backup', 'restore']),
         go('navigate.dataTransfer', 'commands.dataTransfer', '/settings/data', ['import', 'export', 'ndjson']),
-        go('navigate.apiContract', 'commands.apiContract', '/connect/sdk', ['sdk', 'openapi', 'contract']),
-        go('navigate.mcp', 'commands.mcp', '/connect/mcp', ['agent', 'model context protocol']),
+        // 契约与 MCP 不占一级菜单，但属于 Owner 的开发者接入入口（developer.read 不在 readOnly preset 中）。
+        go('navigate.apiContract', 'commands.apiContract', '/api?tab=openapi', ['sdk', 'openapi', 'contract']),
+        go('navigate.mcp', 'commands.mcp', '/mcp', ['agent', 'model context protocol']),
       ] : []),
       ...(role === undefined || role === 'owner' ? [
         {
@@ -496,7 +392,7 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
           category: 'commands.categories.system' as const,
           label: () => t('commands.administrators'),
           keywords: () => [t('administrators.searchKeywords')],
-          execute: (context: CommandContext) => context.navigate('/access/administrators'),
+          execute: (context: CommandContext) => context.navigate('/access?tab=administrators'),
         },
         {
           id: 'navigate.mail',
@@ -601,10 +497,9 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
 function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permission }: AppShellProps) {
   const { t } = useI18n();
   const location = useLocation();
-  const area = productAreaNavigation(location.pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   return (
-    <div className="app-frame min-h-screen" data-product-area={area?.id}>
+    <div className="app-frame min-h-screen">
       <a
         className="fixed top-2 left-2 z-20 -translate-y-[150%] rounded-md bg-card px-3 py-2.25 text-xs font-bold text-accent-cta-ink shadow-soft focus:translate-y-0"
         href="#main-content"
@@ -626,9 +521,9 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
         >
           <div className="flex min-w-0 items-center gap-2 min-[681px]:gap-3.25">
             <Command aria-hidden="true" className="shrink-0 text-primary min-[681px]:hidden" size={18} />
-            <span className="text-[10px] font-semibold text-ink-secondary min-[681px]:text-xs max-[390px]:hidden">{t('shell.projectWorkspace')}</span>
+            <span className="text-[10px] font-semibold text-ink-secondary min-[681px]:text-xs max-[390px]:hidden">Modelry</span>
             <span className="text-[10px] text-subtle-foreground min-[681px]:text-xs max-[390px]:hidden" aria-hidden="true">/</span>
-            <span className="truncate text-[10px] text-muted-foreground min-[681px]:text-xs max-[390px]:hidden">{t('shell.localContext')}</span>
+            <span className="truncate text-[10px] text-muted-foreground min-[681px]:text-xs max-[390px]:hidden" data-shell-destination>{t(destinationKey(location.pathname))}</span>
           </div>
           <div
             className="flex min-w-0 items-center gap-1.5 min-[681px]:gap-1.25 lg:gap-3.25"
@@ -643,13 +538,12 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
             <OwnerMenu onLogout={onLogout} ownerEmail={ownerEmail} role={role} sessionExpiresAt={sessionExpiresAt} />
           </div>
         </header>
-        {area && <ProductAreaNavigation area={area} pathname={location.pathname} permission={permission} role={role} />}
         <main
           className="mx-auto w-full min-w-0 max-w-[1440px] flex-1 px-4 pt-[27px] pb-[41px] min-[681px]:px-[clamp(25px,4.2vw,64px)] min-[681px]:pt-[43px] min-[681px]:pb-[62px]"
           id="main-content"
           tabIndex={-1}
         >
-          <Outlet />
+          <NormalizedOutlet />
         </main>
       </div>
     </div>
@@ -659,10 +553,12 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
 export function AppShell(props: AppShellProps) {
   return (
     <PendingChangesProvider>
-      <CommandRegistryProvider>
-        <ShellCommands permission={props.permission} role={props.role} />
-        <AppShellLayout {...props} />
-      </CommandRegistryProvider>
+      <OverviewProvider>
+        <CommandRegistryProvider>
+          <ShellCommands permission={props.permission} role={props.role} />
+          <AppShellLayout {...props} />
+        </CommandRegistryProvider>
+      </OverviewProvider>
     </PendingChangesProvider>
   );
 }

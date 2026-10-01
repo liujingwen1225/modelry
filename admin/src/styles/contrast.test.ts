@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 // Spec 0001 §17.2 / §18.6：对比度验证由自动化 Token 对比测试持续执行。
 // 解析 globals.css 的 Light / Dark 两套语义 Token（hex 或 oklch，含 alpha），
-// 以 WCAG 2.2 AA 校验关键前景/背景组合，并回归扫描品牌色残留。
+// 以 WCAG 2.2 AA 校验关键前景/背景组合；状态色随 §17.2 的有限状态色集合一起校验，
+// 并回归扫描品牌色残留（全部色值必须是 oklch，不允许 hex）。
 
 function findFile(relative: string): string {
   const candidates = [resolve(process.cwd(), relative), resolve(process.cwd(), 'admin', relative)];
@@ -115,7 +116,7 @@ function contrast(foreground: string | undefined, background: string | undefined
 describe('theme contrast (WCAG 2.2 AA)', () => {
   const themes = themeTokens();
 
-  it('defines both light and dark palettes with the Quiet Mono token set', () => {
+  it('defines both light and dark palettes with the full semantic token set', () => {
     expect(Object.keys(themes.light).length).toBeGreaterThan(20);
     expect(Object.keys(themes.dark).length).toBeGreaterThan(20);
     for (const token of [
@@ -150,7 +151,7 @@ describe('theme contrast (WCAG 2.2 AA)', () => {
     expect(contrast(palette['--sidebar-accent-foreground'], palette['--sidebar-accent'], theme), 'sidebar active ink (' + theme + ')').toBeGreaterThanOrEqual(4.5);
   });
 
-  // 状态色（中性表面 + 前景）与 destructive（唯一彩色语义）保持可读。
+  // 状态色（前景 + 柔和表面）承载状态文本标签，必须达到正文级 AA（spec 0001 §13.5 / §17.2）。
   it.each(['light', 'dark'] as const)('keeps %s status colours readable on their soft surfaces', (theme) => {
     const palette = themes[theme];
     for (const pair of [
@@ -160,12 +161,12 @@ describe('theme contrast (WCAG 2.2 AA)', () => {
       ['--info', '--info-soft'],
       ['--accent-cta-ink', '--accent-cta-soft'],
     ] as const) {
-      expect(contrast(palette[pair[0]], palette[pair[1]], theme), pair[0] + ' on ' + pair[1] + ' (' + theme + ')').toBeGreaterThanOrEqual(3);
+      expect(contrast(palette[pair[0]], palette[pair[1]], theme), pair[0] + ' on ' + pair[1] + ' (' + theme + ')').toBeGreaterThanOrEqual(4.5);
     }
   });
 });
 
-describe('Quiet Mono token hygiene', () => {
+describe('token hygiene', () => {
   it('keeps globals.css free of hex colours (all values are oklch)', () => {
     const css = readFileSync(findFile('src/styles/globals.css'), 'utf8');
     const hexMatches = css.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];

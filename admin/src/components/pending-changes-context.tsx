@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { listAllChanges, type ChangeListItem, type PendingChange } from '../collections/client';
+import { useOwnerSession } from '../auth/owner-session';
+import { allowsOperation } from './permissions';
 
 // Spec 0001 §6.5：Model 页保存一次本地编辑后，操作成为 durable pending change。
 // Shell 的 Changes 入口必须原地反映同一个事实（`N pending changes`），
@@ -60,6 +62,12 @@ function summarize(items: ChangeListItem[]): PendingChangeSummary[] {
 }
 
 export function PendingChangesProvider({ children }: { children: React.ReactNode }) {
+  const { state: session } = useOwnerSession();
+  // `/changes` 由 `schema.read` 控制（internal/permissions/controlplane.go）；没有该权限的管理员
+  // 不应该为了侧栏徽标反复请求被拒绝的接口，也不应该看到凭猜测得出的数字。
+  const allowed = session.status === 'authenticated'
+    ? allowsOperation(session.session.role, session.session.permission, 'schema.read')
+    : false;
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [summaries, setSummaries] = useState<PendingChangeSummary[]>([]);
   const [generation, setGeneration] = useState(0);
@@ -67,6 +75,11 @@ export function PendingChangesProvider({ children }: { children: React.ReactNode
   const refresh = useCallback(() => setGeneration((value) => value + 1), []);
 
   useEffect(() => {
+    if (!allowed) {
+      setSummaries([]);
+      setStatus('error');
+      return;
+    }
     const controller = new AbortController();
     setStatus('loading');
     void listAllChanges(controller.signal).then((items) => {
@@ -79,7 +92,7 @@ export function PendingChangesProvider({ children }: { children: React.ReactNode
       setStatus('error');
     });
     return () => controller.abort();
-  }, [generation]);
+  }, [allowed, generation]);
 
   const report = useCallback((pending: PendingChange | null) => {
     setSummaries((current) => {

@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Settings2 } from 'lucide-react';
 import { Button } from '../components/button';
+import { DiagnosticsCards } from '../components/runtime-status';
+import { useDiagnostics } from '../components/diagnostics-context';
 import { FormField } from '../components/form-field';
 import { ErrorState, LoadingState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
+import { useTheme } from '../components/theme-context';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { fetchRuntimeSettings, saveRuntimeSettings, type RuntimeSetting, type RuntimeSettings } from './client';
@@ -14,6 +17,56 @@ type LoadState = 'loading' | 'error' | 'ready';
 
 function sourceKey(source: RuntimeSetting['source']): TranslationKey {
   return ('runtimeSettings.sources.' + source) as TranslationKey;
+}
+
+// Spec 0001 §11.2：常规分节只放真实可用的实例状态与浏览器本地界面偏好。
+// 后端没有实例名称 / 时区等设置，因此不把它们做成输入框（不允许 Placeholder Action）。
+export function SettingsGeneralPage() {
+  const { t, locale, setLocale } = useI18n();
+  const { theme, toggleTheme } = useTheme();
+  const { refresh } = useDiagnostics();
+
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <section aria-labelledby="settings-general-status" className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="settings-general-status">{t('settings.generalStatusTitle')}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t('settings.diagnosticsDescription')}</p>
+          </div>
+          <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={15} /> {t('settings.refresh')}</Button>
+        </div>
+        <DiagnosticsCards />
+      </section>
+
+      <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+        <div className="min-w-0">
+          <h2 className="m-0">{t('settings.generalPreferencesTitle')}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t('settings.generalPreferencesDescription')}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField htmlFor="settings-general-language" label={t('settings.generalLanguageLabel')}>
+            <select
+              className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+              id="settings-general-language"
+              onChange={(event) => setLocale(event.target.value as 'en' | 'zh-CN')}
+              value={locale}
+            >
+              <option value="en">{t('shell.english')}</option>
+              <option value="zh-CN">{t('shell.simplifiedChinese')}</option>
+            </select>
+          </FormField>
+          <div className="grid gap-1.5">
+            <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalThemeLabel')}</span>
+            <Button onClick={toggleTheme} size="small" type="button" variant="secondary">
+              {theme === 'dark' ? t('shell.themeSwitchToLight') : t('shell.themeSwitchToDark')}
+            </Button>
+          </div>
+        </div>
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('settings.generalReadOnly')}</p>
+      </Surface>
+    </div>
+  );
 }
 
 export function RuntimeSettingsPage() {

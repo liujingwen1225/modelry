@@ -62,7 +62,8 @@ describe('Administrators Admin surface', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: '管理员' })).toBeInTheDocument();
-    expect(document.body.textContent).toContain('管理员访问');
+    // 新 IA：页面标题是「访问与认证」，管理员是其中的一个工作面。
+    expect(document.body.textContent).toContain('访问与认证');
     expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
   });
 

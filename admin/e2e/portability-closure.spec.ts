@@ -207,13 +207,20 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   expect(settings.status).toBe(200);
   expect((JSON.parse(settings.text) as { data: { requestRetentionDays: { value: string } } }).data.requestRetentionDays.value).toBe('14');
 
+  // 旧 `/settings/developer` 深链归一为 API 工作区的 OpenAPI 工作面；
+  // 契约事实（含 contract-hash）现在由 OpenAPI Tab 承担，不再是系统设置里的独立页面。
   await page.goto(runtimeURL + '/settings/developer');
-  await expect(page.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(runtimeURL + '/api?tab=openapi');
+  await expect(page.getByRole('heading', { name: 'API workspace', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'OpenAPI contract', level: 2 })).toBeVisible();
+  await expect(page.getByTestId('contract-hash')).toBeVisible();
   const hash = await page.getByTestId('contract-hash').textContent();
   expect(hash).toMatch(/^[0-9a-f]{64}$/);
   latestContractHash = hash ?? '';
 
+  // 旧 `/settings/portability` 深链归一为系统设置的「备份与恢复」分节。
   await page.goto(runtimeURL + '/settings/portability');
+  await expect(page).toHaveURL(runtimeURL + '/settings/backups');
   await expect(page.getByRole('heading', { name: 'Backup and restore', level: 1 })).toBeVisible();
 
   // Backup：Runtime 产生一个带 manifest 的 tar 归档。
@@ -304,7 +311,8 @@ test('WP28 a CLI restore of an Admin bundle restarts as a complete project', asy
 
   // 恢复出来的项目必须在 Admin 上呈现同一个 Applied Model。
   await page.goto(restored.url + '/settings/developer');
-  await expect(page.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(restored.url + '/api?tab=openapi');
+  await expect(page.getByRole('heading', { name: 'OpenAPI contract', level: 2 })).toBeVisible();
   await expect(page.getByTestId('contract-hash')).toHaveText(latestContractHash);
 
   const listed = await requestJSON(page, 'GET', '/admin/api/v1/collections/' + latestCollectionId + '/records?limit=10');

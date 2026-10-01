@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '../api/client';
-import { createEventHook, createJob, createWebhook, getDelivery, listAutomationCollections, listAutomationSecrets, listDeliveries, listWebhooks, retryDelivery, sendWebhookTest, setEventHookEnabled, setJobEnabled, setWebhookEnabled, updateEventHook, updateJob, updateWebhook } from './client';
+import { createEventHook, createJob, createWebhook, getDelivery, listAutomationCollections, listAutomationSecrets, listDeliveries, listWebhooks, retryDelivery, runJob, sendWebhookTest, setEventHookEnabled, setJobEnabled, setWebhookEnabled, updateEventHook, updateJob, updateWebhook } from './client';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -85,6 +85,48 @@ describe('Webhooks, Jobs, and Deliveries client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(5, '/admin/api/v1/jobs', expect.objectContaining({ method: 'POST', body: JSON.stringify(jobInput) }));
     expect(fetchMock).toHaveBeenNthCalledWith(6, '/admin/api/v1/jobs/job%2Fdaily', expect.objectContaining({ method: 'PUT', body: JSON.stringify(jobInput) }));
     expect(fetchMock).toHaveBeenNthCalledWith(7, '/admin/api/v1/jobs/job_daily/enable', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('requests one manual Job run and keeps only the safe Delivery summary', async () => {
+    const delivery = {
+      id: 'dlv_manual0000000000000000000000000001', sourceType: 'job', sourceId: 'job_daily', webhookId: 'whk_mail',
+      webhookName: 'Mail receiver', webhookRevision: 1, eventType: 'job.manual', status: 'pending',
+      createdAt: '2026-09-25T00:00:00Z', attemptCount: 0, manualRedriveCount: 0, errorCode: 'none',
+      payload: 'must-never-be-kept', responseBody: 'must-never-be-kept', targetUrl: 'https://private.example.test/path',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ data: delivery }, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const created = await runJob('job/daily');
+    expect(created).toMatchObject({ id: delivery.id, sourceType: 'job', eventType: 'job.manual', status: 'pending', errorCode: 'none' });
+    expect(JSON.stringify(created)).not.toContain('must-never-be-kept');
+    expect(JSON.stringify(created)).not.toContain('private.example.test');
+    expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/jobs/job%2Fdaily/run', expect.objectContaining({
+      method: 'POST', credentials: 'same-origin', mode: 'same-origin',
+    }));
+  });
+
+  it('keeps the manual run Webhook validation codes without retaining raw messages or values', async () => {
+    const privateValue = 'https://private.example.test/never-show-this';
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: {
+      code: 'VALIDATION_FAILED', message: `Rejected ${privateValue}`,
+      details: { violations: [
+        { path: '/webhookId', code: 'invalidWebhook', message: privateValue },
+        { path: '/signingSecretId', code: 'invalidSecretReference', message: privateValue },
+        { path: '/targetUrl', code: 'untrusted', message: privateValue },
+      ], targetUrl: privateValue },
+    } }, { status: 422, headers: { 'X-Request-Id': 'req_run123' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await runJob('job_daily').catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(ApiClientError);
+    expect(error).toMatchObject({ apiError: { code: 'VALIDATION_FAILED', requestId: 'req_run123', details: {
+      violations: [
+        { path: '/webhookId', code: 'invalidWebhook', message: 'Review this field.' },
+        { path: '/signingSecretId', code: 'invalidSecretReference', message: 'Review this field.' },
+      ],
+    } } });
+    expect(JSON.stringify(error)).not.toContain(privateValue);
   });
 
   it('keeps Delivery pages and details bounded, filtered, and free of request or response content', async () => {

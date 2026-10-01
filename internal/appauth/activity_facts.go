@@ -52,7 +52,8 @@ func (service *Service) ActivityFacts(ctx context.Context, query storage.Executo
 			ID: "af_recovery_" + id, Kind: activity.KindAuthRecovery, Status: status,
 			OccurredAt: occurred.UTC(), ResourceKind: "appUser", ResourceID: userID,
 			CollectionID: collectionID,
-			DeepLink:     "/collections/" + collectionID + "/security?panel=users&user=" + userID,
+			// 集合的访问规则 / 认证工作面在新 IA 中是 `/collections/:id/access`（spec 0001 §3.2/§15）。
+			DeepLink: "/collections/" + collectionID + "/access?panel=users&user=" + userID,
 		})
 	}
 	if err := rows.Err(); err != nil {

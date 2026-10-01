@@ -37,4 +37,7 @@ type StorageStatus struct {
 	Database     Health
 	LocalStorage LocalStorageStatus
 	FileStorage  FileStorageStatus
+	// DatabaseSizeBytes 是 SQLite 主数据库当前占用的字节数；不可读时为 nil，
+	// 让界面显示 Unavailable 而不是把失败呈现成 0。
+	DatabaseSizeBytes *int64
 }

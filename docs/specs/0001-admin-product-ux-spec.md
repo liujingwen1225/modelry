@@ -734,6 +734,26 @@ Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态�
 
 浏览器 Back 尽量恢复原列表筛选和滚动位置。切换到无关主导航时清除不相关 query，但不得丢弃可分享的 resource identity。
 
+新 IA 的 canonical 路径（实现以此为准）：
+
+| 目的地 | Canonical 路径 | 二级工作面 |
+| --- | --- | --- |
+| 总览 | `/` | 无 |
+| 集合 | `/collections`、`/collections/new`、`/collections/:collectionId` | 嵌套路径 `index`=记录、`model`、`access`、`api` |
+| API 工作区 | `/api` | `?tab=endpoints｜playground｜openapi｜logs`（缺省 endpoints） |
+| 请求详情 | `/api/requests/:requestId` | `?from=` 返回上下文 |
+| Hooks & Events | `/events` | `?tab=hooks｜webhooks｜triggers｜deliveries`（缺省 hooks） |
+| Hook 详情 | `/events/hooks/:extensionId` | `?tab=settings｜runs` |
+| 定时任务 | `/schedules` | `?tab=jobs｜history`（缺省 jobs） |
+| 变更 | `/changes` | `?tab=pending｜history｜drift`（缺省 pending） |
+| 访问与认证 | `/access` | `?tab=administrators｜auth｜tokens`（缺省 administrators） |
+| 活动记录 | `/activity` | `?source=audit｜facts`（缺省 audit，作为筛选器） |
+| 审计详情 | `/activity/audit/:auditRecordId` | `?from=` 返回上下文 |
+| 系统设置 | `/settings`、`/settings/runtime｜storage｜mail｜secrets｜data｜backups` | 页内本地设置导航 |
+| MCP 接入说明 | `/mcp` | 不占一级导航，从总览与 API 工作区可达 |
+
+页内 Tab 是 URL 状态，必须用真实链接表达（可分享、可新开标签页、可前进/后退），并用 `aria-current="page"` 标记当前工作面；切换 Tab 不得丢弃同一页面内的其它可分享参数。
+
 旧稳定深链接继续打开同一产品对象，并映射到新导航：
 
 - `/extensions` → Hooks & Events / Hooks；
@@ -794,19 +814,20 @@ Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态�
 
 ## 17.1 方向
 
-新版方向命名为 **Quiet Mono（黑白灰开发工作台）**：以高对比黑、白和中性灰建立层级，用留白、字重和细边界表达结构。配色参考 shadcn/ui 官方 `neutral` 基色和语义 CSS 变量约定，明暗主题使用同一组语义 Token 成对映射。
+新版方向命名为 **Quiet Mono（黑白灰开发工作台 + 有限状态色）**：以高对比黑、白和中性灰建立层级，用留白、字重和细边界表达结构。配色参考 shadcn/ui 官方 `neutral` 基色和语义 CSS 变量约定，明暗主题使用同一组语义 Token 成对映射。
 
 视觉规则：
 
 - Light 使用纯白画布、近黑正文与浅灰分隔；Dark 使用近黑画布、近白正文、炭灰表面与低对比边界。
 - 主按钮和选中项使用黑白反差：Light 为近黑底/近白字，Dark 为近白底/近黑字。
 - 导航选中、hover、secondary surface、input 和分隔线全部使用中性灰，不增加品牌色强调。
-- Ready、Applied、Warning 等状态以中性色背景、图标和文字标签表达；危险操作及明确错误使用 shadcn `destructive` 语义色。
+- 状态只使用第 17.2 节定义的四类有限状态色（Ready / Applied 绿、Needs review / Warning 琥珀、Failed / Error 红、Unknown / Info 蓝），并始终与文本标签和图标同时出现；颜色只作辅助，不独立表达状态。
+- Ready、Applied、Warning 等状态使用状态色柔和表面 + 状态色前景 + 文本标签；危险操作及明确错误使用 shadcn `destructive` 语义色（与状态红分开）。
 - 以字重、留白、对齐和边界建立信息层次，不依赖卡片阴影。
 - 避免大面积渐变、玻璃模糊、彩色发光、扫描线、数字跳动和装饰动画。
 - 标题和说明以可读 Sans 为主；代码、路径、ID、时间、API 示例采用等宽字。
 - Lucide SVG 使用统一描边；不用 Emoji 充当交互图标。
-- 视觉基准（2026-09-29 确认）：以 [ui.shadcn.com](https://ui.shadcn.com/) 官方站点实际使用的 Light / Dark 主题为准；第 17.2 节 Token 表即该主题的 neutral 基线，实现时以站点渲染效果做像素级对照，不引入额外品牌色。重建方式确认为整体重建，不逐页沿用旧版实现。
+- 视觉基准（2026-09-29 确认）：以 [ui.shadcn.com](https://ui.shadcn.com/) 官方站点实际使用的 Light / Dark 主题为准；第 17.2 节 Token 表即该主题的 neutral 基线加上本节定义的有限状态色，实现时以站点渲染效果做像素级对照，不引入额外品牌色。重建方式确认为整体重建，不逐页沿用旧版实现。
 
 ## 17.2 Token 基线
 
@@ -830,8 +851,12 @@ Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态�
 | `sidebar-foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` |
 | `sidebar-accent` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` |
 | `destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` |
+| `success` / `success-soft` | `oklch(0.527 0.154 150.069)` / `oklch(0.982 0.018 155.826)` | `oklch(0.792 0.209 151.711)` / `oklch(0.266 0.065 152.934)` |
+| `warning` / `warning-soft` | `oklch(0.555 0.163 48.998)` / `oklch(0.987 0.022 95.277)` | `oklch(0.828 0.189 84.429)` / `oklch(0.279 0.077 45.635)` |
+| `danger` / `danger-soft` | `oklch(0.514 0.222 16.935)` / `oklch(0.969 0.015 12.422)` | `oklch(0.712 0.194 13.428)` / `oklch(0.271 0.105 12.094)` |
+| `info` / `info-soft` | `oklch(0.488 0.243 264.376)` / `oklch(0.97 0.014 254.604)` | `oklch(0.809 0.105 251.813)` / `oklch(0.282 0.091 267.935)` |
 
-成功、警告、信息不新增彩色品牌 Token；它们使用中性色表面和前景，配合状态文字/图标。只有破坏性操作和错误使用 `destructive` 色。实现时仍须验证完整前景/背景组合符合 WCAG 2.2 AA。
+状态色是唯一新增的彩色 Token，只覆盖四项状态语义，且必须与状态文本标签和图标同时出现，不允许用颜色单独表达状态、也不允许新增第五种状态色。`danger` 是状态红，`destructive` 仍是破坏性动作红，两者不互相替代。状态前景与柔和表面的组合必须达到 WCAG 2.2 AA 的正文级对比度（≥ 4.5:1），由第 18.6 节的自动化 Token 对比测试持续执行；实现时仍须验证完整前景/背景组合符合 WCAG 2.2 AA。
 
 ## 17.3 字体、间距与动效
 

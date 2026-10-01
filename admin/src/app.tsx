@@ -10,19 +10,22 @@ import type { BootstrapStatus } from './auth/client';
 import { Button } from './components/button';
 import { Surface } from './components/surface';
 import { ErrorState, LoadingState } from './components/states';
-import { ChangesPage as GlobalChangesPage, CollectionRecordsPage, CollectionSchemaPage, CollectionSecurityPage, CollectionWorkspacePage, CollectionsPage, CreateCollectionPage } from './collections';
-import { AccessPage, AuditPage } from './access';
-import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage, RequestsPage } from './api';
-import { OverviewPage, SettingsPage } from './pages/pages';
-import { ExtensionsPage, SecretsPage } from './extensions/pages';
-import { AutomationPage } from './automation/pages';
+import { CollectionRecordsPage, CollectionSchemaPage, CollectionSecurityPage, CollectionWorkspacePage, CollectionsPage, CreateCollectionPage } from './collections';
+import { CollectionAPIPage } from './api';
+import { ApiWorkspacePage } from './api/pages';
+import { RequestDetailPage } from './api/requests';
+import { EventsPage, HookDetailPage } from './events/pages';
+import { SchedulesPage } from './schedules/pages';
+import { ChangesWorkspacePage } from './changes/pages';
+import { AccessWorkspacePage, AuditPage } from './access/pages';
+import { ActivityWorkspacePage } from './activity/pages';
+import { OverviewPage } from './overview/pages';
+import { SettingsLayout } from './settings/layout';
+import { RuntimeSettingsPage, SettingsGeneralPage } from './settings/pages';
 import { FileStoragePage } from './storage/pages';
-import { AdministratorsPage } from './administrators/pages';
 import { MailPage } from './mail/pages';
-import { ActivityPage } from './activity/pages';
-import { DriftPage } from './drift/pages';
-import { RuntimeSettingsPage } from './settings/pages';
-import { APIContractPage, BackupRestorePage, DataTransferPage } from './portability/pages';
+import { SecretsPage } from './extensions/pages';
+import { DataTransferPage, BackupRestorePage } from './portability/pages';
 import { MCPGuidePage } from './developer/pages';
 import { mapLegacyPath } from './route-map';
 
@@ -39,6 +42,8 @@ function NotFoundPage() {
 
 // Spec 0001 §15：旧稳定深链接经纯函数 route-map 映射到新导航，
 // 保留 query/hash 上下文；未命中映射的路径进入 404。
+// 路径已是 canonical、只有 query 采用历史写法的情况（例如 `/changes?view=pending`）
+// 由 AppShellLayout 内的 `NormalizedOutlet` 归一。
 function LegacyRedirect() {
   const location = useLocation();
   const mapped = mapLegacyPath(location.pathname, location.search);
@@ -78,6 +83,8 @@ function AuthLoading({ label }: { label: string }) {
   );
 }
 
+// Spec 0001 §3.1：一级入口按业务对象组织——总览；集合 / API 工作区 / Hooks & Events /
+// 定时任务；变更 / 访问与认证 / 活动记录；系统设置。二级工作面由各页面自己的 Tab 承担。
 function AuthenticatedWorkspace() {
   const { state, logout } = useOwnerSession();
   if (state.status !== 'authenticated') return null;
@@ -87,7 +94,7 @@ function AuthenticatedWorkspace() {
     <Routes>
       <Route element={<AppShell onLogout={logout} ownerEmail={session.owner.email} permission={session.permission} role={session.role} sessionExpiresAt={session.expiresAt} />}>
         <Route element={<OverviewPage />} path="/" />
-        {/* BUILD — Collections（Collection 工作区：Records | Model | Access | API，spec §3.1） */}
+        {/* BUILD — Collections（Collection 工作区：记录 | Model | 访问规则 | API） */}
         <Route element={<CollectionsPage />} path="/collections" />
         <Route element={<CreateCollectionPage />} path="/collections/new" />
         <Route element={<CollectionWorkspacePage />} path="/collections/:collectionId">
@@ -96,39 +103,33 @@ function AuthenticatedWorkspace() {
           <Route element={<CollectionSecurityPage />} path="access" />
           <Route element={<CollectionAPIPage />} path="api" />
         </Route>
-        {/* CONNECT — API & SDK（子导航：API | SDK & Contract | MCP） */}
-        <Route element={<Navigate replace to="/connect/api" />} path="/connect" />
-        <Route element={<GlobalAPIPage />} path="/connect/api" />
-        <Route element={<APIContractPage />} path="/connect/sdk" />
-        <Route element={<MCPGuidePage />} path="/connect/mcp" />
-        {/* AUTOMATE — Automations（子导航：Hooks | Webhooks | Triggers | Schedules | Delivery history）。
-            裸 /automations 与 /automations?tab=* 都交给 catch-all LegacyRedirect / route-map 处理，
-            避免 /automations 的显式 redirect 抢先吞掉 ?tab= 变体。 */}
-        <Route element={<ExtensionsPage />} path="/automations/hooks" />
-        <Route element={<ExtensionsPage />} path="/automations/hooks/:extensionId" />
-        <Route element={<AutomationPage />} path="/automations/webhooks" />
-        <Route element={<AutomationPage />} path="/automations/triggers" />
-        <Route element={<AutomationPage />} path="/automations/schedules" />
-        <Route element={<AutomationPage />} path="/automations/deliveries" />
-        {/* OBSERVE */}
-        <Route element={<RequestsPage />} path="/requests" />
-        <Route element={<RequestDetailPage />} path="/requests/:requestId" />
-        <Route element={<ActivityPage />} path="/activity" />
-        <Route element={<AuditPage />} path="/activity/audit" />
+        {/* BUILD — API 工作区（端点 | 调试台 | OpenAPI | 请求日志） */}
+        <Route element={<ApiWorkspacePage />} path="/api" />
+        <Route element={<RequestDetailPage />} path="/api/requests/:requestId" />
+        {/* BUILD — Hooks & Events（Hooks | Webhooks | 事件触发 | 投递历史） */}
+        <Route element={<EventsPage />} path="/events" />
+        <Route element={<HookDetailPage />} path="/events/hooks/:extensionId" />
+        {/* BUILD — 定时任务（任务 | 执行历史） */}
+        <Route element={<SchedulesPage />} path="/schedules" />
+        {/* OPERATE — 变更（待应用 | 已应用历史 | 结构漂移） */}
+        <Route element={<ChangesWorkspacePage />} path="/changes" />
+        {/* OPERATE — 访问与认证（管理员 | 应用认证 | API Tokens） */}
+        <Route element={<AccessWorkspacePage />} path="/access" />
+        {/* OPERATE — 活动记录（单一时间线，source 为筛选器） */}
+        <Route element={<ActivityWorkspacePage />} path="/activity" />
         <Route element={<AuditPage />} path="/activity/audit/:auditRecordId" />
-        {/* EVOLVE */}
-        <Route element={<GlobalChangesPage />} path="/changes" />
-        <Route element={<DriftPage />} path="/health" />
-        {/* PROJECT */}
-        <Route element={<AccessPage />} path="/access" />
-        <Route element={<AdministratorsPage />} path="/access/administrators" />
-        <Route element={<SettingsPage />} path="/settings" />
-        <Route element={<RuntimeSettingsPage />} path="/settings/runtime" />
-        <Route element={<FileStoragePage />} path="/settings/storage" />
-        <Route element={<MailPage />} path="/settings/mail" />
-        <Route element={<SecretsPage />} path="/settings/secrets" />
-        <Route element={<DataTransferPage />} path="/settings/data" />
-        <Route element={<BackupRestorePage />} path="/settings/backups" />
+        {/* MCP 不占一级菜单，但从总览与 API 工作区可达 */}
+        <Route element={<MCPGuidePage />} path="/mcp" />
+        {/* SYSTEM — 系统设置（本地设置导航，分节用路径表达） */}
+        <Route element={<SettingsLayout />} path="/settings">
+          <Route element={<SettingsGeneralPage />} index />
+          <Route element={<RuntimeSettingsPage />} path="runtime" />
+          <Route element={<FileStoragePage />} path="storage" />
+          <Route element={<MailPage />} path="mail" />
+          <Route element={<SecretsPage />} path="secrets" />
+          <Route element={<DataTransferPage />} path="data" />
+          <Route element={<BackupRestorePage />} path="backups" />
+        </Route>
         <Route element={<AuthenticatedRedirect />} path="/login" />
         <Route element={<LegacyRedirect />} path="*" />
       </Route>

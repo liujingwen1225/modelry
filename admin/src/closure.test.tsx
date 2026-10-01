@@ -55,19 +55,31 @@ describe('Community V0.1.x closure', () => {
 
   it('covers every accepted V0.1.x surface in both languages', () => {
     const surfaces = [
-      'navigation.activity', 'navigation.drift', 'navigation.runtimeSettings', 'navigation.portability',
-      'settings.navigation.project', 'settings.navigation.service', 'settings.navigation.maintenance', 'settings.navigation.developer',
-      'settings.navigation.backupRestore', 'settings.navigation.dataTransfer', 'settings.navigation.apiContract', 'settings.navigation.mcp',
-      'navigation.administrators', 'navigation.mail', 'navigation.automations', 'navigation.extensions',
-      'navigation.secrets', 'navigation.collections', 'navigation.changes', 'navigation.access',
+      // 新 IA 的一级入口与分组（spec 0001 §3.1）。
+      'navigation.workspace', 'navigation.build', 'navigation.operate', 'navigation.system',
+      'navigation.overview', 'navigation.collections', 'navigation.apiWorkspace', 'navigation.hooksEvents',
+      'navigation.scheduledJobs', 'navigation.changes', 'navigation.accessAuth', 'navigation.activity', 'navigation.settings',
+      // 二级工作面。
+      'api.workspaceTabs.endpoints', 'api.workspaceTabs.playground', 'api.workspaceTabs.openapi', 'api.workspaceTabs.logs',
+      'events.tabs.hooks', 'events.tabs.webhooks', 'events.tabs.triggers', 'events.tabs.deliveries',
+      'schedules.tabs.jobs', 'schedules.tabs.history', 'schedules.runNow',
+      'changes.tabs.pending', 'changes.tabs.history', 'changes.tabs.drift',
+      'access.tabs.administrators', 'access.tabs.auth', 'access.tabs.tokens',
+      // 系统设置的本地导航。
+      'settings.navigation.general', 'settings.navigation.runtime', 'settings.navigation.filesStorage',
+      'settings.navigation.mail', 'settings.navigation.secrets', 'settings.navigation.dataTransfer',
+      'settings.navigation.backupRestore',
+      // 既有产品面继续共享同一份词条。
       'activity.title', 'drift.title', 'runtimeSettings.title', 'portability.title',
       'mail.title', 'storage.title', 'administrators.title', 'automation.title', 'extensions.title',
-      // V0.1 时代的四个产品面已经迁移到同一套 i18n，必须与 V0.1.x 面共享同一份词条。
       'collections.title', 'records.title', 'changes.title',
       'schema.title', 'schema.views.history', 'schema.previewReviewTitle',
       'security.title', 'security.tabs.rules', 'security.simulationTitle',
       'access.title', 'access.auditTitle', 'access.revealTitle',
       'api.workspaceTitle', 'api.requestDetailTitle', 'api.endpointTitles.listApplicationRecords',
+      // 总览的真实事实摘要与恢复文案。
+      'overview.cardsLabel', 'overview.continueTitle', 'overview.quickTitle', 'overview.recentActivityTitle',
+      'overview.runtimeTitle', 'overview.unavailable', 'overview.unknown',
     ];
     const english = flatten(en as unknown as Resource);
     const chinese = flatten(zhCN as unknown as Resource);
@@ -160,11 +172,11 @@ describe('Community V0.1.x closure', () => {
     const { unmount } = render(<App />);
 
     await waitFor(() => expect(document.querySelector('[data-command-palette-trigger]')).not.toBeNull());
-    await userEvent.click(await screen.findByRole('link', { name: 'Settings' }));
-    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
-    // Activity 是 OBSERVE 组的一级入口，不再作为 Settings 子页。
+    await userEvent.click(await screen.findByRole('link', { name: 'System settings' }));
+    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings sections' });
+    // 活动记录是 OPERATE 组的一级入口，不再作为 Settings 子页。
     expect(within(settingsNavigation).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
-    // Command Registry 通过 effect 提交 revision；等一个宏任务再打开面板，避免读到上一版命令。
+    // 命令面板通过 effect 提交 revision；等一个宏任务再打开面板，避免读到上一版命令。
     await new Promise((resolve) => setTimeout(resolve, 0));
     await userEvent.keyboard('{Control>}k{/Control}');
     const palette = await screen.findByRole('dialog');
@@ -192,19 +204,18 @@ describe('Community V0.1.x closure', () => {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const adminSidebar = screen.getByRole('navigation', { name: 'Project navigation' });
-    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Settings' }));
-    const adminSettings = await screen.findByRole('navigation', { name: 'Settings' });
-    expect(within(adminSettings).getByRole('link', { name: 'Status' })).toBeInTheDocument();
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'System settings' }));
+    const adminSettings = await screen.findByRole('navigation', { name: 'Settings sections' });
+    // 只读管理员保留只读分节，Owner-only 分节（Secrets / 导入导出 / 备份恢复）不可见。
+    expect(within(adminSettings).getByRole('link', { name: 'General' })).toBeInTheDocument();
     expect(within(adminSettings).getByRole('link', { name: 'Files & Storage' })).toBeInTheDocument();
     expect(within(adminSettings).queryByRole('link', { name: 'Secrets' })).not.toBeInTheDocument();
     expect(within(adminSettings).queryByRole('link', { name: 'Backup and restore' })).not.toBeInTheDocument();
     expect(within(adminSettings).queryByRole('link', { name: 'Data import / export' })).not.toBeInTheDocument();
-    expect(within(adminSettings).queryByRole('link', { name: 'API Contract / SDK' })).not.toBeInTheDocument();
-    expect(within(adminSettings).queryByRole('link', { name: 'MCP' })).not.toBeInTheDocument();
-    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Access & keys' }));
-    const adminAccess = await screen.findByRole('navigation', { name: 'Access & keys' });
-    expect(within(adminAccess).getByRole('link', { name: 'Service Accounts' })).toBeInTheDocument();
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Access & auth' }));
+    const adminAccess = await screen.findByRole('navigation', { name: 'Access sections' });
     expect(within(adminAccess).getByRole('link', { name: 'Administrators' })).toBeInTheDocument();
-    expect(within(adminAccess).getByRole('link', { name: 'Audit log' })).toBeInTheDocument();
+    expect(within(adminAccess).getByRole('link', { name: 'Application auth' })).toBeInTheDocument();
+    expect(within(adminAccess).getByRole('link', { name: 'API Tokens' })).toBeInTheDocument();
   });
 });

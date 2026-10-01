@@ -49,12 +49,13 @@ func (service *Service) ActivityFacts(ctx context.Context, query storage.Executo
 		case "job":
 			fact.Kind = activity.KindJobRun
 			fact.Title = jobName
-			fact.DeepLink = "/automations?tab=deliveries&source=job&deliveryId=" + id
+			// 定时任务的执行历史现在属于独立一级入口「定时任务」（spec 0001 §3.1/§15）。
+			fact.DeepLink = "/schedules?tab=history&deliveryId=" + id
 			fact.CollectionID = ""
 		default:
 			fact.Kind = activity.KindWebhookDelivery
 			fact.Title = webhookName
-			fact.DeepLink = "/automations?tab=deliveries&deliveryId=" + id
+			fact.DeepLink = "/events?tab=deliveries&deliveryId=" + id
 		}
 		if completedAt.Valid {
 			if finished, err := time.Parse(time.RFC3339Nano, completedAt.String); err == nil && finished.After(occurred) {

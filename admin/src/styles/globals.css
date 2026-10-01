@@ -1,13 +1,13 @@
 @import 'tailwindcss';
 
 /*
- * Modelry Admin design system — Quiet Mono（黑白灰开发工作台）。
+ * Modelry Admin design system — Quiet Mono（黑白灰开发工作台 + 有限状态色）。
  * Source: docs/specs/0001-admin-product-ux-spec.md §17（shadcn/ui neutral 基线，
  * 语义 Token 以 oklch 表达，见 §17.2 Token 表）。
  * Dark variant is bound to the `data-theme` attribute (see theme-context.tsx),
  * NOT the default `.dark` class.
- * 状态色（Ready / Warning / Info）按规格使用中性表面与前景，配合文字标签与图标；
- * 只有破坏性操作与错误使用 destructive 语义色。
+ * 状态色只覆盖 Ready / Needs review / Failed / Unknown 四类，且始终与文本标签和图标同时出现；
+ * 动作按钮仍是黑白反差，破坏性操作使用 destructive 语义色。
  */
 
 @font-face {
@@ -66,6 +66,13 @@
   src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2') format('woff2');
 }
 
+/*
+ * 状态色（spec 0001 §17.2）：只覆盖 Ready / Needs review / Failed / Unknown 四类语义，
+ * 且始终与文本标签和图标同时出现。Light 取 Tailwind v4 green/amber/rose/blue-700 与 *-50，
+ * Dark 取 green/amber/rose-400、blue-300 与 *-950；动作色仍是黑白反差（--primary / --accent-cta），
+ * 破坏性动作使用 --destructive，与状态红 --danger 分开。
+ * 注意：语义 Token 块内不要写注释——对比度测试按 `;` 切分后以第一个 `:` 解析 key。
+ */
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
@@ -88,17 +95,17 @@
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --destructive-soft: oklch(0.93 0.04 27);
-  --danger: oklch(0.577 0.245 27.325);
-  --danger-soft: oklch(0.93 0.04 27);
+  --danger: oklch(0.514 0.222 16.935);
+  --danger-soft: oklch(0.969 0.015 12.422);
   --ink-secondary: oklch(0.37 0 0);
   --violet: oklch(0.37 0 0);
   --violet-soft: oklch(0.97 0 0);
-  --warning: oklch(0.37 0 0);
-  --warning-soft: oklch(0.97 0 0);
-  --success: oklch(0.37 0 0);
-  --success-soft: oklch(0.97 0 0);
-  --info: oklch(0.37 0 0);
-  --info-soft: oklch(0.97 0 0);
+  --warning: oklch(0.555 0.163 48.998);
+  --warning-soft: oklch(0.987 0.022 95.277);
+  --success: oklch(0.527 0.154 150.069);
+  --success-soft: oklch(0.982 0.018 155.826);
+  --info: oklch(0.488 0.243 264.376);
+  --info-soft: oklch(0.97 0.014 254.604);
   --accent-cta: oklch(0.205 0 0);
   --accent-cta-soft: oklch(0.97 0 0);
   --accent-cta-ink: oklch(0.205 0 0);
@@ -142,17 +149,17 @@
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.205 0 0);
   --destructive-soft: oklch(0.27 0.04 25);
-  --danger: oklch(0.704 0.191 22.216);
-  --danger-soft: oklch(0.27 0.04 25);
+  --danger: oklch(0.712 0.194 13.428);
+  --danger-soft: oklch(0.271 0.105 12.094);
   --ink-secondary: oklch(0.85 0 0);
   --violet: oklch(0.85 0 0);
   --violet-soft: oklch(0.269 0 0);
-  --warning: oklch(0.85 0 0);
-  --warning-soft: oklch(0.269 0 0);
-  --success: oklch(0.85 0 0);
-  --success-soft: oklch(0.269 0 0);
-  --info: oklch(0.85 0 0);
-  --info-soft: oklch(0.269 0 0);
+  --warning: oklch(0.828 0.189 84.429);
+  --warning-soft: oklch(0.279 0.077 45.635);
+  --success: oklch(0.792 0.209 151.711);
+  --success-soft: oklch(0.266 0.065 152.934);
+  --info: oklch(0.809 0.105 251.813);
+  --info-soft: oklch(0.282 0.091 267.935);
   --accent-cta: oklch(0.922 0 0);
   --accent-cta-soft: oklch(0.269 0 0);
   --accent-cta-ink: oklch(0.922 0 0);
@@ -292,14 +299,4 @@
     line-height: 1.4;
     letter-spacing: 1.3px;
   }
-}
-
-/*
- * Spec 0001 §3.2：全局 Shell 已经为 Automations 和 Project access 渲染了区域子导航，
- * 页面内的同义兜底导航不再重复出现。独立渲染页面（组件测试、深链接落地前）仍保留它，
- * 所以这里用 Shell 容器上的 data-product-area 作为作用域，而不是删除页面内的导航。
- */
-.app-frame[data-product-area='automation'] [data-automation-tabs],
-.app-frame[data-product-area='access'] [data-access-tabs] {
-  display: none;
 }

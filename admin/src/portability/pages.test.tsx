@@ -48,7 +48,7 @@ describe('Settings developer surfaces', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Backup and restore', level: 1 })).toBeInTheDocument();
-    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
+    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings sections' });
     expect(within(settingsNavigation).getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByTestId('contract-hash')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Collection import / export' })).not.toBeInTheDocument();
@@ -95,17 +95,19 @@ describe('Settings developer surfaces', () => {
     expect(fetchMock).not.toHaveBeenCalledWith('/admin/api/v1/developer/contract', expect.any(Object));
   });
 
-  it('shows the API Contract and SDK guidance without backup or Collection transfer', async () => {
+  it('shows the API Contract and SDK guidance in the API workspace OpenAPI tab', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
+    // Spec 0001 §3：SDK / Contract 不再占 Settings 子页，旧的 /settings/developer 深链接
+    // 经 route-map 落到 API 工作区 / OpenAPI。
     window.history.pushState({}, '', '/settings/developer');
     const fetchMock = setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'API workspace', level: 1 })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'API Contract' })).toBeInTheDocument();
     expect(screen.getByTestId('contract-hash')).toHaveTextContent('a'.repeat(64));
     expect(screen.getByText('2 endpoints')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Download application-api.json' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download openapi.json' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create and download backup' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Export NDJSON' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/developer/contract', expect.any(Object));

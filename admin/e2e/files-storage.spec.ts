@@ -337,8 +337,9 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
   await expect(page.getByText('Referenced files')).toBeVisible();
   await expect(page.locator('[data-storage-status-facts]')).toContainText('2');
 
-  // Two write-only Secrets hold the S3 credentials.
+  // Two write-only Secrets hold the S3 credentials. 旧 `/secrets` 深链归一为系统设置的 Secrets 分节。
   await page.goto(runtimeURL + '/secrets');
+  await expect(page).toHaveURL(runtimeURL + '/settings/secrets');
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   for (const secret of [{ name: 'S3 access key', value: s3AccessKey }, { name: 'S3 secret key', value: s3SecretKey }]) {
     await page.locator('#secret-name').fill(secret.name);

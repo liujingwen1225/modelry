@@ -104,21 +104,21 @@ describe('Access and Audit pages', () => {
 
   it('opens an Audit detail through a durable deep link and redacts nested secret metadata', async () => {
     mocks.getAuditRecord.mockResolvedValue({ ...audit, resource: { kind: 'serviceAccount', id: 'sa_1', nested: { apiKeySecret: 'do-not-render' } } });
-    renderAccess('/activity/audit/audit_1?from=%2Factivity%2Faudit%3Faction%3DserviceAccount.created');
+    renderAccess('/activity/audit/audit_1?from=%2Factivity%3Fsource%3Daudit%26action%3DserviceAccount.created');
 
     expect(await screen.findByRole('heading', { name: 'Audit details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Audit' })).toHaveAttribute('href', '/activity/audit?action=serviceAccount.created');
+    // 返回路径经 route-map 归一化到新的活动记录来源筛选。
+    expect(screen.getByRole('link', { name: 'Back to Audit' })).toHaveAttribute('href', '/activity?source=audit&action=serviceAccount.created');
     expect(document.body.textContent).toContain('[redacted]');
     expect(document.body.textContent).not.toContain('do-not-render');
   });
 
   it('renders Access and Audit in Simplified Chinese while keeping Actor, Action and Permission identifiers intact', async () => {
-    const user = userEvent.setup();
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
     mocks.listServiceAccounts.mockResolvedValue({ data: [account] });
-    renderAccess();
+    const mounted = renderAccess();
 
-    expect(await screen.findByRole('heading', { name: '项目访问' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '访问与认证' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '服务账号' })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
     expect(screen.getByRole('button', { name: '创建服务账号' })).toBeInTheDocument();
@@ -127,8 +127,10 @@ describe('Access and Audit pages', () => {
     expect(screen.getByRole('link', { name: 'ci-readonly' })).toBeInTheDocument();
     expect(document.body.textContent).toContain('有效');
     expect(document.body.textContent).not.toContain('active');
+    mounted.unmount();
 
-    await user.click(screen.getByRole('link', { name: '审计日志' }));
+    // 审计时间线现在是活动记录的一个来源，而不是 Access 页内的 Tab。
+    renderAccess('/activity/audit');
     expect(await screen.findByRole('heading', { name: '审计' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /2026/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '应用筛选' })).toBeInTheDocument();

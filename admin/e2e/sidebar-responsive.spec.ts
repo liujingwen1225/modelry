@@ -148,7 +148,7 @@ test('768px Tablet Sidebar can collapse, expand, and preserve primary navigation
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(page.locator('[data-shell-topbar]')).toBeVisible();
   await page.goto(runtimeURL + '/api', { timeout: 15_000 });
-  await expect(page.getByRole('heading', { name: 'API Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'API workspace' })).toBeVisible();
 
   const sidebar = page.getByRole('complementary', { name: 'Project navigation' });
   const workspace = page.locator('[data-shell-workspace]');
@@ -159,7 +159,7 @@ test('768px Tablet Sidebar can collapse, expand, and preserve primary navigation
   await expect(page.getByRole('button', { name: 'Expand project navigation' })).toBeVisible();
   await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(72);
   await expect.poll(async () => workspace.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('72px');
-  await expect(page.getByRole('heading', { name: 'API Workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'API workspace' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(768);
 
   await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('link', { name: 'Collections' }).click();

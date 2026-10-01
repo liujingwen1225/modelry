@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Activity as ActivityIcon, RefreshCw } from 'lucide-react';
-import { Button } from '../components/button';
+import { AuditPage } from '../access/pages';
+import { Button, ButtonLink } from '../components/button';
 import { FormField } from '../components/form-field';
 import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
-import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
+import { mapLegacyPath } from '../route-map';
 import { listAllCollections, type CollectionSummary } from '../collections/client';
 import { listActivity, type ActivityFact, type ActivityKind } from './client';
 
 type LoadState = 'loading' | 'error' | 'ready';
+type ActivitySource = 'audit' | 'facts';
+
+const activitySourceOrder: readonly ActivitySource[] = ['audit', 'facts'];
+
+// 来源名称使用专门词条：管理面时间线（Audit）与子系统事实时间线（Activity facts）。
+const activitySourceLabels: Record<ActivitySource, TranslationKey> = {
+  audit: 'activity.sources.audit',
+  facts: 'activity.sources.facts',
+};
 
 const kinds: ActivityKind[] = [
   'change.applied', 'change.pending', 'change.failed', 'webhook.delivery', 'job.run',
@@ -31,9 +41,64 @@ function statusTone(status: string): string {
   }
 }
 
-export function ActivityPage() {
+// deepLink 由 Runtime 契约返回，可能仍是旧信息架构路径；经纯函数 route-map 映射到新导航
+// （spec 0001 §15），未命中映射的站内路径原样保留，站外或非绝对路径不重写。
+function canonicalDeepLink(deepLink: string): string {
+  if (!deepLink.startsWith('/') || deepLink.startsWith('//')) return deepLink;
+  const queryIndex = deepLink.indexOf('?');
+  const pathname = queryIndex >= 0 ? deepLink.slice(0, queryIndex) : deepLink;
+  const search = queryIndex >= 0 ? deepLink.slice(queryIndex) : '';
+  const mapped = mapLegacyPath(pathname, search);
+  return mapped === null ? deepLink : `${mapped.pathname}${mapped.search}`;
+}
+
+// Spec 0001 §9.2：`活动记录` 是单一管理面审计时间线，不设置二级 Tab，
+// 并且不把 API 请求日志、Webhook 投递或定时任务执行复制进来。
+// Spec 0009 §3.2 的 Activity 事实时间线是已交付能力（且明确排除 Audit 与 Request Log），
+// 因此两者共用一个页面：由 `?source=audit|facts` 这个筛选器（而不是 Tab）选择来源，
+// `kind`、`collection` 等既有筛选参数在切换来源时原样保留（§15）。
+export function ActivityWorkspacePage() {
   const { t } = useI18n();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const source: ActivitySource = searchParams.get('source') === 'facts' ? 'facts' : 'audit';
+
+  // 来源选择是筛选器而不是页签（spec 0001 §3.2 规定活动记录没有二级 Tab），
+  // 但状态同样进入 URL（§15）：用链接表达，可分享、可新开、可用浏览器前进/后退，
+  // 切换时保留 `kind`、`collection` 等既有筛选参数。
+  function sourceTarget(next: ActivitySource): string {
+    const params = new URLSearchParams(searchParams);
+    params.set('source', next);
+    return `/activity?${params.toString()}`;
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="eyebrow">{t('activity.eyebrow')}</p>
+          <h1>{t('activity.title')}</h1>
+          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{source === 'facts' ? t('activity.description') : t('access.auditDescription')}</p>
+        </div>
+        <nav aria-label={t('activity.sourcesLabel')} className="flex flex-wrap items-center gap-1.5" data-activity-source>
+          {activitySourceOrder.map((candidate) => <ButtonLink
+            aria-current={source === candidate ? 'page' : undefined}
+            key={candidate}
+            size="small"
+            to={sourceTarget(candidate)}
+            variant={source === candidate ? 'primary' : 'secondary'}
+          >{t(activitySourceLabels[candidate])}</ButtonLink>)}
+        </nav>
+      </header>
+
+      {source === 'facts' ? <ActivityPage embedded /> : <AuditPage embedded />}
+    </div>
+  );
+}
+
+// embedded：作为 `活动记录`（source=facts）的内容渲染时不重复页面级标题（spec 0001 §3.2、§9.2），
+// 独立渲染仍保留自己的页面标题。
+export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<LoadState>('loading');
   const [facts, setFacts] = useState<ActivityFact[]>([]);
@@ -101,17 +166,6 @@ export function ActivityPage() {
     setSearchParams(next, { replace: true });
   }
 
-  const commands = useMemo<AdminCommand[]>(() => [
-    {
-      id: 'surface.activity',
-      category: 'commands.categories.system',
-      label: () => t('commands.activity'),
-      keywords: () => [t('activity.searchKeywords')],
-      execute: () => navigate('/activity'),
-    },
-  ], [navigate, t]);
-  useRegisterCommands(commands);
-
   if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('activity.loading')} /></div>;
   if (state === 'error') {
     return (
@@ -128,14 +182,14 @@ export function ActivityPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      {!embedded && <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="eyebrow">{t('activity.eyebrow')}</p>
           <h1>{t('activity.title')}</h1>
           <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('activity.description')}</p>
         </div>
         <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ActivityIcon size={19} /></span>
-      </header>
+      </header>}
 
       <Surface className="flex flex-wrap items-end gap-3 p-3" variant="standard">
         <div className="w-full min-w-[190px] max-w-[220px]">
@@ -180,7 +234,7 @@ export function ActivityPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <StatusChip state={statusTone(fact.status)}>{t(('activity.statuses.' + fact.status) as TranslationKey, { status: fact.status })}</StatusChip>
-                    <Link className="text-xs font-semibold text-primary hover:underline" to={fact.deepLink}>{t('activity.open')}</Link>
+                    <Link className="text-xs font-semibold text-primary hover:underline" to={canonicalDeepLink(fact.deepLink)}>{t('activity.open')}</Link>
                   </div>
                 </li>
               ))}

@@ -10,13 +10,15 @@ import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { listAllCollections } from '../collections/client';
 import {
-  createBackup, exportCollection, fetchApplicationAPIContract, importCollection, preflightRestoreBundle,
-  type ApplicationAPIContract, type BackupPreflight, type ImportSummary,
+  createBackup, exportCollection, importCollection, preflightRestoreBundle,
+  type BackupPreflight, type ImportSummary,
 } from './client';
 
 type LoadState = 'loading' | 'error' | 'ready';
 type Collection = { id: string; name: string };
-type Surface = 'backup' | 'data' | 'contract';
+// 契约 / SDK 工作面已经归入 API 工作区的 OpenAPI Tab（spec 0001 §3.1、§15），
+// 因此这里只剩系统设置里的「备份与恢复」与「数据导入导出」两个分节。
+type Surface = 'backup' | 'data';
 
 function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -33,7 +35,6 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
-  const [contract, setContract] = useState<ApplicationAPIContract | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -46,14 +47,12 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
   useEffect(() => {
     const controller = new AbortController();
     setState('loading');
-    const load = surface === 'contract'
-      ? fetchApplicationAPIContract(controller.signal).then((value) => { setContract(value); })
-      : surface === 'data'
-        ? listAllCollections(controller.signal).then((listed) => {
-          setCollections(listed.map((item) => ({ id: item.id, name: item.name })));
-          setSelected(listed[0]?.id ?? '');
-        })
-        : Promise.resolve();
+    const load = surface === 'data'
+      ? listAllCollections(controller.signal).then((listed) => {
+        setCollections(listed.map((item) => ({ id: item.id, name: item.name })));
+        setSelected(listed[0]?.id ?? '');
+      })
+      : Promise.resolve();
     void load.then(
       () => { if (!controller.signal.aborted) setState('ready'); },
       (reason: unknown) => { if (!controller.signal.aborted) { setError(reason); setState('error'); } },
@@ -65,9 +64,11 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
     {
       id: `surface.${surface}`,
       category: 'commands.categories.system',
-      label: () => t(surface === 'backup' ? 'commands.backupRestore' : surface === 'data' ? 'commands.dataTransfer' : 'commands.apiContract'),
+      label: () => t(surface === 'backup' ? 'commands.backupRestore' : 'commands.dataTransfer'),
       keywords: () => [t('portability.searchKeywords')],
-      execute: () => navigate(surface === 'backup' ? '/settings/backups' : surface === 'data' ? '/settings/data' : '/settings/developer'),
+      // 新 IA：备份与恢复、数据导入导出留在系统设置（spec 0001 §3.1、§11.2）；
+      // API 契约 / SDK 归入 API 工作区的 OpenAPI 工作面，因此不再有 `/settings/developer`。
+      execute: () => navigate(surface === 'backup' ? '/settings/backups' : '/settings/data'),
     },
   ], [navigate, surface, t]);
   useRegisterCommands(commands);
@@ -158,15 +159,15 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
       </div>
     );
   }
-  if (surface === 'contract' && !contract) return null;
-
-  const titleKey = surface === 'backup' ? 'portability.surfaces.backupTitle' : surface === 'data' ? 'portability.surfaces.dataTitle' : 'portability.surfaces.contractTitle';
-  const descriptionKey = surface === 'backup' ? 'portability.surfaces.backupDescription' : surface === 'data' ? 'portability.surfaces.dataDescription' : 'portability.surfaces.contractDescription';
+  const titleKey = surface === 'backup' ? 'portability.surfaces.backupTitle' : 'portability.surfaces.dataTitle';
+  const descriptionKey = surface === 'backup' ? 'portability.surfaces.backupDescription' : 'portability.surfaces.dataDescription';
+  // 眉标沿用系统设置分节词汇（spec 0001 §3.1、§11.2）。
+  const eyebrowKey = surface === 'backup' ? 'settings.navigation.backupRestore' : 'settings.navigation.dataTransfer';
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <header className="min-w-0">
-        <p className="eyebrow">{t(surface === 'backup' ? 'settings.navigation.maintenance' : 'settings.navigation.developer')}</p>
+        <p className="eyebrow">{t(eyebrowKey)}</p>
         <h1>{t(titleKey as TranslationKey)}</h1>
         <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t(descriptionKey as TranslationKey)}</p>
       </header>
@@ -264,38 +265,6 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
           )}
       </Surface>}
 
-      {surface === 'contract' && contract && <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
-        <div className="min-w-0">
-          <h2>{t('portability.contract.title')}</h2>
-          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('portability.contract.description')}</p>
-        </div>
-        <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.runtimeVersion')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{contract.version}</dd></div>
-          <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.contract.hash')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary"><code className="font-mono" data-testid="contract-hash">{contract.contentHash}</code></dd></div>
-          <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.collections')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{contract.collections.length}</dd></div>
-        </dl>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={() => saveBlob(new Blob([JSON.stringify(contract, null, 2)], { type: 'application/json' }), 'application-api.json')}
-            size="small"
-            type="button"
-            variant="secondary"
-          >
-            <Download aria-hidden="true" size={14} /> {t('portability.contract.download')}
-          </Button>
-        </div>
-        <p className="m-0 text-[11px] text-muted-foreground">{t('portability.contract.generateHint')}</p>
-        <ul className="m-0 flex list-none flex-col p-0 text-xs">
-          {contract.collections.slice(0, 5).map((collection) => (
-            <li className="flex flex-wrap items-center gap-2.5 border-b py-2 last:border-b-0" key={collection.id}>
-              <strong className="text-xs font-semibold text-foreground">{collection.name}</strong>
-              <span className="text-[11px] text-muted-foreground">{collection.type}</span>
-              <code className="ml-auto font-mono text-[11px] text-ink-secondary">{collection.endpoints.length} {t('portability.contract.endpoints')}</code>
-            </li>
-          ))}
-        </ul>
-      </Surface>}
-
       {error !== undefined && <ErrorState description={actionMessage(error)} title={t('portability.actionFailed')} />}
       {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
     </div>
@@ -304,5 +273,3 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
 
 export function BackupRestorePage() { return <PortabilitySurface surface="backup" />; }
 export function DataTransferPage() { return <PortabilitySurface surface="data" />; }
-export function APIContractPage() { return <PortabilitySurface surface="contract" />; }
-export function PortabilityPage() { return <BackupRestorePage />; }

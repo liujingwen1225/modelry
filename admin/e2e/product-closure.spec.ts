@@ -269,10 +269,39 @@ async function downloadAttachment(page: Page, expected: string) {
 
 async function actionButtonContrast(page: Page) {
   return page.evaluate(() => {
+    // 计算样式会把 oklch() 原样返回，因此这里自己做 OKLab → sRGB 转换，
+    // 否则解析到的是 oklch 分量而不是 0-255 通道，对比度会算成 1:1。
+    const encode = (channel: number) => {
+      const clamped = Math.min(1, Math.max(0, channel));
+      return Math.round((clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055) * 255);
+    };
+    const oklchChannels = (color: string) => {
+      const match = color.match(/oklch\(\s*([\d.]+%?)\s+([\d.]+)\s+([\d.]+)/i);
+      if (!match) return null;
+      const lightness = match[1]!.endsWith('%') ? parseFloat(match[1]!) / 100 : parseFloat(match[1]!);
+      const chroma = parseFloat(match[2]!);
+      const hue = (parseFloat(match[3]!) * Math.PI) / 180;
+      const a = chroma * Math.cos(hue);
+      const b = chroma * Math.sin(hue);
+      const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+      const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+      const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
+      return [
+        encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+        encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+        encode(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+      ];
+    };
+    const channels = (color: string) => {
+      const converted = oklchChannels(color);
+      if (converted) return converted;
+      const match = color.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+      return match && match.length === 3 ? match : null;
+    };
     const luminance = (color: string) => {
-      const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number);
-      if (!channels || channels.length !== 3) throw new Error(`Could not read button color ${color}.`);
-      const linear = channels.map((value) => {
+      const values = channels(color);
+      if (!values) throw new Error(`Could not read button color ${color}.`);
+      const linear = values.map((value) => {
         const channel = value / 255;
         return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
       });
@@ -385,66 +414,88 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByRole('heading', { name: 'Overview' })).toBeVisible();
     const productNavigation = activePage.getByRole('navigation', { name: 'Project navigation' });
     await expect(productNavigation.getByRole('link')).toHaveCount(9);
-    expect(await productNavigation.getByRole('link').allTextContents()).toEqual([
-      'Home', 'Collections', 'API & SDK', 'Automations', 'Activity & Audit', 'Changes', 'Model health', 'Access & keys', 'Settings',
+    // 每个入口的可见名称就是它的 accessible name（计数徽标是 aria-hidden 的装饰）。
+    expect(await productNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('aria-label')))).toEqual([
+      'Overview', 'Collections', 'API workspace', 'Hooks & Events', 'Scheduled jobs', 'Changes', 'Access & auth', 'Activity', 'System settings',
     ]);
-    await expect(activePage.locator('[data-nav-group-label]')).toHaveText(['Build', 'Connect', 'Automate', 'Observe', 'Evolve', 'Project']);
-    // Spec 0001 §5.1：Home 按 状态 → 下一步 → 最近工作 → 需要处理 组织，不复制诊断详情。
-    await expect(activePage.locator('[data-home-status]')).toContainText('Model');
-    await expect(activePage.locator('[data-home-next-step]')).toContainText('Next step');
-    await expect(activePage.locator('[data-home-recent-work]')).toContainText('authors');
+    // 侧栏计数只来自真实快照。
+    await expect(activePage.locator('[data-nav-count="collections"]')).toHaveText('1');
+    await expect(activePage.locator('[data-nav-count="events"]')).toHaveText('0');
+    await expect(activePage.locator('[data-nav-count="schedules"]')).toHaveText('0');
+    // Spec 0001 §3.1：一级导航只用视觉分组 Workspace / Build / Operate / System，不形成额外页面层级。
+    await expect(activePage.locator('[data-nav-group-label]')).toHaveText(['Workspace', 'Build', 'Operate', 'System']);
+    await expect(activePage.locator('[data-shell-destination]')).toHaveText('Overview');
+    // Spec 0001 §5.1：总览按 项目摘要 → 继续工作 / 快捷开始 → 最近活动 / 运行状态 组织，不复制诊断详情。
+    await expect(activePage.locator('[data-overview-cards] [data-overview-card="collections"]')).toContainText('Collections');
+    await expect(activePage.locator('[data-overview-continue]')).toContainText('authors');
     expect(await activePage.evaluate(() => {
-      const status = document.querySelector('[data-home-status]');
-      const recentWork = document.querySelector('[data-home-recent-work]');
-      return Boolean(status && recentWork && (status.compareDocumentPosition(recentWork) & Node.DOCUMENT_POSITION_FOLLOWING));
+      const cards = document.querySelector('[data-overview-cards]');
+      const recentActivity = document.querySelector('[data-overview-recent-activity]');
+      return Boolean(cards && recentActivity && (cards.compareDocumentPosition(recentActivity) & Node.DOCUMENT_POSITION_FOLLOWING));
     })).toBe(true);
-    await expect(activePage.getByRole('heading', { name: 'Connect a coding agent' })).toBeVisible();
-    await expect(activePage.locator('[data-home-agent-command]')).toContainText('modelry mcp --api-url');
-    await expect(activePage.locator('[data-home-agent]').getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
+    // MCP / 编码智能体卡片留在「快捷开始」内：命令与入口都是真实动作。
+    const quickStart = activePage.locator('[data-overview-quick-start]');
+    await expect(quickStart).toContainText('MCP / coding agent');
+    await expect(quickStart.locator('code').first()).toContainText('modelry mcp --api-url');
+    await expect(quickStart.getByRole('link', { name: 'Permissions and tokens' })).toHaveAttribute('href', '/access?tab=tokens');
+    await expect(quickStart.getByRole('link', { name: 'Connection guide' })).toHaveAttribute('href', '/mcp');
     await expect(activePage.locator('.diagnostics-grid')).toHaveCount(0);
     await expect(activePage.getByRole('heading', { name: 'Needs attention' })).toHaveCount(0);
     await expect(activePage.getByText('Modelry Community', { exact: true })).toHaveCount(0);
     await expect(activePage.getByText('V0.1', { exact: true })).toHaveCount(0);
     await expect(activePage.locator('.brand-edition')).toHaveCount(0);
 
-    await productNavigation.getByRole('link', { name: 'Automations' }).click();
-    await expect(activePage).toHaveURL(`${runtimeURL}/automations/hooks`);
-    await expect(activePage.getByRole('heading', { name: 'Hooks', level: 1 })).toBeVisible();
-    await expect(productNavigation.getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
+    // Hooks & Events：一级入口与页面内 Tab 都是真实链接，当前工作面由 aria-current 表达。
+    await productNavigation.getByRole('link', { name: 'Hooks & Events' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/events`);
+    await expect(activePage.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
+    await expect(productNavigation.getByRole('link', { name: 'Hooks & Events' })).toHaveAttribute('aria-current', 'page');
+    const eventsNavigation = activePage.getByRole('navigation', { name: 'Hooks & Events sections' });
+    await expect(eventsNavigation.getByRole('link', { name: 'Hooks', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(eventsNavigation.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/events?tab=webhooks');
+    await expect(eventsNavigation.getByRole('link', { name: 'Event triggers' })).toHaveAttribute('href', '/events?tab=triggers');
+    await expect(eventsNavigation.getByRole('link', { name: 'Delivery history' })).toHaveAttribute('href', '/events?tab=deliveries');
+    await expect(eventsNavigation.getByRole('link', { name: 'Extensions' })).toHaveCount(0);
+    await expect(eventsNavigation.getByRole('link', { name: 'Secrets' })).toHaveCount(0);
+    await eventsNavigation.getByRole('link', { name: 'Event triggers' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/events?tab=triggers`);
+    await expect(eventsNavigation.getByRole('link', { name: 'Event triggers' })).toHaveAttribute('aria-current', 'page');
+    // Hooks 工作面的 Secrets 入口仍然存在，且不再把一级导航标记为当前目的地。
+    await activePage.goto(`${runtimeURL}/events`);
     await activePage.getByRole('link', { name: 'Manage Secrets' }).click();
     await expect(activePage).toHaveURL(`${runtimeURL}/settings/secrets`);
     await expect(activePage.getByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
-    await expect(productNavigation.getByRole('link', { name: 'Automations' })).not.toHaveAttribute('aria-current', 'page');
-    await expect(productNavigation.getByRole('link', { name: 'Automations' })).not.toHaveClass(/nav-link--active/);
+    await expect(productNavigation.getByRole('link', { name: 'Hooks & Events' })).not.toHaveAttribute('aria-current', 'page');
 
+    // 定时任务已从 Automations 拆成独立一级入口：旧 `?tab=jobs` 深链归一为 `/schedules?tab=jobs`。
     await activePage.goto(`${runtimeURL}/automations?tab=jobs&q=mail`);
-    await expect(activePage).toHaveURL(`${runtimeURL}/automations/schedules?q=mail`);
-    await expect(productNavigation.getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
-    await expect(productNavigation.getByRole('link', { name: 'Automations' })).toHaveClass(/nav-link--active/);
-    const automationNavigation = activePage.getByRole('navigation', { name: 'Automations' });
-    await expect(automationNavigation.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/automations/webhooks');
-    await expect(automationNavigation.getByRole('link', { name: 'Schedules' })).toHaveAttribute('href', '/automations/schedules');
-    await expect(automationNavigation.getByRole('link', { name: 'Extensions' })).toHaveCount(0);
-    await expect(automationNavigation.getByRole('link', { name: 'Secrets' })).toHaveCount(0);
-    await expect(automationNavigation.getByText('Triggers and delivery')).toBeVisible();
-    await expect(automationNavigation.getByText('Run history')).toBeVisible();
-    await automationNavigation.getByRole('link', { name: 'Triggers' }).click();
-    await expect(activePage).toHaveURL(`${runtimeURL}/automations/triggers`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/schedules?tab=jobs&q=mail`);
+    await expect(activePage.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
+    await expect(productNavigation.getByRole('link', { name: 'Scheduled jobs' })).toHaveAttribute('aria-current', 'page');
+    await expect(productNavigation.getByRole('link', { name: 'Hooks & Events' })).not.toHaveAttribute('aria-current', 'page');
+    const schedulesNavigation = activePage.getByRole('navigation', { name: 'Scheduled job sections' });
+    // Tab 是真实链接，并且保留 `q` 这类既有筛选上下文。
+    await expect(schedulesNavigation.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/schedules?tab=jobs&q=mail');
+    await expect(schedulesNavigation.getByRole('link', { name: 'Execution history' })).toHaveAttribute('href', '/schedules?tab=history&q=mail');
+    await expect(schedulesNavigation.getByRole('link', { name: 'Webhooks' })).toHaveCount(0);
+    await expect(schedulesNavigation.getByRole('link', { name: 'Hooks', exact: true })).toHaveCount(0);
 
+    // Access & auth：二级工作面是 管理员 / 应用认证 / API Tokens；审计时间线已并入活动记录。
     await activePage.goto(`${runtimeURL}/access`);
-    const accessNavigation = activePage.getByRole('navigation', { name: 'Access & keys' });
-    await expect(accessNavigation.getByRole('link', { name: 'Service Accounts' })).toBeVisible();
-    await expect(accessNavigation.getByText('Identity')).toBeVisible();
-    await expect(accessNavigation.getByText('Security')).toBeVisible();
-    await expect(accessNavigation.getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/access/administrators');
-    await expect(accessNavigation.getByRole('link', { name: 'Audit log' })).toHaveAttribute('href', '/activity/audit');
+    await expect(activePage.getByRole('heading', { name: 'Access & auth', level: 1 })).toBeVisible();
+    const accessNavigation = activePage.getByRole('navigation', { name: 'Access sections' });
+    await expect(accessNavigation.getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/access?tab=administrators');
+    await expect(accessNavigation.getByRole('link', { name: 'Application auth' })).toHaveAttribute('href', '/access?tab=auth');
+    await expect(accessNavigation.getByRole('link', { name: 'API Tokens' })).toHaveAttribute('href', '/access?tab=tokens');
+    await expect(accessNavigation.getByRole('link', { name: 'Audit log' })).toHaveCount(0);
 
-    await productNavigation.getByRole('link', { name: 'Settings' }).click();
-    const settingsNavigation = activePage.getByRole('navigation', { name: 'Settings' });
-    for (const label of ['Status', 'Runtime', 'Files & Storage', 'Mail', 'Secrets', 'Backup and restore', 'Data import / export']) {
+    await productNavigation.getByRole('link', { name: 'System settings' }).click();
+    await expect(activePage).toHaveURL(`${runtimeURL}/settings`);
+    await expect(activePage.getByRole('heading', { name: 'System settings', level: 1 })).toBeVisible();
+    const settingsNavigation = activePage.getByRole('navigation', { name: 'Settings sections' });
+    for (const label of ['General', 'Runtime', 'Files & Storage', 'Mail', 'Secrets', 'Backup and restore', 'Data import / export']) {
       await expect(settingsNavigation.getByRole('link', { name: label })).toBeVisible();
     }
-    for (const label of ['Project', 'Service', 'Maintenance']) await expect(settingsNavigation.getByText(label)).toBeVisible();
 
     await activePage.goto(`${runtimeURL}/settings/portability`);
     await expect(activePage).toHaveURL(`${runtimeURL}/settings/backups`);
@@ -453,14 +504,22 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.goto(`${runtimeURL}/settings/data`);
     await expect(activePage.getByRole('heading', { name: 'Data import / export', level: 1 })).toBeVisible();
     await expect(activePage.getByRole('button', { name: 'Create and download backup' })).toHaveCount(0);
+    // 旧 `/settings/developer` 的契约工作面现在是 API 工作区的 OpenAPI Tab。
     await activePage.goto(`${runtimeURL}/settings/developer`);
-    await expect(activePage).toHaveURL(`${runtimeURL}/connect/sdk`);
-    await expect(activePage.getByRole('heading', { name: 'API Contract / SDK', level: 1 })).toBeVisible();
+    await expect(activePage).toHaveURL(`${runtimeURL}/api?tab=openapi`);
+    await expect(activePage.getByRole('heading', { name: 'API workspace', level: 1 })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'OpenAPI contract', level: 2 })).toBeVisible();
     await expect(activePage.getByTestId('contract-hash')).toBeVisible();
+    await expect(activePage.getByRole('button', { name: 'Download openapi.json' })).toBeVisible();
+    // MCP 说明不占一级菜单，由旧 `/settings/mcp` 深链归一为 `/mcp`。
     await activePage.goto(`${runtimeURL}/settings/mcp`);
-    await expect(activePage).toHaveURL(`${runtimeURL}/connect/mcp`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/mcp`);
     await expect(activePage.getByRole('heading', { name: 'MCP', level: 1 })).toBeVisible();
-    await expect(activePage.getByText(/Model changes go through review and apply, and actions are audited/)).toBeVisible();
+    await expect(activePage.locator('[data-shell-destination]')).toHaveText('MCP');
+    // MCP 说明用真实账号权限摘要回答「智能体能做什么」，不再复述治理长段落。
+    await expect(activePage.getByText('Connect a coding agent through a Service Account API Key, and see exactly what that account may do.')).toBeVisible();
+    // 精确匹配：空态标题「No Service Accounts yet」也包含该子串。
+    await expect(activePage.getByRole('heading', { name: 'Service Account', exact: true })).toBeVisible();
 
     await activePage.goto(`${runtimeURL}/collections`);
     await activePage.getByRole('button', { name: /Search commands/ }).focus();
@@ -548,8 +607,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await expect(palette).toBeVisible();
       const paletteBounds = await palette.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
+        const workspace = document.querySelector('[data-shell-workspace]');
         return {
-          mountedAtDocumentRoot: element.closest('.command-palette-overlay')?.parentElement === document.body,
+          // 命令面板经 Portal 挂到 document.body，绝不能落在 Shell 工作区里（会被祖先的
+          // overflow / transform 裁剪）。实现换成 base-ui Dialog 后不再有专属 overlay class，
+          // 因此直接断言「有 body 级祖先，且不在 shell 工作区内」。
+          mountedAtDocumentRoot: Boolean(workspace) && !workspace!.contains(element) && element.closest('body > *') !== null,
           top: bounds.top,
           bottom: bounds.bottom,
           viewportHeight: window.innerHeight,
@@ -635,6 +698,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.reload();
     await expect(activePage.getByRole('row').filter({ hasText: 'post-a-updated' })).toBeVisible();
     await activePage.getByLabel('Search records').fill('');
+    // 记录详情面板由 `?record=` 驱动：关闭编辑器后它仍然打开并覆盖表格，
+    // 必须先清掉该参数（等价于关闭面板）才能点击行内操作。
+    const recordsURL = new URL(activePage.url());
+    recordsURL.searchParams.delete('record');
+    recordsURL.searchParams.delete('edit');
+    await activePage.goto(recordsURL.toString());
 
     const deleteRow = activePage.getByRole('button', { name: `Delete record ${deletedPostId}` });
     await deleteRow.click();
@@ -1003,16 +1072,17 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     deniedRequestId = responseCodes.find((value) => /^req_[A-Za-z0-9_-]{8,}$/.test(value)) ?? '';
     expect(deniedRequestId).toBeTruthy();
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
-    await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
+    await expect(activePage).toHaveURL(new RegExp(`/api/requests/${deniedRequestId}`));
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
     await expect(activePage.getByRole('heading', { name: /Request/ })).toBeVisible();
     await expect(activePage.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/access`);
     expect(await activePage.locator('body').innerText()).not.toContain(appSession);
 
     await activePage.goto(`${runtimeURL}/requests?search=${encodeURIComponent(deniedRequestId)}`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/api?tab=logs&search=${encodeURIComponent(deniedRequestId)}`);
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
     await activePage.getByText(deniedRequestId, { exact: true }).first().click();
-    await expect(activePage).toHaveURL(new RegExp(`/requests/${deniedRequestId}`));
+    await expect(activePage).toHaveURL(new RegExp(`/api/requests/${deniedRequestId}`));
 
     await activePage.goto(`${runtimeURL}/api?collection=${encodeURIComponent(postsId)}`);
     await activePage.locator('[data-api-endpoint-option]').filter({ hasText: 'Read a file attachment' }).click();
@@ -1045,14 +1115,16 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await expect(activePage.getByText('Response content is hidden because it is not JSON.')).toBeVisible();
     expect(await activePage.locator('[data-api-response-body]').count()).toBe(0);
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
-    await expect(activePage).toHaveURL(/\/requests\/req_/);
+    await expect(activePage).toHaveURL(/\/api\/requests\/req_/);
     await expect(activePage.getByRole('region', { name: 'Request details' })).toContainText('/files/');
-    await expect(activePage.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=' + encodeURIComponent(postsId) + '&endpoint=readApplicationRecordFile');
+    await expect(activePage.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=' + encodeURIComponent(postsId) + '&endpoint=readApplicationRecordFile');
     await expect(activePage.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/api?endpoint=readApplicationRecordFile`);
   });
 
   await test.step('FLOW-008 — One-time Service Account key, authorization and revocation audit', async () => {
-    await activePage.goto(`${runtimeURL}/access`);
+    // 服务账号与 API Key 现在位于「访问与认证」的 API Tokens 工作面。
+    await activePage.goto(`${runtimeURL}/access?tab=tokens`);
+    await expect(activePage.getByRole('heading', { name: 'API Tokens', level: 2 })).toBeVisible();
     await activePage.getByRole('button', { name: 'Create Service Account', exact: true }).first().click();
     const accountDialog = activePage.getByRole('dialog', { name: 'Create Service Account' });
     await accountDialog.getByLabel('Name').fill('ci-readonly');
@@ -1114,7 +1186,10 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const auditBody = await requestJSON(activePage, 'GET', '/admin/api/v1/audit?limit=100');
     expect(auditBody.status).toBe(200);
     expect(JSON.stringify(auditBody.body)).not.toContain(revokedAPIKey);
+    // 旧 `/access/audit` 深链归一为活动记录的管理面审计来源（`source=audit` 是默认值），
+    // 其余审计筛选参数原样保留。
     await activePage.goto(`${runtimeURL}/access/audit?action=${encodeURIComponent('apiKey.revoked')}`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/activity?action=${encodeURIComponent('apiKey.revoked')}&source=audit`);
     const auditRow = activePage.locator('[data-audit-table] tbody tr').filter({ hasText: 'apiKey.revoked' });
     await expect(auditRow).toBeVisible();
     const auditLink = auditRow.getByRole('link').first();
@@ -1187,13 +1262,15 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     // Spec 0001 §7.1/§18.5-4：MCP 子页必须展示真实命令、绑定账号的权限摘要，
     // 以及来自 Activity 的最近操作；它不复制配置，也从不回显 API Key 明文。
     await activePage.goto(`${runtimeURL}/connect/mcp`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/mcp`);
     await expect(activePage.getByRole('heading', { name: 'MCP', level: 1 })).toBeVisible();
     await expect(activePage.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeVisible();
     const mcpAccountRow = activePage.locator('[data-mcp-account-row]').filter({ hasText: 'ci-readonly' });
     await expect(mcpAccountRow).toBeVisible();
     await expect(mcpAccountRow).toContainText('Read only');
     await expect(mcpAccountRow).toContainText('Active');
-    await expect(activePage.getByRole('link', { name: 'Manage Access & keys' })).toHaveAttribute('href', '/access');
+    // 服务账号与 API Key 的入口现在指向「访问与认证」的 API Tokens 工作面（不再复制配置）。
+    await expect(activePage.locator('#main-content').getByRole('link', { name: 'Access & auth' })).toHaveAttribute('href', '/access?tab=tokens');
     expect(await activePage.locator('body').innerText()).not.toContain(revokedAPIKey);
   });
 
@@ -1201,6 +1278,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const beforeRestart = readyRecord;
     expect(beforeRestart?.projectId).toBe(firstReady.projectId);
     await activePage.goto(`${runtimeURL}/requests/${encodeURIComponent(attachmentRequestId)}`);
+    await expect(activePage).toHaveURL(`${runtimeURL}/api/requests/${encodeURIComponent(attachmentRequestId)}`);
     await expect(activePage.getByText(attachmentRequestId, { exact: true }).first()).toBeVisible();
     await expect(activePage.getByRole('region', { name: 'Request details' })).toContainText('/files/');
     await activePage.close();
@@ -1225,7 +1303,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByLabel('Email').fill(ownerEmail);
     await activePage.getByLabel('Password').fill(ownerPassword);
     await activePage.getByRole('button', { name: 'Sign in' }).click();
-    await expect(activePage).toHaveURL(new RegExp(`/requests/${attachmentRequestId}`));
+    await expect(activePage).toHaveURL(new RegExp(`/api/requests/${attachmentRequestId}`));
     await expect(activePage.getByText(attachmentRequestId, { exact: true }).first()).toBeVisible();
     await expect(activePage.getByRole('region', { name: 'Request details' })).toContainText('/files/');
 

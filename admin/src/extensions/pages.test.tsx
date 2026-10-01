@@ -57,23 +57,23 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     const input = within(palette).getByRole('combobox', { name: 'Search commands' });
     await userEvent.type(input, 'Hooks');
     await userEvent.keyboard('{Enter}');
-    expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
-    // 新版 IA：Hooks 属于 Automations 组，侧栏 Automations 项保持高亮。
-    const automationLink = within(navigation).getByRole('link', { name: 'Automations' });
+    expect(await screen.findByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeInTheDocument();
+    // 新 IA：Hooks 属于 BUILD 组的 Hooks & Events 一级入口。
+    const eventsLink = within(navigation).getByRole('link', { name: 'Hooks & Events' });
     // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
-    expect(automationLink).toHaveAttribute('aria-current', 'page');
+    expect(eventsLink).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
     expect(await screen.findByRole('link', { name: /Normalize Profile/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('link', { name: 'Manage Secrets' }));
     expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeInTheDocument();
-    expect(automationLink).not.toHaveAttribute('aria-current', 'page');
-    expect(automationLink).not.toHaveClass(/nav-link--active/);
+    expect(eventsLink).not.toHaveAttribute('aria-current', 'page');
+    expect(eventsLink).not.toHaveClass(/nav-link--active/);
 
-    await userEvent.click(automationLink);
-    expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
+    await userEvent.click(eventsLink);
+    expect(await screen.findByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeInTheDocument();
     // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
-    expect(automationLink).toHaveAttribute('aria-current', 'page');
+    expect(eventsLink).toHaveAttribute('aria-current', 'page');
   });
 
   it('loads, edits, and saves the complete Extension configuration', async () => {

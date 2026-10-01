@@ -73,7 +73,8 @@ describe('MCP connection guide', () => {
     setupMCP({ accounts: [] });
 
     expect(await screen.findByText('No Service Account yet')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create Service Account' })).toHaveAttribute('href', '/access');
+    // 服务账号与 API Key 属于 Access & auth / API Tokens，深链接直接落到该 Tab。
+    expect(screen.getByRole('link', { name: 'Create Service Account' })).toHaveAttribute('href', '/access?tab=tokens');
     expect(await screen.findByText('No agent operations yet')).toBeInTheDocument();
   });
 

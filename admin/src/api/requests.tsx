@@ -57,6 +57,7 @@ function isNumericField(field: FilterField): boolean {
 }
 
 // Runner 的返回上下文仍是安全站内路径；旧深链接经 route-map 映射到新导航。
+// 新 IA 的合法来源是 API 工作区（含请求日志 Tab）、请求详情、集合工作区与审计详情（spec 0001 §3、§9.1）。
 function internalReturnPath(value: string | null) {
   if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return undefined;
   const queryIndex = value.indexOf('?');
@@ -64,7 +65,7 @@ function internalReturnPath(value: string | null) {
   const search = queryIndex >= 0 ? value.slice(queryIndex) : '';
   const mapped = mapLegacyPath(pathname, search);
   if (mapped !== null) return `${mapped.pathname}${mapped.search}`;
-  if (value.startsWith('/connect/api') || value.startsWith('/collections/') || value.startsWith('/requests') || value.startsWith('/activity/audit')) return value;
+  if (pathname === '/api' || pathname.startsWith('/api/requests/') || pathname.startsWith('/collections/') || pathname.startsWith('/activity/audit')) return value;
   return undefined;
 }
 
@@ -101,7 +102,9 @@ function outcomeLabel(prefix: 'authenticationOutcomes' | 'authorizationOutcomes'
   return t(`requests.${prefix}.${value}` as TranslationKey);
 }
 
-export function RequestsPage() {
+// embedded=true 时列表让出页面级标题，由 API 工作区 / 请求日志 Tab 提供 h2 与说明，
+// 页面内仍然是同一套 search / filter / sort / cursor / collection 状态（spec 0001 §3、§9.1）。
+export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t, formatDate, formatNumber, errorMessage } = useI18n();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -160,18 +163,20 @@ export function RequestsPage() {
   const commands = useMemo<AdminCommand[]>(() => [{
     id: 'surface.requests',
     category: 'commands.categories.system',
-    label: () => t('navigation.requests'),
+    label: () => t('api.workspaceTabs.logs'),
     keywords: () => ['requests', 'http log', 'application requests'],
-    execute: () => navigate('/requests'),
+    execute: () => navigate('/api?tab=logs'),
   }], [navigate, t]);
   useRegisterCommands(commands);
 
+  // 换筛选条件后分页游标失效，但 tab / collection 等工作区上下文必须保留（spec 0001 §3、§9.1）。
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const next = new URLSearchParams();
-    if (searchDraft.trim()) next.set('search', searchDraft.trim());
-    if (filterDraft.value.trim()) next.set('filter', serializeFilter({ ...filterDraft, value: filterDraft.value.trim() }));
-    if (sort !== 'time desc') next.set('sort', sort);
+    const next = new URLSearchParams(params);
+    for (const key of ['cursor', 'back']) next.delete(key);
+    if (searchDraft.trim()) next.set('search', searchDraft.trim()); else next.delete('search');
+    if (filterDraft.value.trim()) next.set('filter', serializeFilter({ ...filterDraft, value: filterDraft.value.trim() })); else next.delete('filter');
+    if (sort !== 'time desc') next.set('sort', sort); else next.delete('sort');
     setParams(next, { replace: true });
   }
 
@@ -212,11 +217,18 @@ export function RequestsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <p className="eyebrow">{t('requests.eyebrow')}</p>
-        <h1>{t('requests.title')}</h1>
-        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('requests.description')}</p>
-      </header>
+      {embedded ? (
+        <header className="min-w-0">
+          <h2>{t('api.workspaceTabs.logs')}</h2>
+          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.logsDescription')}</p>
+        </header>
+      ) : (
+        <header className="min-w-0">
+          <p className="eyebrow">{t('requests.eyebrow')}</p>
+          <h1>{t('requests.title')}</h1>
+          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('requests.description')}</p>
+        </header>
+      )}
 
       <Surface className="flex min-w-0 flex-col gap-3 p-3" variant="standard">
         <form className="flex flex-wrap items-end gap-3" onSubmit={applyFilters}>
@@ -328,7 +340,7 @@ export function RequestsPage() {
         (search || filter || collectionParam)
           ? <EmptyState description={t('api.noRequestsDescription')} title={t('api.noRequestsTitle')} />
           : <EmptyState description={t('requests.emptyDescription')} title={t('requests.emptyTitle')}>
-            <div className="mt-3"><ButtonLink size="small" to="/connect/api" variant="primary">{t('navigation.connectApi')}</ButtonLink></div>
+            <div className="mt-3"><ButtonLink size="small" to="/api" variant="primary">{t('navigation.apiWorkspace')}</ButtonLink></div>
           </EmptyState>
       )}
       {state === 'ready' && !!page?.data.length && (
@@ -348,7 +360,7 @@ export function RequestsPage() {
             {page.data.map((record) => (
               <TableRow key={record.requestId}>
                 <TableCell className="align-top whitespace-nowrap"><time dateTime={record.time}>{formatDate(record.time)}</time></TableCell>
-                <TableCell className="align-top"><Link className="font-mono text-[11px] font-semibold text-primary hover:underline" to={`/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(from)}`}>{record.requestId}</Link></TableCell>
+                <TableCell className="align-top"><Link className="font-mono text-[11px] font-semibold text-primary hover:underline" to={`/api/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(from)}`}>{record.requestId}</Link></TableCell>
                 <TableCell className="align-top"><strong className="mr-1.5 font-mono text-[11px] text-foreground">{record.method}</strong><code className="break-all font-mono text-[11px] text-ink-secondary">{record.endpoint}</code></TableCell>
                 <TableCell className="align-top"><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip>{record.errorCode && <small className="mt-1 block font-mono text-[10px] text-muted-foreground">{record.errorCode}</small>}</TableCell>
                 <TableCell className="align-top whitespace-nowrap">{formatNumber(record.durationMs)} ms</TableCell>
@@ -385,7 +397,7 @@ export function RequestDetailPage() {
   const [error, setError] = useState<unknown>();
   const [reload, setReload] = useState(0);
   const from = internalReturnPath(params.get('from'));
-  const returnTo = from ?? '/requests';
+  const returnTo = from ?? '/api?tab=logs';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -411,7 +423,7 @@ export function RequestDetailPage() {
         <ErrorState description={copy.description} title={copy.title}>
           <div className="mt-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></div>
         </ErrorState>
-        <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to="/requests"><ArrowLeft aria-hidden="true" size={14} /> {t('api.allRequests')}</Link>
+        <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to="/api?tab=logs"><ArrowLeft aria-hidden="true" size={14} /> {t('api.allRequests')}</Link>
       </div>
     );
   }
@@ -419,8 +431,8 @@ export function RequestDetailPage() {
   const collection = collections.find((item) => item.id === record.collectionId);
   const endpoint = matchingEndpoint(collections, record);
   const endpointLink = endpoint
-    ? `/connect/api?tab=endpoints&collection=${encodeURIComponent(endpoint.collectionId)}&endpoint=${encodeURIComponent(endpoint.operationId)}`
-    : `/connect/api?tab=endpoints${record.collectionId ? `&collection=${encodeURIComponent(record.collectionId)}` : ''}`;
+    ? `/api?tab=endpoints&collection=${encodeURIComponent(endpoint.collectionId)}&endpoint=${encodeURIComponent(endpoint.operationId)}`
+    : `/api?tab=endpoints${record.collectionId ? `&collection=${encodeURIComponent(record.collectionId)}` : ''}`;
   const collectionLink = collection && endpoint ? `/collections/${encodeURIComponent(collection.id)}/api?endpoint=${encodeURIComponent(endpoint.operationId)}` : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -484,7 +496,7 @@ export function RequestDetailPage() {
           <ButtonLink size="small" to={endpointLink}>{t('api.openEndpoint')}</ButtonLink>
           {collectionLink && <ButtonLink size="small" to={collectionLink}>{t('api.openCollectionApi')}</ButtonLink>}
           {record.authorizationOutcome === 'denied' && record.collectionId && <ButtonLink size="small" to={`/collections/${encodeURIComponent(record.collectionId)}/access`}>{t('api.reviewAccessRules')}</ButtonLink>}
-          <ButtonLink size="small" to={`/requests?search=${encodeURIComponent(record.requestId)}`}>{t('api.findInRequests')}</ButtonLink>
+          <ButtonLink size="small" to={`/api?tab=logs&search=${encodeURIComponent(record.requestId)}`}>{t('api.findInRequests')}</ButtonLink>
         </div>
       </section>
     </div>

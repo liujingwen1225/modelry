@@ -59,6 +59,10 @@ Read or replace `{name,webhookId,cron}`. A valid edit recalculates `nextRunAt` f
 
 Explicitly start or stop future schedule triggers. While the Job is disabled, its past due slot is preserved even when the Webhook is also disabled. Re-enabling the Job lets the scheduler consume that slot: it coalesces it to at most one catch-up Delivery if the Webhook is enabled in the scheduling transaction; otherwise it skips the slot and advances `nextRunAt`. Enabling the Webhook after that skip does not catch it up. For an enabled Job, any due slot consumed while the Webhook is disabled is skipped and advances `nextRunAt`. Previously accepted Deliveries continue independently unless their Webhook is disabled or its signing Secret is revoked. Success returns `{id,enabled,nextRunAt}`.
 
+### `POST /jobs/{jobId}/run`
+
+Creates one explicit manual-run Delivery for the Job with `sourceType: "job"`, `event.type: "job.manual"` and `triggeredAt`. The Webhook must be enabled and its signing Secret configured; otherwise the route returns `422 VALIDATION_FAILED` (`/webhookId` or `/signingSecretId`). A missing Job returns `404 NOT_FOUND`. This route never changes schedule state: it does not advance `nextRunAt`, does not rewrite `lastRunAt`, and never consumes, skips or catches up a scheduled slot. Capacity behaves like the synthetic Webhook test: when the pending or payload quota is full the route still returns `202` with a terminal `capacityExceeded` Delivery that has no payload and made no network request. The run is audited as `job.runRequested`. Poll `GET /deliveries/{deliveryId}` for attempts and terminal status.
+
 ## Delivery history
 
 ### `GET /deliveries?cursor={cursor}&limit={limit}&sourceType={sourceType}&status={status}`

@@ -734,10 +734,11 @@ export function CollectionWorkspacePage() {
   return (
     <div className="flex min-w-0 flex-col gap-6" data-collection-workspace>
       {/* Spec 0001 §6.3：标题区持续提供 Collection 名称、类型、状态与返回路径。 */}
-      <nav aria-label={t('collections.breadcrumbLabel')} className="flex flex-wrap items-center gap-2 text-xs">
+      <nav aria-label={t('collections.breadcrumbLabel')} className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground" to="/collections">{t('navigation.collections')}</Link>
         <span aria-hidden="true" className="text-subtle-foreground">/</span>
-        <span className="font-semibold text-foreground">{collection.name}</span>
+        {/* 集合名可能是不含断点的长标识符：允许任意位置换行，避免窄屏横向溢出（spec 0001 §16.1）。 */}
+        <span className="min-w-0 font-semibold text-foreground [overflow-wrap:anywhere]">{collection.name}</span>
       </nav>
 
       <header className="flex flex-wrap items-start justify-between gap-4" data-collection-header>

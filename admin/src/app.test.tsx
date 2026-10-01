@@ -3,185 +3,174 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 
+// Spec 0001 §3.1：一级导航按 WORKSPACE / BUILD / OPERATE / SYSTEM 四组九项组织；
+// 旧的 Automations / Connect / Observe / Evolve / Project 分组不再存在。
+
+const overviewSnapshot = {
+  generatedAt: '2026-10-01T12:00:00Z',
+  windowSeconds: 86400,
+  collections: { count: 2, recordCount: 1214, withPendingChanges: 0, withFailedChanges: 0, recent: [] },
+  requests: { windowSeconds: 86400, requestCount: 40, clientErrorCount: 0, serverErrorCount: 0, p95DurationMs: 12 },
+  events: { enabledHooks: 1, enabledWebhooks: 1, enabledEventHooks: 1, enabledJobs: 2, runCount: 4, deliveryCount: 6, failedDeliveryCount: 0, pendingDeliveryCount: 0 },
+  changes: { pendingCount: 0, needsReviewCount: 0, failedCount: 0 },
+  drift: { state: 'healthy', differenceCount: 0, checkedAt: '2026-10-01T11:00:00Z' },
+};
+
 function diagnosticResponse(path: string): Response {
   if (path.endsWith('/auth/session')) {
-    return new Response(JSON.stringify({
+    return Response.json({
       owner: { id: 'own_test', email: 'owner@example.com' },
       expiresAt: '2026-09-25T09:00:00Z',
       role: 'owner',
       permission: { preset: 'fullAccess' },
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
   }
 
   if (path.endsWith('/runtime/status')) {
-    return new Response(JSON.stringify({
+    return Response.json({
       state: 'ready',
       observedAt: '2026-09-24T09:00:00Z',
       database: { state: 'ready' },
       localStorage: { state: 'ready' },
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
   }
 
-  return new Response(JSON.stringify({
+  if (path.startsWith('/admin/api/v1/overview')) {
+    return Response.json({ data: overviewSnapshot });
+  }
+
+  if (path.startsWith('/admin/api/v1/changes?')) {
+    return Response.json({ data: [] });
+  }
+
+  if (path.startsWith('/admin/api/v1/activity')) {
+    return Response.json({ data: [] });
+  }
+
+  return Response.json({
     database: { state: 'ready' },
     localStorage: { state: 'ready', provider: 'Local' },
-  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    databaseSizeBytes: 40108032,
+  });
 }
 
+const primaryNavigationLabels = [
+  'Overview',
+  'Collections',
+  'API workspace',
+  'Hooks & Events',
+  'Scheduled jobs',
+  'Changes',
+  'Access & auth',
+  'Activity',
+  'System settings',
+];
+
 describe('Modelry Admin shell', () => {
-  it('opens the Automations workspace from the shared Command Registry', async () => {
+  it('renders the four navigation groups with their real destinations', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
-    const user = userEvent.setup();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path === '/admin/api/v1/webhooks') return Promise.resolve(Response.json({ data: [] }));
-      if (path === '/admin/api/v1/secrets') return Promise.resolve(Response.json({ data: [] }));
-      if (path === '/admin/api/v1/extensions') return Promise.resolve(Response.json({ data: [] }));
-      return Promise.resolve(diagnosticResponse(path));
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    window.history.replaceState({}, '', '/');
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     render(<App />);
 
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
-    await user.click(screen.getByRole('button', { name: /Search commands/ }));
-    const search = screen.getByRole('combobox', { name: 'Search commands' });
-    await user.type(search, 'Automation');
-    await user.click(await screen.findByRole('option', { name: 'Automation' }));
+    await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page'));
 
-    // 新版信息架构：Automations 默认进入 Hooks 子页。
-    expect(await screen.findByRole('heading', { name: 'Hooks' })).toBeInTheDocument();
-    expect(within(navigation).getByRole('link', { name: 'Automations' })).toHaveAttribute('aria-current', 'page');
+    const links = within(navigation).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);
+    expect(links.map((link) => link.getAttribute('title'))).toEqual(primaryNavigationLabels);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/', '/collections', '/api', '/events', '/schedules', '/changes', '/access', '/activity', '/settings',
+    ]);
+
+    const groups = Array.from(navigation.querySelectorAll('[data-nav-group-label]')).map((label) => label.textContent);
+    expect(groups).toEqual(['Workspace', 'Build', 'Operate', 'System']);
+
+    // 顶栏显示当前目的地；侧栏底部显示真实 Runtime 卡（状态来自诊断请求，需等待其解析）。
+    expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('Overview');
+    const runtimeCard = document.querySelector('[data-shell-runtime-card]');
+    expect(runtimeCard).not.toBeNull();
+    expect(runtimeCard).toHaveAttribute('href', '/settings');
+    await waitFor(() => expect(runtimeCard?.textContent).toContain('Ready'));
   });
 
-  it('preserves the current Automation search context in a Command Palette create deep link', async () => {
+  it('shows real navigation counts from the shared overview snapshot', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
-    window.history.replaceState({}, '', '/automations?tab=webhooks&q=mail');
-    const user = userEvent.setup();
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path === '/admin/api/v1/webhooks') return Promise.resolve(Response.json({ data: [] }));
-      if (path === '/admin/api/v1/secrets') return Promise.resolve(Response.json({ data: [] }));
-      if (path === '/admin/api/v1/event-hooks') return Promise.resolve(Response.json({ data: [] }));
-      if (path.startsWith('/admin/api/v1/collections?')) return Promise.resolve(Response.json({ data: [{ id: 'col_orders', name: 'Orders' }] }));
-      return Promise.resolve(diagnosticResponse(path));
-    }));
-    render(<App />);
-
-    await screen.findByRole('heading', { name: 'Automation' });
-    await user.click(screen.getByRole('button', { name: /Search commands/ }));
-    await user.type(screen.getByRole('combobox', { name: 'Search commands' }), 'Create event trigger');
-    await user.click(await screen.findByRole('option', { name: 'Create event trigger' }));
-
-    expect(await screen.findByRole('heading', { name: 'New event trigger' })).toBeInTheDocument();
-    expect(window.location.pathname + window.location.search).toBe('/automations/triggers?q=mail&create=1');
-  });
-
-  it('renders the shared sidebar and reads runtime health through the diagnostics client', async () => {
-    window.localStorage.setItem('modelry-admin-locale', 'en');
-    const user = userEvent.setup();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path.startsWith('/admin/api/v1/collections?')) return Promise.resolve(Response.json({ data: [] }));
-      return Promise.resolve(diagnosticResponse(path));
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    window.history.replaceState({}, '', '/');
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     render(<App />);
 
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
-    await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page'));
-    const primaryNavigationLabels = ['Home', 'Collections', 'API & SDK', 'Automations', 'Requests', 'Activity & Audit', 'Changes', 'Model health', 'Access & keys', 'Settings'];
-    const primaryNavigationLinks = within(navigation).getAllByRole('link');
-    expect(primaryNavigationLinks.map((link) => link.textContent)).toEqual(primaryNavigationLabels);
-    expect(primaryNavigationLinks.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);
-    expect(primaryNavigationLinks.map((link) => link.getAttribute('title'))).toEqual(primaryNavigationLabels);
-    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument();
-    const status = await screen.findByRole('region', { name: 'Workspace status' });
-    for (const label of ['Runtime', 'Database', 'File storage', 'Model']) {
-      expect(status).toHaveTextContent(label);
-    }
-    const nextStep = screen.getByRole('region', { name: 'Next step' });
-    expect(within(nextStep).getByRole('link', { name: /Create Collection/ })).toHaveAttribute('href', '/collections/new');
-    expect(screen.getByRole('heading', { name: 'Connect a coding agent' })).toBeInTheDocument();
-    const englishAgentGuidance = 'Model Context Protocol (MCP) lets your coding agent connect to Modelry through a Service Account API Key. The agent can perform only operations granted to that account. Start with Read only; if the task needs more, grant only its required custom operations. Application data remains governed by each Collection’s Access Rules. Model changes go through review and apply, and actions are audited.';
-    const chineseAgentGuidance = '模型上下文协议（MCP）让编码智能体通过服务账号 API Key 连接 Modelry。智能体只能执行该账号获准的操作。建议从“只读”开始；若任务需要更多权限，只授予其必需的自定义操作。应用数据仍由各集合的访问规则管控。模型变更需要经过复核和应用，操作会写入审计记录。';
-    expect(screen.getByText(englishAgentGuidance)).toBeInTheDocument();
-    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'zh-CN');
-    expect(await screen.findByText(chineseAgentGuidance)).toBeInTheDocument();
-    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'en');
-    expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage Service Accounts' })).toHaveAttribute('href', '/access');
-    // Home 不复制诊断详情：诊断卡片只出现在 Settings → Status（spec §5.1/§9.3）。
-    expect(document.querySelector('.diagnostics-grid')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/runtime/status', expect.any(Object));
-    expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/storage/status', expect.any(Object));
+    await waitFor(() => expect(document.querySelector('[data-nav-count="collections"]')).not.toBeNull());
+    expect(document.querySelector('[data-nav-count="collections"]')).toHaveTextContent('2');
+    // Hooks & Events 计数是启用的 Hook + Webhook + 事件触发数量之和。
+    expect(document.querySelector('[data-nav-count="events"]')).toHaveTextContent('3');
+    expect(document.querySelector('[data-nav-count="schedules"]')).toHaveTextContent('2');
+    expect(within(navigation).getByRole('link', { name: 'Overview' })).toBeInTheDocument();
   });
 
-  it('aggregates Automation and Settings pages while preserving the active Automation search', async () => {
+  it('normalises a legacy query form on a canonical path without a full reload', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
-    window.history.replaceState({}, '', '/automations?tab=webhooks&q=mail');
-    const user = userEvent.setup();
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
-      const path = String(input);
-      if (path === '/admin/api/v1/webhooks' || path === '/admin/api/v1/secrets' || path === '/admin/api/v1/event-hooks' || path === '/admin/api/v1/jobs') return Promise.resolve(Response.json({ data: [] }));
-      return Promise.resolve(diagnosticResponse(path));
-    }));
+    // 路径已是 canonical，只有 query 是历史写法：真实路由会命中，必须由 Shell 内的归一处理。
+    window.history.replaceState({}, '', '/changes?view=pending&q=posts');
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     render(<App />);
 
-    const automationNavigation = await screen.findByRole('navigation', { name: 'Automations' });
-    expect(within(automationNavigation).getByText('Triggers and delivery')).toBeInTheDocument();
-    expect(within(automationNavigation).getByText('Run history')).toBeInTheDocument();
-    // 新版子导航包含 Hooks；Hooks 由 Extensions 工作区承载。
-    expect(within(automationNavigation).getByRole('link', { name: 'Hooks' })).toHaveAttribute('href', '/automations/hooks');
-    expect(within(automationNavigation).getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/automations/webhooks');
-    await user.click(within(automationNavigation).getByRole('link', { name: 'Triggers' }));
-    expect(window.location.pathname + window.location.search).toBe('/automations/triggers');
-
-    const primaryNavigation = screen.getByRole('navigation', { name: 'Project navigation' });
-    await user.click(within(primaryNavigation).getByRole('link', { name: 'Settings' }));
-    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings' });
-    expect(within(settingsNavigation).getByRole('link', { name: 'Status' })).toHaveAttribute('href', '/settings');
-    expect(within(settingsNavigation).getByRole('link', { name: 'Files & Storage' })).toHaveAttribute('href', '/settings/storage');
-    expect(within(settingsNavigation).getByRole('link', { name: 'Secrets' })).toHaveAttribute('href', '/settings/secrets');
-    expect(within(settingsNavigation).getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('href', '/settings/backups');
-    expect(within(settingsNavigation).getByRole('link', { name: 'Data import / export' })).toHaveAttribute('href', '/settings/data');
-    // SDK & Contract 与 MCP 移入 Connect，不再作为 Settings 子页。
-    expect(within(settingsNavigation).queryByRole('link', { name: 'API Contract / SDK' })).not.toBeInTheDocument();
-    expect(within(settingsNavigation).queryByRole('link', { name: 'MCP' })).not.toBeInTheDocument();
-    expect(within(settingsNavigation).getByText('Maintenance')).toBeInTheDocument();
-    expect(within(settingsNavigation).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
-    expect(within(settingsNavigation).queryByRole('link', { name: 'Storage consistency' })).not.toBeInTheDocument();
-    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'zh-CN');
-    expect(await screen.findByRole('heading', { name: '状态' })).toBeInTheDocument();
-    expect(screen.getByText(/移动已有文件/)).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain('迁移');
-    await user.selectOptions(document.querySelector('[data-locale-switcher] select') as HTMLSelectElement, 'en');
-
-    await user.click(within(primaryNavigation).getByRole('link', { name: 'Access & keys' }));
-    const accessNavigation = await screen.findByRole('navigation', { name: 'Access & keys' });
-    expect(within(accessNavigation).getByText('Identity')).toBeInTheDocument();
-    expect(within(accessNavigation).getByText('Security')).toBeInTheDocument();
-    expect(within(accessNavigation).getByRole('link', { name: 'Service Accounts' })).toHaveAttribute('href', '/access');
-    expect(within(accessNavigation).getByRole('link', { name: 'Administrators' })).toHaveAttribute('href', '/access/administrators');
-    expect(within(accessNavigation).getByRole('link', { name: 'Audit log' })).toHaveAttribute('href', '/activity/audit');
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/changes?tab=pending&q=posts'));
+    expect(await screen.findByRole('heading', { name: 'Changes', level: 1 })).toBeInTheDocument();
+    const changesNavigation = screen.getByRole('navigation', { name: 'Change sections' });
+    expect(within(changesNavigation).getByRole('link', { name: 'Pending' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('opens the MCP guide from Connect with the authorized connection path', async () => {
+  it('opens Hooks & Events from the shared Command Registry and keeps the legacy deep link working', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/automations?tab=webhooks&q=mail');
     const user = userEvent.setup();
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     render(<App />);
 
-    const sidebar = await screen.findByRole('navigation', { name: 'Project navigation' });
-    await user.click(within(sidebar).getByRole('link', { name: 'API & SDK' }));
-    const connectNavigation = await screen.findByRole('navigation', { name: 'API & SDK' });
-    await user.click(within(connectNavigation).getByRole('link', { name: 'MCP' }));
+    // 旧 /automations?tab=webhooks 经 route-map 落到 Hooks & Events 的 Webhooks 工作面，并保留搜索上下文。
+    const eventsNavigation = await screen.findByRole('navigation', { name: 'Hooks & Events sections' });
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/events?tab=webhooks&q=mail'));
+    expect(within(eventsNavigation).getByRole('link', { name: 'Webhooks' })).toHaveAttribute('aria-current', 'page');
+
+    const navigation = screen.getByRole('navigation', { name: 'Project navigation' });
+    expect(within(navigation).getByRole('link', { name: 'Hooks & Events' })).toHaveAttribute('aria-current', 'page');
+
+    // 命令面板导航到定时任务（新的一级入口）。
+    await user.click(screen.getByRole('button', { name: /Search commands/ }));
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    await user.type(search, 'Scheduled jobs');
+    await user.click(await screen.findByRole('option', { name: 'Scheduled jobs' }));
+    expect(await screen.findByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeInTheDocument();
+  });
+
+  it('keeps the API workspace tabs in the URL', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/connect/sdk');
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
+    render(<App />);
+
+    // 旧 /connect/sdk 落到 API 工作区的 OpenAPI 工作面。
+    const apiNavigation = await screen.findByRole('navigation', { name: 'API workspace sections' });
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/api?tab=openapi'));
+    expect(within(apiNavigation).getByRole('link', { name: 'OpenAPI' })).toHaveAttribute('aria-current', 'page');
+    await user.click(within(apiNavigation).getByRole('link', { name: 'Request log' }));
+    expect(window.location.pathname + window.location.search).toBe('/api?tab=logs');
+    expect(await screen.findByRole('heading', { name: 'API workspace', level: 1 })).toBeInTheDocument();
+  });
+
+  it('opens the MCP guide and links back to the new destinations', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/mcp');
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
+    render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'MCP', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText(/Connect a coding agent through a Service Account API Key/)).toBeInTheDocument();
     expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage Access & keys' })).toHaveAttribute('href', '/access');
-    expect(within(connectNavigation).getByRole('link', { name: 'MCP' })).toHaveAttribute('aria-current', 'page');
+    // MCP 不占一级菜单，但接入入口必须可达（spec §3.3）。
+    expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('MCP');
   });
 
   it('persists a keyboard reachable light and dark theme toggle', async () => {
@@ -223,6 +212,8 @@ describe('Modelry Admin shell', () => {
 
     const localizedNavigation = await screen.findByRole('navigation', { name: '项目导航' });
     expect(within(localizedNavigation).getByRole('link', { name: '集合' })).toBeInTheDocument();
+    expect(within(localizedNavigation).getByRole('link', { name: 'API 工作区' })).toBeInTheDocument();
+    expect(within(localizedNavigation).getByRole('link', { name: '定时任务' })).toBeInTheDocument();
     expect(window.location.pathname + window.location.search + window.location.hash).toBe('/?filter=keep#selected');
     await waitFor(() => {
       expect(document.documentElement).toHaveAttribute('lang', 'zh-CN');
@@ -249,11 +240,11 @@ describe('Modelry Admin shell', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
     const dialog = await screen.findByRole('dialog', { name: 'Command palette' });
     const input = within(dialog).getByRole('combobox', { name: 'Search commands' });
-    await user.type(input, 'Settings');
-    expect(within(dialog).getByRole('option', { name: 'Settings' })).toBeInTheDocument();
+    await user.type(input, 'System settings');
+    expect(within(dialog).getByRole('option', { name: 'System settings' })).toBeInTheDocument();
     await user.keyboard('{Enter}');
 
-    expect(await screen.findByRole('heading', { name: 'Status' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'System settings' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(trigger);
   });
@@ -309,12 +300,12 @@ describe('Modelry Admin shell', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
       if (path.endsWith('/auth/session')) {
-        return Promise.resolve(new Response(JSON.stringify({
+        return Promise.resolve(Response.json({
           error: { code: 'UNAUTHENTICATED', message: 'An Owner session is required.', details: {}, requestId: 'req_test' },
-        }), { status: 401, headers: { 'Content-Type': 'application/json' } }));
+        }, { status: 401 }));
       }
       if (path.endsWith('/bootstrap/status')) {
-        return Promise.resolve(new Response(JSON.stringify({ state: 'required' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        return Promise.resolve(Response.json({ state: 'required' }));
       }
       return Promise.resolve(diagnosticResponse(path));
     });

@@ -46,15 +46,15 @@ function CurrentLocation() {
   return <output data-testid="current-location">{location.pathname}{location.search}</output>;
 }
 
-function renderRequests(initialEntry: string) {
+function renderRequests(initialEntry: string, embedded = false) {
   return render(<LocaleProvider><CommandRegistryProvider><MemoryRouter initialEntries={[initialEntry]}><CurrentLocation /><Routes>
-    <Route element={<RequestsPage />} path="/requests" />
+    <Route element={<RequestsPage embedded={embedded} />} path="/api" />
   </Routes></MemoryRouter></CommandRegistryProvider></LocaleProvider>);
 }
 
 function renderRequestDetail(initialEntry: string) {
   return render(<LocaleProvider><MemoryRouter initialEntries={[initialEntry]}><Routes>
-    <Route element={<RequestDetailPage />} path="/requests/:requestId" />
+    <Route element={<RequestDetailPage />} path="/api/requests/:requestId" />
   </Routes></MemoryRouter></LocaleProvider>);
 }
 
@@ -70,7 +70,7 @@ describe('Requests surface', () => {
   it('lists durable request facts and localizes the surface in Simplified Chinese', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
     mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: 'cursor_2' });
-    renderRequests('/requests?search=req_12');
+    renderRequests('/api?tab=logs&search=req_12');
 
     expect(await screen.findByRole('heading', { name: '请求' })).toBeInTheDocument();
     expect(await screen.findByRole('table', { name: '应用请求记录' })).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe('Requests surface', () => {
   it('keeps search, filter, sort and cursor pagination in the URL', async () => {
     const user = userEvent.setup();
     mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: 'cursor_2' });
-    renderRequests('/requests?search=req_12&filter=status+eq+403&sort=time+asc');
+    renderRequests('/api?tab=logs&search=req_12&filter=status+eq+403&sort=time+asc');
 
     expect(await screen.findByRole('link', { name: 'req_12345678' })).toBeInTheDocument();
     expect(mocks.listRequestRecords).toHaveBeenCalledWith(
@@ -100,11 +100,32 @@ describe('Requests surface', () => {
     expect(screen.getByTestId('current-location').textContent).toContain('search=req_12');
     expect(screen.getByTestId('current-location').textContent).toContain('filter=status');
     expect(screen.getByTestId('current-location').textContent).toContain('back=');
+    // 请求日志是 API 工作区的一个 Tab：分页与筛选都不能丢掉 tab 上下文。
+    expect(screen.getByTestId('current-location').textContent).toContain('tab=logs');
+  });
+
+  it('lets the API workspace own the page heading when embedded', async () => {
+    mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: undefined });
+    renderRequests('/api?tab=logs', true);
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Request log' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Requests' })).not.toBeInTheDocument();
+  });
+
+  it('keeps search, filter, sort and cursor pagination in the URL when applying filters', async () => {
+    const user = userEvent.setup();
+    mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: undefined });
+    renderRequests('/api?tab=logs&search=req_12');
+
+    await screen.findByRole('link', { name: 'req_12345678' });
+    await user.click(screen.getByRole('button', { name: /Apply filters/ }));
+    await waitFor(() => expect(screen.getByTestId('current-location').textContent).toContain('search=req_12'));
+    expect(screen.getByTestId('current-location').textContent).toContain('tab=logs');
   });
 
   it('maps a Collection deep link onto the same single filter condition', async () => {
     mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: undefined });
-    renderRequests('/requests?collection=col_posts');
+    renderRequests('/api?tab=logs&collection=col_posts');
 
     expect(await screen.findByRole('link', { name: 'req_12345678' })).toBeInTheDocument();
     expect(mocks.listRequestRecords).toHaveBeenCalledWith(
@@ -115,7 +136,7 @@ describe('Requests surface', () => {
 
   it('shows only allowlisted durable fields on the detail surface', async () => {
     mocks.getRequestRecord.mockResolvedValue(requestRecord);
-    renderRequestDetail('/requests/req_12345678?from=%2Fconnect%2Fapi%3Ftab%3Dendpoints');
+    renderRequestDetail('/api/requests/req_12345678?from=%2Fconnect%2Fapi%3Ftab%3Dendpoints');
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
     const region = screen.getByRole('region', { name: 'Request details' });
@@ -125,44 +146,45 @@ describe('Requests surface', () => {
     // §9.1 allowlist 之外的字段（如响应体大小）不再展示。
     expect(region).not.toHaveTextContent('46 bytes');
     expect(region).toHaveTextContent('Not recorded');
-    expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/connect/api?tab=endpoints');
+    // 旧的 /connect/api 深链接经 route-map 收敛到 /api?tab=endpoints。
+    expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/api?tab=endpoints');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=getApplicationRecord');
   });
 
   it('offers a direct Collection Access Rules recovery route after authorization is denied', async () => {
     mocks.getRequestRecord.mockResolvedValue(requestRecord);
-    renderRequestDetail('/requests/req_12345678');
+    renderRequestDetail('/api/requests/req_12345678');
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', '/collections/col_posts/access');
-    expect(screen.getByRole('link', { name: 'All requests' })).toHaveAttribute('href', '/requests');
+    expect(screen.getByRole('link', { name: 'All requests' })).toHaveAttribute('href', '/api?tab=logs');
   });
 
   it('resolves route templates stored by durable telemetry back to their endpoint', async () => {
     mocks.getRequestRecord.mockResolvedValue({ ...fileRequestRecord, endpoint: '/api/v1/{collectionName}/{recordId}/files/{fieldName}' });
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
-    renderRequestDetail('/requests/req_file_123456');
+    renderRequestDetail('/api/requests/req_file_123456');
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
   });
 
   it('resolves ordered file read templates to the indexed endpoint', async () => {
     mocks.getRequestRecord.mockResolvedValue({ ...fileRequestRecord, endpoint: '/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}' });
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
-    renderRequestDetail('/requests/req_file_ordered');
+    renderRequestDetail('/api/requests/req_file_ordered');
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
   });
 
   it('preserves file endpoint context in Request Detail links', async () => {
     mocks.getRequestRecord.mockResolvedValue(fileRequestRecord);
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
-    renderRequestDetail('/requests/req_file_123456');
+    renderRequestDetail('/api/requests/req_file_123456');
 
     expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/connect/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
+    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=readApplicationRecordFile');
   });
 });

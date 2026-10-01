@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, KeyRound, Plus, RefreshCw, ShieldCheck } 
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ApiClientError } from '../api/client';
+import { AdministratorsPage } from '../administrators/pages';
 import { useOwnerSession } from '../auth/owner-session';
 import { Button } from '../components/button';
 import { CopyButton } from '../components/copy-button';
@@ -11,6 +12,8 @@ import { Dialog } from '../components/overlays';
 import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
+import { mapLegacyPath } from '../route-map';
+import { ApplicationAuthPanel } from './auth-panel';
 import {
   createAPIKey, createServiceAccount, getAuditRecord, getServiceAccount, listAPIKeys, listAuditRecords, listServiceAccounts,
   revokeAPIKey, setServiceAccountEnabled, updateServiceAccount,
@@ -151,17 +154,65 @@ function DangerDialog({ open, title, description, busy, error, onClose, onConfir
   </Dialog>;
 }
 
-function AccessTabs({ active }: { active: 'access' | 'audit' }) {
-  const { t } = useI18n();
-  const tabClassName = (isActive: boolean) => `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`;
-  return <nav aria-label={t('access.tabsLabel')} data-access-tabs><div className="flex flex-wrap items-center gap-1 overflow-x-auto border-b"><Link aria-current={active === 'access' ? 'page' : undefined} className={tabClassName(active === 'access')} to="/access">{t('access.tabs.access')}</Link><Link aria-current={active === 'audit' ? 'page' : undefined} className={tabClassName(active === 'audit')} to="/activity/audit">{t('access.tabs.audit')}</Link></div></nav>;
-}
+type AccessTab = 'administrators' | 'auth' | 'tokens';
+
+const accessTabOrder: readonly AccessTab[] = ['administrators', 'auth', 'tokens'];
+
+const accessTabLabels: Record<AccessTab, TranslationKey> = {
+  administrators: 'access.tabs.administrators',
+  auth: 'access.tabs.auth',
+  tokens: 'access.tabs.tokens',
+};
 
 function PageTitle({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return <header className="flex min-w-0 flex-wrap items-end justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p></div>{action}</header>;
 }
 
-export function AccessPage() {
+// Spec 0001 §3.2、§11.1：`访问与认证` 的二级工作面固定为 管理员 / 应用认证 / API Tokens。
+// 工作面状态存放在 URL 的 `?tab=`（§15，可分享、可刷新），未知值回落到默认的管理员。
+// 集合级 Application Access Rules 仍留在具体 Collection 工作区，这里只做项目级身份与凭据；
+// 管理面审计已归入 `活动记录`（§9.2），因此本页不再有指向审计的第二个入口。
+export function AccessWorkspacePage() {
+  const { t } = useI18n();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  // Spec 0001 §15：`account` / `cursor` 是 API Tokens 的 resource identity，
+  // 未显式给出 tab 的旧深链接落到 tokens，避免丢掉用户要打开的服务账号。
+  const activeTab: AccessTab = requestedTab === 'auth' || requestedTab === 'tokens'
+    ? requestedTab
+    : requestedTab === null && (searchParams.has('account') || searchParams.has('cursor')) ? 'tokens' : 'administrators';
+
+  function tabTarget(tab: AccessTab): string {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    return `/access?${next.toString()}`;
+  }
+
+  return <div className="flex min-w-0 flex-col gap-6">
+    <header className="min-w-0">
+      <p className="eyebrow">{t('access.eyebrow')}</p>
+      <h1>{t('access.title')}</h1>
+      <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('access.description')}</p>
+    </header>
+
+    <nav aria-label={t('access.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-access-workspace-tabs>
+      {accessTabOrder.map((tab) => <Link
+        aria-current={activeTab === tab ? 'page' : undefined}
+        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        key={tab}
+        to={tabTarget(tab)}
+      >{t(accessTabLabels[tab])}</Link>)}
+    </nav>
+
+    {activeTab === 'administrators' && <AdministratorsPage embedded />}
+    {activeTab === 'auth' && <ApplicationAuthPanel />}
+    {activeTab === 'tokens' && <AccessPage embedded />}
+  </div>;
+}
+
+// embedded：作为 `/access?tab=tokens` 的内容渲染时不重复页面级标题（spec 0001 §3.2），
+// 独立渲染仍保留自己的页面标题与主操作。
+export function AccessPage({ embedded = false }: { embedded?: boolean }) {
   const { t, formatDate } = useI18n();
   const { state: ownerState } = useOwnerSession();
   const [params, setParams] = useSearchParams();
@@ -300,15 +351,24 @@ export function AccessPage() {
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <PageTitle action={!accountId ? <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button> : undefined} description={t('access.description')} eyebrow={t('access.eyebrow')} title={t('access.title')} />
-    <AccessTabs active="access" />
+    {embedded
+      ? <div className="flex min-w-0 flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h2>{t('access.tokensTitle')}</h2>
+          <p className="mt-1.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('access.tokensDescription')}</p>
+        </div>
+        {!accountId && <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button>}
+      </div>
+      : <PageTitle action={!accountId ? <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button> : undefined} description={t('access.description')} eyebrow={t('access.eyebrow')} title={t('access.title')} />}
     {ownerEmail && <Surface className="flex flex-wrap items-center gap-3 p-4" variant="standard"><span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={18} /></span><div className="grid min-w-0 flex-1 gap-0.5"><strong className="text-xs font-semibold text-foreground">{t('access.owner')}</strong><span className="truncate text-[11px] text-muted-foreground">{ownerEmail}</span></div><StatusChip state="full-access">{t('access.fullAccess')}</StatusChip></Surface>}
     {successMessage && <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status"><Check aria-hidden="true" className="shrink-0 text-success" size={15} />{t(successMessage)}</div>}
     {!accountId && <>
-      <div className="flex flex-wrap items-end justify-between gap-3"><div className="flex items-center gap-2.5"><span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><KeyRound size={16} /></span><div><h2>{t('access.accountsTitle')}</h2><p className="text-xs text-muted-foreground">{t('access.accountsDescription')}</p></div></div></div>
+      {/* 作为 `/access?tab=tokens` 内容渲染时，工作面标题已经由 tokensTitle/tokensDescription 承担，
+          这里不再重复同一段说明（spec 0001 §13.2、§17.4）。 */}
+      {!embedded && <div className="flex flex-wrap items-end justify-between gap-3"><div className="flex items-center gap-2.5"><span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><KeyRound size={16} /></span><div><h2>{t('access.accountsTitle')}</h2><p className="text-xs text-muted-foreground">{t('access.accountsDescription')}</p></div></div></div>}
       {state === 'loading' && <LoadingState label={t('access.loading')} />}
       {state === 'error' && (() => { const copy = errorCopy(error, t('access.loadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => void refreshList()} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
-      {state === 'ready' && (!visibleAccounts.length ? <EmptyState title={t('access.emptyTitle')} description={t('access.emptyDescription')}><Button onClick={() => setCreateOpen(true)} variant="primary"><Plus aria-hidden="true" size={15} /> {t('access.create')}</Button></EmptyState> : <Table><TableCaption>{t('access.accountsTitle')}</TableCaption><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40"><TableHead scope="col">{t('access.columnName')}</TableHead><TableHead scope="col">{t('access.columnPermission')}</TableHead><TableHead scope="col">{t('access.columnStatus')}</TableHead><TableHead scope="col">{t('access.columnLastUsed')}</TableHead></TableRow></TableHeader><TableBody>{visibleAccounts.map((item) => <TableRow key={item.id}><TableCell><Link className="text-xs font-semibold text-primary hover:underline" to={`/access?account=${encodeURIComponent(item.id)}`}>{item.name}</Link>{item.description && <small className="mt-0.5 block text-[11px] text-muted-foreground">{item.description}</small>}</TableCell><TableCell><PermissionLabel permission={item.permission} /></TableCell><TableCell><StatusChip state={item.status}>{accessStatusLabel(item.status, t)}</StatusChip></TableCell><TableCell>{item.lastUsedAt ? <time dateTime={item.lastUsedAt}>{formatDate(item.lastUsedAt)}</time> : t('access.never')}</TableCell></TableRow>)}</TableBody></Table>)}
+      {state === 'ready' && (!visibleAccounts.length ? <EmptyState title={t('access.emptyTitle')} description={t('access.emptyDescription')}><Button onClick={() => setCreateOpen(true)} variant="primary"><Plus aria-hidden="true" size={15} /> {t('access.create')}</Button></EmptyState> : <Table><TableCaption>{t('access.accountsTitle')}</TableCaption><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40"><TableHead scope="col">{t('access.columnName')}</TableHead><TableHead scope="col">{t('access.columnPermission')}</TableHead><TableHead scope="col">{t('access.columnStatus')}</TableHead><TableHead scope="col">{t('access.columnLastUsed')}</TableHead></TableRow></TableHeader><TableBody>{visibleAccounts.map((item) => <TableRow key={item.id}><TableCell><Link className="text-xs font-semibold text-primary hover:underline" to={`/access?tab=tokens&account=${encodeURIComponent(item.id)}`}>{item.name}</Link>{item.description && <small className="mt-0.5 block text-[11px] text-muted-foreground">{item.description}</small>}</TableCell><TableCell><PermissionLabel permission={item.permission} /></TableCell><TableCell><StatusChip state={item.status}>{accessStatusLabel(item.status, t)}</StatusChip></TableCell><TableCell>{item.lastUsedAt ? <time dateTime={item.lastUsedAt}>{formatDate(item.lastUsedAt)}</time> : t('access.never')}</TableCell></TableRow>)}</TableBody></Table>)}
       {state === 'ready' && visibleAccounts.length > 0 && <nav aria-label={t('access.pagesLabel')} className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"><Button disabled={!pageCursors.length} onClick={previousAccounts} size="small"><ArrowLeft aria-hidden="true" size={14} /> {t('access.previous')}</Button><span>{t('access.perPage')}</span><Button disabled={!cursor} onClick={nextAccounts} size="small">{t('access.next')} <ArrowRight aria-hidden="true" size={14} /></Button></nav>}
     </>}
     {accountId && <ServiceAccountDetail account={account} keys={keys} state={detailState} error={detailError} keyError={keyError} keyName={keyName} onKeyName={setKeyName} onCreateKey={makeKey} keyBusy={keyBusy} onEdit={() => { setEditOpen(true); setEditError(undefined); }} onDisable={() => setDanger({ kind: 'disable' })} onEnable={() => void enableAccount()} onRevoke={(key) => setDanger({ kind: 'revoke', key })} busy={dangerBusy} onRetry={() => setDetailReload((value) => value + 1)} />}
@@ -341,9 +401,9 @@ function ServiceAccountDetail({
 }) {
   const { t, formatDate } = useI18n();
   if (state === 'loading') return <LoadingState label={t('access.detailLoading')} />;
-  if (state === 'error' || !account) { const copy = errorCopy(error, t('access.detailLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={onRetry} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-xs font-semibold text-primary hover:underline" to="/access">{t('access.backToAccess')}</Link></div></ErrorState>; }
+  if (state === 'error' || !account) { const copy = errorCopy(error, t('access.detailLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={onRetry} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-xs font-semibold text-primary hover:underline" to="/access?tab=tokens">{t('access.backToAccess')}</Link></div></ErrorState>; }
   return <section aria-label={t('access.detailLabel')} className="flex min-w-0 flex-col gap-4">
-    <p className="m-0"><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground" to="/access"><ArrowLeft aria-hidden="true" size={14} /> {t('access.backToAccess')}</Link></p>
+    <p className="m-0"><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground" to="/access?tab=tokens"><ArrowLeft aria-hidden="true" size={14} /> {t('access.backToAccess')}</Link></p>
     <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
       <header className="flex flex-wrap items-center gap-3 border-b pb-3"><div className="min-w-0 flex-1"><p className="eyebrow">{t('access.detailEyebrow')}</p><h2 className="mt-0.5 break-words">{account.name}</h2><p className="mt-1 text-xs text-muted-foreground">{account.description || t('access.noDescription')}</p></div><StatusChip state={account.status}>{accessStatusLabel(account.status, t)}</StatusChip><Button onClick={onEdit} size="small">{t('access.edit')}</Button>{account.status === 'active' ? <Button disabled={busy} onClick={onDisable} size="small" variant="danger">{t('access.disable')}</Button> : <Button disabled={busy} onClick={onEnable} size="small" variant="primary">{t('access.enable')}</Button>}</header>
       <dl className="m-0 flex flex-wrap gap-x-8 gap-y-3"><div className="grid gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.detailPermission')}</dt><dd className="m-0 text-xs text-ink-secondary"><PermissionLabel permission={account.permission} /></dd></div><div className="grid gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.detailCreated')}</dt><dd className="m-0 text-xs text-ink-secondary">{account.createdAt ? <time dateTime={account.createdAt}>{formatDate(account.createdAt)}</time> : '—'}</dd></div><div className="grid gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.detailLastUsed')}</dt><dd className="m-0 text-xs text-ink-secondary">{account.lastUsedAt ? <time dateTime={account.lastUsedAt}>{formatDate(account.lastUsedAt)}</time> : t('access.never')}</dd></div></dl>
@@ -374,7 +434,9 @@ function serverDateTime(value: string) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : '';
 }
 
-export function AuditPage() {
+// embedded：作为 `活动记录`（source=audit）的内容渲染时不重复页面级标题（spec 0001 §3.2、§9.2），
+// 独立渲染（审计详情深链接落地）仍保留自己的页面标题。
+export function AuditPage({ embedded = false }: { embedded?: boolean }) {
   const { t, formatDate } = useI18n();
   const { auditRecordId } = useParams();
   const location = useLocation();
@@ -396,9 +458,15 @@ export function AuditPage() {
   const [fromDraft, setFromDraft] = useState(params.get('from') ? localDateTime(params.get('from')!) : '');
   const [toDraft, setToDraft] = useState(params.get('to') ? localDateTime(params.get('to')!) : '');
   const cursor = params.get('cursor') ?? undefined;
+  // 返回路径只接受活动记录内部的来源；旧 `/access/audit` 深链接经 route-map 归一到新导航（spec 0001 §15）。
   const returnPath = useMemo(() => {
     const value = params.get('from');
-    return value && value.startsWith('/activity/audit') && !value.startsWith('//') ? value : '/activity/audit';
+    const fallback = '/activity?source=audit';
+    if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return fallback;
+    const queryIndex = value.indexOf('?');
+    const mapped = mapLegacyPath(queryIndex >= 0 ? value.slice(0, queryIndex) : value, queryIndex >= 0 ? value.slice(queryIndex) : '');
+    const candidate = mapped === null ? value : `${mapped.pathname}${mapped.search}`;
+    return candidate === '/activity' || candidate.startsWith('/activity?') || candidate.startsWith('/activity/audit') ? candidate : fallback;
   }, [params]);
 
   useEffect(() => {
@@ -449,9 +517,9 @@ export function AuditPage() {
   }
 
   if (auditRecordId) {
-    if (detailState === 'loading') return <div className="flex min-w-0 flex-col gap-6"><AccessTabs active="audit" /><LoadingState label={t('access.auditDetailLoading')} /></div>;
-    if (detailState === 'error' || !detail) { const copy = errorCopy(detailError, t('access.auditDetailLoadFailed'), t); return <div className="flex min-w-0 flex-col gap-6"><AccessTabs active="audit" /><ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-xs font-semibold text-primary hover:underline" to={returnPath}>{t('access.auditBack')}</Link></div></ErrorState></div>; }
-    return <div className="flex min-w-0 flex-col gap-6"><AccessTabs active="audit" /><p className="m-0"><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground" to={returnPath}><ArrowLeft aria-hidden="true" size={14} /> {t('access.auditBack')}</Link></p><PageTitle description={t('access.auditDetailDescription')} eyebrow={t('access.auditDetailEyebrow')} title={t('access.auditDetailTitle')} /><Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+    if (detailState === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('access.auditDetailLoading')} /></div>;
+    if (detailState === 'error' || !detail) { const copy = errorCopy(detailError, t('access.auditDetailLoadFailed'), t); return <div className="flex min-w-0 flex-col gap-6"><ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-xs font-semibold text-primary hover:underline" to={returnPath}>{t('access.auditBack')}</Link></div></ErrorState></div>; }
+    return <div className="flex min-w-0 flex-col gap-6"><p className="m-0"><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground" to={returnPath}><ArrowLeft aria-hidden="true" size={14} /> {t('access.auditBack')}</Link></p>{!embedded && <PageTitle description={t('access.auditDetailDescription')} eyebrow={t('access.auditDetailEyebrow')} title={t('access.auditDetailTitle')} />}<Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
       <header className="flex flex-wrap items-center gap-3 border-b pb-3"><div className="min-w-0 flex-1"><p className="eyebrow">{t('access.auditRecordEyebrow')}</p><h2 className="mt-0.5 break-words"><code className="font-mono text-sm">{detail.id}</code></h2></div><StatusChip state={detail.result}>{auditResultLabel(detail.result, t)}</StatusChip></header>
       <dl className="m-0 grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 min-[701px]:grid-cols-2" data-audit-detail-grid><div className="grid min-w-0 gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.auditTime')}</dt><dd className="m-0 break-words text-xs text-ink-secondary"><time dateTime={detail.time}>{formatDate(detail.time)}</time></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.auditActor')}</dt><dd className="m-0 break-words text-xs text-ink-secondary">{auditActorLabel(detail.actor.kind, t)} · <code className="font-mono text-[11px]">{detail.actor.id}</code></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.auditAction')}</dt><dd className="m-0 break-words text-xs text-ink-secondary"><code className="font-mono text-[11px]">{detail.action}</code></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.auditResult')}</dt><dd className="m-0 break-words text-xs text-ink-secondary">{auditResultLabel(detail.result, t)}</dd></div>{detail.requestId && <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.auditRequest')}</dt><dd className="m-0 break-words text-xs text-ink-secondary"><Link className="text-xs font-semibold text-primary hover:underline" to={`/requests/${encodeURIComponent(detail.requestId)}?from=${encodeURIComponent(`/activity/audit/${detail.id}`)}`}>{detail.requestId}</Link></dd></div>}</dl>
       <section className="border-t pt-3" data-audit-resource><h3 className="m-0 mb-1.5">{t('access.auditResource')}</h3><pre className="m-0 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-muted p-3 font-mono text-[11px] leading-relaxed text-ink-secondary"><code>{JSON.stringify(safeAuditValue(detail.resource), null, 2)}</code></pre></section>
@@ -463,8 +531,7 @@ export function AuditPage() {
   function previousPage() { if (!pageCursors.length) return; const next = new URLSearchParams(params); next.delete('back'); pageCursors.slice(0, -1).forEach((item) => next.append('back', item)); const previous = pageCursors.at(-1); if (previous) next.set('cursor', previous); else next.delete('cursor'); setParams(next); }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <PageTitle description={t('access.auditDescription')} eyebrow={t('access.auditEyebrow')} title={t('access.auditTitle')} />
-    <AccessTabs active="audit" />
+    {!embedded && <PageTitle description={t('access.auditDescription')} eyebrow={t('access.auditEyebrow')} title={t('access.auditTitle')} />}
     <form className="grid min-w-0 grid-cols-1 items-end gap-3 min-[701px]:grid-cols-2 min-[1051px]:grid-cols-3" onSubmit={submitFilters}>
       <FormField htmlFor="audit-search" label={t('access.auditSearch')}><input id="audit-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('access.auditSearchPlaceholder')} value={searchDraft} /></FormField>
       <FormField htmlFor="audit-actor" label={t('access.auditActor')}><select id="audit-actor" onChange={(event) => setActorDraft(event.target.value)} value={actorDraft}><option value="all">{t('access.auditAllActors')}</option><option value="owner">{t('access.auditActorOwner')}</option><option value="serviceAccount">{t('access.auditActorServiceAccount')}</option></select></FormField>

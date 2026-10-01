@@ -230,22 +230,30 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   });
   expect([200, 201]).toContain(pending.status);
 
+  // 旧 `/settings/drift` 深链仍然可用，但会被 route mapper 归一为 `/changes?tab=drift`；
+  // 结构漂移在新 IA 中是「变更」工作区的一个工作面，因此标题是 h2。
   await page.goto(runtimeURL + '/settings/drift');
-  await expect(page.getByRole('heading', { name: 'Storage consistency', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/changes\?tab=drift$/);
+  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Storage consistency', level: 2 })).toBeVisible();
   await expect(page.getByText('A saved change is waiting for review')).toBeVisible();
   await expect(page.getByText('No differences found')).toBeVisible();
 
-  await page.goto(runtimeURL + '/activity');
+  // Activity 默认来源是管理面审计；子系统事实时间线由 `?source=facts` 筛选。
+  await page.goto(runtimeURL + '/activity?source=facts');
   await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
   const pendingRow = page.locator('li[data-activity-kind="change.pending"]').first();
   await expect(pendingRow).toBeVisible();
   await expect(pendingRow.getByText('posts')).toBeVisible();
-  await expect(pendingRow.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/collections/' + collectionId + '/schema');
+  // 待应用变更的深链接指向新的集合结构工作面 `/collections/:id/model`。
+  await expect(pendingRow.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/collections/' + collectionId + '/model');
   // Activity 不是请求日志：请求面产生的 RequestRecord 不出现在这里。
   expect(await page.locator('li[data-activity-kind="request.record"]').count()).toBe(0);
 
   // Policy Simulation：先预演默认 noAccess，再用真实匿名请求交叉验证同一 evaluator。
+  // 旧 `/collections/:id/security` 深链归一为 `/collections/:id/access`。
   await page.goto(runtimeURL + '/collections/' + collectionId + '/security');
+  await expect(page).toHaveURL(runtimeURL + '/collections/' + collectionId + '/access');
   await expect(page.getByRole('heading', { name: 'Simulate a request' })).toBeVisible();
   await page.getByLabel('Operation').selectOption('list');
   await page.getByLabel('Request identity').selectOption('anonymous');
@@ -284,7 +292,7 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   const changeVersion = (pendingChange.body as { data: { version: number } }).data.version;
   const appliedChange = await requestJSON(page, 'POST', '/admin/api/v1/collections/' + collectionId + '/schema/apply', { expectedVersion: changeVersion, confirmRisk: true });
   expect([200, 201]).toContain(appliedChange.status);
-  await page.goto(runtimeURL + '/activity');
+  await page.goto(runtimeURL + '/activity?source=facts');
   await expect(page.locator('li[data-activity-kind="change.applied"]').first()).toBeVisible();
 
   // 关闭并重启：Project Runtime Settings 决定监听地址，且不再要求重启。

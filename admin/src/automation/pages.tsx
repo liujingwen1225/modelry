@@ -1,54 +1,57 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Check, CircleAlert, Clock3, Radio, Search, Webhook as WebhookIcon } from 'lucide-react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, CircleAlert, Search, Webhook as WebhookIcon } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/button';
+import { CopyButton } from '../components/copy-button';
 import { FormField } from '../components/form-field';
 import { Dialog } from '../components/overlays';
-import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
-import { createEventHook, createJob, createWebhook, getDelivery, listAutomationCollections, listAutomationSecrets, listDeliveries, listEventHooks, listJobs, listWebhooks, retryDelivery, sendWebhookTest, setEventHookEnabled, setJobEnabled, setWebhookEnabled, updateEventHook, updateJob, updateWebhook, type CollectionOption, type DeliveryDetail, type DeliverySourceType, type DeliveryStatus, type EventHookInput, type EventHookSummary, type JobInput, type JobSummary, type SecretOption, type WebhookSummary } from './client';
+import { createEventHook, createJob, createWebhook, getDelivery, listAutomationCollections, listAutomationSecrets, listDeliveries, listEventHooks, listJobs, listWebhooks, retryDelivery, runJob, sendWebhookTest, setEventHookEnabled, setJobEnabled, setWebhookEnabled, updateEventHook, updateJob, updateWebhook, type CollectionOption, type DeliveryDetail, type DeliverySourceType, type DeliveryStatus, type EventHookInput, type EventHookSummary, type JobInput, type JobSummary, type SecretOption, type WebhookSummary } from './client';
 import { nextCronOccurrence } from './cron';
 
-type Tab = 'webhooks' | 'eventHooks' | 'jobs' | 'deliveries';
 type ViewState = 'loading' | 'error' | 'ready';
-const tabs: Array<{ id: Tab; icon: typeof WebhookIcon }> = [
-  { id: 'webhooks', icon: WebhookIcon }, { id: 'eventHooks', icon: Radio },
-  { id: 'jobs', icon: Clock3 }, { id: 'deliveries', icon: Activity },
-];
 
-function selectedTab(value: string | null): Tab {
-  return value === 'eventHooks' || value === 'jobs' || value === 'deliveries' ? value : 'webhooks';
-}
+export type PanelProps = { params: URLSearchParams; setParams: (next: URLSearchParams, options?: { replace?: boolean }) => void };
 
-// 新版信息架构（spec 0001 §3.1）：Automations 使用路径子导航；
-// 旧 `/automations?tab=*` 深链接经 route-map 重定向，这里同时兼容两种形态。
-const automationPathTabs: Record<string, Tab> = {
-  '/automations/webhooks': 'webhooks',
-  '/automations/triggers': 'eventHooks',
-  '/automations/schedules': 'jobs',
-  '/automations/deliveries': 'deliveries',
-};
+// 页面内二级 Tab 的共享实现（spec 0001 §3.1）：`?tab=` 是唯一事实来源，
+// Hooks & Events 与定时任务两个页面复用同一套 Tab 结构与样式，不各写一份（§17.4）。
+export type PanelTab<T extends string> = { id: T; label: TranslationKey; icon: typeof WebhookIcon };
 
-const automationTabPaths: Record<Tab, string> = {
-  webhooks: '/automations/webhooks',
-  eventHooks: '/automations/triggers',
-  jobs: '/automations/schedules',
-  deliveries: '/automations/deliveries',
-};
+// 切换工作面时丢弃属于上一个工作面的表单与详情上下文，保留搜索词与筛选。
+const surfaceContextKeys = ['create', 'edit', 'deliveryId', 'cursor'];
 
-function automationCommandPath(context: { pathname: string; search: string }, tab: Tab, additions: Record<string, string> = {}): string {
-  const current = new URLSearchParams(context.pathname.startsWith('/automations') ? context.search : '');
-  const next = new URLSearchParams();
-  const search = current.get('q');
-  if (search) next.set('q', search);
-  for (const [key, value] of Object.entries(additions)) next.set(key, value);
-  const serialized = next.toString();
-  return `${automationTabPaths[tab]}${serialized ? `?${serialized}` : ''}`;
+export function PanelTabNav<T extends string>({ active, idPrefix, label, tabs }: {
+  active: T; idPrefix: string; label: string; tabs: ReadonlyArray<PanelTab<T>>;
+}) {
+  const { t } = useI18n();
+  const { pathname, search } = useLocation();
+  // 每个 Tab 都是真实链接：工作面可分享、可新标签页打开、可前进后退，
+  // 目标 URL 由当前 query 派生，因此 `q`、`source`、`status` 等筛选不会丢失。
+  const linkTo = (id: T) => {
+    const next = new URLSearchParams(search);
+    for (const key of surfaceContextKeys) next.delete(key);
+    next.set('tab', id);
+    const serialized = next.toString();
+    return `${pathname}${serialized ? `?${serialized}` : ''}`;
+  };
+  return <nav aria-label={label} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-panel-tabs={idPrefix}>
+    {tabs.map(({ id, label: tabLabel, icon: Icon }) => {
+      const selected = active === id;
+      return <Link
+        aria-current={selected ? 'page' : undefined}
+        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selected ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        id={`${idPrefix}-tab-${id}`}
+        key={id}
+        replace
+        to={linkTo(id)}
+      ><Icon aria-hidden="true" size={16} />{t(tabLabel)}</Link>;
+    })}
+  </nav>;
 }
 
 const validationTranslations: Record<string, TranslationKey> = {
@@ -80,95 +83,12 @@ function fieldErrorMessage(error: unknown, path: string, t: ReturnType<typeof us
   return key ? t(key) : undefined;
 }
 
-export function AutomationPage() {
-  const { t } = useI18n();
-  const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const pathTab = automationPathTabs[location.pathname];
-  const activeTab = pathTab ?? selectedTab(params.get('tab'));
-  const commands = useMemo<AdminCommand[]>(() => ([
-    {
-      id: 'automation.open-webhooks', category: 'commands.categories.automation', label: () => t('automation.tabs.webhooks'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'webhooks')),
-    },
-    {
-      id: 'automation.open-event-hooks', category: 'commands.categories.automation', label: () => t('automation.tabs.eventHooks'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'eventHooks')),
-    },
-    {
-      id: 'automation.open-jobs', category: 'commands.categories.automation', label: () => t('automation.tabs.jobs'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'jobs')),
-    },
-    {
-      id: 'automation.open-deliveries', category: 'commands.categories.automation', label: () => t('commands.deliveryHistory'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'deliveries')),
-    },
-    {
-      id: 'automation.create-webhook', category: 'commands.categories.automation', label: () => t('commands.createWebhook'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'webhooks', { create: '1' })),
-    },
-    {
-      id: 'automation.create-event-hook', category: 'commands.categories.automation', label: () => t('commands.createEventHook'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'eventHooks', { create: '1' })),
-    },
-    {
-      id: 'automation.create-job', category: 'commands.categories.automation', label: () => t('commands.createJob'),
-      isVisible: (context) => context.pathname.startsWith('/automations'),
-      execute: (context) => context.navigate(automationCommandPath(context, 'jobs', { create: '1' })),
-    },
-  ]), [t]);
-  useRegisterCommands(commands);
-
-  function selectTab(tab: Tab) {
-    const next = new URLSearchParams(params);
-    next.delete('tab');
-    if (pathTab !== undefined) {
-      // 路径子导航形态：切换 tab 时更新 pathname，保留 q/create/edit 等参数。
-      const search = next.toString();
-      navigate(`${automationTabPaths[tab]}${search ? `?${search}` : ''}`);
-      return;
-    }
-    next.set('tab', tab);
-    setParams(next);
-  }
-
-  return <div className="flex min-w-0 flex-col gap-6">
-    <header className="min-w-0">
-      <p className="eyebrow">{t('automation.eyebrow')}</p>
-      <h1>{t('automation.title')}</h1>
-      <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('automation.description')}</p>
-    </header>
-    <nav aria-label={t('automation.title')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-automation-tabs role="tablist">
-      {tabs.map(({ id, icon: Icon }) => <button
-        aria-selected={activeTab === id}
-        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-        id={`automation-tab-${id}`}
-        key={id}
-        onClick={() => selectTab(id)}
-        role="tab"
-        type="button"
-      ><Icon aria-hidden="true" size={16} />{t(`automation.tabs.${id}` as TranslationKey)}</button>)}
-    </nav>
-    {activeTab === 'webhooks' && <WebhooksPanel params={params} setParams={setParams} navigate={navigate} />}
-    {activeTab === 'eventHooks' && <EventHooksPanel params={params} setParams={setParams} />}
-    {activeTab === 'jobs' && <JobsPanel params={params} setParams={setParams} />}
-    {activeTab === 'deliveries' && <DeliveriesPanel params={params} setParams={setParams} />}
-  </div>;
-}
-
-function WebhooksPanel({ params, setParams, navigate }: {
-  params: URLSearchParams; setParams: (next: URLSearchParams, options?: { replace?: boolean }) => void; navigate: ReturnType<typeof useNavigate>;
-}) {
+export function WebhooksPanel({ params, setParams }: PanelProps) {
   const { t, formatDate } = useI18n();
+  const navigate = useNavigate();
   const [items, setItems] = useState<WebhookSummary[]>([]);
   const [secrets, setSecrets] = useState<SecretOption[]>([]);
+  const [secretsUnavailable, setSecretsUnavailable] = useState(false);
   const [state, setState] = useState<ViewState>('loading');
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -180,10 +100,13 @@ function WebhooksPanel({ params, setParams, navigate }: {
   useEffect(() => {
     const controller = new AbortController();
     setState('loading');
-    void Promise.all([listWebhooks(controller.signal), listAutomationSecrets(controller.signal)]).then(([webhooks, secretOptions]) => {
+    // Secret 列表只服务于表单与「可测试」判断：它加载失败时仍展示可用的 Webhook，
+    // 并在页面内说明缺失的部分，而不是把整页降级为错误状态（spec 0001 §13.5）。
+    void Promise.all([listWebhooks(controller.signal), listAutomationSecrets(controller.signal).catch(() => undefined)]).then(([webhooks, secretOptions]) => {
       if (controller.signal.aborted) return;
       setItems(webhooks);
-      setSecrets(secretOptions);
+      setSecrets(secretOptions ?? []);
+      setSecretsUnavailable(secretOptions === undefined);
       setState('ready');
       setError(false);
     }).catch(() => {
@@ -219,12 +142,13 @@ function WebhooksPanel({ params, setParams, navigate }: {
     setBusyId(item.id);
     try {
       const result = await sendWebhookTest(item.id);
-      navigate(`/automations/deliveries?deliveryId=${encodeURIComponent(result.id)}&source=test`);
+      // 测试投递的真实结果只存在于投递历史：直接进入 Hooks & Events / 投递历史并打开该条记录。
+      navigate(`/events?tab=deliveries&deliveryId=${encodeURIComponent(result.id)}&source=test`);
     } catch { setError(true); }
     finally { setBusyId(undefined); }
   }
 
-  return <section aria-labelledby="automation-webhooks-heading" className="flex min-w-0 flex-col gap-4" role="tabpanel">
+  return <section aria-labelledby="automation-webhooks-heading" className="flex min-w-0 flex-col gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0"><h2 id="automation-webhooks-heading">{t('automation.tabs.webhooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.webhooks.description')}</p></div>
       <Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.webhooks.create')}</Button>
@@ -234,6 +158,7 @@ function WebhooksPanel({ params, setParams, navigate }: {
       <span className="text-xs text-muted-foreground">{t('automation.webhooks.list')} · {visible.length}</span>
     </Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}
+    {secretsUnavailable && <PartialState>{t('navigation.secrets')} · {t('automation.common.loadFailed')}</PartialState>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}
     {state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && error && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
@@ -322,13 +247,12 @@ function WebhookForm({ editing, secrets, onCancel, onSaved }: {
   </Surface>;
 }
 
-type PanelProps = { params: URLSearchParams; setParams: (next: URLSearchParams, options?: { replace?: boolean }) => void };
-
-function EventHooksPanel({ params, setParams }: PanelProps) {
+export function EventHooksPanel({ params, setParams }: PanelProps) {
   const { t, formatDate } = useI18n();
   const [items, setItems] = useState<EventHookSummary[]>([]);
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookSummary[]>([]);
+  const [webhooksUnavailable, setWebhooksUnavailable] = useState(false);
   const [state, setState] = useState<ViewState>('loading');
   const [failedAction, setFailedAction] = useState(false);
   const [reload, setReload] = useState(0);
@@ -338,9 +262,12 @@ function EventHooksPanel({ params, setParams }: PanelProps) {
   useEffect(() => {
     const controller = new AbortController();
     setState('loading');
-    void Promise.all([listEventHooks(controller.signal), listAutomationCollections(controller.signal), listWebhooks(controller.signal)]).then(([hooks, collectionOptions, webhookOptions]) => {
+    // Webhook 列表只用于提示「目标 Webhook 已停用」：它失败时事件触发列表仍然可用。
+    void Promise.all([listEventHooks(controller.signal), listAutomationCollections(controller.signal), listWebhooks(controller.signal).catch(() => undefined)]).then(([hooks, collectionOptions, webhookOptions]) => {
       if (controller.signal.aborted) return;
-      setItems(hooks); setCollections(collectionOptions); setWebhooks(webhookOptions); setState('ready');
+      setItems(hooks); setCollections(collectionOptions); setWebhooks(webhookOptions ?? []);
+      setWebhooksUnavailable(webhookOptions === undefined);
+      setState('ready');
     }).catch(() => { if (!controller.signal.aborted) setState('error'); });
     return () => controller.abort();
   }, [reload]);
@@ -356,11 +283,12 @@ function EventHooksPanel({ params, setParams }: PanelProps) {
     catch { setFailedAction(true); }
     finally { setBusyId(undefined); }
   }
-  return <section aria-labelledby="automation-event-hooks-heading" className="flex min-w-0 flex-col gap-4" role="tabpanel">
+  return <section aria-labelledby="automation-event-hooks-heading" className="flex min-w-0 flex-col gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id="automation-event-hooks-heading">{t('automation.tabs.eventHooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.eventHooks.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.eventHooks.create')}</Button></div>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><label className="relative min-w-[200px] flex-1 md:max-w-sm"><span className="sr-only">{t('automation.common.search')}</span><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} /><Input aria-label={t('automation.common.search')} className="pl-9" onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} type="search" value={search} /></label><span className="text-xs text-muted-foreground">{t('automation.eventHooks.list')} · {visible.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}
     {failedAction && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
+    {webhooksUnavailable && <PartialState>{t('automation.webhooks.list')} · {t('automation.common.loadFailed')}</PartialState>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}
     {state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && visible.length === 0 && <EmptyState description={items.length ? t('automation.common.emptySearch') : t('automation.eventHooks.emptyDescription')} title={items.length ? t('automation.common.emptySearch') : t('automation.eventHooks.emptyTitle')}>{items.length > 0 && search && <Button onClick={() => updateSearch('')} size="small" type="button" variant="quiet">{t('automation.common.clearSearch')}</Button>}</EmptyState>}
@@ -417,7 +345,7 @@ function EventHookForm({ editing, collections, webhooks, onCancel, onSaved }: {
         {webhookError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{webhookError}</p>}
       </div>
       {collections.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.eventHooks.noCollections')} <Link className="font-semibold text-primary hover:underline" to="/collections">{t('automation.eventHooks.collectionsLink')}</Link></p>}
-      {webhooks.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.eventHooks.noWebhooks')} <Link className="font-semibold text-primary hover:underline" to="/automations?tab=webhooks&create=1">{t('automation.eventHooks.createWebhookLink')}</Link></p>}
+      {webhooks.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.eventHooks.noWebhooks')} <Link className="font-semibold text-primary hover:underline" to="/events?tab=webhooks&create=1">{t('automation.eventHooks.createWebhookLink')}</Link></p>}
       <p className={`m-0 rounded-md border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs leading-relaxed text-warning sm:col-span-2`}>{t('automation.eventHooks.valuesNotice')}</p>
       {webhookId && !webhooks.find((item) => item.id === webhookId)?.enabled && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.eventHooks.webhookDormant')}</p>}
       {error !== undefined && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger sm:col-span-2" role="alert">{safeErrorMessage(error, t)}</p>}
@@ -426,19 +354,40 @@ function EventHookForm({ editing, collections, webhooks, onCancel, onSaved }: {
   </Surface>;
 }
 
-function JobsPanel({ params, setParams }: PanelProps) {
+// 手动运行的 422 是字段级校验：`/webhookId`（目标 Webhook 未启用）与 `/signingSecretId`
+//（签名 Secret 未配置）对用户是同一个恢复动作，因此共用一条可恢复文案
+//（automation-http-contract §/jobs/{jobId}/run）。
+function jobRunErrorMessage(error: unknown, t: ReturnType<typeof useI18n>['t']): string {
+  if (error instanceof ApiClientError) {
+    const violations = error.apiError.details.violations ?? [];
+    if (violations.some((item) => item.code === 'invalidWebhook' || item.code === 'invalidSecretReference')) {
+      return t('schedules.runFailedWebhook');
+    }
+  }
+  return t('automation.common.requestFailed');
+}
+
+export function JobsPanel({ onRunRecorded, params, setParams }: PanelProps & {
+  /** 服务器已接受一次手动运行时通知宿主，让执行历史重新加载（spec 0001 §8）。 */
+  onRunRecorded?: (deliveryId: string) => void;
+}) {
   const { t, formatDate } = useI18n();
   const [items, setItems] = useState<JobSummary[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookSummary[]>([]);
+  const [webhooksUnavailable, setWebhooksUnavailable] = useState(false);
   const [state, setState] = useState<ViewState>('loading');
   const [failedAction, setFailedAction] = useState(false);
   const [reload, setReload] = useState(0);
   const [busyId, setBusyId] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [runId, setRunId] = useState<string>();
+  const [runResult, setRunResult] = useState<{ jobName: string; deliveryId: string }>();
+  const [runFailure, setRunFailure] = useState<{ jobName: string; message: string }>();
   const search = params.get('q') ?? '';
   useEffect(() => {
     const controller = new AbortController(); setState('loading');
-    void Promise.all([listJobs(controller.signal), listWebhooks(controller.signal)]).then(([jobs, hooks]) => { if (!controller.signal.aborted) { setItems(jobs); setWebhooks(hooks); setState('ready'); } }).catch(() => { if (!controller.signal.aborted) setState('error'); });
+    // 与事件触发一致：Webhook 列表只影响「目标 Webhook 已停用」提示，不决定任务列表是否可用。
+    void Promise.all([listJobs(controller.signal), listWebhooks(controller.signal).catch(() => undefined)]).then(([jobs, hooks]) => { if (!controller.signal.aborted) { setItems(jobs); setWebhooks(hooks ?? []); setWebhooksUnavailable(hooks === undefined); setState('ready'); } }).catch(() => { if (!controller.signal.aborted) setState('error'); });
     return () => controller.abort();
   }, [reload]);
   const visible = useMemo(() => items.filter((item) => !search || `${item.name} ${item.webhookName}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
@@ -446,13 +395,47 @@ function JobsPanel({ params, setParams }: PanelProps) {
   function updateSearch(value: string) { const next = new URLSearchParams(params); if (value) next.set('q', value); else next.delete('q'); setParams(next, { replace: true }); }
   function closeForm() { const next = new URLSearchParams(params); next.delete('create'); next.delete('edit'); setParams(next); }
   async function toggle(item: JobSummary) { setBusyId(item.id); try { await setJobEnabled(item.id, !item.enabled); setReload((value) => value + 1); } catch { setFailedAction(true); } finally { setBusyId(undefined); } }
-  return <section aria-labelledby="automation-jobs-heading" className="flex min-w-0 flex-col gap-4" role="tabpanel">
+
+  // 手动运行以服务器响应为准：只有 202 + Delivery 才算「已请求」，
+  // 不显示乐观成功；终态 capacityExceeded 与 422 字段级校验都给出恢复路径。
+  async function runNow(item: JobSummary) {
+    setRunId(item.id);
+    setRunResult(undefined);
+    setRunFailure(undefined);
+    try {
+      const created = await runJob(item.id);
+      if (created.status === 'failed' && created.errorCode === 'capacityExceeded') {
+        setRunFailure({ jobName: item.name, message: t('schedules.runCapacityExceeded') });
+        return;
+      }
+      setRunResult({ jobName: item.name, deliveryId: created.id });
+      // 刷新任务列表（最近一次运行事实），并让执行历史重新加载。
+      setReload((value) => value + 1);
+      onRunRecorded?.(created.id);
+    } catch (reason) {
+      setRunFailure({ jobName: item.name, message: jobRunErrorMessage(reason, t) });
+    } finally {
+      setRunId(undefined);
+    }
+  }
+
+  return <section aria-labelledby="automation-jobs-heading" className="flex min-w-0 flex-col gap-4">
     <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id="automation-jobs-heading">{t('automation.tabs.jobs')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.jobs.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.jobs.create')}</Button></div>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><label className="relative min-w-[200px] flex-1 md:max-w-sm"><span className="sr-only">{t('automation.common.search')}</span><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} /><Input aria-label={t('automation.common.search')} className="pl-9" onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} type="search" value={search} /></label><span className="text-xs text-muted-foreground">{t('automation.jobs.list')} · {visible.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}{failedAction && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
+    {webhooksUnavailable && <PartialState>{t('automation.webhooks.list')} · {t('automation.common.loadFailed')}</PartialState>}
+    {/* 手动运行结果耐久留在面板内：成功直达执行历史，失败说明恢复动作。 */}
+    {runResult && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status">
+      <Check aria-hidden="true" className="shrink-0" size={15} />
+      <span className="min-w-0 flex-1"><strong className="font-semibold">{runResult.jobName}</strong> · <span>{t('schedules.runRequested', { id: runResult.deliveryId })}</span></span>
+      <CopyButton label={t('common.copy')} value={runResult.deliveryId} />
+      {/* 链接文案与「执行历史」Tab 区分开，避免两个同名链接指向不同位置。 */}
+      <Link className="font-semibold underline" to={`/schedules?tab=history&deliveryId=${encodeURIComponent(runResult.deliveryId)}`}>{t('schedules.openHistory')}</Link>
+    </div>}
+    {runFailure && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert"><strong className="font-semibold">{runFailure.jobName}</strong> · <span>{runFailure.message}</span></p>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}{state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && visible.length === 0 && <EmptyState description={items.length ? t('automation.common.emptySearch') : t('automation.jobs.emptyDescription')} title={items.length ? t('automation.common.emptySearch') : t('automation.jobs.emptyTitle')}>{items.length > 0 && search && <Button onClick={() => updateSearch('')} size="small" type="button" variant="quiet">{t('automation.common.clearSearch')}</Button>}</EmptyState>}
-    {state === 'ready' && visible.length > 0 && <div aria-label={t('automation.jobs.list')} className="flex min-w-0 flex-col gap-3">{visible.map((item) => <article className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.cron} UTC · {item.webhookName}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.jobs.nextRun')}: {formatDate(item.nextRunAt)}</p>{item.enabled && !webhooks.find((hook) => hook.id === item.webhookId)?.enabled && <p className="m-0 mt-1.5 rounded-md border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning">{t('automation.jobs.webhookDormant')}</p>}</div><StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.jobs.edit', { name: item.name })}</Button><Button disabled={busyId === item.id} onClick={() => void toggle(item)} size="small" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button></div></article>)}</div>}
+    {state === 'ready' && visible.length > 0 && <div aria-label={t('automation.jobs.list')} className="flex min-w-0 flex-col gap-3">{visible.map((item) => <article className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.cron} UTC · {item.webhookName}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.jobs.nextRun')}: {formatDate(item.nextRunAt)}</p>{item.enabled && !webhooks.find((hook) => hook.id === item.webhookId)?.enabled && <p className="m-0 mt-1.5 rounded-md border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning">{t('automation.jobs.webhookDormant')}</p>}</div><StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.jobs.edit', { name: item.name })}</Button><Button disabled={busyId === item.id || runId === item.id} onClick={() => void toggle(item)} size="small" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button><Button disabled={runId === item.id} onClick={() => void runNow(item)} size="small" type="button" variant="secondary">{runId === item.id ? t('schedules.running') : t('schedules.runNow')}</Button></div></article>)}</div>}
     {state === 'ready' && formOpen && <JobForm editing={editing} webhooks={webhooks} onCancel={closeForm} onSaved={(created) => { setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
   </section>;
 }
@@ -477,7 +460,7 @@ function JobForm({ editing, webhooks, onCancel, onSaved }: { editing?: JobSummar
         <FormField htmlFor="automation-job-cron" hint={t('automation.jobs.cronHint')} label={t('automation.jobs.cron')}><input autoComplete="off" id="automation-job-cron" onChange={(event) => setCron(event.target.value)} placeholder="0 9 * * *" required value={cron} aria-invalid={Boolean(cron.trim()) && !validCron} /></FormField>
         {Boolean(cron.trim()) && !validCron && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{cronError ?? t('automation.jobs.cronInvalid')}</p>}{validCron && cronError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{cronError}</p>}
       </div>
-      {webhooks.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.jobs.noWebhooks')} <Link className="font-semibold text-primary hover:underline" to="/automations?tab=webhooks&create=1">{t('automation.jobs.createWebhookLink')}</Link></p>}
+      {webhooks.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.jobs.noWebhooks')} <Link className="font-semibold text-primary hover:underline" to="/events?tab=webhooks&create=1">{t('automation.jobs.createWebhookLink')}</Link></p>}
       {validCron && next && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2"><strong>{t('automation.jobs.nextRunPreview')}:</strong> {formatDate(next, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</p>}
       {editing && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.jobs.disabledDueHint')}</p>}
       {webhookId && !webhooks.find((item) => item.id === webhookId)?.enabled && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.jobs.webhookDormant')}</p>}
@@ -487,17 +470,33 @@ function JobForm({ editing, webhooks, onCancel, onSaved }: { editing?: JobSummar
   </Surface>;
 }
 
-function DeliveriesPanel({ params, setParams }: PanelProps) {
+export type DeliveriesPanelCopy = { title: string; description: string; emptyTitle?: string; emptyDescription?: string };
+
+export function DeliveriesPanel({ copy, fixedSourceType, params, reloadKey = 0, setParams, showTriggerColumn = fixedSourceType === 'job' }: PanelProps & {
+  /** 固定来源时隐藏来源筛选并始终按该来源查询：定时任务执行历史 = job（spec 0001 §3.2）。 */
+  fixedSourceType?: DeliverySourceType;
+  /** 由投递事件的 eventType 推导的「触发方式」列，只对定时任务执行历史有意义。 */
+  showTriggerColumn?: boolean;
+  /** 执行历史 Tab 的专属标题、说明与空态文案。 */
+  copy?: DeliveriesPanelCopy;
+  /** 外部触发重新加载的信号（例如刚刚请求了一次手动运行）。 */
+  reloadKey?: number;
+}) {
   const { t, formatDate } = useI18n();
   const [items, setItems] = useState<Awaited<ReturnType<typeof listDeliveries>>['data']>([]);
   const [detail, setDetail] = useState<DeliveryDetail>(); const [webhooks, setWebhooks] = useState<WebhookSummary[]>([]);
-  const [nextCursor, setNextCursor] = useState<string>(); const [state, setState] = useState<ViewState>('loading'); const [reload, setReload] = useState(0); const [busy, setBusy] = useState(false); const [error, setError] = useState<string>(); const [notice, setNotice] = useState<string>();
-  const source = params.get('source') as DeliverySourceType | null; const status = params.get('status') as DeliveryStatus | null; const cursor = params.get('cursor') ?? undefined; const deliveryId = params.get('deliveryId');
+  const [nextCursor, setNextCursor] = useState<string>(); const [state, setState] = useState<ViewState>('loading'); const [reload, setReload] = useState(0); const [busy, setBusy] = useState(false); const [error, setError] = useState<string>(); const [notice, setNotice] = useState<string>(); const [partial, setPartial] = useState(false);
+  const requestedSource = params.get('source'); const source = fixedSourceType ?? (validSource(requestedSource) ? requestedSource : undefined); const status = params.get('status') as DeliveryStatus | null; const cursor = params.get('cursor') ?? undefined; const deliveryId = params.get('deliveryId');
   useEffect(() => {
-    const controller = new AbortController(); setState('loading');
-    void Promise.all([listDeliveries({ cursor, limit: 50, sourceType: validSource(source) ? source : undefined, status: validStatus(status) ? status : undefined }, controller.signal), deliveryId ? getDelivery(deliveryId, controller.signal) : Promise.resolve(undefined), deliveryId ? listWebhooks(controller.signal) : Promise.resolve([])]).then(([page, selected, hooks]) => { if (!controller.signal.aborted) { setItems(page.data); setNextCursor(page.nextCursor); setDetail(selected); setWebhooks(hooks); setState('ready'); setError(undefined); } }).catch(() => { if (!controller.signal.aborted) setState('error'); });
+    const controller = new AbortController(); setState('loading'); setPartial(false);
+    // 投递列表是主体，详情与 Webhook 修订只是辅助信息：辅助请求失败时保留可用列表（§13.5）。
+    void Promise.all([
+      listDeliveries({ cursor, limit: 50, sourceType: source, status: validStatus(status) ? status : undefined }, controller.signal),
+      deliveryId ? getDelivery(deliveryId, controller.signal).catch(() => undefined) : Promise.resolve(undefined),
+      deliveryId ? listWebhooks(controller.signal).catch(() => undefined) : Promise.resolve(undefined),
+    ]).then(([page, selected, hooks]) => { if (!controller.signal.aborted) { setItems(page.data); setNextCursor(page.nextCursor); setDetail(selected); setWebhooks(hooks ?? []); setPartial(Boolean(deliveryId) && (selected === undefined || hooks === undefined)); setState('ready'); setError(undefined); } }).catch(() => { if (!controller.signal.aborted) setState('error'); });
     return () => controller.abort();
-  }, [cursor, deliveryId, reload, source, status]);
+  }, [cursor, deliveryId, reload, reloadKey, source, status]);
   function changeFilter(key: 'source' | 'status', value: string) { const next = new URLSearchParams(params); if (value) next.set(key, value); else next.delete(key); next.delete('cursor'); next.delete('deliveryId'); setParams(next); }
   function closeDetail() { const next = new URLSearchParams(params); next.delete('deliveryId'); setParams(next); }
   async function retry() { if (!detail) return; setBusy(true); setError(undefined); setNotice(undefined); try { await retryDelivery(detail.id); setNotice(t('automation.deliveries.retrySuccess')); setReload((value) => value + 1); } catch (reason) { setError(safeErrorMessage(reason, t)); } finally { setBusy(false); } }
@@ -505,17 +504,21 @@ function DeliveriesPanel({ params, setParams }: PanelProps) {
   const lastAttempt = detail?.attempts.at(-1);
   const configChanged = Boolean(lastAttempt && currentWebhook && currentWebhook.revision !== lastAttempt.webhookRevision);
   const canRetry = Boolean(detail && detail.status === 'failed' && detail.errorCode !== 'capacityExceeded' && detail.manualRedriveCount < 3 && currentWebhook?.enabled && currentWebhook.signingConfigured);
-  return <section aria-labelledby="automation-deliveries-heading" className="flex min-w-0 flex-col gap-4" role="tabpanel">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id="automation-deliveries-heading">{t('automation.deliveries.list')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.deliveries.description')}</p></div></div>
-    <Surface className="flex flex-wrap items-end justify-between gap-3 p-3"><div aria-label={t('automation.deliveries.filters')} className="flex flex-wrap items-end gap-3"><label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.source')}<select aria-label={t('automation.deliveries.source')} className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => changeFilter('source', event.target.value)} value={source ?? ''}><option value="">{t('automation.deliveries.allSources')}</option><option value="eventHook">{t('automation.sources.eventHook')}</option><option value="job">{t('automation.sources.job')}</option><option value="test">{t('automation.sources.test')}</option></select></label><label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.status')}<select aria-label={t('automation.deliveries.status')} className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => changeFilter('status', event.target.value)} value={status ?? ''}><option value="">{t('automation.deliveries.allStatuses')}</option>{(['pending', 'running', 'succeeded', 'failed', 'cancelled'] as DeliveryStatus[]).map((value) => <option key={value} value={value}>{t(`automation.statuses.${value}` as TranslationKey)}</option>)}</select></label></div><span className="text-xs text-muted-foreground">{items.length}</span></Surface>
+  const headingId = fixedSourceType ? `${fixedSourceType}-deliveries-heading` : 'automation-deliveries-heading';
+  const title = copy?.title ?? t('automation.deliveries.list');
+  const description = copy?.description ?? t('automation.deliveries.description');
+  return <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-4">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id={headingId}>{title}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{description}</p></div></div>
+    <Surface className="flex flex-wrap items-end justify-between gap-3 p-3"><div aria-label={t('automation.deliveries.filters')} className="flex flex-wrap items-end gap-3">{!fixedSourceType && <label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.source')}<select aria-label={t('automation.deliveries.source')} className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => changeFilter('source', event.target.value)} value={requestedSource ?? ''}><option value="">{t('automation.deliveries.allSources')}</option><option value="eventHook">{t('automation.sources.eventHook')}</option><option value="job">{t('automation.sources.job')}</option><option value="test">{t('automation.sources.test')}</option></select></label>}<label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.status')}<select aria-label={t('automation.deliveries.status')} className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => changeFilter('status', event.target.value)} value={status ?? ''}><option value="">{t('automation.deliveries.allStatuses')}</option>{(['pending', 'running', 'succeeded', 'failed', 'cancelled'] as DeliveryStatus[]).map((value) => <option key={value} value={value}>{t(`automation.statuses.${value}` as TranslationKey)}</option>)}</select></label></div><span className="text-xs text-muted-foreground">{items.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}{error && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{error}</p>}
+    {partial && <PartialState>{t('automation.deliveries.detail')} · {t('automation.common.loadFailed')}</PartialState>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}{state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
-    {state === 'ready' && items.length === 0 && <EmptyState description={t('automation.deliveries.emptyDescription')} title={t('automation.deliveries.emptyTitle')} />}
-    {state === 'ready' && items.length > 0 && <div aria-label={t('automation.deliveries.list')} className="flex min-w-0 flex-col gap-3">{items.map((item) => <article className={`flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5${item.status === 'failed' ? ' border-danger/30' : ''}`} data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.webhookName}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{t(`automation.sources.${item.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(item.eventType, t)} · {formatDate(item.createdAt)}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.deliveries.attempts')}: {item.attemptCount} · {item.lastHttpStatus ?? '—'}</p>{item.errorCode !== 'none' && <p className="m-0 mt-1.5 flex items-center gap-1.5 text-[11px] text-danger"><CircleAlert aria-hidden="true" className="shrink-0" size={14} />{errorLabel(item.errorCode, t)}</p>}</div><StatusChip state={item.status}>{t(`automation.statuses.${item.status}` as TranslationKey)}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.set('deliveryId', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.deliveries.view')}</Button></div></article>)}</div>}
+    {state === 'ready' && items.length === 0 && <EmptyState description={copy?.emptyDescription ?? t('automation.deliveries.emptyDescription')} title={copy?.emptyTitle ?? t('automation.deliveries.emptyTitle')} />}
+    {state === 'ready' && items.length > 0 && <div aria-label={t('automation.deliveries.list')} className="flex min-w-0 flex-col gap-3">{items.map((item) => <article className={`flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5${item.status === 'failed' ? ' border-danger/30' : ''}`} data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.webhookName}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{t(`automation.sources.${item.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(item.eventType, t)} · {formatDate(item.createdAt)}</p>{showTriggerColumn && <p className="mt-0.5 break-words text-xs text-muted-foreground"><span className="font-medium text-ink-secondary">{t('schedules.trigger')}</span>: <span>{deliveryTriggerLabel(item.eventType, t)}</span></p>}<p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.deliveries.attempts')}: {item.attemptCount} · {item.lastHttpStatus ?? '—'}</p>{item.errorCode !== 'none' && <p className="m-0 mt-1.5 flex items-center gap-1.5 text-[11px] text-danger"><CircleAlert aria-hidden="true" className="shrink-0" size={14} />{errorLabel(item.errorCode, t)}</p>}</div><StatusChip state={item.status}>{t(`automation.statuses.${item.status}` as TranslationKey)}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.set('deliveryId', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.deliveries.view')}</Button></div></article>)}</div>}
     {state === 'ready' && nextCursor && <div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.set('cursor', nextCursor); setParams(next); }} type="button">{t('automation.common.next')}</Button></div>}
     {detail && <Surface className="flex min-w-0 flex-col gap-4 border-primary p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="eyebrow">{t('automation.deliveries.detail')}</p><h3>{detail.webhookName}</h3><p className="mt-0.5 text-xs text-muted-foreground">{t(`automation.sources.${detail.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(detail.eventType, t)} · {t(`automation.statuses.${detail.status}` as TranslationKey)}</p></div><Button onClick={closeDetail} size="small" type="button" variant="quiet">{t('automation.common.close')}</Button></div>
       {configChanged && <p className="m-0 rounded-md border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs leading-relaxed text-warning">{t('automation.deliveries.configChanged')}</p>}
-      <div className="border-t pt-4"><dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs"><dt className="text-muted-foreground">{t('automation.deliveries.deliveryId')}</dt><dd className="m-0 break-words"><code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">{detail.id}</code></dd><dt className="text-muted-foreground">{t('automation.deliveries.createdAt')}</dt><dd className="m-0 break-words text-ink-secondary">{formatDate(detail.createdAt)}</dd><dt className="text-muted-foreground">{t('automation.deliveries.outcome')}</dt><dd className="m-0 break-words text-ink-secondary">{errorLabel(detail.errorCode, t)}</dd><dt className="text-muted-foreground">{t('automation.deliveries.attempts')}</dt><dd className="m-0 break-words text-ink-secondary">{detail.attemptCount}</dd></dl></div>
+      <div className="border-t pt-4"><dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs"><dt className="text-muted-foreground">{t('automation.deliveries.deliveryId')}</dt><dd className="m-0 break-words"><code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">{detail.id}</code></dd><dt className="text-muted-foreground">{t('automation.deliveries.createdAt')}</dt><dd className="m-0 break-words text-ink-secondary">{formatDate(detail.createdAt)}</dd><dt className="text-muted-foreground">{t('automation.deliveries.outcome')}</dt><dd className="m-0 break-words text-ink-secondary">{errorLabel(detail.errorCode, t)}</dd><dt className="text-muted-foreground">{t('automation.deliveries.attempts')}</dt><dd className="m-0 break-words text-ink-secondary">{detail.attemptCount}</dd>{showTriggerColumn && <><dt className="text-muted-foreground">{t('schedules.trigger')}</dt><dd className="m-0 break-words text-ink-secondary">{deliveryTriggerLabel(detail.eventType, t)}</dd></>}</dl></div>
       <h4 className="m-0 text-sm font-semibold text-foreground">{t('automation.deliveries.attemptHistory')}</h4>{detail.attempts.length === 0 ? <p className="m-0 text-xs text-muted-foreground">{t('automation.deliveries.noAttempts')}</p> : <Table><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40"><TableHead scope="col">{t('automation.deliveries.round')}</TableHead><TableHead scope="col">{t('automation.deliveries.attempt')}</TableHead><TableHead scope="col">{t('automation.deliveries.attemptStatus')}</TableHead><TableHead scope="col">{t('automation.deliveries.startedAt')}</TableHead><TableHead scope="col">{t('automation.deliveries.duration')}</TableHead><TableHead scope="col">{t('automation.deliveries.httpStatus')}</TableHead><TableHead scope="col">{t('automation.deliveries.errorCode')}</TableHead></TableRow></TableHeader><TableBody>{detail.attempts.map((attempt, index) => <TableRow key={`${attempt.round}-${attempt.attempt}-${index}`}><TableCell>{attempt.round}</TableCell><TableCell>{attempt.attempt}</TableCell><TableCell>{t(`automation.statuses.${attempt.status}` as TranslationKey)}</TableCell><TableCell>{formatDate(attempt.startedAt)}</TableCell><TableCell>{attempt.durationMs} ms</TableCell><TableCell>{attempt.httpStatus ?? '—'}</TableCell><TableCell>{errorLabel(attempt.errorCode, t)}</TableCell></TableRow>)}</TableBody></Table>}
       {detail.status === 'failed' && !canRetry && <p className="m-0 text-xs leading-relaxed text-ink-secondary">{detail.manualRedriveCount >= 3 ? t('automation.deliveries.retryLimit') : detail.errorCode === 'capacityExceeded' ? t('automation.deliveries.capacity') : t('automation.deliveries.retryUnavailable')}</p>}
       {canRetry && <div className="flex flex-wrap items-center gap-2 border-t pt-4"><Button disabled={busy} onClick={() => void retry()} type="button" variant="primary">{busy ? t('automation.deliveries.retrying') : t('automation.deliveries.retry')}</Button></div>}
@@ -523,6 +526,14 @@ function DeliveriesPanel({ params, setParams }: PanelProps) {
   </section>;
 }
 
-function validSource(value: string | null): value is DeliverySourceType { return value === 'eventHook' || value === 'job' || value === 'test'; }
+// 「触发方式」由投递事实推导：`job.manual` 来自手动运行，`job.scheduled` 来自计划槽位；
+// 其它事件类型回落到事件标签，不猜测语义（automation-http-contract）。
+function deliveryTriggerLabel(type: string, t: ReturnType<typeof useI18n>['t']): string {
+  if (type === 'job.manual') return t('schedules.triggerManual');
+  if (type === 'job.scheduled') return t('schedules.triggerSchedule');
+  return deliveryEventTypeLabel(type, t);
+}
+
+function validSource(value: string | null | undefined): value is DeliverySourceType { return value === 'eventHook' || value === 'job' || value === 'test'; }
 function validStatus(value: string | null): value is DeliveryStatus { return value === 'pending' || value === 'running' || value === 'succeeded' || value === 'failed' || value === 'cancelled'; }
 function errorLabel(code: string, t: ReturnType<typeof useI18n>['t']): string { return code === 'none' ? t('automation.deliveries.noError') : t(`automation.errors.${code}` as TranslationKey); }

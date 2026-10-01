@@ -58,16 +58,18 @@ export function RuntimeBadge() {
   const { runtime } = useDiagnostics();
   const { t } = useI18n();
   const badge = (chip: ReactNode) => <span className="inline-flex items-center" data-runtime-badge>{chip}</span>;
+  // 窄屏只保留状态点：文字用 sr-only 隐藏，既让出顶栏空间，又保留无障碍名称。
+  const label = (text: string) => <span className="max-[1023px]:sr-only">{text}</span>;
 
   if (runtime.state === 'loading' && !runtime.value) {
-    return badge(<StatusChip state="loading"><span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" /> {t('runtime.connecting')}</StatusChip>);
+    return badge(<StatusChip state="loading"><span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" /> {label(t('runtime.connecting'))}</StatusChip>);
   }
-  if (runtime.state === 'error') return badge(<StatusChip state="unavailable">{t('runtime.unavailable')}</StatusChip>);
-  if (!runtime.value) return badge(<StatusChip state="unknown">{t('runtime.unknown')}</StatusChip>);
+  if (runtime.state === 'error') return badge(<StatusChip state="unavailable">{label(t('runtime.unavailable'))}</StatusChip>);
+  if (!runtime.value) return badge(<StatusChip state="unknown">{label(t('runtime.unknown'))}</StatusChip>);
 
   const state = runtime.value.state;
-  const label = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: stateLabel(state, t) });
-  return badge(<StatusChip state={state}>{state === 'ready' && <span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{label}</StatusChip>);
+  const stateText = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: stateLabel(state, t) });
+  return badge(<StatusChip state={state}>{state === 'ready' && <span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{label(stateText)}</StatusChip>);
 }
 
 export function DiagnosticsCards() {

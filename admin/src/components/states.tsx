@@ -3,7 +3,9 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 // 状态徽标 / Loading / Empty / Error / Partial 是四个共享的页面状态原语
-// （spec 0001 §13.5、§14）。状态语义只映射到设计系统的语义色。
+// （spec 0001 §13.5、§14）。状态语义映射到设计系统的有限状态色
+// （ready=success / degraded=warning / unavailable=danger / unknown=info），
+// 颜色只作辅助，标签文本始终存在；data-status-tone 供测试与样式断言语义。
 const chipVariants: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'outline'> = {
   ready: 'success',
   active: 'success',
@@ -30,7 +32,8 @@ const chipVariants: Record<string, 'default' | 'primary' | 'success' | 'warning'
 
 export function StatusChip({ state, children }: { state: string; children: ReactNode }) {
   const tone = state.toLowerCase().replace(/[^a-z]+/g, '-');
-  return <Badge data-status-chip variant={chipVariants[tone] ?? 'default'}>{children}</Badge>;
+  const variant = chipVariants[tone] ?? 'default';
+  return <Badge data-status-chip data-status-tone={variant} data-status-state={tone} variant={variant}>{children}</Badge>;
 }
 
 export function LoadingState({ label }: { label: string }) {

@@ -48,6 +48,17 @@ function setupFetch(options: { drift?: unknown; settingsAfterSave?: unknown } = 
     if (path.endsWith('/auth/session')) return response(session);
     if (path.endsWith('/runtime/status')) return response({ state: 'ready', observedAt: '2026-09-25T09:00:00Z', database: { state: 'ready' }, localStorage: { state: 'ready', message: 'ok' } });
     if (path.endsWith('/storage/status')) return response({ database: { state: 'ready' }, localStorage: { state: 'ready', provider: 'Local' } });
+    if (path.startsWith('/admin/api/v1/overview')) {
+      return response({
+        data: {
+          generatedAt: '2026-09-25T09:00:00Z',
+          windowSeconds: 86400,
+          collections: { count: 1, recordCount: 12, withPendingChanges: 0, withFailedChanges: 0, recent: [] },
+          changes: { pendingCount: 0, needsReviewCount: 0, failedCount: 0 },
+        },
+      });
+    }
+    if (path.startsWith('/admin/api/v1/changes?')) return response({ data: [] });
     if (path.startsWith('/admin/api/v1/collections?')) return response({ data: [] });
     if (path.startsWith('/admin/api/v1/activity')) return response({ data: [activityFact] });
     if (path === '/admin/api/v1/drift' && method === 'GET') {
@@ -71,7 +82,8 @@ function setupFetch(options: { drift?: unknown; settingsAfterSave?: unknown } = 
 describe('Operations surfaces', () => {
   it('renders the Activity timeline with its deep link and kind filter', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
-    window.history.pushState({}, '', '/activity');
+    // 活动记录默认显示管理面审计时间线；子系统事实时间线是同一页面的另一个来源（spec §9.2 + §3.2）。
+    window.history.pushState({}, '', '/activity?source=facts');
     setupFetch();
     render(<App />);
 
@@ -84,11 +96,12 @@ describe('Operations surfaces', () => {
 
   it('reports a healthy Drift state and repairs an actionable difference', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
-    window.history.pushState({}, '', '/settings/drift');
+    window.history.pushState({}, '', '/changes?tab=drift');
     const fetchMock = setupFetch({ drift: { state: 'degraded', findings: [driftFinding], detectedAt: '2026-09-25T09:00:00Z' } });
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Storage consistency', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Changes', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Storage consistency', level: 2 })).toBeInTheDocument();
     expect(await screen.findByText('Collection data is missing from storage')).toBeInTheDocument();
     expect(screen.getByText('Collection data should be available in storage.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open corrective surface' })).toHaveAttribute('href', '/collections/col_posts/model');
@@ -100,11 +113,12 @@ describe('Operations surfaces', () => {
 
   it('describes a healthy Drift check as storage consistency in Simplified Chinese', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
-    window.history.pushState({}, '', '/settings/drift');
+    window.history.pushState({}, '', '/changes?tab=drift');
     setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '存储一致性', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '变更', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '存储一致性', level: 2 })).toBeInTheDocument();
     expect(screen.getByText('集合定义、存储数据与当前运行时状态一致。')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/投影|SQLite/i);
   });

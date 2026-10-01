@@ -120,9 +120,10 @@ function RecordPageTitle({ collection, onCreate }: { collection: Collection; onC
   return (
     <header className="flex flex-wrap items-end justify-between gap-4" data-record-heading>
       <div className="min-w-0">
-        <p className="eyebrow">{collection.name} · {t('records.dataEyebrow')}</p>
+        {/* 集合名可能是不含断点的长标识符，必须允许在任意位置换行（spec 0001 §16.1 不允许横向溢出）。 */}
+        <p className="eyebrow [overflow-wrap:anywhere]">{collection.name} · {t('records.dataEyebrow')}</p>
         <h1>{t('records.title')}</h1>
-        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('records.description', { name: collection.name })}</p>
+        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{t('records.description', { name: collection.name })}</p>
       </div>
       <Button onClick={onCreate} variant="primary"><Plus aria-hidden="true" size={15} />{t(collection.type === 'Auth' ? 'records.createUser' : 'records.createRecord')}</Button>
     </header>

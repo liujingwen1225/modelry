@@ -43,7 +43,9 @@ function actionMessage(error: unknown, t: ReturnType<typeof useI18n>['t']): stri
   }
 }
 
-export function AdministratorsPage() {
+// embedded：作为 `/access?tab=administrators` 的内容渲染时不重复页面级标题（spec 0001 §3.2、§11.1），
+// 独立渲染仍保留自己的页面标题与主操作。
+export function AdministratorsPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
@@ -88,7 +90,7 @@ export function AdministratorsPage() {
       category: 'commands.categories.system',
       label: () => t('commands.administrators'),
       keywords: () => [t('administrators.searchKeywords')],
-      execute: () => navigate('/administrators'),
+      execute: () => navigate('/access?tab=administrators'),
     },
   ], [navigate, t]);
   useRegisterCommands(commands);
@@ -195,21 +197,37 @@ export function AdministratorsPage() {
   }
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="eyebrow">{t('administrators.eyebrow')}</p>
-          <h1>{t('administrators.title')}</h1>
-          <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
+      {embedded
+        ? <div className="flex min-w-0 flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            {/* 作为 /access?tab=administrators 的工作面时只提供分节标题，页面级 h1 由 Access 工作区负责。 */}
+            <h2 className="m-0">{t('administrators.title')}</h2>
+            <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
+              <UserPlus aria-hidden="true" size={14} /> {t('administrators.createAction')}
+            </Button>
+            <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary">
+              <RefreshCw aria-hidden="true" size={14} /> {t('administrators.refresh')}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
-            <UserPlus aria-hidden="true" size={14} /> {t('administrators.createAction')}
-          </Button>
-          <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary">
-            <RefreshCw aria-hidden="true" size={14} /> {t('administrators.refresh')}
-          </Button>
-        </div>
-      </header>
+        : <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="eyebrow">{t('administrators.eyebrow')}</p>
+            <h1>{t('administrators.title')}</h1>
+            <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
+              <UserPlus aria-hidden="true" size={14} /> {t('administrators.createAction')}
+            </Button>
+            <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary">
+              <RefreshCw aria-hidden="true" size={14} /> {t('administrators.refresh')}
+            </Button>
+          </div>
+        </header>}
 
       <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
         <div className="flex flex-wrap items-center gap-3">

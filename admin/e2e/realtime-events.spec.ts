@@ -372,7 +372,9 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
   expect(collectionId).toMatch(/^col_/);
 
+  // 旧 `/collections/:id/security` 深链归一为新的 `/collections/:id/access` 访问规则工作面。
   await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/security`);
+  await expect(page).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/access`);
   await page.getByRole('button', { name: 'Edit List access' }).click();
   await page.getByLabel('Custom rule').check();
   await page.getByRole('button', { name: 'Add condition', exact: true }).click();

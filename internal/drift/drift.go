@@ -249,7 +249,7 @@ func (service *Service) runtimeFindings(ctx context.Context, snapshot storage.Ex
 			Code: "appliedModel.pendingChange", CollectionID: collectionID, CollectionName: name,
 			Expected: "this change is intentionally not applied yet", Actual: "a saved change is waiting for review",
 			ExpectedPendingChange: true, Remedy: RemedyManual,
-			DeepLink: "/collections/" + collectionID + "/schema", DetectedAt: now,
+			DeepLink: "/collections/" + collectionID + "/model", DetectedAt: now,
 		})
 	}
 	if err := rows.Err(); err != nil {

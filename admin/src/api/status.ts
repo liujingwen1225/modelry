@@ -26,6 +26,8 @@ export type RuntimeStatus = {
 export type StorageStatus = {
   database: HealthSnapshot;
   localStorage: LocalStorageSnapshot;
+  // SQLite 主数据库字节数；缺失表示读不到，界面必须显示 Unavailable，不能用 0 代替。
+  databaseSizeBytes?: number;
 };
 
 export function fetchRuntimeStatus(signal?: AbortSignal): Promise<RuntimeStatus> {

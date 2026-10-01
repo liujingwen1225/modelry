@@ -98,7 +98,7 @@ export function MCPGuidePage() {
     category: 'commands.categories.system',
     label: () => t('commands.mcp'),
     keywords: () => ['mcp', 'agent', 'coding agent', 'model context protocol'],
-    execute: () => navigate('/connect/mcp'),
+    execute: () => navigate('/mcp'),
   }], [navigate, t]);
   useRegisterCommands(commands);
 
@@ -166,7 +166,8 @@ export function MCPGuidePage() {
               <p className="mt-1 max-w-[640px] text-xs leading-relaxed text-muted-foreground">{t('mcp.accountsDescription')}</p>
             </div>
           </div>
-          <ButtonLink size="small" to="/access">{t('mcp.manageAccounts')}</ButtonLink>
+          {/* 服务账号与 API Key 现在属于 Access & auth / API Tokens（spec 0001 §3）。 */}
+          <ButtonLink size="small" to="/access?tab=tokens">{t('navigation.accessAuth')}</ButtonLink>
         </div>
 
         {accountsState === 'loading' && <LoadingState label={t('common.loading')} />}
@@ -177,7 +178,7 @@ export function MCPGuidePage() {
         )}
         {accountsState === 'ready' && activeAccounts.length === 0 && (
           <EmptyState description={t('mcp.accountsEmptyDescription')} title={t('mcp.accountsEmptyTitle')}>
-            <div className="mt-3"><ButtonLink size="small" to="/access" variant="primary">{t('mcp.createAccount')}</ButtonLink></div>
+            <div className="mt-3"><ButtonLink size="small" to="/access?tab=tokens" variant="primary">{t('mcp.createAccount')}</ButtonLink></div>
           </EmptyState>
         )}
         {accountsState === 'ready' && activeAccounts.length > 0 && (
@@ -248,9 +249,9 @@ export function MCPGuidePage() {
       </Surface>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/connect/api">{t('navigation.connectApi')}</Link>
+        <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/api">{t('navigation.apiWorkspace')}</Link>
         <span aria-hidden="true" className="text-subtle-foreground">·</span>
-        <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/connect/sdk">{t('navigation.connectSdk')}</Link>
+        <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/api?tab=openapi">{t('api.workspaceTabs.openapi')}</Link>
       </div>
     </div>
   );

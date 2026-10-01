@@ -50,7 +50,9 @@ function severityTone(severity: DriftSeverity): string {
   }
 }
 
-export function DriftPage() {
+// embedded：作为 `/changes?tab=drift` 的内容渲染时不再重复页面级标题，
+// 由 Changes 工作区提供唯一的 h1（spec 0001 §3.2、§16.2）；独立渲染仍保留自己的标题。
+export function DriftPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
@@ -95,7 +97,8 @@ export function DriftPage() {
       category: 'commands.categories.system',
       label: () => t('commands.drift'),
       keywords: () => [t('drift.searchKeywords')],
-      execute: () => navigate('/health'),
+      // 结构漂移已并入「变更」工作区的 `结构漂移` 页签（spec 0001 §3.2、§15）。
+      execute: () => navigate('/changes?tab=drift'),
     },
   ], [navigate, t]);
   useRegisterCommands(commands);
@@ -119,16 +122,22 @@ export function DriftPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="eyebrow">{t('drift.eyebrow')}</p>
-          <h1>{t('drift.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('drift.description')}</p>
+      {embedded
+        ? <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button disabled={busy !== null} onClick={() => void load()} size="small" type="button" variant="secondary">
+            <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
+          </Button>
         </div>
-        <Button disabled={busy !== null} onClick={() => void load()} size="small" type="button" variant="secondary">
-          <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
-        </Button>
-      </header>
+        : <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="eyebrow">{t('drift.eyebrow')}</p>
+            <h1>{t('drift.title')}</h1>
+            <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('drift.description')}</p>
+          </div>
+          <Button disabled={busy !== null} onClick={() => void load()} size="small" type="button" variant="secondary">
+            <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
+          </Button>
+        </header>}
 
       <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
         <div className="flex flex-wrap items-center gap-3">
@@ -222,7 +231,7 @@ export function DriftPage() {
                   <StatusChip state="info">{t('drift.expected.badge')}</StatusChip>
                 </div>
                 <div>
-                  <Link className="text-xs font-semibold text-primary hover:underline" to={finding.deepLink}>{t('drift.openCorrectiveSurface')}</Link>
+                  <Link className="text-xs font-semibold text-primary hover:underline" to={correctiveSurfaceLink(finding.deepLink)}>{t('drift.openCorrectiveSurface')}</Link>
                 </div>
               </li>
             ))}

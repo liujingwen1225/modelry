@@ -8,7 +8,10 @@ import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '
 import { diffLabel, preconditionMessage, preconditionStatus } from './preview-copy';
 import { applySchemaChange, discardSchemaChange, getChange, listAllChanges, listAllCollections, previewSchemaChange, type ChangeDetail, type ChangeListItem, type Collection, type PendingChange, type PendingOperation, type SchemaPreview } from './client';
 
-type ChangesView = 'all' | 'pending' | 'applied';
+// Spec 0001 §3.2：`变更` 的二级工作面固定为「待应用 / 已应用历史 / 结构漂移」，
+// 本组件承担前两个工作面；选择存放在 URL 的 `?tab=`，未知值回落到默认的待应用。
+// Spec 0001 §15：可分享的页签必须进入 URL，因此 `q` 与 `changeSet` 等参数原样保留。
+type ChangesTab = 'pending' | 'history';
 
 function isPending(item: ChangeListItem): item is PendingChange {
   return 'status' in item;
@@ -66,7 +69,9 @@ function statusLabel(status: string, translate: ReturnType<typeof useI18n>['t'])
   return key ? translate(key) : translate('changes.statuses.unavailable');
 }
 
-export function ChangesPage() {
+// embedded：作为 `/changes` 工作区的内容渲染时不重复页面级标题（spec 0001 §3.2、§17.3），
+// 独立渲染（组件测试、深链接落地前）仍保留自己的页面标题。
+export function ChangesPage({ embedded = false }: { embedded?: boolean }) {
   const { t, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<ChangeListItem[]>([]);
@@ -80,8 +85,7 @@ export function ChangesPage() {
   const [detailError, setDetailError] = useState<unknown>();
 
   const query = searchParams.get('q') ?? '';
-  const rawView = searchParams.get('view');
-  const view: ChangesView = rawView === 'pending' || rawView === 'applied' ? rawView : 'all';
+  const tab: ChangesTab = searchParams.get('tab') === 'history' ? 'history' : 'pending';
   const selectedId = searchParams.get('changeSet') ?? '';
   const collectionNames = useMemo(() => new Map(collections.map((collection) => [collection.id, collection.name])), [collections]);
 
@@ -139,29 +143,24 @@ export function ChangesPage() {
     setSearchParams(next, { replace: true });
   }
 
-  function selectView(nextView: ChangesView) {
-    updateQuery('view', nextView === 'all' ? '' : nextView);
-  }
-
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return items.filter((item) => {
       const pending = isPending(item);
-      if (view === 'pending' && !pending) return false;
-      if (view === 'applied' && pending) return false;
-      const collectionId = pending ? item.collectionId : item.collectionId;
-      const name = collectionNames.get(collectionId ?? '') ?? '';
+      // 页签决定工作面：待应用只列出待应用变化，已应用历史只列出已应用事实。
+      if (tab === 'history' ? pending : !pending) return false;
+      const name = collectionNames.get(item.collectionId ?? '') ?? '';
       return !normalized || `${name} ${summaryFor(item, t)} ${pending ? statusLabel(item.status, t) : t('changes.statuses.applied')}`.toLocaleLowerCase().includes(normalized);
     });
-  }, [collectionNames, items, query, t, view]);
+  }, [collectionNames, items, query, t, tab]);
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
+      {!embedded && <header className="min-w-0">
         <p className="eyebrow">{t('changes.eyebrow')}</p>
         <h1>{t('changes.title')}</h1>
         <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('changes.description')}</p>
-      </header>
+      </header>}
       {collectionError && state === 'ready' && <PartialState>{t('changes.partial')}</PartialState>}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] flex-1 md:max-w-sm">
@@ -175,37 +174,26 @@ export function ChangesPage() {
             value={query}
           />
         </div>
-        <nav aria-label={t('changes.filterLabel')} className="flex overflow-hidden rounded-lg border border-input">
-          {(['all', 'pending', 'applied'] as const).map((filter) => (
-            <button
-              aria-pressed={view === filter}
-              className={`px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${view === filter ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
-              key={filter}
-              onClick={() => selectView(filter)}
-              type="button"
-            >{filter === 'all' ? t('changes.filterAll') : filter === 'pending' ? t('changes.filterPending') : t('changes.filterApplied')}</button>
-          ))}
-        </nav>
       </div>
       {state === 'loading' && <LoadingState label={t('changes.loading')} />}
       {state === 'error' && (() => { const copy = changeError(error, t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><div className="mt-3"><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('changes.retry')}</Button></div></ErrorState>; })()}
-      {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState description={t('changes.emptyDescription')} title={t('changes.emptyTitle')}><Link className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/collections">{t('changes.browseCollections')} <ArrowRight aria-hidden="true" size={14} /></Link></EmptyState>}
-      {state === 'ready' && visible.length === 0 && items.length > 0 && <EmptyState description={t('changes.noMatchDescription')} title={t('changes.noMatchTitle')} />}
-      {state === 'ready' && visible.length > 0 && <div className={`grid min-w-0 items-start gap-5 ${selectedId ? 'lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]' : ''}`}>
+      {state === 'ready' && visible.length === 0 && !selectedId && items.length === 0 && <EmptyState description={t('changes.emptyDescription')} title={t('changes.emptyTitle')}><Link className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/collections">{t('changes.browseCollections')} <ArrowRight aria-hidden="true" size={14} /></Link></EmptyState>}
+      {state === 'ready' && visible.length === 0 && !selectedId && items.length > 0 && <EmptyState description={t('changes.noMatchDescription')} title={t('changes.noMatchTitle')} />}
+      {/* 选中的变更即使不在当前工作面的列表里也保持可见：`changeSet` 深链接（§15）必须继续打开同一对象。 */}
+      {state === 'ready' && (visible.length > 0 || selectedId) && <div className={`grid min-w-0 items-start gap-5 ${selectedId ? 'lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]' : ''}`}>
         <section aria-label={t('changes.listLabel')} className="flex min-w-0 flex-col gap-2">
           {visible.map((item) => {
             const pending = isPending(item);
-            const collectionId = pending ? item.collectionId : item.collectionId;
-            const label = collectionNames.get(collectionId ?? '') ?? t('changes.collection');
+            const label = collectionNames.get(item.collectionId ?? '') ?? t('changes.collection');
             const status = pending ? statusLabel(item.status, t) : t('changes.statuses.applied');
-            const id = pending ? item.changeSetId : item.changeSetId;
+            const id = item.changeSetId;
             const failed = pending && item.status === 'failed';
             return <Link
               aria-current={selectedId === id ? 'page' : undefined}
               className={`flex min-w-0 items-start gap-3 rounded-lg border bg-card p-3.5 transition-colors hover:border-subtle-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${selectedId === id ? 'border-primary' : 'border-input'}`}
               key={`${pending ? 'pending' : 'applied'}-${id}`}
               onClick={(event) => { event.preventDefault(); updateQuery('changeSet', id); }}
-              to={`/changes?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(view !== 'all' ? { view } : {}), changeSet: id }).toString()}`}
+              to={`/changes?${new URLSearchParams({ ...(query ? { q: query } : {}), tab, changeSet: id }).toString()}`}
             >
               <span aria-hidden="true" className={`grid size-7 shrink-0 place-items-center rounded-md ${failed ? 'bg-danger-soft text-danger' : 'bg-muted text-ink-secondary'}`}>{pending ? failed ? <AlertTriangle size={16} /> : <FileClock size={16} /> : <Check size={16} />}</span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -216,6 +204,7 @@ export function ChangesPage() {
               <StatusChip state={pending ? item.status : 'applied'}>{status}</StatusChip>
             </Link>;
           })}
+          {visible.length === 0 && <EmptyState description={t('changes.noMatchDescription')} title={t('changes.noMatchTitle')} />}
         </section>
         {selectedId && <ChangeDetailPanel detail={detail} detailError={detailError} detailState={detailState} onChanged={() => setReloadKey((value) => value + 1)} onRetry={() => { setDetailError(undefined); setDetailState('loading'); void getChange(selectedId).then((value) => { setDetail(value); setDetailState('ready'); }).catch((reason: unknown) => { setDetailError(reason); setDetailState('error'); }); }} collectionNames={collectionNames} />}
       </div>}

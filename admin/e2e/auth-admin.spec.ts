@@ -363,8 +363,11 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   expect(remotePlaintext.status).toBe(400);
 
   // Create an Administrator that only holds collections.read.
+  // 旧 `/administrators` 深链归一为「访问与认证」的管理员工作面。
   await page.goto(runtimeURL + '/administrators');
-  await expect(page.getByRole('heading', { name: 'Administrators', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(runtimeURL + '/access?tab=administrators');
+  await expect(page.getByRole('heading', { name: 'Access & auth', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Administrators', level: 2 })).toBeVisible();
   await page.getByRole('button', { name: 'Create Administrator' }).click();
   const createDialog = page.getByRole('dialog');
   await createDialog.getByLabel('Email').fill(administratorEmail);
@@ -382,10 +385,19 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   await expect(page.locator('[data-owner-menu] summary')).toHaveAttribute('aria-label', 'Owner menu for ' + administratorEmail);
 
 
+  // Navigation 只显示该 Permission 允许的入口：collections.read 覆盖 Collections 与 API workspace；
+  // Owner-only 入口（无 operation）与需要其它 operation 的入口都不出现。
   const navigation = page.getByRole('navigation', { name: 'Project navigation' });
   await expect(navigation.getByRole('link', { name: 'Collections' })).toBeVisible();
-  await expect(navigation.getByRole('link', { name: 'Automations' })).toHaveCount(0);
-  await expect(navigation.getByRole('link', { name: 'Extensions' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'API workspace' })).toBeVisible();
+  await expect(navigation.getByRole('link', { name: 'Overview' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'Hooks & Events' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'Scheduled jobs' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'Changes' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'Access & auth' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'Activity' })).toHaveCount(0);
+  await expect(navigation.getByRole('link', { name: 'System settings' })).toHaveCount(0);
+  // 旧信息架构里属于一级菜单、现在已并入设置或工作面的入口同样不得出现。
   await expect(navigation.getByRole('link', { name: 'Secrets' })).toHaveCount(0);
   await expect(navigation.getByRole('link', { name: 'Administrators' })).toHaveCount(0);
   await expect(navigation.getByRole('link', { name: 'Mail' })).toHaveCount(0);
@@ -401,6 +413,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   await signOut(page);
   await signIn(page, ownerEmail, ownerPassword);
   await page.goto(runtimeURL + '/administrators');
+  await expect(page).toHaveURL(runtimeURL + '/access?tab=administrators');
   await page.getByRole('button', { name: 'Disable ' + administratorEmail }).click();
   await expect(page.getByText('Administrator disabled and all sessions revoked.')).toBeVisible();
   const listed = await requestJSON(page, 'GET', '/admin/api/v1/administrators');
