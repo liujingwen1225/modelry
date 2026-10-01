@@ -1,6 +1,6 @@
 # Spec 0001 — Modelry Admin 全新体验与界面规格
 
-- **状态：** 新版设计提案（2026-09-29）
+- **状态：** 新版设计提案（2026-10-01 更新信息架构与概览页）
 - **范围：** 自托管 Modelry 项目 Admin 的信息架构、内容、操作旅程与视觉系统
 - **替代：** 本文件重建 Admin 的导航、页面组织、首页、内容表达和交互方式；实现阶段从本稿重新对照，不沿用旧版页面结论
 - **依赖：** `docs/00-product-vision.md`、`docs/04-v0.1-community-scope.md`、`docs/05-product-experience-and-acceptance.md`、`docs/06-product-architecture.md` 及已接受的相关 ADR / Spec / HTTP Contract
@@ -25,7 +25,7 @@ Modelry Admin 是开发者构建和运营一个应用后端的工作台。界面
 7. 用稳定的深链接恢复集合、记录、请求和变更上下文；
 8. 在键盘、屏幕阅读器、窄屏和明暗主题下保持可操作。
 
-首页承担任务入口与注意事项，不承担统计大屏职责。产品不展示没有真实运行能力的入口或示意指标。
+首页承担任务入口与注意事项，不承担统计大屏职责。允许展示与下一步工作直接相关的少量业务状态摘要，但这些摘要必须可解释、可下钻、来自真实运行事实；产品不展示没有真实运行能力的入口或示意指标。
 
 # 2. 两条核心任务旅程
 
@@ -63,104 +63,123 @@ Admin 展示 MCP 连接方式、服务账号权限和验证结果。编码智能
 
 # 3. 新版信息架构
 
-## 3.1 全局导航
+## 3.1 一级菜单
 
-全局导航依开发者完成后端的工作顺序排列。它不使用传统企业后台的模块分组，也不把内部实现模块直接作为一级页面。
+一级菜单按开发者实际管理的业务对象组织，不再把内部模块名、观察面或诊断页拆成同等权重的入口。导航分组只用于视觉分隔，不形成额外页面层级。
 
 ~~~text
-Home
+WORKSPACE
+  总览 / Overview
 
 BUILD
-  Collections
+  集合 / Collections
+  API 工作区 / API Workspace
+  Hooks & Events
+  定时任务 / Scheduled Jobs
 
-CONNECT
-  API & SDK
+OPERATE
+  变更 / Changes
+  访问与认证 / Access & Auth
+  活动记录 / Activity
 
-AUTOMATE
-  Automations
-
-OBSERVE
-  Requests
-  Activity & Audit
-
-EVOLVE
-  Changes
-  Model health
-
-PROJECT
-  Access & keys
-  Settings
+SYSTEM
+  系统设置 / System Settings
 ~~~
 
-导航目的地与已交付页面映射：
+一级菜单职责：
 
-| 入口 | 页面内容 |
-| --- | --- |
-| Home | 项目状态、继续最近工作、当前需要处理的问题、首次使用的下一步 |
-| Collections | Collection 列表和创建；选中 Collection 后进入 Records / Model / Access / API 工作区 |
-| API & SDK | 全局端点、请求调试、OpenAPI、SDK 生成、MCP 连接与接入说明 |
-| Automations | Extensions / Hooks、Secrets 入口、Webhooks、Event Triggers、Scheduled Triggers 和投递历史 |
-| Requests | 应用请求日志、请求详情和从请求进入 API 调试的上下文 |
-| Activity & Audit | 活动时间线与管理面审计事实；两类记录清楚区分 |
-| Changes | 尚待应用的模型变化、应用尝试和已应用历史 |
-| Model health | 已应用模型与运行时投影的 Drift 检查及可执行的恢复路径 |
-| Access & keys | Administrators、Service Accounts、Permission 和 API Key |
-| Settings | 项目状态与 Runtime、Files & Storage、Mail、Secrets、数据导入 / 导出、Backup & restore |
+| 一级菜单 | 页面职责 | 不再单独占一级菜单的能力 |
+| --- | --- | --- |
+| 总览 | 当前项目真正需要继续处理的工作、最近上下文和必要运行状态 | 不做独立 KPI Dashboard |
+| 集合 | Collection 全生命周期入口：记录、Schema、集合访问规则、集合 API | Relations、Indexes 并入 Schema |
+| API 工作区 | 全局端点浏览、请求调试、OpenAPI 与请求日志 | Requests 并入本页；SDK / Contract 由 OpenAPI 上下文提供；MCP 作为开发者接入入口保留但不占一级菜单 |
+| Hooks & Events | 生命周期 Hook、Webhook、事件触发与外部投递事实 | 不再使用笼统的 Automations 一级菜单；定时任务移出 |
+| 定时任务 | 独立管理时间驱动任务、时间规则、启停、手动执行与执行历史 | 原 Scheduled Triggers / Schedules |
+| 变更 | 待应用 Change Set、已应用历史与 Schema Drift | Model health / Drift 并入本页 |
+| 访问与认证 | 管理员、应用认证、Service Account / API Token 等项目级身份能力 | Collection Access Rules 仍留在具体 Collection |
+| 活动记录 | 管理面操作和安全审计事实 | API 请求日志、Hook/Webhook 投递、定时任务执行各回自己的业务页 |
+| 系统设置 | Runtime、存储、邮件、Secrets、导入导出、备份恢复等实例级配置 | 不再为 Runtime / Storage / Backup / Drift 单独增加一级菜单 |
 
-Connect 的本地子导航为 `API`、`SDK & Contract`、`MCP`。MCP 与 SDK 一样，是接入 Modelry 的开发者接口；Service Account 凭据的生命周期仍由 Access & keys 管理。MCP 子页展示：连接状态与可复制的连接配置命令、绑定的 Service Account 及其权限摘要、最近的 Agent 操作列表（按 Service Account 过滤 Activity）；不在此页管理凭据。
+## 3.2 二级 Tab 与本地导航
 
-Automations 的子导航按实际运行对象显示：`Hooks`、`Webhooks`、`Triggers`、`Schedules`、`Delivery history`。如果用户无权访问其中一项，只隐藏对应入口，服务端继续负责授权。
+以下表格是一级页面的权威二级导航。实现不得为了复用旧页面再次增加同义一级菜单。
 
-Collection 工作区：
+| 一级页面 | 二级 Tab / 本地导航 | 说明 |
+| --- | --- | --- |
+| 总览 | 无 | 总览是一屏工作台，不通过 Tab 拆分状态 |
+| 集合 | 列表页无 Tab；进入 Collection 后：`记录` / `Schema` / `访问规则` / `API` | Relations 与 Indexes 作为 Schema 内容呈现，不再拆二级页 |
+| API 工作区 | `端点` / `调试台` / `OpenAPI` / `请求日志` | SDK / Contract 从 OpenAPI 上下文提供；MCP 以开发者接入卡片、命令面板或关联入口提供 |
+| Hooks & Events | `Hooks` / `Webhooks` / `事件触发` / `投递历史` | 只处理事件驱动能力；不包含定时任务 |
+| 定时任务 | `任务` / `执行历史` | 任务页负责 Cron / 固定时间、时区、启停、最近/下次执行和手动运行 |
+| 变更 | `待应用` / `已应用历史` / `结构漂移` | Drift 只能生成受控修复变更，不允许静默修复 |
+| 访问与认证 | `管理员` / `应用认证` / `API Tokens` | Service Account / Token 生命周期在 API Tokens 上下文中管理；集合级访问规则不搬到这里 |
+| 活动记录 | 无 | 单一审计时间线，通过筛选器区分 Actor / Action / Resource / Result |
+| 系统设置 | `常规` / `运行时` / `文件存储` / `邮件` / `Secrets` / `数据导入导出` / `备份与恢复` | 使用本地设置导航；仍属于一个一级页面 |
+
+Collection 工作区保持同一个 Collection 上下文：
 
 ~~~text
-Records     Model     Access     API
+记录     Schema     访问规则     API
 ~~~
 
-`Model` 内含 `Fields`、`Relations`、`Indexes`。Auth Collection 的 `Access` 内含 `Rules`、`Authentication`、`App users`、`Sessions`。Normal Collection 不显示只属于认证集合的页面。
+规则：
 
-## 3.2 导航行为
+- `Schema` 是 Fields、Relations、Indexes 的统一工作面；用户可以连续修改多个结构项，再一次保存为一个 Collection-scoped Change Set。
+- `访问规则` 只处理当前 Collection 的应用数据面访问规则。Auth Collection 可在该上下文继续进入与该集合相关的 Authentication / App users / Sessions 详情，但不新增全局一级菜单。
+- `API` 是全局 API 工作区的 Collection 过滤视图。
+- Pending Change 在 Collection 与全局 `变更` 中使用同一实时事实和计数。
 
-- 全局主导航切换到新的工作目的地；集合内子导航保留当前 Collection。
-- 顶栏固定显示 Modelry 标识、当前项目路径/本地上下文、Runtime 状态、全局搜索/命令、语言、主题和 Admin 账户。
+## 3.3 能力归位原则
+
+本次 IA 收敛只改变“能力放在哪里”，不删除既有核心能力：
+
+- Requests → `API 工作区 / 请求日志`；
+- Model health / Drift → `变更 / 结构漂移`；
+- Hooks / Extensions、Webhooks、Event Triggers、Delivery history → `Hooks & Events`；
+- Scheduled Triggers / Schedules → 独立一级 `定时任务`；
+- Relations / Indexes → Collection `Schema`；
+- Administrators、Application Auth、Service Account / API Token → `访问与认证`；
+- Runtime、Storage、Mail、Secrets、Data import/export、Backup/Restore → `系统设置`；
+- MCP 不占一级菜单，但连接方式、Service Account 权限摘要和 Agent 操作入口仍必须可发现；
+- SDK / Contract 不占一级菜单，通过 `API 工作区 / OpenAPI` 及相邻接入说明继续提供。
+
+## 3.4 导航行为
+
+- 全局一级菜单切换工作对象；二级 Tab 只切换该对象内部的工作面。
+- 顶栏固定显示 Modelry 标识、当前本地项目上下文、Runtime 状态、全局搜索/命令、语言、主题和 Admin 账户。
 - 自托管单项目没有项目切换器。项目路径仅作当前运行上下文说明，不伪装成可切换的云资源。
-- 选中 Collection 后，在页面标题和集合内子导航持续显示 Collection 名称与类型。
-- Pending changes 在 Changes 入口、对应 Collection 导航和 Collection 页面内显示同一实时计数；失败状态使用文本和图标说明。
-- Runtime、Database 或 Storage 出现问题时，状态控件直接打开可恢复问题的详情页。
+- 选中 Collection 后，在页面标题和 Collection Tab 持续显示 Collection 名称、类型与 pending-change 状态。
+- Pending changes 在 `变更` 入口、对应 Collection 和总览中使用同一实时计数；失败状态使用文本和图标说明。
+- Runtime、Database 或 Storage 出现问题时，状态控件直接打开 `系统设置` 中对应的可恢复位置。
+- 请求错误从总览或业务页进入 `API 工作区 / 请求日志`；Webhook 投递进入 `Hooks & Events / 投递历史`；定时任务运行进入 `定时任务 / 执行历史`。
 - 路由、query、hash 和返回上下文遵守第 15 节的 URL 约定。
 
-## 3.3 桌面工作区框架
+## 3.5 桌面工作区框架
 
 ~~~text
 ┌────────────────────────────────────────────────────────────────────────┐
-│ modelry  /  local project       Runtime: Ready   ⌘K   EN   ◐   Owner  │
+│ modelry / local project       Runtime: Ready   ⌘K   中/EN   ◐   Owner │
 ├────────────────────┬───────────────────────────────────────────────────┤
-│ Home               │                                                   │
-│                    │ Page title                         Primary action │
-│ BUILD              │ Context summary / actionable state                │
-│ Collections        │                                                   │
-│                    │ Main work surface                                  │
-│ CONNECT            │                                                   │
-│ API & SDK          │                                                   │
+│ WORKSPACE          │                                                   │
+│ 总览               │ Page title                         Primary action │
+│                    │ Context summary / actionable state                │
+│ BUILD              │                                                   │
+│ 集合               │ Main work surface                                 │
+│ API 工作区         │                                                   │
+│ Hooks & Events     │                                                   │
+│ 定时任务           │                                                   │
 │                    │                                                   │
-│ AUTOMATE           │                                                   │
-│ Automations        │                                                   │
+│ OPERATE            │                                                   │
+│ 变更               │                                                   │
+│ 访问与认证         │                                                   │
+│ 活动记录           │                                                   │
 │                    │                                                   │
-│ OBSERVE            │                                                   │
-│ Requests           │                                                   │
-│ Activity & Audit   │                                                   │
-│                    │                                                   │
-│ EVOLVE             │                                                   │
-│ Changes            │                                                   │
-│ Model health       │                                                   │
-│                    │                                                   │
-│ PROJECT            │                                                   │
-│ Access & keys      │                                                   │
-│ Settings           │                                                   │
+│ SYSTEM             │                                                   │
+│ 系统设置           │                                                   │
 └────────────────────┴───────────────────────────────────────────────────┘
 ~~~
 
-Shell 的侧栏使用低对比度底色，当前目的地使用清晰的左侧标记和底色。主要内容区保持连续画布，不把每个区块做成同等权重的卡片。
+Shell 的侧栏使用低对比度底色，当前目的地使用清晰的选中状态。主要内容区保持连续画布，不把每个区块做成同等权重的卡片。
 
 # 4. 首次使用与登录
 
@@ -191,49 +210,159 @@ Shell 的侧栏使用低对比度底色，当前目的地使用清晰的左侧�
 
 密码错误、账号恢复和会话失效分别给出清楚说明。登录错误不泄露账号是否存在等敏感信息。
 
-# 5. Home — 项目工作台
+# 5. Home — 项目总览
 
 ## 5.1 页面任务
 
-回答：**项目现在能否正常工作？我可以继续做什么？**
+回答三个问题：
 
-Home 以状态和任务顺序组织内容，不展示 KPI 瓷砖墙、重复 Collection 清单、重复请求列表或纯装饰性图表。
+1. **项目当前是否能正常工作？**
+2. **今天有哪些事情值得我处理？**
+3. **我最可能从哪里继续工作？**
+
+总览不是传统运维 Dashboard，也不是所有子系统数字的汇总页。页面只保留能帮助用户继续工作、发现异常或进入下一步的真实信息。
+
+页面标题与主操作：
 
 ~~~text
-Home
-后端项目的当前状态与下一步工作。
+项目总览
+把今天真正需要处理的事情放在这里：数据结构、API 使用、
+事件执行、定时任务和待应用变更。系统诊断保留，但不成为页面主角。
 
-Workspace status
-Runtime          Ready
-Database         Ready
-File storage     Ready
-Model            Up to date
-
-Next step
-Create your first Collection
-定义应用数据并生成对应 API。
-[ Create Collection ]
-
-Recent work
-Collection name        Updated       Open
-
-Needs attention                         仅在有待处理问题时出现
-Storage needs attention · View storage settings
+[ 打开 API 工作区 ]    [ 审查 N 条变更 ]
 ~~~
 
-空项目的主要操作是 Create Collection。创建成功后，首页提示 Create first record；产生记录后可继续配置 Access Rules 或调用 API。引导项只根据当前真实状态生成，完成后自动收起。
+当没有待应用变更时，不显示“审查 0 条变更”；主操作根据项目真实状态切换为 `新建集合`、`创建第一条记录`、`调试 API` 等下一步。
 
-## 5.2 已有项目
+## 5.2 首屏业务状态摘要
 
-- 首屏显示 Runtime / Database / Storage / Model 四类当前状态；正常状态精简为一行。
-- 显示一项建议的下一步，例如完成 API 调用、查看待应用变化或恢复 Storage。
-- 显示最近访问的 Collection 和最近一次有意义的操作；不把时间线复制成 Activity。
-- Pending / Failed Change 只在存在时出现，并直达对应的 Changes / Recovery context。
-- Agent connection 作为低权重、可复制的接入说明，提供通往 Access & keys 和 MCP 文档的入口。
+首屏使用四个紧凑工作状态摘要，不扩展成 KPI 瓷砖墙：
 
-## 5.3 首页数据失败
+| 摘要 | 显示内容 | 点击后的去向 |
+| --- | --- | --- |
+| 集合 | Collection 数量、记录规模、是否存在待结构变更 | 集合 |
+| API | 最近真实请求量、错误情况、必要的延迟摘要 | API 工作区 / 请求日志 |
+| Hooks & Events | 启用数量、最近执行 / 投递、失败投递 | Hooks & Events |
+| 变更 | Pending 数量、Needs review 数量、Schema Drift | 变更 |
 
-某个状态服务失败时，保留已加载的其它状态。明确写出哪些信息不可用，并提供对应重试或设置入口。不可用状态不得显示为零、正常或空项目。
+要求：
+
+- 数字必须来自真实运行事实；取不到数据时显示 `Unavailable` / `Unknown`，不能显示 0 代替失败。
+- 只有能影响下一步的摘要才强调异常；正常状态保持低视觉权重。
+- 摘要卡本身必须可进入对应业务页，不展示无法下钻的装饰性指标。
+- 定时任务不需要再复制一张长期统计卡；存在失败或需要关注的执行时，可进入总览的“最近活动 / 需要处理”区域，并直达 `定时任务 / 执行历史`。
+
+## 5.3 继续工作
+
+`继续工作` 是总览中面积最大的业务区域，优先恢复用户最近访问的 Collection，而不是重复展示全部 Collection。
+
+默认显示最近 3–5 个 Collection：
+
+~~~text
+继续工作
+Collection       Fields       Records       Status       Open
+users            9            1,204         待应用       打开
+posts            12           8,932         已同步       打开
+audit_events     8            94,118        已同步       打开
+~~~
+
+规则：
+
+- 点击 `打开` 恢复该 Collection 最近一次工作 Tab；没有历史时进入 `记录`。
+- Pending / Failed 只在确实需要注意时强调。
+- 提供 `查看全部集合`，但不在总览复制完整 Collection 管理列表。
+- 空项目时整个区域替换为第一步引导：`新建集合`。
+
+## 5.4 快捷开始
+
+快捷开始围绕“用户现在想做什么”提供少量动作：
+
+- `新建集合`：一次完成名称、类型和初始字段；
+- `调试 API`：进入 API 工作区，选择端点并发送真实请求；
+- `创建 Webhook`：进入 Hooks & Events / Webhooks；
+- `创建定时任务`：进入独立的定时任务创建流程。
+
+MCP / 编码智能体作为低权重接入卡保留在快捷开始下方：
+
+- 提供复制 MCP 配置或打开连接说明；
+- 显示当前绑定的 Service Account / 权限摘要；
+- 凭据管理仍进入 `访问与认证`；
+- Agent 的审计操作仍进入 `活动记录`；
+- MCP 不占一级菜单，也不因为导航收敛而删除。
+
+快捷开始根据权限与当前项目状态隐藏不适用动作，不显示无实现能力的 Placeholder。
+
+## 5.5 最近活动
+
+总览只显示 3–5 条**和下一步有关**的最近事件，例如：
+
+- 某个 Schema 修改已形成 Pending Change；
+- 某个 API endpoint 连续出现 4xx / 5xx；
+- 某次 Webhook 投递失败或重试成功；
+- 某个定时任务执行失败；
+- Agent 提交了需要复核的变更。
+
+每条事件跳到事实所属页面：
+
+- API → `API 工作区 / 请求日志`；
+- Hook / Webhook → `Hooks & Events`；
+- 定时任务 → `定时任务 / 执行历史`；
+- Change / Drift → `变更`；
+- 管理操作 → `活动记录`。
+
+总览不复制完整 Activity 时间线。
+
+## 5.6 运行状态
+
+运行状态位于总览下半部，作为必要的系统事实，而不是页面主角：
+
+~~~text
+Runtime           Ready
+SQLite            Ready · 38.2 MB
+File storage      Ready
+Backup            6 天前
+Schema drift      1 项
+~~~
+
+- Runtime / SQLite / File storage 的异常进入 `系统设置` 对应位置；
+- Backup 进入 `系统设置 / 备份与恢复`；
+- Schema Drift 进入 `变更 / 结构漂移`；
+- 正常时使用紧凑行，不再重复健康诊断大卡片；
+- 支持手动重新检查，但不让“健康检查”成为总览主要操作。
+
+## 5.7 空项目与渐进引导
+
+空项目时避免展示大量零值卡片：
+
+~~~text
+创建你的第一个集合
+定义应用数据并获得对应 API。
+
+[ 新建集合 ]
+~~~
+
+成功创建后，总览的建议动作按真实状态渐进：
+
+~~~text
+创建集合
+→ 创建第一条记录
+→ 配置访问规则（按需要）
+→ 调试第一条 API
+→ 添加 Hook / Webhook / 定时任务（按需要）
+→ 审查后续 Schema 变更
+~~~
+
+完成的引导自动收起；用户可以跳过非必需步骤。
+
+## 5.8 部分失败与恢复
+
+某一块数据加载失败时：
+
+- 保留其它已经成功加载的区域；
+- 在失败区域明确显示 `Unavailable` / `Unknown` 和最近已知时间（如果有）；
+- 提供与失败对象一致的 Retry 或设置入口；
+- 不把请求失败解释成空项目、0 条记录或正常状态；
+- 总览自身不执行复杂修复，恢复操作跳回所属业务页。
 
 # 6. Build — Collections 与集合工作区
 
@@ -342,11 +471,11 @@ App users 和 Sessions 使用相同的返回上下文。撤销 Session 后显示
 
 Collection API 是全局 API & SDK 工作区的 Collection 过滤视图。保留当前 Collection，并跳转到对应 endpoint、示例、文档或调试表单。Realtime 订阅作为该 Collection 的接口能力在 Collection API 内展示（订阅事件、示例与连接说明）；Connect / API 只保留全局 Realtime 文档入口，不重复连接配置。
 
-# 7. Connect — API & SDK
+# 7. API 工作区
 
 ## 7.1 页面结构
 
-页面任务：**找到应用调用方式，验证一次真实请求，并把正确配置带回应用。**
+页面任务：**找到应用调用方式，验证一次真实请求，并把正确配置带回应用。** 二级 Tab 固定为 `端点`、`调试台`、`OpenAPI`、`请求日志`。
 
 ~~~text
 API & SDK
@@ -369,25 +498,23 @@ POST /api/collections/... Headers / Params / Body
 - SDK 页面选择受支持的 SDK 目标，提供生成产物、安装步骤、首个请求和兼容性信息。`modelry generate` 指引来自真实 CLI，不显示虚构的生成结果。
 - API Key 值不在此页面反复暴露；需要身份时链接到对应身份详情。
 
-# 8. Automate — Hooks 与自动化
+# 8. Hooks & Events 与定时任务
 
-Automations 汇总生命周期 Hook 和 HTTP / Cron 投递工作，但清楚区分代码扩展、事件触发、定时任务与外部投递事实。
-
-页面子页：`Hooks`、`Webhooks`、`Triggers`、`Schedules`、`Delivery history`。
+Hooks & Events 只汇总事件驱动能力，二级 Tab 固定为 `Hooks`、`Webhooks`、`事件触发`、`投递历史`。定时任务不再属于该页面，而是独立一级入口 `定时任务`，其二级 Tab 为 `任务`、`执行历史`。
 
 - Hook 页说明触发事件、脚本、配置状态和最近运行结果。Secrets 在需要时以受控链接进入管理；页面不输出 Secret 值。
 - Webhook 配置页显示目标 URL、事件范围、启停和投递状态，不把外部投递描述成 SQLite 事务回滚。
 - Event Trigger 明确显示 Collection 事件和目标 Webhook。
-- Schedule 显示 Cron、时区（UTC）和下一次运行时间。
+- 定时任务页显示 Cron / 固定时间规则、时区、启停、最近一次与下一次运行时间，并支持手动执行。
 - Delivery history 支持按目标、状态和时间检索；失败条目提供响应摘要、重试状态、关联 Request / Activity 与当前恢复动作。
 - 任何实际重试都展示投递副作用事实和新的尝试记录；重复投递不能伪装成恰好一次。
 - 没有配置时分别提供能完成初始化的主操作，不用单一“Add integration”掩盖配置对象差异。
 
-# 9. Observe — Requests、Activity、Audit 与 Runtime
+# 9. 活动记录与运行观察
 
-## 9.1 Requests
+## 9.1 API 请求日志归位
 
-Requests 是应用 HTTP 请求日志，围绕诊断一次应用调用设计。
+应用 HTTP 请求日志不再作为一级 Requests 页面，而位于 `API 工作区 / 请求日志`，围绕诊断一次应用调用设计。
 
 - 列表可按请求 ID、Collection、endpoint、method、status、认证结果、授权结果、错误码和时间筛选。
 - 结果列展示时间、方法/路径、状态、耗时、Collection 和 requestId。
@@ -396,9 +523,9 @@ Requests 是应用 HTTP 请求日志，围绕诊断一次应用调用设计。
 - API Runner 的失败必须使用同一个 Request ID 直接打开详情。
 - 详情展示字段使用显式 allowlist：requestId、时间、method、path、status、耗时、错误码、Collection、认证结果（是否通过与主体类型）、授权结果（是否通过与拒绝原因码）、User-Agent 摘要。未列入 allowlist 的字段一律不展示；新增展示字段必须先更新本清单。
 
-## 9.2 Activity & Audit
+## 9.2 Activity
 
-Activity 展示各子系统有界的用户可见操作和操作结果；Audit 展示管理面安全事实。通过同一页面容器的本地页签切换，或由 URL 明确分开的子页呈现，不把两类记录混成一个不可解释的 Feed。
+活动记录是单一管理面审计时间线，不设置二级 Tab。它展示各子系统有界的管理操作、安全事实和结果，并通过 Actor、Action、Resource、Result 与时间筛选，不把 API 请求日志、Webhook 投递或定时任务执行复制进来。
 
 两者支持按 Actor、Action、Resource、Result 与时间过滤。字段映射为 Owner、Administrator、Service Account 等产品术语。原始身份标识可在技术详情中查看。
 
@@ -408,7 +535,7 @@ Runtime、Database、File Storage 各自报告 Ready、Degraded、Unavailable �
 
 Settings → Status 是诊断详情和刷新入口；顶栏状态负责快速发现并直达详情。健康页不以颜色单独表达状态，也不把检查失败显示为正常。
 
-# 10. Evolve — Changes 与 Model Health
+# 10. Changes — 变更与结构漂移
 
 ## 10.1 Changes 列表
 
@@ -438,19 +565,19 @@ users        Remove legacyRole            Needs review     1 hour ago
 - 失败后同时显示最新状态、失败原因、是否产生耐久副作用及恢复操作。Retry 会成为新的运行时尝试记录。
 - Discard 只允许针对尚未应用的 pending operation，并说明会删除哪些已保存操作。
 
-## 10.3 Applied history 与 Model health
+## 10.3 Applied history 与 Schema Drift
 
 Applied history 展示已应用变更事实。Migration ID、Change ID、Ledger 等实现信息只进入 Technical details。
 
-Model health 展示 Drift 检查结果、对比范围和实际支持的校准 / 恢复动作。未知或部分不可读的状态写成 Unknown / Unavailable，不用“0 differences”代替检查失败。
+`结构漂移` Tab 展示 Drift 检查结果、对比范围和实际支持的校准 / 恢复动作。未知或部分不可读的状态写成 Unknown / Unavailable，不用“0 differences”代替检查失败。
 
-# 11. Project — Access & keys 与 Settings
+# 11. 访问与认证、系统设置
 
-## 11.1 Access & keys
+## 11.1 访问与认证
 
-Project access 只管理 Modelry 管理面身份与权限，不管理 Collection 的 Application Access Rules。
+访问与认证只管理项目级身份、应用认证与凭据，不管理 Collection 的 Application Access Rules。
 
-页面切换：`Service Accounts`、`Administrators`。Audit 记录在 Observe 中，相关详情可从身份动作进入。
+二级 Tab 固定为 `管理员`、`应用认证`、`API Tokens`。Service Account 与 Token 生命周期在 API Tokens 上下文中管理；管理面审计进入 `活动记录`。
 
 Service Account 创建一次完成名称、说明和 Permission。默认创建 API Key，提交后只显示一次明文；之后只展示 Key metadata、创建时间、末次使用及状态。创建结果保留在 Service Account Detail，包含复制状态和 MCP 接入说明。
 
@@ -458,9 +585,9 @@ Service Account 创建一次完成名称、说明和 Permission。默认创建 A
 
 Disable Service Account、撤销 API Key 和移除 Administrator 使用确认 Dialog，写出对象名称和影响。Admin 权限仍由服务端执行检查。
 
-## 11.2 Settings
+## 11.2 系统设置
 
-Settings 按用户要完成的设置任务组织：
+系统设置使用本地设置导航：`常规`、`运行时`、`文件存储`、`邮件`、`Secrets`、`数据导入导出`、`备份与恢复`。仍按用户要完成的设置任务组织：
 
 ~~~text
 Project status
@@ -609,26 +736,26 @@ Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态�
 
 旧稳定深链接继续打开同一产品对象，并映射到新导航：
 
-- `/extensions` → Automations / Hooks；
-- `/extensions/:extensionId` → Automations / 对应 Hook 详情；
-- `/automations` → Automations；
-- `/activity` → Activity；
-- `/requests/:requestId` → Requests / 同一 Request Detail；
-- `/changes` → Changes；
-- `/access`、`/administrators` → Access & keys 中对应身份；
-- `/access/audit` → Activity & Audit / Audit；
-- `/access/audit/:auditRecordId` → Activity & Audit / 对应 Audit 详情；
+- `/extensions` → Hooks & Events / Hooks；
+- `/extensions/:extensionId` → Hooks & Events / 对应 Hook 详情；
+- `/automations` → Hooks & Events；历史 Schedule 子路径映射到 `定时任务`；
+- `/activity` → 活动记录；
+- `/requests/:requestId` → API 工作区 / 请求日志 / 同一 Request Detail；
+- `/changes` → 变更 / 待应用；
+- `/access`、`/administrators` → 访问与认证中对应身份；
+- `/access/audit` → 活动记录；
+- `/access/audit/:auditRecordId` → 活动记录 / 对应 Audit 详情；
 - `/secrets` → Settings / Secrets；
 - `/settings/portability`、`/settings/backups` → Settings / Backup & restore；
 - `/settings/data` → Settings / Data import & export；
-- `/settings/developer` → Connect / SDK & Contract；
-- `/settings/mcp` → Connect / MCP；
-- `/settings/drift` → Model health；
+- `/settings/developer` → API 工作区 / OpenAPI；
+- `/settings/mcp` → MCP 接入说明（从总览 / API 工作区可发现）；
+- `/settings/drift` → 变更 / 结构漂移；
 - `/settings/runtime` → Settings / Runtime；
 - `/settings/storage` → Settings / Files & Storage；
 - `/settings/mail` → Settings / Mail；
 - `/settings` → Settings；
-- `/api` → Connect / API；
+- `/api` → API 工作区 / 端点；
 - `/collections/new` → Create Collection；
 - `/collections/:collectionId` → 对应 Collection / Records；
 - `/collections/:collectionId/schema` → 对应 Collection / Model；
@@ -752,7 +879,7 @@ React + TypeScript + Vite
 → 创建 Record
 → 刷新后记录仍在
 → 从 Collection API 发出真实请求
-→ Requests 中打开同一 requestId
+→ API 工作区 / 请求日志中打开同一 requestId
 ~~~
 
 ## 18.2 Access 闭环
@@ -793,10 +920,11 @@ Run API request
 → 返回 Runner 保留 endpoint 和输入
 ~~~
 
-## 18.5 Automation 与身份
+## 18.5 Hooks、定时任务与身份
 
 - 配置 Hook Secret 后只查看 metadata，不回显明文；验证 Hook 运行结果。
-- 配置 Event Trigger / Schedule，查看真实 Delivery history、失败原因、重试与外部副作用状态。
+- 配置 Event Trigger，在 Hooks & Events / 投递历史查看真实投递、失败原因、重试与外部副作用状态。
+- 配置定时任务，在独立 `定时任务 / 执行历史` 查看计划运行、手动运行、失败原因与执行事实。
 - 创建 Service Account 和 API Key；明文只显示一次，刷新后只显示 metadata。
 - 使用 Service Account 权限调用 MCP 可用能力；越权动作仍被服务端拒绝并记录事实。
 
@@ -815,7 +943,7 @@ Run API request
 新版 Admin 交付必须同时满足：
 
 - 工作顺序可从 Home 连续走到第一条真实 API 请求；
-- 建模、访问控制、API、自动化、观察和变更演进入口由开发者任务组织；
+- 建模、访问控制、API、Hooks & Events、定时任务、活动记录和变更演进入口由开发者任务组织；
 - 空项目第一步明确，正常状态下 Home 不变成无意义中转页；
 - 每项主要操作的成功结果耐久、就地可见且可通过第二观察面验证；
 - SAFE 模型变化不需要多余确认，真实高风险变化说明影响并由 Runtime 权威判定；
