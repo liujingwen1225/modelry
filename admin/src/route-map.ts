@@ -7,9 +7,10 @@
 // 新版 canonical 路径：
 //   /                                  总览
 //   /collections[/new|/:collectionId[/model|/access|/api]]   集合
-//   /api[?tab=endpoints|playground|openapi|logs]             API 工作区
+//   /api[?tab=endpoints|openapi|logs]             API 工作区
 //   /api/requests/:requestId                                  请求详情
 //   /events[?tab=hooks|webhooks|triggers|deliveries]         Hooks & Events
+//   /events/hooks/new                                        Hook 创建
 //   /events/hooks/:extensionId                                Hook 详情
 //   /schedules[?tab=jobs|history]                            定时任务
 //   /changes[?tab=pending|history|drift]                     变更

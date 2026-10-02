@@ -222,7 +222,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
 
   // locale + theme 选择在刷新后保持，且不改变当前深链接。
-  await page.getByLabel('Language').selectOption('zh-CN');
+  await page.getByRole('button', { name: 'Switch language to Simplified Chinese' }).click();
   await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: '切换为深色主题' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -230,7 +230,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
-  await page.getByLabel('语言').selectOption('en');
+  await page.getByRole('button', { name: '切换语言为 English' }).click();
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 

@@ -1,3 +1,7 @@
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -198,9 +202,9 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {embedded
-        ? <div className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
-            {/* 作为 /access?tab=administrators 的工作面时只提供分节标题，页面级 h1 由 Access 工作区负责。 */}
+        ? <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+          <div className="sr-only">
+            {/* 工作面标题只保留屏幕阅读器语义，可见上下文由导航提供。 */}
             <h2 className="m-0">{t('administrators.title')}</h2>
             <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
           </div>
@@ -213,8 +217,8 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
             </Button>
           </div>
         </div>
-        : <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
+        : <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+          <div className="sr-only">
             <p className="eyebrow">{t('administrators.eyebrow')}</p>
             <h1>{t('administrators.title')}</h1>
             <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
@@ -333,40 +337,32 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setCreateOpen(false)} open={createOpen} title={t('administrators.create.title')}>
         <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void create(); }}>
           <FormField htmlFor="administrator-email" label={t('administrators.create.email')}>
-            <input autoComplete="off" id="administrator-email" onChange={(event) => setCreateEmail(event.target.value)} type="email" value={createEmail} />
+            <Input autoComplete="off" id="administrator-email" onChange={(event) => setCreateEmail(event.target.value)} type="email" value={createEmail} />
           </FormField>
           <FormField hint={t('administrators.create.passwordHint')} htmlFor="administrator-password" label={t('administrators.create.password')}>
-            <input autoComplete="new-password" id="administrator-password" onChange={(event) => setCreatePassword(event.target.value)} type="password" value={createPassword} />
+            <Input autoComplete="new-password" id="administrator-password" onChange={(event) => setCreatePassword(event.target.value)} type="password" value={createPassword} />
           </FormField>
           <FormField htmlFor="administrator-preset" label={t('administrators.create.preset')}>
-            <select
-              id="administrator-preset"
-              onChange={(event) => setCreatePermission((current) => ({ ...current, preset: event.target.value as PermissionPreset }))}
-              value={createPermission.preset}
-            >
-              <option value="fullAccess">{t('administrators.create.presets.fullAccess')}</option>
-              <option value="readOnly">{t('administrators.create.presets.readOnly')}</option>
-              <option value="custom">{t('administrators.create.presets.custom')}</option>
-            </select>
+            <SelectField id="administrator-preset" onValueChange={(selectedValue) => setCreatePermission((current) => ({ ...current, preset: selectedValue as PermissionPreset }))} value={createPermission.preset} options={[({ value: "fullAccess", label: t('administrators.create.presets.fullAccess') }), ({ value: "readOnly", label: t('administrators.create.presets.readOnly') }), ({ value: "custom", label: t('administrators.create.presets.custom') })]} />
           </FormField>
           {createPermission.preset === 'custom' && (
             <fieldset className="m-0 grid max-h-60 gap-1.5 overflow-y-auto rounded-lg border bg-secondary px-3 py-2.5">
               <legend className="px-1 text-xs font-semibold text-ink-secondary">{t('administrators.create.operations')}</legend>
               <p className="m-0 text-[10px] text-muted-foreground">{t('administrators.create.operationsHint')}</p>
               {administratorOperations.map((operation) => (
-                <label className="flex items-center gap-2 text-xs text-ink-secondary" key={operation}>
-                  <input
+                <Label className="flex items-center gap-2 text-xs text-ink-secondary" key={operation}>
+                  <Checkbox
                     checked={(createPermission.customOperations ?? []).includes(operation)}
-                    className="accent-primary"
-                    onChange={(event) => setCreatePermission((current) => {
+
+                    onCheckedChange={(checked) => setCreatePermission((current) => {
                       const selected = current.customOperations ?? [];
-                      const next = event.target.checked ? [...selected, operation] : selected.filter((entry) => entry !== operation);
+                      const next = checked ? [...selected, operation] : selected.filter((entry) => entry !== operation);
                       return { ...current, customOperations: next };
                     })}
-                    type="checkbox"
+
                   />
                   <span className="break-words font-mono text-[11px]">{operation}</span>
-                </label>
+                </Label>
               ))}
             </fieldset>
           )}
@@ -383,7 +379,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
         <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void savePassword(); }}>
           <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.password.description', { email: passwordTarget?.email ?? '' })}</p>
           <FormField hint={t('administrators.create.passwordHint')} htmlFor="administrator-new-password" label={t('administrators.password.label')}>
-            <input autoComplete="new-password" id="administrator-new-password" onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
+            <Input autoComplete="new-password" id="administrator-new-password" onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
           </FormField>
           <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3">
             <Button onClick={() => setPasswordTarget(null)} type="button" variant="quiet">{t('administrators.cancel')}</Button>

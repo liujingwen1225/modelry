@@ -1,9 +1,17 @@
+import { TabContent } from '../components/tab-content';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Button as ControlButton } from '@/components/ui/button';
+import { SearchInput } from '@/components/ui/search-input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Search, Shield } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Input, Textarea } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button, ButtonLink } from '../components/button';
@@ -117,8 +125,8 @@ export function CollectionsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div className="min-w-0">
+      <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        <div className="sr-only">
           <p className="eyebrow">{t('collections.eyebrow')}</p>
           <h1>{t('collections.title')}</h1>
           <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.description')}</p>
@@ -127,17 +135,7 @@ export function CollectionsPage() {
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1 md:max-w-sm">
-          <Search aria-hidden="true" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label={t('collections.search')}
-            className="pl-9"
-            onChange={(event) => updateQuery('q', event.target.value)}
-            placeholder={t('collections.searchPlaceholder')}
-            type="search"
-            value={search}
-          />
-        </div>
+        <SearchInput aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} value={search} className="min-w-[220px] flex-1 md:max-w-sm" />
         <Select items={typeItems} onValueChange={(value) => updateQuery('type', String(value) === 'all' ? '' : String(value))} value={type}>
           <SelectTrigger aria-label={t('collections.type')} className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -155,16 +153,16 @@ export function CollectionsPage() {
         </Select>
         <div aria-label={t('collections.viewLabel')} className="ml-auto flex overflow-hidden rounded-lg border border-input" role="group">
           {(['list', 'card'] as const).map((option) => (
-            <button
+            <ControlButton variant="unstyled"
               aria-pressed={view === option}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${view === option ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:shadow-none ${view === option ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
               key={option}
               onClick={() => updateQuery('view', option === 'list' ? '' : 'card')}
               type="button"
             >
               {option === 'list' ? <List aria-hidden="true" size={14} /> : <LayoutGrid aria-hidden="true" size={14} />}
               {t(option === 'list' ? 'collections.viewList' : 'collections.viewCards')}
-            </button>
+            </ControlButton>
           ))}
         </div>
       </div>
@@ -236,7 +234,7 @@ function CollectionListRow({ collection }: { collection: CollectionSummary }) {
 function CollectionCard({ collection }: { collection: CollectionSummary }) {
   const { t, formatDate } = useI18n();
   return (
-    <Link className="group relative flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary" to={`/collections/${encodeURIComponent(collection.id)}`}>
+    <Link className="group relative flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors " to={`/collections/${encodeURIComponent(collection.id)}`}>
       <div className="flex items-center justify-between gap-2">
         <span aria-hidden="true" className="grid size-9 place-items-center rounded-lg bg-muted text-ink-secondary"><Database size={18} /></span>
         <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
@@ -419,7 +417,7 @@ export function CreateCollectionPage() {
     <main className="mx-auto flex w-full max-w-[880px] min-w-0 flex-col gap-6">
       <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
 
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t('collections.buildEyebrow')}</p>
         <h1>{t('collections.create')}</h1>
         <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.createDescription')}</p>
@@ -447,32 +445,32 @@ export function CreateCollectionPage() {
           {/* Spec 0001 §6.2：类型选择留在名称旁边，Auth 选项随后就地出现。 */}
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className="mb-1 text-[11px] font-semibold text-ink-secondary">{t('collections.type')}</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <RadioGroup aria-label={t('collections.type')} className="grid gap-3 sm:grid-cols-2" name="collection-type" value={type} onValueChange={setType}>
               {(['Normal', 'Auth'] as const).map((option) => {
                 const selected = type === option;
                 return (
-                  <label
-                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 transition-colors ${selected ? 'border-primary bg-accent' : 'border-input bg-card hover:border-subtle-foreground'}`}
+                  <Label
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 transition-colors ${selected ? 'border-primary bg-accent' : 'border-input bg-card '}`}
                     key={option}
                   >
-                    <input aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} checked={selected} className="mt-0.5" name="collection-type" onChange={() => setType(option)} type="radio" value={option} />
+                    <RadioGroupItem aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} className="mt-0.5" value={option} />
                     <span className="min-w-0">
                       <strong className="block text-xs font-semibold text-foreground">{t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')}</strong>
                       <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span>
                     </span>
-                  </label>
+                  </Label>
                 );
               })}
-            </div>
+            </RadioGroup>
           </fieldset>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField htmlFor="collection-name" label={t('collections.nameLabel')} hint={t('collections.nameHint')}>
-              <input aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'collection-name-error' : undefined} autoComplete="off" id="collection-name" onChange={(event) => { setName(event.target.value); setNameError(''); setRequestError(undefined); }} value={name} />
+              <Input aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'collection-name-error' : undefined} autoComplete="off" id="collection-name" onChange={(event) => { setName(event.target.value); setNameError(''); setRequestError(undefined); }} value={name} />
             </FormField>
             {nameError && <p className="m-0 self-start text-[11px] font-semibold text-danger" id="collection-name-error" role="alert">{nameError}</p>}
             <FormField htmlFor="collection-description" label={t('collections.descriptionLabel')} hint={t('collections.descriptionHint')}>
-              <textarea id="collection-description" onChange={(event) => setDescription(event.target.value)} rows={2} value={description} />
+              <Textarea id="collection-description" onChange={(event) => setDescription(event.target.value)} rows={2} value={description} />
             </FormField>
           </div>
         </Surface>
@@ -510,25 +508,25 @@ export function CreateCollectionPage() {
           <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
             <div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2>{t('collections.authTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.authDescription')}</p></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
+              <Label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
                 <span className="min-w-0">
                   <strong className="block text-xs font-semibold text-foreground">{t('collections.emailPassword')}</strong>
                   <small className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t('collections.emailPasswordHint')}</small>
                 </span>
                 <span className="inline-flex shrink-0 items-center gap-2 text-[11px] text-ink-secondary">
-                  <input checked={authentication.emailPasswordEnabled} onChange={(event) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: event.target.checked }))} type="checkbox" />
+                  <Checkbox checked={authentication.emailPasswordEnabled} onCheckedChange={(checked) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: checked }))} />
                   {t('collections.enabled')}
                 </span>
-              </label>
-              <label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
+              </Label>
+              <Label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
                 <span className="min-w-0">
                   <strong className="block text-xs font-semibold text-foreground">{t('collections.selfRegistration')}</strong>
                   <small className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t('collections.selfRegistrationHint')}</small>
                 </span>
-                <input aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} className="mt-0.5 shrink-0" onChange={(event) => setAuthentication((value) => ({ ...value, selfRegistration: event.target.checked }))} type="checkbox" />
-              </label>
+                <Checkbox aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} className="mt-0.5 shrink-0" onCheckedChange={(checked) => setAuthentication((value) => ({ ...value, selfRegistration: checked }))} />
+              </Label>
               <FormField htmlFor="session-duration" label={t('collections.sessionDuration')} hint={t('collections.sessionDurationHint')}>
-                <input id="session-duration" min={1} onChange={(event) => setAuthentication((value) => ({ ...value, sessionDurationDays: Number(event.target.value) }))} type="number" value={authentication.sessionDurationDays} />
+                <Input id="session-duration" min={1} onChange={(event) => setAuthentication((value) => ({ ...value, sessionDurationDays: Number(event.target.value) }))} type="number" value={authentication.sessionDurationDays} />
               </FormField>
             </div>
           </Surface>
@@ -591,52 +589,45 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
     <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-initial-field-row>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_auto] lg:items-end">
         <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
-          <input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
+          <Input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
           {errors.name && <span className="text-[11px] font-semibold text-danger" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
         </FormField>
         <FormField htmlFor={`field-type-${field.key}`} label={t('collections.fieldType')}>
-          <select id={`field-type-${field.key}`} onChange={(event) => onUpdate({ type: event.target.value as FieldType, ...(event.target.value === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type}>
-            <option value="text">{t('schema.fieldTypes.text')}</option><option value="number">{t('schema.fieldTypes.number')}</option><option value="boolean">{t('schema.fieldTypes.boolean')}</option><option value="dateTime">{t('schema.fieldTypes.dateTime')}</option><option value="json">{t('schema.fieldTypes.json')}</option><option value="relation">{t('schema.fieldTypes.relation')}</option><option value="file">{t('schema.fieldTypes.file')}</option><option value="files">{t('schema.fieldTypes.files')}</option>
-          </select>
+          <SelectField id={`field-type-${field.key}`} onValueChange={(selectedValue) => onUpdate({ type: selectedValue as FieldType, ...(selectedValue === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type} options={[({ value: "text", label: t('schema.fieldTypes.text') }), ({ value: "number", label: t('schema.fieldTypes.number') }), ({ value: "boolean", label: t('schema.fieldTypes.boolean') }), ({ value: "dateTime", label: t('schema.fieldTypes.dateTime') }), ({ value: "json", label: t('schema.fieldTypes.json') }), ({ value: "relation", label: t('schema.fieldTypes.relation') }), ({ value: "file", label: t('schema.fieldTypes.file') }), ({ value: "files", label: t('schema.fieldTypes.files') })]} />
         </FormField>
         <div className="flex flex-wrap items-center gap-4 pb-1 text-xs text-ink-secondary">
-          <label className="inline-flex items-center gap-2"><input checked={field.required} onChange={(event) => onUpdate({ required: event.target.checked })} type="checkbox" />{t('collections.fieldRequired')}</label>
-          <label className="inline-flex items-center gap-2"><input checked={field.unique} onChange={(event) => onUpdate({ unique: event.target.checked })} type="checkbox" />{t('collections.fieldUnique')}</label>
+          <Label className="inline-flex items-center gap-2"><Checkbox checked={field.required} onCheckedChange={(checked) => onUpdate({ required: checked })} />{t('collections.fieldRequired')}</Label>
+          <Label className="inline-flex items-center gap-2"><Checkbox checked={field.unique} onCheckedChange={(checked) => onUpdate({ unique: checked })} />{t('collections.fieldUnique')}</Label>
           {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet">{t('collections.remove')}</Button>}
         </div>
       </div>
       {field.type === 'relation' && (
         <div className="grid gap-3 rounded-md border bg-secondary p-3 sm:grid-cols-2">
           <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
-            <select id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onChange={(event) => onUpdate({ targetCollectionId: event.target.value })} value={field.targetCollectionId}>
-              <option value="">{targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection')}</option>
-              {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-            </select>
+            <SelectField id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onValueChange={(selectedValue) => onUpdate({ targetCollectionId: selectedValue })} value={field.targetCollectionId} options={[({ value: "", label: targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection') }), targets.map((target) => ({ value: target.id, label: target.name }))]} />
             {errors.target && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.target}</span>}
           </FormField>
           <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
-            <select id={`field-cardinality-${field.key}`} onChange={(event) => onUpdate({ cardinality: event.target.value })} value={field.cardinality}>
-              <option value="many-to-one">{t('collections.manyToOne')}</option><option value="one-to-one">{t('collections.oneToOne')}</option><option value="one-to-many">{t('collections.oneToMany')}</option><option value="many-to-many">{t('collections.manyToMany')}</option>
-            </select>
+            <SelectField id={`field-cardinality-${field.key}`} onValueChange={(selectedValue) => onUpdate({ cardinality: selectedValue })} value={field.cardinality} options={[({ value: "many-to-one", label: t('collections.manyToOne') }), ({ value: "one-to-one", label: t('collections.oneToOne') }), ({ value: "one-to-many", label: t('collections.oneToMany') }), ({ value: "many-to-many", label: t('collections.manyToMany') })]} />
           </FormField>
         </div>
       )}
-      <details className="rounded-md border bg-secondary px-3 py-2 text-xs [&[open]>summary]:mb-3" id={detailsId}>
-        <summary className="flex cursor-pointer items-center gap-1.5 font-semibold text-ink-secondary"><ChevronDown aria-hidden="true" size={14} />{t('collections.advancedFieldSettings')}</summary>
+      <Collapsible data-slot="collapsible" className="rounded-md border bg-secondary px-3 py-2 text-xs [&[data-open]>[data-slot=collapsible-trigger]]:mb-3" id={detailsId}>
+        <CollapsibleTrigger className="flex cursor-pointer items-center gap-1.5 font-semibold text-ink-secondary"><ChevronDown aria-hidden="true" size={14} />{t('collections.advancedFieldSettings')}</CollapsibleTrigger><CollapsibleContent>
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField htmlFor={`field-description-${field.key}`} label={t('collections.fieldDescription')}>
-            <input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder={t('collections.optional')} value={field.description} />
+            <Input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder={t('collections.optional')} value={field.description} />
           </FormField>
           <FormField htmlFor={`field-default-${field.key}`} label={t('collections.defaultValue') + ' (JSON)'} hint={t('collections.defaultValueHint')}>
-            <input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
+            <Input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
             {errors.defaultValue && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.defaultValue}</span>}
           </FormField>
           <FormField htmlFor={`field-validation-${field.key}`} label={t('collections.validationLabel') + ' (JSON)'} hint={t('collections.validationHint')}>
-            <textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
+            <Textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
             {errors.validation && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.validation}</span>}
           </FormField>
         </div>
-      </details>
+      </CollapsibleContent></Collapsible>
     </section>
   );
 }
@@ -746,13 +737,13 @@ export function CollectionWorkspacePage() {
           <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg border bg-card text-ink-secondary"><Database size={20} /></span>
           <div className="min-w-0" data-collection-title>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold text-foreground">{collection.name}</h1>
+              <h1 className="sr-only">{collection.name}</h1>
               <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
               {pendingOperationCount > 0 && (
                 <Badge variant={pendingTone}>{formatPlural(pendingOperationCount, { one: t('shell.pendingChangeOne'), other: t('shell.pendingChangeMany') })}</Badge>
               )}
             </div>
-            <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{collection.description || t('collections.workspaceDescription')}</p>
+            <p className="sr-only">{collection.description || t('collections.workspaceDescription')}</p>
           </div>
         </div>
         <span className="text-xs text-muted-foreground">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</span>
@@ -796,7 +787,7 @@ export function CollectionWorkspacePage() {
           >{tab.label}</NavLink>
         ))}
       </nav>
-      <Outlet context={context} />
+      <TabContent activeKey={location.pathname}><Outlet context={context} /></TabContent>
     </div>
   );
 }

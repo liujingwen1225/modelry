@@ -128,8 +128,8 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
             <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
           </Button>
         </div>
-        : <header className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
+        : <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+          <div className="sr-only">
             <p className="eyebrow">{t('drift.eyebrow')}</p>
             <h1>{t('drift.title')}</h1>
             <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('drift.description')}</p>

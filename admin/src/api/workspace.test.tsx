@@ -1,10 +1,11 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Collection } from '../collections/client';
 import { LocaleProvider } from '../i18n/i18n';
-import { CollectionAPIPage } from './workspace';
+import { CollectionAPIPage, EndpointWorkspace } from './workspace';
 
 const mocks = vi.hoisted(() => ({
   getRequestRecord: vi.fn(),
@@ -52,6 +53,22 @@ function renderCollectionAPI(type: 'Normal' | 'Auth' = 'Normal', collectionOverr
 }
 
 describe('API Workspace', () => {
+  it('不同集合的同名端点只选中一项，并保留所选集合的深链接', async () => {
+    const user = userEvent.setup();
+    const other = { ...collection, id: 'col_notes', name: 'notes' };
+    const mounted = render(<LocaleProvider><MemoryRouter><CurrentLocation /><EndpointWorkspace collections={[collection, other]} /></MemoryRouter></LocaleProvider>);
+    const notesEndpoint = await screen.findByRole('button', { name: /GET.*List records.*\/api\/v1\/notes.*notes/ });
+    expect(document.querySelectorAll('[data-api-endpoint-option][aria-current="page"]')).toHaveLength(1);
+    await user.click(notesEndpoint);
+    expect(notesEndpoint).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelectorAll('[data-api-endpoint-option][aria-current="page"]')).toHaveLength(1);
+    expect(screen.getByTestId('current-location')).toHaveTextContent('endpoint=col_notes%3AlistApplicationRecords');
+    mounted.unmount();
+    render(<LocaleProvider><MemoryRouter initialEntries={['/?endpoint=col_notes%3AlistApplicationRecords']}><EndpointWorkspace collections={[collection, other]} /></MemoryRouter></LocaleProvider>);
+    expect(await screen.findByRole('button', { name: /GET.*List records.*\/api\/v1\/notes.*notes/ })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelectorAll('[data-api-endpoint-option][aria-current="page"]')).toHaveLength(1);
+  });
+
   beforeEach(() => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     mocks.getRequestRecord.mockReset();
@@ -157,7 +174,7 @@ describe('API Workspace', () => {
     await user.click(await screen.findByRole('button', { name: /Read a file attachment/ }));
     expect(await screen.findByText('Signed-in users')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Record ID'), 'rec_123');
-    await user.selectOptions(screen.getByLabelText('File field'), 'attachment');
+    await selectOption(user, screen.getByLabelText('File field'), 'attachment');
     await user.click(screen.getByText('View OpenAPI'));
     expect(screen.getAllByText(/readApplicationRecordFile/).length).toBeGreaterThan(0);
     expect(screen.getByText(/"\*\/\*"/)).toBeInTheDocument();

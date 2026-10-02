@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -293,7 +294,7 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
   await titleFieldRow.getByLabel('Field name 1').press('Enter');
   const filesFieldRow = page.locator('[data-initial-field-row]').nth(1);
   await filesFieldRow.getByLabel('Field name 2').fill('attachments');
-  await filesFieldRow.getByLabel('Type', { exact: true }).selectOption('files');
+  await selectOption(page, filesFieldRow.getByLabel('Type', { exact: true }), 'files');
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'documents' })).toBeVisible();
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
@@ -353,13 +354,13 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
   // Configure the S3-compatible Provider and prove that referenced objects require a migration first.
   await page.goto(runtimeURL + '/settings/storage');
   await expect(page.getByRole('heading', { name: 'Files & storage' })).toBeVisible();
-  await page.getByLabel('Provider').selectOption('s3');
+  await selectOption(page, page.getByLabel('Provider'), 's3');
   await page.getByLabel('Endpoint').fill(fakeS3!.url);
   await page.getByLabel('Region').fill('us-east-1');
   await page.getByLabel('Bucket').fill(bucketName);
   await page.getByLabel('Key prefix').fill('modelry');
-  await page.getByLabel('Access key Secret').selectOption({ label: 'S3 access key' });
-  await page.getByLabel('Secret key Secret').selectOption({ label: 'S3 secret key' });
+  await selectOption(page, page.getByLabel('Access key Secret'), { label: 'S3 access key' });
+  await selectOption(page, page.getByLabel('Secret key Secret'), { label: 'S3 secret key' });
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByText(/S3-compatible Storage is responding/)).toBeVisible();
   expectedHTTPFailures.add('409 ' + new URL('/admin/api/v1/storage/files/provider', runtimeURL).toString());

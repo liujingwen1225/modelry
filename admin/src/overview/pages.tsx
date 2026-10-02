@@ -1,3 +1,4 @@
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Bot, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -22,8 +23,8 @@ type SummaryState = 'loading' | 'ready' | 'unavailable';
 function PageHeading({ actions }: { actions: React.ReactNode }) {
   const { t } = useI18n();
   return (
-    <header className="flex min-w-0 flex-wrap items-start justify-between gap-5">
-      <div className="min-w-0">
+    <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+      <div className="sr-only">
         <p className="eyebrow">{t('overview.eyebrow')}</p>
         <h1>{t('overview.title')}</h1>
         <p className="mt-2 max-w-[700px] text-[13px] leading-relaxed text-muted-foreground">{t('overview.description')}</p>
@@ -125,36 +126,36 @@ function ContinueWorking() {
       {collections && recent.length === 0 ? <EmptyState description={t('overview.continueEmpty')} title={t('overview.continueTitle')} /> : null}
       {recent.length > 0 ? (
         <div className="min-w-0 overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse text-left">
-            <thead>
-              <tr className="border-b text-[10px] font-bold tracking-[0.6px] text-muted-foreground uppercase">
-                <th className="py-2 pr-3 font-bold">{t('navigation.collections')}</th>
-                <th className="py-2 pr-3 font-bold">{t('overview.collectionFields')}</th>
-                <th className="py-2 pr-3 font-bold">{t('overview.collectionRecords')}</th>
-                <th className="py-2 pr-3 font-bold">{t('overview.collectionStatus')}</th>
-                <th className="py-2 font-bold" />
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full min-w-[520px] border-collapse text-left">
+            <TableHeader>
+              <TableRow className="border-b text-[10px] font-bold tracking-[0.6px] text-muted-foreground uppercase">
+                <TableHead className="py-2 pr-3 font-bold">{t('navigation.collections')}</TableHead>
+                <TableHead className="py-2 pr-3 font-bold">{t('overview.collectionFields')}</TableHead>
+                <TableHead className="py-2 pr-3 font-bold">{t('overview.collectionRecords')}</TableHead>
+                <TableHead className="py-2 pr-3 font-bold">{t('overview.collectionStatus')}</TableHead>
+                <TableHead className="py-2 font-bold" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {recent.map((collection) => {
                 const status = collectionStatus(collection, t);
                 return (
-                  <tr className="border-b last:border-b-0" key={collection.id}>
-                    <td className="py-2.5 pr-3">
+                  <TableRow className="border-b last:border-b-0" key={collection.id}>
+                    <TableCell className="py-2.5 pr-3">
                       <span className="block truncate text-xs font-semibold text-foreground">{collection.name}</span>
                       <small className="font-mono text-[10px] text-muted-foreground">{collection.type === 'Auth' ? t('overview.authCollection') : t('overview.collection')}</small>
-                    </td>
-                    <td className="py-2.5 pr-3 font-mono text-[11px] text-ink-secondary">{formatNumber(collection.fieldCount)}</td>
-                    <td className="py-2.5 pr-3 font-mono text-[11px] text-ink-secondary">{collection.recordCount === undefined ? t('overview.unknown') : formatNumber(collection.recordCount)}</td>
-                    <td className="py-2.5 pr-3"><StatusChip state={status.state}>{status.label}</StatusChip></td>
-                    <td className="py-2.5 text-right">
+                    </TableCell>
+                    <TableCell className="py-2.5 pr-3 font-mono text-[11px] text-ink-secondary">{formatNumber(collection.fieldCount)}</TableCell>
+                    <TableCell className="py-2.5 pr-3 font-mono text-[11px] text-ink-secondary">{collection.recordCount === undefined ? t('overview.unknown') : formatNumber(collection.recordCount)}</TableCell>
+                    <TableCell className="py-2.5 pr-3"><StatusChip state={status.state}>{status.label}</StatusChip></TableCell>
+                    <TableCell className="py-2.5 text-right">
                       <ButtonLink size="small" to={`/collections/${encodeURIComponent(collection.id)}`} variant="secondary">{t('overview.continueOpen')}</ButtonLink>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       ) : null}
     </Surface>
@@ -165,7 +166,7 @@ function QuickStart() {
   const { t } = useI18n();
   const actions: Array<{ title: TranslationKey; hint: TranslationKey; to: string }> = [
     { title: 'overview.quickCreateCollection', hint: 'overview.quickCreateCollectionHint', to: '/collections/new' },
-    { title: 'overview.quickDebugApi', hint: 'overview.quickDebugApiHint', to: '/api?tab=playground' },
+    { title: 'overview.quickDebugApi', hint: 'overview.quickDebugApiHint', to: '/api?tab=endpoints' },
     { title: 'overview.quickCreateWebhook', hint: 'overview.quickCreateWebhookHint', to: '/events?tab=webhooks&create=1' },
     { title: 'overview.quickCreateSchedule', hint: 'overview.quickCreateScheduleHint', to: '/schedules?tab=jobs&create=1' },
   ];
@@ -177,7 +178,7 @@ function QuickStart() {
       </div>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {actions.map((action) => (
-          <Link className="flex min-w-0 flex-col gap-1 rounded-lg border bg-muted px-3 py-2.5 no-underline transition-colors hover:border-primary" key={action.to} to={action.to}>
+          <Link className="flex min-w-0 flex-col gap-1 rounded-lg border bg-muted px-3 py-2.5 no-underline transition-colors " key={action.to} to={action.to}>
             <strong className="text-xs font-semibold text-foreground">{t(action.title)}</strong>
             <span className="text-[11px] leading-relaxed text-muted-foreground">{t(action.hint)}</span>
           </Link>
@@ -360,7 +361,7 @@ export function OverviewPage() {
       return { label: t('overview.reviewChangesAction', { count: changes.pendingCount }), to: '/changes?tab=pending' };
     }
     if (collections && collections.count === 0) return { label: t('overview.createCollection'), to: '/collections/new' };
-    return { label: t('overview.quickDebugApi'), to: '/api?tab=playground' };
+    return { label: t('overview.quickDebugApi'), to: '/api?tab=endpoints' };
   }, [changes, collections, t]);
 
   return (

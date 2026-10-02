@@ -1,3 +1,5 @@
+import { Input } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, RefreshCw, Send } from 'lucide-react';
@@ -188,8 +190,8 @@ export function MailPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
+      <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        <div className="sr-only">
           <p className="eyebrow">{t('mail.eyebrow')}</p>
           <h1>{t('mail.title')}</h1>
           <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.description')}</p>
@@ -217,41 +219,28 @@ export function MailPage() {
         <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.provider.description')}</p>
         <form className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <FormField htmlFor="mail-enabled" label={t('mail.provider.enabled')}>
-            <select id="mail-enabled" onChange={(event) => setInput({ ...input, enabled: event.target.value === 'enabled' })} value={input.enabled ? 'enabled' : 'disabled'}>
-              <option value="disabled">{t('mail.provider.off')}</option>
-              <option value="enabled">{t('mail.provider.on')}</option>
-            </select>
+            <SelectField id="mail-enabled" onValueChange={(selectedValue) => setInput({ ...input, enabled: selectedValue === 'enabled' })} value={input.enabled ? 'enabled' : 'disabled'} options={[({ value: "disabled", label: t('mail.provider.off') }), ({ value: "enabled", label: t('mail.provider.on') })]} />
           </FormField>
           <FormField htmlFor="mail-host" label={t('mail.provider.host')}>
-            <input id="mail-host" onChange={(event) => setInput({ ...input, host: event.target.value })} value={input.host} />
+            <Input id="mail-host" onChange={(event) => setInput({ ...input, host: event.target.value })} value={input.host} />
           </FormField>
           <FormField htmlFor="mail-port" label={t('mail.provider.port')}>
-            <input id="mail-port" min="1" max="65535" onChange={(event) => setInput({ ...input, port: Number(event.target.value) })} type="number" value={input.port} />
+            <Input id="mail-port" min="1" max="65535" onChange={(event) => setInput({ ...input, port: Number(event.target.value) })} type="number" value={input.port} />
           </FormField>
           <FormField htmlFor="mail-security" label={t('mail.provider.security')}>
-            <select id="mail-security" onChange={(event) => setInput({ ...input, security: event.target.value === 'tls' ? 'tls' : event.target.value === 'plaintext' ? 'plaintext' : 'startTLS' })} value={input.security}>
-              <option value="startTLS">{t('mail.provider.securityStartTLS')}</option>
-              <option value="tls">{t('mail.provider.securityTLS')}</option>
-              <option value="plaintext">{t('mail.provider.securityPlaintext')}</option>
-            </select>
+            <SelectField id="mail-security" onValueChange={(selectedValue) => setInput({ ...input, security: selectedValue === 'tls' ? 'tls' : selectedValue === 'plaintext' ? 'plaintext' : 'startTLS' })} value={input.security} options={[({ value: "startTLS", label: t('mail.provider.securityStartTLS') }), ({ value: "tls", label: t('mail.provider.securityTLS') }), ({ value: "plaintext", label: t('mail.provider.securityPlaintext') })]} />
           </FormField>
           <FormField htmlFor="mail-from-address" label={t('mail.provider.fromAddress')}>
-            <input id="mail-from-address" onChange={(event) => setInput({ ...input, fromAddress: event.target.value })} type="email" value={input.fromAddress} />
+            <Input id="mail-from-address" onChange={(event) => setInput({ ...input, fromAddress: event.target.value })} type="email" value={input.fromAddress} />
           </FormField>
           <FormField htmlFor="mail-from-name" label={t('mail.provider.fromName')}>
-            <input id="mail-from-name" onChange={(event) => setInput({ ...input, fromName: event.target.value })} value={input.fromName} />
+            <Input id="mail-from-name" onChange={(event) => setInput({ ...input, fromName: event.target.value })} value={input.fromName} />
           </FormField>
           <FormField htmlFor="mail-username" label={t('mail.provider.username')}>
-            <select id="mail-username" onChange={(event) => setInput({ ...input, usernameSecretId: event.target.value })} value={input.usernameSecretId}>
-              <option value="">{t('mail.provider.chooseSecret')}</option>
-              {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
-            </select>
+            <SelectField id="mail-username" onValueChange={(selectedValue) => setInput({ ...input, usernameSecretId: selectedValue })} value={input.usernameSecretId} options={[({ value: "", label: t('mail.provider.chooseSecret') }), secrets.map((secret) => ({ value: secret.id, label: secret.name }))]} />
           </FormField>
           <FormField htmlFor="mail-password" label={t('mail.provider.password')}>
-            <select id="mail-password" onChange={(event) => setInput({ ...input, passwordSecretId: event.target.value })} value={input.passwordSecretId}>
-              <option value="">{t('mail.provider.chooseSecret')}</option>
-              {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
-            </select>
+            <SelectField id="mail-password" onValueChange={(selectedValue) => setInput({ ...input, passwordSecretId: selectedValue })} value={input.passwordSecretId} options={[({ value: "", label: t('mail.provider.chooseSecret') }), secrets.map((secret) => ({ value: secret.id, label: secret.name }))]} />
           </FormField>
           <div className="min-w-0 sm:col-span-2 xl:col-span-3">
             {secrets.length === 0
@@ -267,7 +256,7 @@ export function MailPage() {
         <div className="flex flex-wrap items-end gap-2 border-t pt-3">
           <div className="min-w-[220px] flex-1">
             <FormField htmlFor="mail-test-recipient" label={t('mail.provider.testRecipient')}>
-              <input id="mail-test-recipient" onChange={(event) => setTestRecipient(event.target.value)} type="email" value={testRecipient} />
+              <Input id="mail-test-recipient" onChange={(event) => setTestRecipient(event.target.value)} type="email" value={testRecipient} />
             </FormField>
           </div>
           <Button disabled={busy !== null || testRecipient.trim() === ''} onClick={() => void sendTest()} size="small" type="button" variant="secondary">

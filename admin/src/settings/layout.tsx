@@ -1,3 +1,4 @@
+import { TabContent } from '../components/tab-content';
 import { useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOwnerSession } from '../auth/owner-session';
@@ -33,7 +34,7 @@ export function SettingsLayout() {
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t('settings.eyebrow')}</p>
         <h1>{t('settings.title')}</h1>
         <p className="mt-2 max-w-[700px] text-[13px] leading-relaxed text-muted-foreground">{t('settings.description')}</p>
@@ -56,7 +57,7 @@ export function SettingsLayout() {
           ))}
         </nav>
         <div className="min-w-0">
-          <Outlet />
+          <TabContent activeKey={pathname}><Outlet /></TabContent>
         </div>
       </div>
     </div>

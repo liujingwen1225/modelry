@@ -1,3 +1,5 @@
+import { Input, Textarea } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useState } from 'react';
 import { Button } from '../components/button';
 import { FormField } from '../components/form-field';
@@ -70,25 +72,21 @@ export function AccessRuleSimulation({ collectionId }: { collectionId: string })
       </div>
       <div className="grid gap-3.5 min-[561px]:grid-cols-2">
         <FormField htmlFor="simulate-operation" label={t('security.simulationOperation')}>
-          <select id="simulate-operation" onChange={(event) => setOperation(event.target.value as (typeof OPERATIONS)[number])} value={operation}>
-            {OPERATIONS.map((candidate) => <option key={candidate} value={candidate}>{t(`security.operations.${candidate}`)}</option>)}
-          </select>
+          <SelectField id="simulate-operation" onValueChange={(selectedValue) => setOperation(selectedValue as (typeof OPERATIONS)[number])} value={operation} options={[OPERATIONS.map((candidate) => ({ value: candidate, label: t(`security.operations.${candidate}`) }))]} />
         </FormField>
         <FormField htmlFor="simulate-principal" label={t('security.simulationPrincipal')}>
-          <select id="simulate-principal" onChange={(event) => setPrincipalKind(event.target.value as PolicySimulationPrincipalKind)} value={principalKind}>
-            {PRINCIPALS.map((candidate) => <option key={candidate.value} value={candidate.value}>{t(candidate.key)}</option>)}
-          </select>
+          <SelectField id="simulate-principal" onValueChange={(selectedValue) => setPrincipalKind(selectedValue as PolicySimulationPrincipalKind)} value={principalKind} options={[PRINCIPALS.map((candidate) => ({ value: candidate.value, label: t(candidate.key) }))]} />
         </FormField>
         {needsPrincipalId && (
           <FormField htmlFor="simulate-principal-id" label={t('security.simulationPrincipalId')}>
-            <input id="simulate-principal-id" onChange={(event) => setPrincipalId(event.target.value)} value={principalId} />
+            <Input id="simulate-principal-id" onChange={(event) => setPrincipalId(event.target.value)} value={principalId} />
           </FormField>
         )}
         <FormField htmlFor="simulate-record" label={t('security.simulationRecordId')}>
-          <input id="simulate-record" onChange={(event) => setRecordId(event.target.value)} value={recordId} />
+          <Input id="simulate-record" onChange={(event) => setRecordId(event.target.value)} value={recordId} />
         </FormField>
         <FormField htmlFor="simulate-payload" hint={t('security.simulationPayloadHint')} label={t('security.simulationPayload')}>
-          <textarea id="simulate-payload" onChange={(event) => setPayload(event.target.value)} rows={3} value={payload} />
+          <Textarea id="simulate-payload" onChange={(event) => setPayload(event.target.value)} rows={3} value={payload} />
         </FormField>
       </div>
       <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3">

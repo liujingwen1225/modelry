@@ -1,3 +1,6 @@
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HardDrive, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -205,7 +208,7 @@ export function FileStoragePage() {
   const targetLabel = status.activeProvider === 'local' ? 'S3-compatible' : 'Local';
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t('storage.eyebrow')}</p>
         <h1>{t('storage.title')}</h1>
         <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('storage.description')}</p>
@@ -247,44 +250,32 @@ export function FileStoragePage() {
           <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('storage.provider.description')}</p>
         </div>
         <FormField htmlFor="storage-provider" label={t('storage.provider.label')}>
-          <select id="storage-provider" onChange={(event) => setProvider(event.target.value === 's3' ? 's3' : 'local')} value={provider}>
-            <option value="local">{t('storage.provider.local')}</option>
-            <option value="s3">{t('storage.provider.s3')}</option>
-          </select>
+          <SelectField id="storage-provider" onValueChange={(selectedValue) => setProvider(selectedValue === 's3' ? 's3' : 'local')} value={provider} options={[({ value: "local", label: t('storage.provider.local') }), ({ value: "s3", label: t('storage.provider.s3') })]} />
         </FormField>
         {provider === 's3' && <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <FormField htmlFor="storage-endpoint" label={t('storage.provider.endpoint')} hint={t('storage.provider.endpointHint')}>
-            <input id="storage-endpoint" onChange={(event) => setS3({ ...s3, endpoint: event.target.value })} placeholder="https://s3.example.com" type="url" value={s3.endpoint} />
+            <Input id="storage-endpoint" onChange={(event) => setS3({ ...s3, endpoint: event.target.value })} placeholder="https://s3.example.com" type="url" value={s3.endpoint} />
           </FormField>
           <FormField htmlFor="storage-region" label={t('storage.provider.region')}>
-            <input id="storage-region" onChange={(event) => setS3({ ...s3, region: event.target.value })} value={s3.region} />
+            <Input id="storage-region" onChange={(event) => setS3({ ...s3, region: event.target.value })} value={s3.region} />
           </FormField>
           <FormField htmlFor="storage-bucket" label={t('storage.provider.bucket')}>
-            <input id="storage-bucket" onChange={(event) => setS3({ ...s3, bucket: event.target.value })} value={s3.bucket} />
+            <Input id="storage-bucket" onChange={(event) => setS3({ ...s3, bucket: event.target.value })} value={s3.bucket} />
           </FormField>
           <FormField htmlFor="storage-key-prefix" label={t('storage.provider.keyPrefix')} hint={t('storage.provider.keyPrefixHint')}>
-            <input id="storage-key-prefix" onChange={(event) => setS3({ ...s3, keyPrefix: event.target.value })} value={s3.keyPrefix} />
+            <Input id="storage-key-prefix" onChange={(event) => setS3({ ...s3, keyPrefix: event.target.value })} value={s3.keyPrefix} />
           </FormField>
           <FormField htmlFor="storage-path-style" label={t('storage.provider.pathStyle')}>
-            <input checked={s3.pathStyle ?? true} id="storage-path-style" onChange={(event) => setS3({ ...s3, pathStyle: event.target.checked })} type="checkbox" />
+            <Checkbox checked={s3.pathStyle ?? true} id="storage-path-style" onCheckedChange={(checked) => setS3({ ...s3, pathStyle: checked })} />
           </FormField>
           <FormField htmlFor="storage-access-key" label={t('storage.provider.accessKey')}>
-            <select id="storage-access-key" onChange={(event) => setS3({ ...s3, accessKeySecretId: event.target.value })} value={s3.accessKeySecretId}>
-              <option value="">{t('storage.provider.chooseSecret')}</option>
-              {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
-            </select>
+            <SelectField id="storage-access-key" onValueChange={(selectedValue) => setS3({ ...s3, accessKeySecretId: selectedValue })} value={s3.accessKeySecretId} options={[({ value: "", label: t('storage.provider.chooseSecret') }), secrets.map((secret) => ({ value: secret.id, label: secret.name }))]} />
           </FormField>
           <FormField htmlFor="storage-secret-key" label={t('storage.provider.secretKey')}>
-            <select id="storage-secret-key" onChange={(event) => setS3({ ...s3, secretKeySecretId: event.target.value })} value={s3.secretKeySecretId}>
-              <option value="">{t('storage.provider.chooseSecret')}</option>
-              {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
-            </select>
+            <SelectField id="storage-secret-key" onValueChange={(selectedValue) => setS3({ ...s3, secretKeySecretId: selectedValue })} value={s3.secretKeySecretId} options={[({ value: "", label: t('storage.provider.chooseSecret') }), secrets.map((secret) => ({ value: secret.id, label: secret.name }))]} />
           </FormField>
           <FormField htmlFor="storage-session-token" label={t('storage.provider.sessionToken')}>
-            <select id="storage-session-token" onChange={(event) => setS3({ ...s3, sessionTokenSecretId: event.target.value })} value={s3.sessionTokenSecretId ?? ''}>
-              <option value="">{t('storage.provider.noSessionToken')}</option>
-              {secrets.map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}
-            </select>
+            <SelectField id="storage-session-token" onValueChange={(selectedValue) => setS3({ ...s3, sessionTokenSecretId: selectedValue })} value={s3.sessionTokenSecretId ?? ''} options={[({ value: "", label: t('storage.provider.noSessionToken') }), secrets.map((secret) => ({ value: secret.id, label: secret.name }))]} />
           </FormField>
           <div className="min-w-0 sm:col-span-2 xl:col-span-3">
             {secrets.length === 0

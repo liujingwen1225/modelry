@@ -1,3 +1,4 @@
+import { TabContent } from '../components/tab-content';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChangesPage } from '../collections/changes';
 import { DriftPage } from '../drift/pages';
@@ -30,7 +31,7 @@ export function ChangesWorkspacePage() {
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="min-w-0">
+    <header className="sr-only">
       <p className="eyebrow">{t('changes.eyebrow')}</p>
       <h1>{t('changes.title')}</h1>
       <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('changes.description')}</p>
@@ -39,14 +40,16 @@ export function ChangesWorkspacePage() {
     <nav aria-label={t('changes.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-changes-tabs>
       {changesTabOrder.map((tab) => <Link
         aria-current={activeTab === tab ? 'page' : undefined}
-        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={tab}
         to={tabTarget(tab)}
       >{t(changesTabLabels[tab])}</Link>)}
     </nav>
 
-    {activeTab === 'drift' && <p className="m-0 max-w-[680px] text-xs leading-relaxed text-muted-foreground">{t('changes.driftDescription')}</p>}
+    <TabContent activeKey={activeTab}>
+    {activeTab === 'drift' && <p className="sr-only">{t('changes.driftDescription')}</p>}
 
     {activeTab === 'drift' ? <DriftPage embedded /> : <ChangesPage embedded />}
+    </TabContent>
   </div>;
 }

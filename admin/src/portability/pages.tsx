@@ -1,3 +1,5 @@
+import { Input, Textarea } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Package, RefreshCw, Upload } from 'lucide-react';
@@ -166,7 +168,7 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t(eyebrowKey)}</p>
         <h1>{t(titleKey as TranslationKey)}</h1>
         <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t(descriptionKey as TranslationKey)}</p>
@@ -187,7 +189,7 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
           </Button>
         </div>
         <FormField hint={t('portability.restore.hint')} htmlFor="portability-restore-bundle" label={t('portability.restore.label')}>
-          <input
+          <Input
             accept="application/x-tar,.tar"
             id="portability-restore-bundle"
             onChange={(event) => void preflightBundle(event.target.files?.[0])}
@@ -234,9 +236,7 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
           : (
             <>
               <FormField htmlFor="portability-collection" label={t('portability.transfer.collection')}>
-                <select id="portability-collection" onChange={(event) => setSelected(event.target.value)} value={selected}>
-                  {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
-                </select>
+                <SelectField id="portability-collection" onValueChange={(selectedValue) => setSelected(selectedValue)} value={selected} options={[collections.map((collection) => ({ value: collection.id, label: collection.name }))]} />
               </FormField>
               <div className="flex flex-wrap items-center gap-2">
                 <Button disabled={busy !== null} onClick={() => void exportRecords()} size="small" type="button" variant="secondary">
@@ -247,7 +247,7 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
                 </Button>
               </div>
               <FormField hint={t('portability.transfer.ndjsonHint')} htmlFor="portability-import" label={t('portability.transfer.ndjson')}>
-                <textarea id="portability-import" onChange={(event) => setImportText(event.target.value)} rows={5} value={importText} />
+                <Textarea id="portability-import" onChange={(event) => setImportText(event.target.value)} rows={5} value={importText} />
               </FormField>
               {importSummary && (
                 <div className="flex flex-col gap-2 rounded-lg border bg-secondary px-3 py-3" role="status">

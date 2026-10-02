@@ -60,7 +60,7 @@ describe('Community V0.1.x closure', () => {
       'navigation.overview', 'navigation.collections', 'navigation.apiWorkspace', 'navigation.hooksEvents',
       'navigation.scheduledJobs', 'navigation.changes', 'navigation.accessAuth', 'navigation.activity', 'navigation.settings',
       // 二级工作面。
-      'api.workspaceTabs.endpoints', 'api.workspaceTabs.playground', 'api.workspaceTabs.openapi', 'api.workspaceTabs.logs',
+      'api.workspaceTabs.endpoints', 'api.workspaceTabs.openapi', 'api.workspaceTabs.logs',
       'events.tabs.hooks', 'events.tabs.webhooks', 'events.tabs.triggers', 'events.tabs.deliveries',
       'schedules.tabs.jobs', 'schedules.tabs.history', 'schedules.runNow',
       'changes.tabs.pending', 'changes.tabs.history', 'changes.tabs.drift',

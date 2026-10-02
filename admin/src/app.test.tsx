@@ -181,8 +181,8 @@ describe('Modelry Admin shell', () => {
     const darkThemeButton = await screen.findByRole('button', { name: 'Switch to dark theme' });
     const ownerMenu = document.querySelector('[data-owner-menu]');
     expect(ownerMenu?.querySelector('[data-theme-button]')).toBeNull();
-    await user.click(ownerMenu?.querySelector('summary') as HTMLElement);
-    expect(within(ownerMenu as HTMLElement).getByText('Session active')).toBeInTheDocument();
+    await user.click(ownerMenu?.querySelector('button') as HTMLElement);
+    expect(screen.getByText('Session active')).toBeInTheDocument();
     expect(ownerMenu).not.toHaveTextContent('Control Plane');
 
     darkThemeButton.focus();
@@ -205,10 +205,10 @@ describe('Modelry Admin shell', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     const mounted = render(<App />);
 
-    const language = await screen.findByRole('combobox', { name: 'Language' });
+    const language = await screen.findByRole('button', { name: 'Switch language to Simplified Chinese' });
     const navigation = screen.getByRole('navigation', { name: 'Project navigation' });
     expect(within(navigation).getByRole('link', { name: 'Collections' })).toBeInTheDocument();
-    await user.selectOptions(language, 'zh-CN');
+    await user.click(language);
 
     const localizedNavigation = await screen.findByRole('navigation', { name: '项目导航' });
     expect(within(localizedNavigation).getByRole('link', { name: '集合' })).toBeInTheDocument();
@@ -219,13 +219,13 @@ describe('Modelry Admin shell', () => {
       expect(document.documentElement).toHaveAttribute('lang', 'zh-CN');
       expect(window.localStorage.getItem('modelry-admin-locale')).toBe('zh-CN');
     });
-    await user.click(document.querySelector('[data-owner-menu] summary') as HTMLElement);
+    await user.click(document.querySelector('[data-owner-menu] > button') as HTMLElement);
     expect(document.querySelector('[data-owner-menu]')).not.toHaveTextContent(/控制面|控制平面/);
 
     mounted.unmount();
     render(<App />);
     expect(await screen.findByRole('navigation', { name: '项目导航' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '语言' })).toHaveValue('zh-CN');
+    expect(screen.getByRole('button', { name: '切换语言为 English' })).toHaveTextContent('EN');
     expect(window.location.pathname + window.location.search + window.location.hash).toBe('/?filter=keep#selected');
   });
 

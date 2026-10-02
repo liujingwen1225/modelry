@@ -1,3 +1,9 @@
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Input, Textarea } from '@/components/ui/input';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Button as ControlButton } from '@/components/ui/button';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, ArrowRight, Check, ChevronDown, Clock3, Database, GitBranch, Layers3, LoaderCircle, Plus, RefreshCw, Save, ShieldCheck, Trash2, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -308,8 +314,8 @@ export function CollectionSchemaPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+      <header className="flex flex-wrap items-center justify-end gap-3">
+        <div className="sr-only">
           <p className="eyebrow">{t('schema.eyebrow')}</p>
           <h2>{t('schema.title')}</h2>
           <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('schema.description')}</p>
@@ -319,13 +325,13 @@ export function CollectionSchemaPage() {
 
       <nav aria-label={t('schema.viewsLabel')} className="flex gap-1 overflow-x-auto border-b">
         {(['fields', 'relations', 'indexes', 'history'] as const).map((tab) => (
-          <button
+          <ControlButton variant="unstyled"
             aria-current={view === tab ? 'page' : undefined}
             className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${view === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             key={tab}
             onClick={() => selectView(tab)}
             type="button"
-          >{t(`schema.views.${tab}`)}</button>
+          >{t(`schema.views.${tab}`)}</ControlButton>
         ))}
       </nav>
 
@@ -544,15 +550,15 @@ export function CollectionSchemaPage() {
                         <time className="text-[11px] text-muted-foreground" dateTime={entry.appliedAt}>{formatDate(entry.appliedAt)}</time>
                       </div>
                       <span className="text-xs text-muted-foreground">{t(changes === 1 ? 'schema.historySummaryOne' : 'schema.historySummaryMany', { count: changes, version: (collection.schemaVersion ?? 1) - Math.max(0, history.indexOf(entry)) })}</span>
-                      <details className="text-[11px] text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_pre]:mt-1.5 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-[10px] [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary:hover]:text-foreground">
-                        <summary>{t('schema.technicalDetails')}</summary>
+                      <Collapsible data-slot="collapsible" className="text-[11px] text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_pre]:mt-1.5 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-[10px] [&_[data-slot=collapsible-trigger]]:w-fit [&_[data-slot=collapsible-trigger]]:cursor-pointer [&_[data-slot=collapsible-trigger]]:font-semibold [&_[data-slot=collapsible-trigger]:hover]:text-foreground">
+                        <CollapsibleTrigger>{t('schema.technicalDetails')}</CollapsibleTrigger><CollapsibleContent>
                         <dl>
                           <div className="flex gap-2"><dt className="font-semibold">{t('schema.changeId')}</dt><dd className="m-0"><code>{entry.changeSetId}</code></dd></div>
                           <div className="flex gap-2"><dt className="font-semibold">{t('schema.appliedModelRecord')}</dt><dd className="m-0"><code>{entry.id}</code></dd></div>
                           <div className="flex gap-2"><dt className="font-semibold">{t('schema.applyAttempt')}</dt><dd className="m-0"><code>{entry.applyAttemptId}</code></dd></div>
                         </dl>
                         {entry.diff?.map((diff, index) => <pre key={index}>{JSON.stringify(diff, null, 2)}</pre>)}
-                      </details>
+                      </CollapsibleContent></Collapsible>
                     </div>
                   </li>
                 );
@@ -700,13 +706,13 @@ function SchemaEditor({
       </div>
       <form className="mt-4 flex flex-col gap-3.5" noValidate onSubmit={submit}>
         <div className="grid gap-3.5 md:grid-cols-2">
-          <FormField htmlFor="schema-edit-name" label={t(kind === 'index' ? 'schema.indexName' : 'schema.fieldName')}><input autoComplete="off" id="schema-edit-name" onChange={(event) => { setName(event.target.value); setFormError(''); }} value={name} /></FormField>
-          {kind === 'index' ? <FormField htmlFor="schema-index-fields" label={t('schema.columnFields')}><select id="schema-index-fields" multiple onChange={(event) => setSelectedFields(Array.from(event.target.selectedOptions, (option) => option.value))} value={selectedFields}>{fields.filter((item) => !item.system).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField> : <FormField htmlFor="schema-edit-type" label={t('schema.columnType')}><select disabled={kind === 'relation'} id="schema-edit-type" onChange={(event) => setType(event.target.value as FieldType)} value={kind === 'relation' ? 'relation' : type}>{(['text', 'number', 'boolean', 'dateTime', 'json', 'relation', 'file', 'files'] as const).map((option) => <option key={option} value={option}>{t(`schema.fieldTypes.${option}`)}</option>)}</select></FormField>}
+          <FormField htmlFor="schema-edit-name" label={t(kind === 'index' ? 'schema.indexName' : 'schema.fieldName')}><Input autoComplete="off" id="schema-edit-name" onChange={(event) => { setName(event.target.value); setFormError(''); }} value={name} /></FormField>
+          {kind === 'index' ? <FormField htmlFor="schema-index-fields" label={t('schema.columnFields')}><SelectField id="schema-index-fields" multiple onValueChange={(selectedValue) => setSelectedFields(selectedValue)} value={selectedFields} options={[fields.filter((item) => !item.system).map((item) => ({ value: item.id ?? item.name, label: item.name }))]} /></FormField> : <FormField htmlFor="schema-edit-type" label={t('schema.columnType')}><SelectField disabled={kind === 'relation'} id="schema-edit-type" onValueChange={(selectedValue) => setType(selectedValue as FieldType)} value={kind === 'relation' ? 'relation' : type} options={[(['text', 'number', 'boolean', 'dateTime', 'json', 'relation', 'file', 'files'] as const).map((option) => ({ value: option, label: t(`schema.fieldTypes.${option}`) }))]} /></FormField>}
         </div>
-        {kind === 'relation' && <div className="grid gap-3.5 md:grid-cols-2"><FormField htmlFor="schema-target" label={t('schema.targetCollection')}><select id="schema-target" onChange={(event) => setTargetCollectionId(event.target.value)} value={targetCollectionId}><option value="">{loadingTargets ? t('schema.targetLoading') : t('schema.chooseCollection')}</option>{targetCollections.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select>{targetError && <span className="text-[11px] text-danger">{t('schema.targetLoadFailed')}</span>}</FormField><FormField htmlFor="schema-cardinality" label={t('schema.cardinality')}><select id="schema-cardinality" onChange={(event) => setCardinality(event.target.value)} value={cardinality}>{(['many-to-one', 'one-to-one', 'one-to-many', 'many-to-many'] as const).map((option) => <option key={option} value={option}>{t(`schema.cardinalities.${option}`)}</option>)}</select></FormField></div>}
-        {kind !== 'index' && <div className="flex flex-wrap items-center gap-4 text-xs text-ink-secondary"><label className="inline-flex items-center gap-2"><input checked={required} onChange={(event) => setRequired(event.target.checked)} type="checkbox" />{t('schema.required')}</label><label className="inline-flex items-center gap-2"><input checked={unique} disabled={type === 'files'} onChange={(event) => setUnique(event.target.checked)} type="checkbox" />{t('schema.unique')}</label>{type === 'files' && <span className="text-[11px] text-muted-foreground">{t('schema.filesCannotBeUnique')}</span>}</div>}
-        {kind === 'index' && <label className="inline-flex w-fit items-center gap-2 text-xs text-ink-secondary"><input checked={unique} onChange={(event) => setUnique(event.target.checked)} type="checkbox" />{t('schema.uniqueIndex')}</label>}
-        {kind !== 'index' && <details className="rounded-lg border bg-card px-3.5 py-2.5 text-xs [&[open]>summary]:mb-3"><summary className="flex cursor-pointer items-center gap-1.5 font-semibold text-ink-secondary"><ChevronDown aria-hidden="true" size={14} />{t('schema.advancedSummary')}</summary><div className="grid gap-3.5 md:grid-cols-2"><FormField htmlFor="schema-edit-description" label={t('schema.fieldDescription')}><input id="schema-edit-description" onChange={(event) => setDescription(event.target.value)} value={description} /></FormField><FormField htmlFor="schema-edit-default" label={t('schema.defaultValue')}><input id="schema-edit-default" onChange={(event) => setDefaultValue(event.target.value)} value={defaultValue} /></FormField><FormField htmlFor="schema-edit-validation" hint={(type === 'file' || type === 'files') ? t('schema.fileValidationHint') : undefined} label={t('schema.validation')}><textarea id="schema-edit-validation" onChange={(event) => setValidation(event.target.value)} rows={3} value={validation} /></FormField></div></details>}
+        {kind === 'relation' && <div className="grid gap-3.5 md:grid-cols-2"><FormField htmlFor="schema-target" label={t('schema.targetCollection')}><SelectField id="schema-target" onValueChange={(selectedValue) => setTargetCollectionId(selectedValue)} value={targetCollectionId} options={[({ value: "", label: loadingTargets ? t('schema.targetLoading') : t('schema.chooseCollection') }), targetCollections.map((target) => ({ value: target.id, label: target.name }))]} />{targetError && <span className="text-[11px] text-danger">{t('schema.targetLoadFailed')}</span>}</FormField><FormField htmlFor="schema-cardinality" label={t('schema.cardinality')}><SelectField id="schema-cardinality" onValueChange={(selectedValue) => setCardinality(selectedValue)} value={cardinality} options={[(['many-to-one', 'one-to-one', 'one-to-many', 'many-to-many'] as const).map((option) => ({ value: option, label: t(`schema.cardinalities.${option}`) }))]} /></FormField></div>}
+        {kind !== 'index' && <div className="flex flex-wrap items-center gap-4 text-xs text-ink-secondary"><Label className="inline-flex items-center gap-2"><Checkbox checked={required} onCheckedChange={(checked) => setRequired(checked)} />{t('schema.required')}</Label><Label className="inline-flex items-center gap-2"><Checkbox checked={unique} disabled={type === 'files'} onCheckedChange={(checked) => setUnique(checked)} />{t('schema.unique')}</Label>{type === 'files' && <span className="text-[11px] text-muted-foreground">{t('schema.filesCannotBeUnique')}</span>}</div>}
+        {kind === 'index' && <Label className="inline-flex w-fit items-center gap-2 text-xs text-ink-secondary"><Checkbox checked={unique} onCheckedChange={(checked) => setUnique(checked)} />{t('schema.uniqueIndex')}</Label>}
+        {kind !== 'index' && <Collapsible data-slot="collapsible" className="rounded-lg border bg-card px-3.5 py-2.5 text-xs [&[data-open]>[data-slot=collapsible-trigger]]:mb-3"><CollapsibleTrigger className="flex cursor-pointer items-center gap-1.5 font-semibold text-ink-secondary"><ChevronDown aria-hidden="true" size={14} />{t('schema.advancedSummary')}</CollapsibleTrigger><CollapsibleContent><div className="grid gap-3.5 md:grid-cols-2"><FormField htmlFor="schema-edit-description" label={t('schema.fieldDescription')}><Input id="schema-edit-description" onChange={(event) => setDescription(event.target.value)} value={description} /></FormField><FormField htmlFor="schema-edit-default" label={t('schema.defaultValue')}><Input id="schema-edit-default" onChange={(event) => setDefaultValue(event.target.value)} value={defaultValue} /></FormField><FormField htmlFor="schema-edit-validation" hint={(type === 'file' || type === 'files') ? t('schema.fileValidationHint') : undefined} label={t('schema.validation')}><Textarea id="schema-edit-validation" onChange={(event) => setValidation(event.target.value)} rows={3} value={validation} /></FormField></div></CollapsibleContent></Collapsible>}
         {formError && <p className="text-[11px] font-semibold text-danger" role="alert">{t(formError)}</p>}
         <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} type="button" variant="quiet">{t('common.cancel')}</Button><Button disabled={working || loadingTargets && kind === 'relation'} type="submit" variant="primary">{working ? t('schema.saving') : t('schema.save')}<Save aria-hidden="true" size={14} /></Button></div>
       </form>

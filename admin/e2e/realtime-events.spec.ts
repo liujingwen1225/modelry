@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, readdir, rm } from 'node:fs/promises';
@@ -378,7 +379,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await page.getByRole('button', { name: 'Edit List access' }).click();
   await page.getByLabel('Custom rule').check();
   await page.getByRole('button', { name: 'Add condition', exact: true }).click();
-  await page.getByLabel('Condition 1 field').selectOption({ label: 'visibility' });
+  await selectOption(page, page.getByLabel('Condition 1 field'), { label: 'visibility' });
   await page.getByLabel('Condition value', { exact: true }).fill('public');
   await page.getByRole('button', { name: 'Save pending rule' }).click();
   await page.getByRole('button', { name: /Apply 1 change/ }).click();
@@ -397,7 +398,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await paletteInput.fill('Open current Collection Realtime events');
   await expect(palette.getByRole('option', { name: 'Open current Collection Realtime events' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN');
+  await page.getByRole('button', { name: 'Switch language to Simplified Chinese' }).click();
   await expect(page.getByRole('heading', { name: '已提交的记录事件' })).toBeVisible();
   await expect(page.locator('[data-api-realtime-example] code')).toContainText('设置应用会话 token');
   await page.getByRole('button', { name: '搜索命令' }).click();
@@ -408,7 +409,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/api?tab=realtime`);
   await expect(page.getByRole('heading', { name: '已提交的记录事件' })).toBeVisible();
-  await page.getByRole('combobox', { name: '语言' }).selectOption('en');
+  await page.getByRole('button', { name: '切换语言为 English' }).click();
   await expect(page.getByRole('heading', { name: 'Committed Record Events' })).toBeVisible();
   await page.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

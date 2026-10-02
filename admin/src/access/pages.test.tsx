@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -82,11 +83,25 @@ describe('Access and Audit pages', () => {
     await user.click(await screen.findByRole('button', { name: 'Create Service Account' }));
     const form = document.querySelector<HTMLFormElement>('[data-access-form]')!;
     await user.type(form.querySelector('#account-name')!, 'model-reader');
-    await user.selectOptions(form.querySelector('#account-permission')!, 'custom');
+    await selectOption(user, form.querySelector('#account-permission')!, 'custom');
     await user.click(form.querySelector('input[value="collections.read"]')!);
     await user.click(form.querySelector('[data-access-create-key] input')!);
     await user.click(form.querySelector('button[type="submit"]')!);
     await waitFor(() => expect(mocks.createServiceAccount).toHaveBeenCalledWith(expect.objectContaining({ permission: 'custom', customPermissionVersion: 1, customOperations: ['collections.read'], createAPIKey: false })));
+  });
+
+  it('默认精简审计筛选，折叠高级条件后仍提交并保留输入', async () => {
+    const user = userEvent.setup();
+    renderAccess('/activity/audit');
+    await screen.findByRole('link', { name: /2026/ });
+    expect(screen.queryByRole('textbox', { name: 'Actor ID' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'More filters' }));
+    await user.type(screen.getByRole('textbox', { name: 'Actor ID' }), 'own_2');
+    await user.click(screen.getByRole('button', { name: 'More filters' }));
+    expect(screen.queryByRole('textbox', { name: 'Actor ID' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Apply filters' }));
+    await waitFor(() => expect(mocks.listAuditRecords).toHaveBeenLastCalledWith(expect.objectContaining({ actorId: 'own_2' }), expect.any(AbortSignal)));
+    expect(await screen.findByRole('textbox', { name: 'Actor ID' })).toHaveValue('own_2');
   });
 
   it('sends Audit filters to the server and retains them across cursor pages and detail links', async () => {

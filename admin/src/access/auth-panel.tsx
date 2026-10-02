@@ -50,7 +50,7 @@ export function ApplicationAuthPanel() {
     : { title: t('access.authLoadFailed'), detail: t('common.tryAgainWhenAvailable') };
 
   return <section aria-label={t('access.authTitle')} className="flex min-w-0 flex-col gap-4">
-    <div className="min-w-0">
+    <div className="sr-only">
       <h2>{t('access.authTitle')}</h2>
       <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('access.authDescription')}</p>
     </div>

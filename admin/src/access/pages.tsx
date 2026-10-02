@@ -1,5 +1,11 @@
+import { TabContent } from '../components/tab-content';
+import { SearchInput } from '@/components/ui/search-input';
+import { Input, Textarea } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, KeyRound, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, KeyRound, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ApiClientError } from '../api/client';
@@ -19,6 +25,8 @@ import {
   revokeAPIKey, setServiceAccountEnabled, updateServiceAccount,
   type APIKey, type APIKeyReveal, type AuditRecord, type CustomPermissionOperation, type PermissionPreset, type ServiceAccount,
 } from './client';
+
+const advancedAuditFilters = ['actorId', 'resourceKind', 'resourceId', 'from', 'to'] as const;
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -79,7 +87,7 @@ function PermissionFields({ selected, onChange }: { selected: CustomPermissionOp
     <p className="m-0 text-[11px] text-muted-foreground">{t('access.customPermissionsDescription')}</p>
     <div className="grid max-h-80 grid-cols-1 gap-2 overflow-auto min-[561px]:grid-cols-2">{operationGroups.map((group) => <fieldset className="grid min-w-0 content-start gap-1.5 rounded-lg border p-2.5" key={group.labelKey}>
       <legend className="px-1 text-[11px] font-semibold text-ink-secondary">{t(group.labelKey)}</legend>
-      {group.operations.map((operation) => <label className="flex items-center gap-2 text-xs text-ink-secondary" key={operation}><input checked={selected.includes(operation)} className="accent-primary" onChange={(event) => toggle(operation, event.target.checked)} type="checkbox" value={operation} /><code className="font-mono text-[11px]">{operation}</code></label>)}
+      {group.operations.map((operation) => <Label className="flex items-center gap-2 text-xs text-ink-secondary" key={operation}><Checkbox checked={selected.includes(operation)} onCheckedChange={(checked) => toggle(operation, checked)}  value={operation} /><code className="font-mono text-[11px]">{operation}</code></Label>)}
     </fieldset>)}</div>
   </div>;
 }
@@ -112,15 +120,13 @@ function AccountForm({
 
   return <form className="grid gap-4" data-access-form onSubmit={(event) => void submit(event)}>
     {error !== undefined && (() => { const copy = errorCopy(error, t('access.saveFailed'), t); return <ErrorState description={copy.detail} title={copy.title} />; })()}
-    <FormField htmlFor="account-name" label={t('access.formName')}><input autoComplete="off" id="account-name" maxLength={80} onChange={(event) => setName(event.target.value)} required value={name} /></FormField>
-    <FormField htmlFor="account-description" label={t('access.formDescription')}><textarea id="account-description" maxLength={500} onChange={(event) => setDescription(event.target.value)} rows={3} value={description} /></FormField>
+    <FormField htmlFor="account-name" label={t('access.formName')}><Input autoComplete="off" id="account-name" maxLength={80} onChange={(event) => setName(event.target.value)} required value={name} /></FormField>
+    <FormField htmlFor="account-description" label={t('access.formDescription')}><Textarea id="account-description" maxLength={500} onChange={(event) => setDescription(event.target.value)} rows={3} value={description} /></FormField>
     <FormField htmlFor="account-permission" hint={t('access.formPermissionHint')} label={t('access.formPermission')}>
-      <select id="account-permission" onChange={(event) => setPermission(event.target.value as PermissionPreset)} value={permission}>
-        <option value="fullAccess">{t('access.permissions.fullAccess')}</option><option value="readOnly">{t('access.permissions.readOnly')}</option><option value="custom">{t('access.permissions.custom')}</option>
-      </select>
+      <SelectField id="account-permission" onValueChange={(selectedValue) => setPermission(selectedValue as PermissionPreset)} value={permission} options={[({ value: "fullAccess", label: t('access.permissions.fullAccess') }), ({ value: "readOnly", label: t('access.permissions.readOnly') }), ({ value: "custom", label: t('access.permissions.custom') })]} />
     </FormField>
     {permission === 'custom' && <PermissionFields onChange={setCustomOperations} selected={customOperations} />}
-    {creating && <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-input bg-secondary p-3" data-access-create-key><input checked={createKey} className="mt-0.5 accent-primary" onChange={(event) => setCreateKey(event.target.checked)} type="checkbox" /><span className="grid gap-0.5"><strong className="text-xs font-semibold text-ink-secondary">{t('access.createKey')}</strong><small className="text-[11px] text-muted-foreground">{t('access.createKeyHint')}</small></span></label>}
+    {creating && <Label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-input bg-secondary p-3" data-access-create-key><Checkbox checked={createKey} className="mt-0.5" onCheckedChange={(checked) => setCreateKey(checked)} /><span className="grid gap-0.5"><strong className="text-xs font-semibold text-ink-secondary">{t('access.createKey')}</strong><small className="text-[11px] text-muted-foreground">{t('access.createKeyHint')}</small></span></Label>}
     {validation && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{t(validation)}</p>}
     <div className="flex flex-wrap items-center gap-1.5"><Button disabled={busy} type="submit" variant="primary">{busy ? t('access.saving') : creating ? t('access.create') : t('access.save')}</Button><Button disabled={busy} onClick={onCancel} type="button">{t('common.cancel')}</Button></div>
   </form>;
@@ -165,7 +171,7 @@ const accessTabLabels: Record<AccessTab, TranslationKey> = {
 };
 
 function PageTitle({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
-  return <header className="flex min-w-0 flex-wrap items-end justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p></div>{action}</header>;
+  return <header className={action ? "flex min-w-0 flex-wrap items-center justify-end gap-3" : "sr-only"}><div className="sr-only"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p></div>{action}</header>;
 }
 
 // Spec 0001 §3.2、§11.1：`访问与认证` 的二级工作面固定为 管理员 / 应用认证 / API Tokens。
@@ -189,7 +195,7 @@ export function AccessWorkspacePage() {
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="min-w-0">
+    <header className="sr-only">
       <p className="eyebrow">{t('access.eyebrow')}</p>
       <h1>{t('access.title')}</h1>
       <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('access.description')}</p>
@@ -198,15 +204,17 @@ export function AccessWorkspacePage() {
     <nav aria-label={t('access.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-access-workspace-tabs>
       {accessTabOrder.map((tab) => <Link
         aria-current={activeTab === tab ? 'page' : undefined}
-        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={tab}
         to={tabTarget(tab)}
       >{t(accessTabLabels[tab])}</Link>)}
     </nav>
 
+    <TabContent activeKey={activeTab}>
     {activeTab === 'administrators' && <AdministratorsPage embedded />}
     {activeTab === 'auth' && <ApplicationAuthPanel />}
     {activeTab === 'tokens' && <AccessPage embedded />}
+    </TabContent>
   </div>;
 }
 
@@ -352,8 +360,8 @@ export function AccessPage({ embedded = false }: { embedded?: boolean }) {
 
   return <div className="flex min-w-0 flex-col gap-6">
     {embedded
-      ? <div className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
+      ? <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        <div className="sr-only">
           <h2>{t('access.tokensTitle')}</h2>
           <p className="mt-1.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('access.tokensDescription')}</p>
         </div>
@@ -409,7 +417,7 @@ function ServiceAccountDetail({
       <dl className="m-0 flex flex-wrap gap-x-8 gap-y-3"><div className="grid gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.detailPermission')}</dt><dd className="m-0 text-xs text-ink-secondary"><PermissionLabel permission={account.permission} /></dd></div><div className="grid gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.detailCreated')}</dt><dd className="m-0 text-xs text-ink-secondary">{account.createdAt ? <time dateTime={account.createdAt}>{formatDate(account.createdAt)}</time> : '—'}</dd></div><div className="grid gap-0.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('access.detailLastUsed')}</dt><dd className="m-0 text-xs text-ink-secondary">{account.lastUsedAt ? <time dateTime={account.lastUsedAt}>{formatDate(account.lastUsedAt)}</time> : t('access.never')}</dd></div></dl>
       {account.permission === 'custom' && <div className="grid gap-2 border-t pt-3"><strong className="text-xs font-semibold text-ink-secondary">{t('access.customSummary', { version: account.customPermissionVersion ?? 1 })}</strong><ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">{(account.customOperations ?? []).map((operation) => <li className="rounded-md border bg-muted px-1.5 py-1" key={operation}><code className="font-mono text-[11px]">{operation}</code></li>)}</ul></div>}
     </Surface>
-    <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard"><header className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3>{t('access.keysTitle')}</h3><p className="mt-1 text-xs text-muted-foreground">{t('access.keysDescription')}</p></div><form className="flex w-full items-center gap-1.5 min-[561px]:w-auto" onSubmit={onCreateKey}><label className="sr-only" htmlFor="new-key-name">{t('access.newKeyName')}</label><input className="min-h-9 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring min-[561px]:w-48" id="new-key-name" autoComplete="off" maxLength={80} onChange={(event) => onKeyName(event.target.value)} placeholder={t('access.keyNamePlaceholder')} value={keyName} /><Button disabled={keyBusy || account.status === 'disabled'} size="small" type="submit" variant="primary"><Plus aria-hidden="true" size={14} /> {t('access.createKeyAction')}</Button></form></header>
+    <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard"><header className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3>{t('access.keysTitle')}</h3><p className="mt-1 text-xs text-muted-foreground">{t('access.keysDescription')}</p></div><form className="flex w-full items-center gap-1.5 min-[561px]:w-auto" onSubmit={onCreateKey}><Label className="sr-only" htmlFor="new-key-name">{t('access.newKeyName')}</Label><Input className="min-[561px]:w-48" id="new-key-name" autoComplete="off" maxLength={80} onChange={(event) => onKeyName(event.target.value)} placeholder={t('access.keyNamePlaceholder')} value={keyName} /><Button disabled={keyBusy || account.status === 'disabled'} size="small" type="submit" variant="primary"><Plus aria-hidden="true" size={14} /> {t('access.createKeyAction')}</Button></form></header>
       {keyError !== undefined && (() => { const copy = errorCopy(keyError, t('access.keysLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={onRetry} size="small">{t('common.retry')}</Button></ErrorState>; })()}
       {keyError === undefined && !keys.length ? <EmptyState title={t('access.noKeysTitle')} description={t('access.noKeysDescription')} /> : keyError === undefined && <Table><TableCaption>{t('access.keysCaption')}</TableCaption><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40"><TableHead scope="col">{t('access.columnName')}</TableHead><TableHead scope="col">{t('access.columnCreated')}</TableHead><TableHead scope="col">{t('access.columnLastUsed')}</TableHead><TableHead scope="col">{t('access.columnStatus')}</TableHead><TableHead scope="col">{t('access.columnAction')}</TableHead></TableRow></TableHeader><TableBody>{keys.map((key) => <TableRow key={key.id}><TableCell>{key.name}</TableCell><TableCell><time dateTime={key.createdAt}>{formatDate(key.createdAt)}</time></TableCell><TableCell>{key.lastUsedAt ? <time dateTime={key.lastUsedAt}>{formatDate(key.lastUsedAt)}</time> : t('access.never')}</TableCell><TableCell><StatusChip state={key.status}>{accessStatusLabel(key.status, t)}</StatusChip></TableCell><TableCell>{key.status === 'active' ? <Button disabled={busy} onClick={() => onRevoke(key)} size="small" variant="danger">{t('access.revoke')}</Button> : '—'}</TableCell></TableRow>)}</TableBody></Table>}
     </Surface>
@@ -449,6 +457,7 @@ export function AuditPage({ embedded = false }: { embedded?: boolean }) {
   const [detail, setDetail] = useState<AuditRecord>();
   const [detailState, setDetailState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [detailError, setDetailError] = useState<unknown>();
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => advancedAuditFilters.some((key) => Boolean(params.get(key))));
   const [searchDraft, setSearchDraft] = useState(params.get('search') ?? '');
   const [actorDraft, setActorDraft] = useState(params.get('actorKind') ?? 'all');
   const [actorIdDraft, setActorIdDraft] = useState(params.get('actorId') ?? '');
@@ -500,6 +509,7 @@ export function AuditPage({ embedded = false }: { embedded?: boolean }) {
   }, [auditRecordId, reload]);
 
   useEffect(() => {
+    if (advancedAuditFilters.some((key) => Boolean(params.get(key)))) setMoreFiltersOpen(true);
     setSearchDraft(params.get('search') ?? ''); setActorDraft(params.get('actorKind') ?? 'all'); setActorIdDraft(params.get('actorId') ?? ''); setActionDraft(params.get('action') ?? '');
     setResourceKindDraft(params.get('resourceKind') ?? ''); setResourceIdDraft(params.get('resourceId') ?? '');
     setFromDraft(params.get('from') ? localDateTime(params.get('from')!) : ''); setToDraft(params.get('to') ? localDateTime(params.get('to')!) : '');
@@ -532,18 +542,28 @@ export function AuditPage({ embedded = false }: { embedded?: boolean }) {
 
   return <div className="flex min-w-0 flex-col gap-6">
     {!embedded && <PageTitle description={t('access.auditDescription')} eyebrow={t('access.auditEyebrow')} title={t('access.auditTitle')} />}
-    <form className="grid min-w-0 grid-cols-1 items-end gap-3 min-[701px]:grid-cols-2 min-[1051px]:grid-cols-3" onSubmit={submitFilters}>
-      <FormField htmlFor="audit-search" label={t('access.auditSearch')}><input id="audit-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('access.auditSearchPlaceholder')} value={searchDraft} /></FormField>
-      <FormField htmlFor="audit-actor" label={t('access.auditActor')}><select id="audit-actor" onChange={(event) => setActorDraft(event.target.value)} value={actorDraft}><option value="all">{t('access.auditAllActors')}</option><option value="owner">{t('access.auditActorOwner')}</option><option value="serviceAccount">{t('access.auditActorServiceAccount')}</option></select></FormField>
-      <FormField htmlFor="audit-actor-id" label={t('access.auditActorId')}><input id="audit-actor-id" onChange={(event) => setActorIdDraft(event.target.value)} value={actorIdDraft} /></FormField>
-      <FormField htmlFor="audit-action" hint={t('access.auditActionHint')} label={t('access.auditAction')}><input id="audit-action" onChange={(event) => setActionDraft(event.target.value)} placeholder="serviceAccount.created" value={actionDraft} /></FormField>
-      <FormField htmlFor="audit-resource-kind" label={t('access.auditResourceType')}><input id="audit-resource-kind" onChange={(event) => setResourceKindDraft(event.target.value)} value={resourceKindDraft} /></FormField>
-      <FormField htmlFor="audit-resource-id" label={t('access.auditResourceId')}><input id="audit-resource-id" onChange={(event) => setResourceIdDraft(event.target.value)} value={resourceIdDraft} /></FormField>
-      <FormField htmlFor="audit-from" label={t('access.auditFrom')}><input id="audit-from" onChange={(event) => setFromDraft(event.target.value)} type="datetime-local" value={fromDraft} /></FormField>
-      <FormField htmlFor="audit-to" label={t('access.auditTo')}><input id="audit-to" onChange={(event) => setToDraft(event.target.value)} type="datetime-local" value={toDraft} /></FormField>
-      <Button type="submit" variant="primary">{t('access.auditApplyFilters')}</Button>
+    <form className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3" onSubmit={submitFilters}>
+      <div className="grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(200px,1fr)_180px_220px_auto]">
+        <FormField htmlFor="audit-search" label={t('access.auditSearch')}><SearchInput id="audit-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('access.auditSearchPlaceholder')} value={searchDraft} /></FormField>
+        <FormField htmlFor="audit-actor" label={t('access.auditActor')}><SelectField id="audit-actor" onValueChange={(selectedValue) => setActorDraft(selectedValue)} value={actorDraft} options={[({ value: "all", label: t('access.auditAllActors') }), ({ value: "owner", label: t('access.auditActorOwner') }), ({ value: "serviceAccount", label: t('access.auditActorServiceAccount') })]} /></FormField>
+        <FormField htmlFor="audit-action" label={t('access.auditAction')}><Input aria-describedby="audit-action-note" id="audit-action" onChange={(event) => setActionDraft(event.target.value)} placeholder="serviceAccount.created" value={actionDraft} /></FormField>
+        <div className="flex items-center justify-end gap-2">
+          <Button aria-controls="audit-more-filters" aria-expanded={moreFiltersOpen} onClick={() => setMoreFiltersOpen((value) => !value)} type="button" variant="secondary"><ChevronDown aria-hidden="true" className={moreFiltersOpen ? 'rotate-180' : ''} size={14} />{t('access.auditMoreFilters')}</Button>
+          <Button type="submit" variant="primary">{t('access.auditApplyFilters')}</Button>
+        </div>
+      </div>
+      <p className="sr-only" id="audit-action-note">{t('access.auditActionHint')}</p>
+      {moreFiltersOpen && <div className="flex min-w-0 flex-col gap-3 border-t pt-3" id="audit-more-filters">
+        <div className="grid min-w-0 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField htmlFor="audit-actor-id" label={t('access.auditActorId')}><Input id="audit-actor-id" onChange={(event) => setActorIdDraft(event.target.value)} value={actorIdDraft} /></FormField>
+          <FormField htmlFor="audit-resource-kind" label={t('access.auditResourceType')}><Input id="audit-resource-kind" onChange={(event) => setResourceKindDraft(event.target.value)} value={resourceKindDraft} /></FormField>
+          <FormField htmlFor="audit-resource-id" label={t('access.auditResourceId')}><Input id="audit-resource-id" onChange={(event) => setResourceIdDraft(event.target.value)} value={resourceIdDraft} /></FormField>
+          <FormField htmlFor="audit-from" label={t('access.auditFrom')}><Input id="audit-from" onChange={(event) => setFromDraft(event.target.value)} type="datetime-local" value={fromDraft} /></FormField>
+          <FormField htmlFor="audit-to" label={t('access.auditTo')}><Input id="audit-to" onChange={(event) => setToDraft(event.target.value)} type="datetime-local" value={toDraft} /></FormField>
+        </div>
+        <p className="m-0 text-[11px] text-muted-foreground">{t('access.auditActionHint')} {t('access.auditFilterNote')}</p>
+      </div>}
     </form>
-    <p className="m-0 -mt-4 text-[11px] text-muted-foreground">{t('access.auditFilterNote')}</p>
     {state === 'loading' && <LoadingState label={t('access.auditLoading')} />}
     {state === 'error' && (() => { const copy = errorCopy(error, t('access.auditLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
     {state === 'ready' && (!records.length ? <EmptyState title={t('access.auditEmptyTitle')} description={t('access.auditEmptyDescription')} /> : <Table data-audit-table><TableCaption>{t('access.auditCaption')}</TableCaption><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40"><TableHead scope="col">{t('access.auditColumnTime')}</TableHead><TableHead scope="col">{t('access.auditColumnActor')}</TableHead><TableHead scope="col">{t('access.auditColumnAction')}</TableHead><TableHead scope="col">{t('access.auditColumnResource')}</TableHead><TableHead scope="col">{t('access.auditColumnResult')}</TableHead></TableRow></TableHeader><TableBody>{records.map((record) => <TableRow key={record.id}><TableCell><Link className="text-xs font-semibold text-primary hover:underline" to={`/activity/audit/${encodeURIComponent(record.id)}?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}><time dateTime={record.time}>{formatDate(record.time)}</time></Link></TableCell><TableCell>{auditActorLabel(record.actor.kind, t)}<small className="mt-0.5 block text-[11px] text-muted-foreground"><code className="font-mono text-[11px]">{record.actor.id}</code></small></TableCell><TableCell><code className="font-mono text-[11px]">{record.action}</code></TableCell><TableCell className="max-w-[280px]"><code className="break-words font-mono text-[11px]">{JSON.stringify(safeAuditValue(record.resource))}</code></TableCell><TableCell><StatusChip state={record.result}>{auditResultLabel(record.result, t)}</StatusChip></TableCell></TableRow>)}</TableBody></Table>)}

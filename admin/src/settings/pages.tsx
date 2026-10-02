@@ -1,3 +1,4 @@
+import { Input } from '@/components/ui/input';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Settings2 } from 'lucide-react';
@@ -5,6 +6,7 @@ import { Button } from '../components/button';
 import { DiagnosticsCards } from '../components/runtime-status';
 import { useDiagnostics } from '../components/diagnostics-context';
 import { FormField } from '../components/form-field';
+import { LanguageSwitcher } from '../components/language-switcher';
 import { ErrorState, LoadingState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
@@ -22,7 +24,7 @@ function sourceKey(source: RuntimeSetting['source']): TranslationKey {
 // Spec 0001 §11.2：常规分节只放真实可用的实例状态与浏览器本地界面偏好。
 // 后端没有实例名称 / 时区等设置，因此不把它们做成输入框（不允许 Placeholder Action）。
 export function SettingsGeneralPage() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const { refresh } = useDiagnostics();
 
@@ -45,17 +47,10 @@ export function SettingsGeneralPage() {
           <p className="mt-1 text-xs text-muted-foreground">{t('settings.generalPreferencesDescription')}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <FormField htmlFor="settings-general-language" label={t('settings.generalLanguageLabel')}>
-            <select
-              className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              id="settings-general-language"
-              onChange={(event) => setLocale(event.target.value as 'en' | 'zh-CN')}
-              value={locale}
-            >
-              <option value="en">{t('shell.english')}</option>
-              <option value="zh-CN">{t('shell.simplifiedChinese')}</option>
-            </select>
-          </FormField>
+          <div className="grid gap-1.5">
+            <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalLanguageLabel')}</span>
+            <LanguageSwitcher />
+          </div>
           <div className="grid gap-1.5">
             <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalThemeLabel')}</span>
             <Button onClick={toggleTheme} size="small" type="button" variant="secondary">
@@ -143,7 +138,7 @@ export function RuntimeSettingsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t('runtimeSettings.eyebrow')}</p>
         <h1>{t('runtimeSettings.title')}</h1>
         <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('runtimeSettings.description')}</p>
@@ -189,10 +184,10 @@ export function RuntimeSettingsPage() {
         </div>
         <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <FormField hint={t('runtimeSettings.listenAddress.hint')} htmlFor="runtime-listen-address" label={t('runtimeSettings.listenAddress.label')}>
-            <input id="runtime-listen-address" onChange={(event) => setListenAddress(event.target.value)} placeholder={settings.listenAddress.value} value={listenAddress} />
+            <Input id="runtime-listen-address" onChange={(event) => setListenAddress(event.target.value)} placeholder={settings.listenAddress.value} value={listenAddress} />
           </FormField>
           <FormField hint={t('runtimeSettings.requestRetention.hint')} htmlFor="runtime-request-retention" label={t('runtimeSettings.requestRetention.label')}>
-            <input id="runtime-request-retention" max="3650" min="1" onChange={(event) => setRetentionDays(event.target.value)} type="number" value={retentionDays} />
+            <Input id="runtime-request-retention" max="3650" min="1" onChange={(event) => setRetentionDays(event.target.value)} type="number" value={retentionDays} />
           </FormField>
           <div className="flex justify-end">
             <Button disabled={busy || invalid} type="submit" variant="primary">{busy ? t('runtimeSettings.saving') : t('runtimeSettings.save')}</Button>

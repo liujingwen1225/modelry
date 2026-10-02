@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 // shadcn/ui Select（Base UI 变体，与 components.json style: base-nova 约定一致）。
 // 触发器对齐 ui/input 的视觉与高度；弹出层使用语义 Token。
 
-function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
+function Select<Value, Multiple extends boolean | undefined = false>(props: SelectPrimitive.Root.Props<Value, Multiple>) {
   return <SelectPrimitive.Root {...props} />;
 }
 
@@ -19,7 +19,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       className={cn(
         'flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-card px-3 text-sm text-foreground transition-[color,background-color,border-color] outline-none',
-        'hover:border-primary focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+        'focus-visible:outline-none focus-visible:shadow-none',
         'aria-invalid:border-destructive data-[placeholder]:text-muted-foreground',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-55',
         '[&_svg]:pointer-events-none [&_svg]:shrink-0',
@@ -50,7 +50,7 @@ function SelectContent({
 }: React.ComponentProps<typeof SelectPrimitive.Popup>) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner sideOffset={6} className="outline-none">
+      <SelectPrimitive.Positioner sideOffset={6} className="z-50 outline-none">
         <SelectPrimitive.Popup data-slot="select-content" className={cn(selectPopupClassName, 'p-1', className)} {...props}>
           {children}
         </SelectPrimitive.Popup>

@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
@@ -550,7 +551,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       const cookieHeader = `${ownerCookie!.name}=${ownerCookie!.value}`;
       expect((await sessionClient.get(sessionURL, { headers: { Cookie: cookieHeader } })).status()).toBe(200);
 
-      await activePage.locator('[data-owner-menu] summary').click();
+      await activePage.locator('[data-owner-menu] > button').click();
       const logoutResponsePromise = activePage.waitForResponse((response) =>
         new URL(response.url()).pathname === '/admin/api/v1/auth/logout' && response.request().method() === 'POST',
       );
@@ -574,9 +575,9 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
 
       const ownerMenu = activePage.locator('[data-owner-menu]');
-      await ownerMenu.locator('summary').click();
+      await ownerMenu.locator('button').click();
       await expect(ownerMenu.getByRole('button', { name: /theme|主题/i })).toHaveCount(0);
-      await ownerMenu.locator('summary').click();
+      await ownerMenu.locator('button').click();
 
       const darkThemeButton = activePage.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to dark theme' });
       await expect(darkThemeButton).toBeVisible();
@@ -589,7 +590,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       expect(contrast.primary).toBeGreaterThanOrEqual(4.5);
       expect(contrast.danger).toBeGreaterThanOrEqual(4.5);
 
-      await activePage.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN');
+      await activePage.getByRole('button', { name: 'Switch language to Simplified Chinese' }).click();
       const chineseNavigation = activePage.getByRole('navigation', { name: '项目导航' });
       await expect(chineseNavigation).toBeVisible();
       await expect(chineseNavigation.getByRole('link', { name: '集合' })).toBeVisible();
@@ -598,7 +599,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.reload();
       await expect(activePage).toHaveURL(shellDeepLink);
       await expect(activePage.getByRole('navigation', { name: '项目导航' })).toBeVisible();
-      await expect(activePage.getByRole('combobox', { name: '语言' })).toHaveValue('zh-CN');
+      await expect(activePage.getByRole('button', { name: '切换语言为 English' })).toHaveText('EN');
       await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
 
       await activePage.getByRole('button', { name: '搜索命令' }).focus();
@@ -638,7 +639,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.goto(shellDeepLink);
       await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
 
-      await activePage.getByRole('combobox', { name: '语言' }).selectOption('en');
+      await activePage.getByRole('button', { name: '切换语言为 English' }).click();
       await expect(activePage.getByRole('navigation', { name: 'Project navigation' })).toBeVisible();
       await activePage.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to light theme' }).click();
       await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -658,7 +659,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Add initial field' }).click();
     const fileField = activePage.locator('[data-initial-field-row]').nth(2);
     await fileField.getByLabel('Field name 3').fill('attachment');
-    await fileField.getByLabel('Type', { exact: true }).selectOption('file');
+    await selectOption(activePage, fileField.getByLabel('Type', { exact: true }), 'file');
     await activePage.getByRole('button', { name: 'Create Collection', exact: true }).click();
     await expect(activePage.getByRole('heading', { name: 'posts' })).toBeVisible();
     postsId = collectionId(activePage);
@@ -720,12 +721,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       expect(created.status, `Create pagination fixture ${suffix}`).toBe(201);
     }
     await activePage.reload();
-    await activePage.getByLabel('Filter field').selectOption('category');
-    await activePage.getByLabel('Filter operator').selectOption('contains');
+    await selectOption(activePage, activePage.getByLabel('Filter field'), 'category');
+    await selectOption(activePage, activePage.getByLabel('Filter operator'), 'contains');
     await activePage.getByLabel('Filter value').fill('browse-');
     await activePage.getByLabel('Search records').fill('page-record');
-    await activePage.getByLabel('Sort field').selectOption('title');
-    await activePage.getByLabel('Sort direction').selectOption('asc');
+    await selectOption(activePage, activePage.getByLabel('Sort field'), 'title');
+    await selectOption(activePage, activePage.getByLabel('Sort direction'), 'asc');
     await expect(activePage.locator('[data-record-table] tbody tr')).toHaveCount(25);
     await expect(activePage.locator('[data-record-table] tbody tr').first()).toContainText('page-record-000');
     const nextPage = activePage.getByRole('button', { name: 'Next', exact: true });
@@ -794,21 +795,17 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Relations', exact: true }).click();
     await activePage.getByRole('button', { name: 'Add relation', exact: true }).click();
     await activePage.getByLabel('Field name', { exact: true }).fill('author');
-    await activePage.getByLabel('Target Collection').selectOption({ label: 'authors' });
+    await selectOption(activePage, activePage.getByLabel('Target Collection'), { label: 'authors' });
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
     await activePage.getByRole('button', { name: 'Add relation', exact: true }).click();
     await activePage.getByLabel('Field name', { exact: true }).fill('owner');
-    await activePage.getByLabel('Target Collection').selectOption({ label: 'users' });
+    await selectOption(activePage, activePage.getByLabel('Target Collection'), { label: 'users' });
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
     await activePage.getByRole('button', { name: 'Indexes', exact: true }).click();
     await activePage.getByRole('button', { name: 'Add index', exact: true }).click();
     await activePage.getByLabel('Index name').fill('posts_title_category');
     const indexFields = activePage.locator('#schema-index-fields');
-    const selectedFieldValues = await indexFields.locator('option').evaluateAll((options) => options
-      .filter((option) => ['title', 'category'].includes((option as HTMLOptionElement).label))
-      .map((option) => (option as HTMLOptionElement).value));
-    expect(selectedFieldValues).toHaveLength(2);
-    await indexFields.selectOption(selectedFieldValues);
+    await selectOption(activePage, indexFields, [{ label: 'title' }, { label: 'category' }]);
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
 
     const pending = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/schema/pending-change`)).body);
@@ -1025,7 +1022,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     });
     expect(assignOwner.status).toBe(200);
     await applyViewRule('Record owner', async () => {
-      await activePage.locator('#access-owner-field').selectOption({ label: 'owner' });
+      await selectOption(activePage, activePage.locator('#access-owner-field'), { label: 'owner' });
     });
     const ownerView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit');
     expect(ownerView.status).toBe(200);
@@ -1034,7 +1031,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
     await applyViewRule('Custom rule', async () => {
       await activePage.getByRole('button', { name: 'Add condition', exact: true }).click();
-      await activePage.getByLabel('Condition 1 field').selectOption({ label: 'title' });
+      await selectOption(activePage, activePage.getByLabel('Condition 1 field'), { label: 'title' });
       await activePage.getByLabel('Condition value', { exact: true }).fill('post-a-updated');
     });
     const matchingCustomView = await requestJSON(activePage, 'GET', `/api/v1/posts/${firstPostId}`, undefined, appSession, 'omit');
@@ -1052,8 +1049,8 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.locator('[data-api-endpoint-option]').filter({ hasText: 'List records' }).click();
     await expect(activePage.locator('[data-api-endpoint-meta]')).toContainText('Signed-in users');
     await activePage.getByText('View OpenAPI', { exact: true }).click();
-    await expect(activePage.locator('[data-api-openapi] pre')).toContainText('x-modelry-access-rule');
-    await expect(activePage.locator('[data-api-openapi] pre')).toContainText('signedInUsers');
+    await expect(activePage.locator('[data-slot=popover-content] pre')).toContainText('x-modelry-access-rule');
+    await expect(activePage.locator('[data-slot=popover-content] pre')).toContainText('signedInUsers');
     await activePage.getByLabel('App Session token (optional)').fill(appSession);
     const listResponsePromise = activePage.waitForResponse((response) => new URL(response.url()).pathname === '/api/v1/posts' && response.request().method() === 'GET');
     await activePage.getByRole('button', { name: 'Send GET request' }).click();
@@ -1087,7 +1084,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.goto(`${runtimeURL}/api?collection=${encodeURIComponent(postsId)}`);
     await activePage.locator('[data-api-endpoint-option]').filter({ hasText: 'Read a file attachment' }).click();
     await activePage.getByLabel('Record ID').fill(firstPostId);
-    await activePage.getByLabel('File field').selectOption('attachment');
+    await selectOption(activePage, activePage.getByLabel('File field'), 'attachment');
     await activePage.getByLabel('App Session token (optional)').fill(appSession);
     const attachmentResponsePromise = activePage.waitForResponse((response) =>
       new URL(response.url()).pathname === `/api/v1/posts/${firstPostId}/files/attachment`,
@@ -1128,7 +1125,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Create Service Account', exact: true }).first().click();
     const accountDialog = activePage.getByRole('dialog', { name: 'Create Service Account' });
     await accountDialog.getByLabel('Name').fill('ci-readonly');
-    await expect(accountDialog.getByLabel('Permission preset')).toHaveValue('readOnly');
+    await expect(accountDialog.getByLabel('Permission preset')).toHaveAttribute('data-value', 'readOnly');
     await expect(accountDialog.getByLabel('Create API Key now')).toBeChecked();
     await accountDialog.getByRole('button', { name: 'Create Service Account', exact: true }).click();
     await expect(activePage.getByRole('heading', { name: 'Copy your API Key now' })).toBeVisible();

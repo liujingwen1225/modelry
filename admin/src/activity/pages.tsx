@@ -1,3 +1,4 @@
+import { SelectField } from '@/components/ui/select-field';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Activity as ActivityIcon, RefreshCw } from 'lucide-react';
@@ -73,8 +74,8 @@ export function ActivityWorkspacePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
+      <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        <div className="sr-only">
           <p className="eyebrow">{t('activity.eyebrow')}</p>
           <h1>{t('activity.title')}</h1>
           <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{source === 'facts' ? t('activity.description') : t('access.auditDescription')}</p>
@@ -182,7 +183,7 @@ export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {!embedded && <header className="flex flex-wrap items-end justify-between gap-4">
+      {!embedded && <header className="sr-only">
         <div className="min-w-0">
           <p className="eyebrow">{t('activity.eyebrow')}</p>
           <h1>{t('activity.title')}</h1>
@@ -194,18 +195,12 @@ export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
       <Surface className="flex flex-wrap items-end gap-3 p-3" variant="standard">
         <div className="w-full min-w-[190px] max-w-[220px]">
           <FormField htmlFor="activity-kind" label={t('activity.filter')}>
-            <select id="activity-kind" onChange={(event) => updateQuery('kind', event.target.value)} value={kind}>
-              <option value="">{t('activity.filterAll')}</option>
-              {kinds.map((candidate) => <option key={candidate} value={candidate}>{t(kindKey(candidate))}</option>)}
-            </select>
+            <SelectField id="activity-kind" onValueChange={(selectedValue) => updateQuery('kind', selectedValue)} value={kind} options={[({ value: "", label: t('activity.filterAll') }), kinds.map((candidate) => ({ value: candidate, label: t(kindKey(candidate)) }))]} />
           </FormField>
         </div>
         <div className="w-full min-w-[220px] max-w-[280px]">
           <FormField htmlFor="activity-collection" label={t('api.filterByCollection')}>
-            <select id="activity-collection" onChange={(event) => updateQuery('collection', event.target.value)} value={collectionId}>
-              <option value="">{t('api.allCollections')}</option>
-              {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
-            </select>
+            <SelectField id="activity-collection" onValueChange={(selectedValue) => updateQuery('collection', selectedValue)} value={collectionId} options={[({ value: "", label: t('api.allCollections') }), collections.map((collection) => ({ value: collection.id, label: collection.name }))]} />
           </FormField>
         </div>
       </Surface>

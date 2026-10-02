@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -78,7 +79,7 @@ describe('Administrators Admin surface', () => {
     const dialog = within(await screen.findByRole('dialog'));
     await userEvent.type(dialog.getByLabelText('Email'), 'second@example.test');
     await userEvent.type(dialog.getByLabelText('Initial password'), 'administrator-password');
-    await userEvent.selectOptions(dialog.getByLabelText('Permission preset'), 'custom');
+    await selectOption(userEvent, dialog.getByLabelText('Permission preset'), 'custom');
     await userEvent.click(dialog.getByLabelText('audit.read'));
     await userEvent.click(dialog.getByRole('button', { name: 'Create Administrator' }));
 

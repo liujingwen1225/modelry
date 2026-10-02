@@ -20,6 +20,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api/v1': {
+        target: process.env.MODELRY_RUNTIME_URL ?? 'http://127.0.0.1:8080',
+        changeOrigin: false,
+      },
       '/admin/api': {
         target: process.env.MODELRY_RUNTIME_URL ?? 'http://127.0.0.1:8080',
         changeOrigin: false,

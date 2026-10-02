@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHmac } from 'node:crypto';
@@ -304,7 +305,7 @@ async function createWebhook(page: Page, name: string, pathname: string, secretI
   await page.getByRole('button', { name: 'Create Webhook' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await page.getByLabel('HTTPS destination').fill(`https://hooks.modelry.test${pathname}`);
-  await page.getByLabel('Signing Secret').selectOption(secretId);
+  await selectOption(page, page.getByLabel('Signing Secret'), secretId);
   await page.getByRole('button', { name: 'Save Webhook' }).click();
   const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
@@ -327,9 +328,9 @@ async function createEventHook(page: Page, name: string, collectionId: string, w
   await expect(page).toHaveURL(`${runtimeURL}/events?tab=triggers`);
   await page.getByRole('button', { name: 'Create event trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
-  await page.getByLabel('Collection', { exact: true }).selectOption(collectionId);
-  await page.getByLabel('Record Event').selectOption('record.created');
-  await page.getByLabel('Webhook', { exact: true }).selectOption(webhookId);
+  await selectOption(page, page.getByLabel('Collection', { exact: true }), collectionId);
+  await selectOption(page, page.getByLabel('Record Event'), 'record.created');
+  await selectOption(page, page.getByLabel('Webhook', { exact: true }), webhookId);
   await page.getByRole('button', { name: 'Save event trigger' }).click();
   const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
@@ -485,7 +486,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(page.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Create scheduled trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('UTC maturity check');
-  await page.getByLabel('Webhook', { exact: true }).selectOption(primaryWebhook.id);
+  await selectOption(page, page.getByLabel('Webhook', { exact: true }), primaryWebhook.id);
   const cronInput = page.getByRole('textbox', { name: /Cron schedule/ });
   await cronInput.fill('0 9 * * *');
   const preview = page.getByText(/Next run preview \(UTC\)/);
@@ -650,7 +651,8 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await expect(page.getByText(interruptedDelivery.id, { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(privateRecordMarker);
-  await page.locator('[data-locale-switcher] select').selectOption('zh-CN');
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect(page.getByRole('heading', { name: 'Hooks & Events', exact: true })).toBeVisible();
   const themeBefore = await page.locator('html').getAttribute('data-theme');
   await page.locator('[data-theme-button]').click();
@@ -662,7 +664,8 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
 
   // 手动运行（Run now）：服务器接受后，执行记录耐久进入执行历史，并标明触发方式。
   // 目标 Webhook 已启用且签名 Secret 已配置，因此这里走的是成功路径。
-  await page.locator('[data-locale-switcher] select').selectOption('en');
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.goto(`${runtimeURL}/schedules?tab=jobs`);
   await expect(page.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
   const runNowCard = page.locator('[data-automation-card]').filter({ hasText: 'UTC maturity check' });

@@ -1,3 +1,4 @@
+import { Button as ControlButton } from '@/components/ui/button';
 import { useEffect, useMemo, useState } from 'react';
 import { Activity as ActivityIcon, Bot, RefreshCw, ShieldCheck, Terminal } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -107,7 +108,7 @@ export function MCPGuidePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t('mcp.eyebrow')}</p>
         <h1>{t('mcp.title')}</h1>
         <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('mcp.description')}</p>
@@ -187,9 +188,9 @@ export function MCPGuidePage() {
               const isSelected = selected?.id === account.id;
               return (
                 <li key={account.id}>
-                  <button
+                  <ControlButton variant="unstyled"
                     aria-pressed={isSelected}
-                    className={`flex w-full flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${isSelected ? 'border-primary bg-accent' : 'border-input bg-card hover:border-subtle-foreground'}`}
+                    className={`flex w-full flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:shadow-none ${isSelected ? 'border-primary bg-accent' : 'border-input bg-card '}`}
                     data-mcp-account-row
                     onClick={() => setSelectedId(account.id)}
                     type="button"
@@ -204,7 +205,7 @@ export function MCPGuidePage() {
                       <Badge variant={permissionTone(account.permission)}>{t(`access.permissions.${account.permission}`)}</Badge>
                     </span>
                     <StatusChip state={account.status}>{t(`access.statuses.${account.status}`)}</StatusChip>
-                  </button>
+                  </ControlButton>
                 </li>
               );
             })}

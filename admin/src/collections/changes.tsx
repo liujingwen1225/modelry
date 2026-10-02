@@ -1,5 +1,7 @@
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { SearchInput } from '@/components/ui/search-input';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, Check, FileClock, LoaderCircle, RefreshCw, Search, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, FileClock, LoaderCircle, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
@@ -156,24 +158,14 @@ export function ChangesPage({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {!embedded && <header className="min-w-0">
+      {!embedded && <header className="sr-only">
         <p className="eyebrow">{t('changes.eyebrow')}</p>
         <h1>{t('changes.title')}</h1>
         <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('changes.description')}</p>
       </header>}
       {collectionError && state === 'ready' && <PartialState>{t('changes.partial')}</PartialState>}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1 md:max-w-sm">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} />
-          <input
-            aria-label={t('changes.search')}
-            className="min-h-9 w-full rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-[color,border-color] placeholder:text-muted-foreground hover:border-subtle-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-            onChange={(event) => updateQuery('q', event.target.value)}
-            placeholder={t('changes.searchPlaceholder')}
-            type="search"
-            value={query}
-          />
-        </div>
+        <SearchInput aria-label={t('changes.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('changes.searchPlaceholder')} value={query} className="min-w-[220px] flex-1 md:max-w-sm" />
       </div>
       {state === 'loading' && <LoadingState label={t('changes.loading')} />}
       {state === 'error' && (() => { const copy = changeError(error, t, errorMessage); return <ErrorState description={copy.message} title={copy.title}><div className="mt-3"><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('changes.retry')}</Button></div></ErrorState>; })()}
@@ -190,7 +182,7 @@ export function ChangesPage({ embedded = false }: { embedded?: boolean }) {
             const failed = pending && item.status === 'failed';
             return <Link
               aria-current={selectedId === id ? 'page' : undefined}
-              className={`flex min-w-0 items-start gap-3 rounded-lg border bg-card p-3.5 transition-colors hover:border-subtle-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${selectedId === id ? 'border-primary' : 'border-input'}`}
+              className={`flex min-w-0 items-start gap-3 rounded-lg border bg-card p-3.5 transition-colors focus-visible:outline-none focus-visible:shadow-none ${selectedId === id ? 'border-primary' : 'border-input'}`}
               key={`${pending ? 'pending' : 'applied'}-${id}`}
               onClick={(event) => { event.preventDefault(); updateQuery('changeSet', id); }}
               to={`/changes?${new URLSearchParams({ ...(query ? { q: query } : {}), tab, changeSet: id }).toString()}`}
@@ -420,12 +412,12 @@ function ChangeDetailPanel({
       return <li className="flex flex-col gap-1 rounded-md border bg-secondary px-3 py-2" key={String(attempt.id ?? index)}>
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><strong className="font-semibold text-foreground">{typeof attempt.status === 'string' ? statusLabel(attempt.status, t) : t('changes.attempt')}</strong><time className="text-[10px] text-muted-foreground">{typeof attempt.startedAt === 'string' ? new Date(attempt.startedAt).toLocaleString() : ''}</time></div>
         {typeof attempt.errorCode === 'string' && <span className="w-fit rounded border border-danger/30 bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger">{attempt.errorCode}</span>}
-        <details className="text-[11px] text-muted-foreground [&_pre]:mt-1.5 [&_pre]:max-h-52 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-card [&_pre]:p-2 [&_pre]:text-[10px] [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary:hover]:text-foreground"><summary>{t('changes.technicalDetails')}</summary><pre>{JSON.stringify(diagnosticDetails(rawAttempt), null, 2)}</pre></details>
+        <Collapsible data-slot="collapsible" className="text-[11px] text-muted-foreground [&_pre]:mt-1.5 [&_pre]:max-h-52 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-card [&_pre]:p-2 [&_pre]:text-[10px] [&_[data-slot=collapsible-trigger]]:w-fit [&_[data-slot=collapsible-trigger]]:cursor-pointer [&_[data-slot=collapsible-trigger]]:font-semibold [&_[data-slot=collapsible-trigger]:hover]:text-foreground"><CollapsibleTrigger>{t('changes.technicalDetails')}</CollapsibleTrigger><CollapsibleContent><pre>{JSON.stringify(diagnosticDetails(rawAttempt), null, 2)}</pre></CollapsibleContent></Collapsible>
       </li>;
     })}</ol></section>}
     {detail.appliedMigration && <section className="flex flex-col gap-1.5"><h3>{t('changes.appliedModel')}</h3><div className="flex items-center gap-2 rounded-md border bg-secondary px-3 py-2 text-xs text-ink-secondary"><Check aria-hidden="true" className="shrink-0 text-success" size={15} /><span>{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span></div>{detail.appliedMigration.diff && <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-ink-secondary">{detail.appliedMigration.diff.map((diff, index) => <li key={index}>{String(diff.action ?? t('changes.changed'))} {String(diff.kind ?? t('changes.schema'))} {String(diff.name ?? '')}</li>)}</ul>}</section>}
     {detail.recoveryState && <section className="flex flex-col gap-1.5"><h3>{t('changes.recommendedSteps')}</h3><ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-ink-secondary">{recoveryActions.map((action, index) => <li key={index}>{action}</li>)}</ul></section>}
     <div className="flex flex-wrap gap-2"><ButtonLink size="small" to={`/collections/${encodeURIComponent(detail.collectionId)}/model`}>{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></ButtonLink></div>
-    {detail.appliedMigration && <details className="border-t pt-3 text-[11px] text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary:hover]:text-foreground"><summary>{t('changes.technicalDetails')}</summary><dl><div className="flex gap-2"><dt className="font-semibold">{t('changes.changeReference')}</dt><dd className="m-0"><code>{detail.changeSetId}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.appliedModelRecord')}</dt><dd className="m-0"><code>{detail.appliedMigration.id}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.applyAttempt')}</dt><dd className="m-0"><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></details>}
+    {detail.appliedMigration && <Collapsible data-slot="collapsible" className="border-t pt-3 text-[11px] text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_[data-slot=collapsible-trigger]]:w-fit [&_[data-slot=collapsible-trigger]]:cursor-pointer [&_[data-slot=collapsible-trigger]]:font-semibold [&_[data-slot=collapsible-trigger]:hover]:text-foreground"><CollapsibleTrigger>{t('changes.technicalDetails')}</CollapsibleTrigger><CollapsibleContent><dl><div className="flex gap-2"><dt className="font-semibold">{t('changes.changeReference')}</dt><dd className="m-0"><code>{detail.changeSetId}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.appliedModelRecord')}</dt><dd className="m-0"><code>{detail.appliedMigration.id}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.applyAttempt')}</dt><dd className="m-0"><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></CollapsibleContent></Collapsible>}
   </aside>;
 }

@@ -1,5 +1,9 @@
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { SearchInput } from '@/components/ui/search-input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Filter, RefreshCw, Search, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Filter, RefreshCw, X } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -218,12 +222,12 @@ export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {embedded ? (
-        <header className="min-w-0">
+        <header className="sr-only">
           <h2>{t('api.workspaceTabs.logs')}</h2>
           <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.logsDescription')}</p>
         </header>
       ) : (
-        <header className="min-w-0">
+        <header className="sr-only">
           <p className="eyebrow">{t('requests.eyebrow')}</p>
           <h1>{t('requests.title')}</h1>
           <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('requests.description')}</p>
@@ -232,97 +236,40 @@ export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) 
 
       <Surface className="flex min-w-0 flex-col gap-3 p-3" variant="standard">
         <form className="flex flex-wrap items-end gap-3" onSubmit={applyFilters}>
-          <div className="relative min-w-[200px] flex-1 md:max-w-xs">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} />
-            <label className="sr-only" htmlFor="requests-search">{t('api.searchLabel')}</label>
-            <input
-              className="min-h-9 w-full rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              id="requests-search"
-              onChange={(event) => setSearchDraft(event.target.value)}
-              placeholder={t('api.requestSearchPlaceholder')}
-              type="search"
-              value={searchDraft}
-            />
-          </div>
-          <label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+          <SearchInput id="requests-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('api.requestSearchPlaceholder')} value={searchDraft} aria-label={t('api.searchLabel')} className="min-w-[200px] flex-1 md:max-w-xs" />
+          <Label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
             {t('requests.filterField')}
-            <select
-              className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              onChange={(event) => setFilterDraft((current) => ({ ...current, field: event.target.value as FilterField, value: '' }))}
-              value={filterDraft.field}
-            >
-              {filterFields.map((field) => <option key={field} value={field}>{field}</option>)}
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+            <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, field: selectedValue as FilterField, value: '' }))} value={filterDraft.field} options={[filterFields.map((field) => ({ value: field, label: field }))]} />
+          </Label>
+          <Label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
             {t('requests.filterOperator')}
-            <select
-              className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              onChange={(event) => setFilterDraft((current) => ({ ...current, operator: event.target.value as Operator }))}
-              value={filterDraft.operator}
-            >
-              {operators.map((operator) => <option key={operator} value={operator}>{operator}</option>)}
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+            <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, operator: selectedValue as Operator }))} value={filterDraft.operator} options={[operators.map((operator) => ({ value: operator, label: operator }))]} />
+          </Label>
+          <Label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
             {t('requests.filterValue')}
             {filterDraft.field === 'collectionId' ? (
-              <select
-                className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                onChange={(event) => setFilterDraft((current) => ({ ...current, value: event.target.value }))}
-                value={filterDraft.value}
-              >
-                <option value="">{t('api.allCollections')}</option>
-                {collections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
+              <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, value: selectedValue }))} value={filterDraft.value} options={[({ value: "", label: t('api.allCollections') }), collections.map((item) => ({ value: item.id, label: item.name }))]} />
             ) : filterDraft.field === 'method' ? (
-              <select
-                className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                onChange={(event) => setFilterDraft((current) => ({ ...current, value: event.target.value }))}
-                value={filterDraft.value}
-              >
-                <option value="">{t('api.allCollections')}</option>
-                {methods.map((method) => <option key={method} value={method}>{method}</option>)}
-              </select>
+              <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, value: selectedValue }))} value={filterDraft.value} options={[({ value: "", label: t('api.allCollections') }), methods.map((method) => ({ value: method, label: method }))]} />
             ) : filterDraft.field === 'authenticationOutcome' ? (
-              <select
-                className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                onChange={(event) => setFilterDraft((current) => ({ ...current, value: event.target.value }))}
-                value={filterDraft.value}
-              >
-                {authenticationOutcomes.map((value) => <option key={value} value={value}>{t(`requests.authenticationOutcomes.${value}` as TranslationKey)}</option>)}
-              </select>
+              <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, value: selectedValue }))} value={filterDraft.value} options={[authenticationOutcomes.map((value) => ({ value: value, label: t(`requests.authenticationOutcomes.${value}` as TranslationKey) }))]} />
             ) : filterDraft.field === 'authorizationOutcome' ? (
-              <select
-                className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                onChange={(event) => setFilterDraft((current) => ({ ...current, value: event.target.value }))}
-                value={filterDraft.value}
-              >
-                {authorizationOutcomes.map((value) => <option key={value} value={value}>{t(`requests.authorizationOutcomes.${value}` as TranslationKey)}</option>)}
-              </select>
+              <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, value: selectedValue }))} value={filterDraft.value} options={[authorizationOutcomes.map((value) => ({ value: value, label: t(`requests.authorizationOutcomes.${value}` as TranslationKey) }))]} />
             ) : (
-              <input
-                className="min-h-9 w-[140px] rounded-lg border border-input bg-card px-3 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+              <Input
+                className="w-[140px]"
                 onChange={(event) => setFilterDraft((current) => ({ ...current, value: event.target.value }))}
                 type={isNumericField(filterDraft.field) ? 'number' : 'text'}
                 value={filterDraft.value}
               />
             )}
-          </label>
+          </Label>
           <Button type="submit" variant="primary"><Filter aria-hidden="true" size={14} />{t('requests.applyFilters')}</Button>
           {(filter || collectionParam) && <Button onClick={clearFilter} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} />{t('requests.clearFilter')}</Button>}
-          <label className="ml-auto grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+          <Label className="ml-auto grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
             {t('api.sortLabel')}
-            <select
-              className="min-h-9 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              onChange={(event) => changeSort(event.target.value)}
-              value={sort}
-            >
-              <option value="time desc">{t('requests.sortNewest')}</option>
-              <option value="time asc">{t('requests.sortOldest')}</option>
-              <option value="durationMs desc">{t('requests.sortSlowest')}</option>
-            </select>
-          </label>
+            <SelectField onValueChange={(selectedValue) => changeSort(selectedValue)} value={sort} options={[({ value: "time desc", label: t('requests.sortNewest') }), ({ value: "time asc", label: t('requests.sortOldest') }), ({ value: "durationMs desc", label: t('requests.sortSlowest') })]} />
+          </Label>
         </form>
         <p className="m-0 text-[10px] text-muted-foreground">{t('requests.filterHint')}</p>
       </Surface>
@@ -437,7 +384,7 @@ export function RequestDetailPage() {
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={returnTo}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link>
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">{t('api.requestDetailEyebrow')}</p>
         <h1>{t('api.requestDetailTitle')}</h1>
         <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.requestDetailDescription')}</p>

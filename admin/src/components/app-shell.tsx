@@ -1,3 +1,6 @@
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Button as ControlButton } from '@/components/ui/button';
+import { LanguageSwitcher } from './language-switcher';
 import {
   useMemo, useState } from 'react';
 import {
@@ -144,7 +147,7 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
   const runtimeState = runtime.state === 'ready' ? runtime.value.state : runtime.state === 'error' ? 'unavailable' : 'loading';
   const collapsedBlock = collapsed ? 'hidden' : 'hidden min-[681px]:block';
   const navLinkClassName = (isActive: boolean) => [
-    'flex min-h-[35px] shrink-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+    'flex min-h-[35px] shrink-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:shadow-none',
     collapsed
       ? 'min-[681px]:min-h-[39px] min-[681px]:justify-center min-[681px]:gap-0 min-[681px]:rounded-[5px] min-[681px]:px-0 min-[681px]:text-[13px]'
       : 'min-[681px]:min-h-[39px] min-[681px]:gap-[11px] min-[681px]:rounded-[5px] min-[681px]:px-2.5 min-[681px]:text-[13px]',
@@ -173,15 +176,15 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
       >
         <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground min-[681px]:size-[27px]" aria-hidden="true"><Command size={17} strokeWidth={2.2} /></span>
         <span className={['text-[17px] font-extrabold tracking-[-0.8px] min-[681px]:text-[19px]', collapsed ? 'min-[681px]:hidden' : ''].filter(Boolean).join(' ')}>modelry</span>
-        <button
+        <ControlButton variant="unstyled"
           aria-label={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
-          className="hidden size-8 shrink-0 cursor-pointer place-items-center rounded-lg border border-input bg-card text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:grid"
+          className="hidden size-8 shrink-0 cursor-pointer place-items-center rounded-lg border border-input bg-card text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:grid"
           onClick={onToggleCollapsed}
           title={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
           type="button"
         >
           {collapsed ? <PanelLeftOpen aria-hidden="true" size={17} /> : <PanelLeftClose aria-hidden="true" size={17} />}
-        </button>
+        </ControlButton>
       </div>
       <nav
         aria-label={t('navigation.projectNavigation')}
@@ -244,36 +247,19 @@ function ThemeButton() {
   const nextLabel = theme === 'dark' ? t('shell.themeSwitchToLight') : t('shell.themeSwitchToDark');
   const Icon = theme === 'dark' ? Sun : Moon;
   return (
-    <button
+    <ControlButton variant="unstyled"
       aria-label={nextLabel}
-      className="grid size-[30px] shrink-0 cursor-pointer place-items-center rounded-lg border border-transparent text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:size-[34px]"
+      className="grid size-[30px] shrink-0 cursor-pointer place-items-center rounded-lg border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:size-[34px]"
       data-theme-button
       onClick={toggleTheme}
       title={nextLabel}
       type="button"
     >
       <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
-    </button>
+    </ControlButton>
   );
 }
 
-function LanguageSwitcher() {
-  const { locale, setLocale, t } = useI18n();
-  return (
-    <label className="flex items-center" data-locale-switcher>
-      <span className="sr-only">{t('shell.language')}</span>
-      <select
-        aria-label={t('shell.language')}
-        className="min-h-[30px] max-w-[88px] cursor-pointer rounded-lg border border-input bg-card px-1 text-[10px] text-ink-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:min-h-8 min-[681px]:max-w-[116px] min-[681px]:px-2 min-[681px]:text-[11px] max-[390px]:max-w-[74px]"
-        onChange={(event) => setLocale(event.target.value as 'en' | 'zh-CN')}
-        value={locale}
-      >
-        <option value="en">{t('shell.english')}</option>
-        <option value="zh-CN">{t('shell.simplifiedChinese')}</option>
-      </select>
-    </label>
-  );
-}
 
 export type AppShellProps = {
   ownerEmail?: string;
@@ -303,16 +289,16 @@ function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout, role }: AppShellPro
   return (
     // 窄屏只保留头像：完整邮箱仍在 aria-label 与展开后的菜单里，
     // 但不再把顶栏撑出视口（spec 0001 §16.1 不允许横向溢出）。
-    <details className="relative flex min-w-0 items-center" data-owner-menu>
-      <summary
+    <div className="relative flex min-w-0 items-center" data-owner-menu><Popover>
+      <PopoverTrigger
         aria-label={ownerLabel}
-        className="flex min-w-0 cursor-pointer list-none items-center gap-[7px] rounded-full border border-transparent py-1 pr-2 pl-1 text-[11px] font-semibold text-ink-secondary hover:border-border hover:bg-accent open:border-border open:bg-accent [&::-webkit-details-marker]:hidden"
+        className="flex min-w-0 cursor-pointer list-none items-center gap-[7px] rounded-full border border-transparent py-1 pr-2 pl-1 text-[11px] font-semibold text-ink-secondary hover:bg-accent open:border-border open:bg-accent [&::-webkit-details-marker]:hidden"
       >
         <span className="grid size-[25px] shrink-0 place-items-center rounded-full bg-accent-cta-soft text-[10px] font-bold text-accent-cta-ink" aria-hidden="true">{ownerEmail?.slice(0, 1).toUpperCase() ?? 'O'}</span>
         <span className="hidden min-w-0 max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap min-[1024px]:inline">{ownerEmail ?? t('shell.owner')}</span>
         <ChevronDown aria-hidden="true" size={14} />
-      </summary>
-      <div className="absolute top-[calc(100%+8px)] right-0 z-[8] w-[min(290px,calc(100vw-24px))] rounded-md border border-border bg-card p-3.25 shadow-floating">
+      </PopoverTrigger><PopoverContent>
+      <div className="w-[min(290px,calc(100vw-24px))]">
         <div className="grid gap-[3px] border-b border-border px-[3px] pt-0.5 pb-2.75">
           <strong className="text-[11px] text-foreground [overflow-wrap:anywhere]">{ownerEmail ?? t('shell.owner')}</strong>
           <span className="text-[10px] text-muted-foreground">{t(role === 'administrator' ? 'shell.roleAdministrator' : 'shell.roleOwner')}</span>
@@ -321,21 +307,21 @@ function OwnerMenu({ ownerEmail, sessionExpiresAt, onLogout, role }: AppShellPro
         </div>
         <div className="flex items-center gap-[7px] pt-2 text-[10px] text-muted-foreground">
           {onLogout && (
-            <button
+            <ControlButton variant="unstyled"
               aria-disabled={signOutState === 'loading'}
-              className="ml-auto flex min-h-8 cursor-pointer items-center gap-[7px] rounded-[7px] border border-input bg-card px-2.25 text-[10px] text-ink-secondary enabled:hover:border-danger/40 enabled:hover:bg-danger-soft enabled:hover:text-danger disabled:cursor-wait disabled:opacity-65"
+              className="ml-auto flex min-h-8 cursor-pointer items-center gap-[7px] rounded-[7px] border border-input bg-card px-2.25 text-[10px] text-ink-secondary enabled:hover:bg-danger-soft enabled:hover:text-danger disabled:cursor-wait disabled:opacity-65"
               disabled={signOutState === 'loading'}
               onClick={() => void signOut()}
               type="button"
             >
               <LogOut aria-hidden="true" size={15} />
               {signOutState === 'loading' ? t('shell.signingOut') : t('shell.signOut')}
-            </button>
+            </ControlButton>
           )}
         </div>
         {signOutState === 'error' && <p className="mt-2.25 mb-0 text-[10px] text-danger" role="alert">{t('shell.signOutFailed')}</p>}
       </div>
-    </details>
+    </PopoverContent></Popover></div>
   );
 }
 

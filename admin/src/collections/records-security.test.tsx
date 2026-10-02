@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -172,7 +173,7 @@ describe('Collection Records and Security pages', () => {
     renderCollection('/collections/col_members/security?panel=authentication');
 
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
-    await user.selectOptions(screen.getByLabelText('Self registration'), 'enabled');
+    await selectOption(user, screen.getByLabelText('Self registration'), 'enabled');
     await user.click(screen.getByRole('button', { name: 'Save pending settings' }));
     expect(await screen.findByRole('region', { name: 'Pending authentication settings' })).toHaveTextContent('Pending authentication settings');
     expect(state.applied.selfRegistration).toBe(false);
@@ -355,9 +356,11 @@ describe('Collection Records and Security pages', () => {
     expect(screen.queryByText('No access')).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '模拟一次请求' })).toBeInTheDocument();
     const requestIdentity = screen.getByRole('combobox', { name: '请求身份' });
-    expect(within(requestIdentity).getByRole('option', { name: '所有者（预览）' })).toBeInTheDocument();
+    await user.click(requestIdentity);
+    expect(await screen.findByRole('option', { name: '所有者（预览）' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
     expect(document.body.textContent).not.toMatch(/主体|控制平面/i);
-    await user.selectOptions(requestIdentity, 'applicationUser');
+    await selectOption(user, requestIdentity, 'applicationUser');
     expect(screen.getByLabelText('用户或账号 ID')).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: '应用用户' }));
@@ -383,8 +386,10 @@ describe('Collection Records and Security pages', () => {
 
     expect(await screen.findByRole('heading', { name: 'Simulate a request' })).toBeInTheDocument();
     const requestIdentity = screen.getByRole('combobox', { name: 'Request identity' });
-    expect(within(requestIdentity).getByRole('option', { name: 'Owner (preview)' })).toBeInTheDocument();
-    await user.selectOptions(requestIdentity, 'serviceAccount');
+    await user.click(requestIdentity);
+    expect(await screen.findByRole('option', { name: 'Owner (preview)' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await selectOption(user, requestIdentity, 'serviceAccount');
     expect(screen.getByLabelText('User or account ID')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/principal|control plane/i);
   });

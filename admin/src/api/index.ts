@@ -1,4 +1,4 @@
-// API 工作区（/api?tab=endpoints|playground|openapi|logs）与请求详情。
+// API 工作区（/api?tab=endpoints|openapi|logs）与请求详情。
 export { ApiWorkspacePage, RequestLogPage } from './pages';
 export { CollectionAPIPage, ApiEndpointBrowser } from './workspace';
 export { RequestsPage, RequestDetailPage } from './requests';

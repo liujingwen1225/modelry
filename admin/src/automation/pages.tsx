@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleAlert, Search, Webhook as WebhookIcon } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { SearchInput } from '@/components/ui/search-input';
+import { SelectField } from '@/components/ui/select-field';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, CircleAlert, Pencil, RefreshCw, Webhook as WebhookIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/button';
 import { CopyButton } from '../components/copy-button';
 import { FormField } from '../components/form-field';
-import { Dialog } from '../components/overlays';
+import { Dialog, Sheet } from '../components/overlays';
 import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
 import { Input } from '@/components/ui/input';
@@ -22,7 +25,7 @@ export type PanelProps = { params: URLSearchParams; setParams: (next: URLSearchP
 // Hooks & Events 与定时任务两个页面复用同一套 Tab 结构与样式，不各写一份（§17.4）。
 export type PanelTab<T extends string> = { id: T; label: TranslationKey; icon: typeof WebhookIcon };
 
-// 切换工作面时丢弃属于上一个工作面的表单与详情上下文，保留搜索词与筛选。
+// 切换工作面时关闭表单与详情，Events 各页签分别恢复自己的搜索和筛选。
 const surfaceContextKeys = ['create', 'edit', 'deliveryId', 'cursor'];
 
 export function PanelTabNav<T extends string>({ active, idPrefix, label, tabs }: {
@@ -30,10 +33,12 @@ export function PanelTabNav<T extends string>({ active, idPrefix, label, tabs }:
 }) {
   const { t } = useI18n();
   const { pathname, search } = useLocation();
+  const tabSearches = useRef<Record<string, string>>({});
+  tabSearches.current[active] = search;
   // 每个 Tab 都是真实链接：工作面可分享、可新标签页打开、可前进后退，
-  // 目标 URL 由当前 query 派生，因此 `q`、`source`、`status` 等筛选不会丢失。
+  // Events 目标 URL 来自该页签上次的 query，避免搜索、来源和状态筛选串用。
   const linkTo = (id: T) => {
-    const next = new URLSearchParams(search);
+    const next = new URLSearchParams(idPrefix === 'events' ? tabSearches.current[id] ?? '' : search);
     for (const key of surfaceContextKeys) next.delete(key);
     next.set('tab', id);
     const serialized = next.toString();
@@ -44,7 +49,7 @@ export function PanelTabNav<T extends string>({ active, idPrefix, label, tabs }:
       const selected = active === id;
       return <Link
         aria-current={selected ? 'page' : undefined}
-        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selected ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${selected ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         id={`${idPrefix}-tab-${id}`}
         key={id}
         replace
@@ -94,6 +99,7 @@ export function WebhooksPanel({ params, setParams }: PanelProps) {
   const [reload, setReload] = useState(0);
   const [busyId, setBusyId] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [savedId, setSavedId] = useState<string>();
   const [disableItem, setDisableItem] = useState<WebhookSummary>();
   const search = params.get('q') ?? '';
 
@@ -117,10 +123,11 @@ export function WebhooksPanel({ params, setParams }: PanelProps) {
 
   const visible = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
-    return items.filter((item) => !needle || item.name.toLocaleLowerCase().includes(needle));
-  }, [items, search]);
+    return items.filter((item) => item.id === savedId || !needle || item.name.toLocaleLowerCase().includes(needle));
+  }, [items, savedId, search]);
 
   function updateSearch(value: string) {
+    setSavedId(undefined);
     const next = new URLSearchParams(params);
     if (value) next.set('q', value); else next.delete('q');
     setParams(next, { replace: true });
@@ -149,12 +156,12 @@ export function WebhooksPanel({ params, setParams }: PanelProps) {
   }
 
   return <section aria-labelledby="automation-webhooks-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0"><h2 id="automation-webhooks-heading">{t('automation.tabs.webhooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.webhooks.description')}</p></div>
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="sr-only"><h2 id="automation-webhooks-heading">{t('automation.tabs.webhooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.webhooks.description')}</p></div>
       <Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.webhooks.create')}</Button>
     </div>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3">
-      <label className="relative min-w-[200px] flex-1 md:max-w-sm"><span className="sr-only">{t('automation.common.search')}</span><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} /><Input aria-label={t('automation.common.search')} className="pl-9" onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} type="search" value={search} /></label>
+      <SearchInput aria-label={t('automation.common.search')} onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
       <span className="text-xs text-muted-foreground">{t('automation.webhooks.list')} · {visible.length}</span>
     </Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}
@@ -163,20 +170,19 @@ export function WebhooksPanel({ params, setParams }: PanelProps) {
     {state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && error && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
     {state === 'ready' && visible.length === 0 && <EmptyState description={items.length ? t('automation.common.emptySearch') : t('automation.webhooks.emptyDescription')} title={items.length ? t('automation.common.emptySearch') : t('automation.webhooks.emptyTitle')}>{items.length > 0 && search && <Button onClick={() => updateSearch('')} size="small" type="button" variant="quiet">{t('automation.common.clearSearch')}</Button>}</EmptyState>}
-    {visible.length > 0 && <div aria-label={t('automation.webhooks.list')} className="flex min-w-0 flex-col gap-3">
-      {visible.map((item) => <article className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-automation-card key={item.id}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.signingConfigured ? item.signingSecretName : t('automation.webhooks.secretUnavailable')} · {t('automation.common.updated', { date: formatDate(item.updatedAt) })}</p></div>
-          <StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip>
+    {visible.length > 0 && <div aria-label={t('automation.webhooks.list')} className="flex min-w-0 flex-col gap-2">
+      {visible.map((item) => <article className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5" data-automation-card key={item.id}>
+        <div className="min-w-0 flex-1 basis-56"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.signingConfigured ? item.signingSecretName : t('automation.webhooks.secretUnavailable')} · {t('automation.common.updated', { date: formatDate(item.updatedAt) })}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" type="button" variant="quiet">{t('automation.webhooks.edit', { name: item.name })}</Button>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          <StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip>
+          <Button aria-label={t('automation.webhooks.edit', { name: item.name })} onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" type="button" variant="secondary"><Pencil aria-hidden="true" size={14} />{t('automation.common.edit')}</Button>
           <Button disabled={busyId === item.id || (!item.enabled && !item.signingConfigured)} onClick={() => item.enabled ? setDisableItem(item) : void toggleWebhook(item, true)} size="small" type="button" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button>
           <Button disabled={busyId === item.id || !item.signingConfigured} onClick={() => void sendTest(item)} size="small" type="button" variant="secondary">{busyId === item.id ? t('automation.webhooks.testing') : t('automation.webhooks.test')}</Button>
         </div>
       </article>)}
     </div>}
-    {formOpen && <WebhookForm editing={editing} secrets={secrets} onCancel={closeForm} onSaved={(created) => { setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
+    {state === 'ready' && formOpen && (!editId || editing) && <WebhookForm key={editId ?? 'new'} editing={editing} secrets={secrets} onCancel={closeForm} onSaved={(created, id) => { setSavedId(id); setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
     <Dialog closeLabel={t('automation.common.cancel')} open={Boolean(disableItem)} title={t('automation.webhooks.disableConfirmTitle')} onClose={() => setDisableItem(undefined)}>
       <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('automation.webhooks.disableWarning')}</p>
       <div className="flex flex-wrap justify-end gap-2 pt-3">
@@ -198,7 +204,7 @@ export function WebhooksPanel({ params, setParams }: PanelProps) {
 }
 
 function WebhookForm({ editing, secrets, onCancel, onSaved }: {
-  editing?: WebhookSummary; secrets: SecretOption[]; onCancel: () => void; onSaved: (created: boolean) => void;
+  editing?: WebhookSummary; secrets: SecretOption[]; onCancel: () => void; onSaved: (created: boolean, id: string) => void;
 }) {
   const { t } = useI18n();
   const [name, setName] = useState(editing?.name ?? '');
@@ -216,25 +222,24 @@ function WebhookForm({ editing, secrets, onCancel, onSaved }: {
     setError(undefined);
     try {
       const input = { name: name.trim(), targetUrl: targetUrl.trim(), signingSecretId: secretId };
-      if (editing) await updateWebhook(editing.id, input); else await createWebhook(input);
-      onSaved(!editing);
+      const saved = editing ? await updateWebhook(editing.id, input) : await createWebhook(input);
+      onSaved(!editing, saved.id);
     } catch (reason) { setError(reason); }
     finally { setSaving(false); }
   }
 
-  return <Surface className="flex min-w-0 flex-col gap-4 border-primary p-5">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="eyebrow">{editing ? t('automation.common.edit') : t('automation.common.create')}</p><h3>{editing ? t('automation.webhooks.editTitle') : t('automation.webhooks.createTitle')}</h3></div><Button onClick={onCancel} size="small" type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>
+  return <Sheet open title={editing ? t('automation.webhooks.editTitle') : t('automation.webhooks.createTitle')} onClose={() => { if (!saving) onCancel(); }} closeLabel={t('automation.common.close')} size="wide">
     <form className="grid max-w-[64rem] gap-4 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-webhook-name" label={t('automation.common.name')}><input autoComplete="off" id="automation-webhook-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} aria-invalid={Boolean(nameError)} aria-errormessage={nameError ? 'automation-webhook-name-error' : undefined} /></FormField>
+        <FormField htmlFor="automation-webhook-name" label={t('automation.common.name')}><Input autoComplete="off" id="automation-webhook-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} aria-invalid={Boolean(nameError)} aria-errormessage={nameError ? 'automation-webhook-name-error' : undefined} /></FormField>
         {nameError && <p className="m-0 text-[11px] font-semibold text-danger" id="automation-webhook-name-error" role="alert">{nameError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-webhook-target" hint={t('automation.webhooks.targetUrlHint')} label={t('automation.webhooks.targetUrl')}><input autoComplete="url" id="automation-webhook-target" onChange={(event) => setTargetUrl(event.target.value)} required type="url" value={targetUrl} aria-invalid={Boolean(targetUrlError)} aria-errormessage={targetUrlError ? 'automation-webhook-target-error' : undefined} /></FormField>
+        <FormField htmlFor="automation-webhook-target" hint={t('automation.webhooks.targetUrlHint')} label={t('automation.webhooks.targetUrl')}><Input autoComplete="url" id="automation-webhook-target" onChange={(event) => setTargetUrl(event.target.value)} required type="url" value={targetUrl} aria-invalid={Boolean(targetUrlError)} aria-errormessage={targetUrlError ? 'automation-webhook-target-error' : undefined} /></FormField>
         {targetUrlError && <p className="m-0 text-[11px] font-semibold text-danger" id="automation-webhook-target-error" role="alert">{targetUrlError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-webhook-secret" hint={t('automation.webhooks.writeOnly')} label={t('automation.webhooks.signingSecret')}><select id="automation-webhook-secret" onChange={(event) => setSecretId(event.target.value)} required value={secretId} aria-invalid={Boolean(secretError)} aria-errormessage={secretError ? 'automation-webhook-secret-error' : undefined}><option value="">{t('automation.webhooks.chooseSecret')}</option>{editing && !secrets.some((secret) => secret.id === editing.signingSecretId) && <option disabled value={editing.signingSecretId}>{t('automation.webhooks.secretUnavailable')}</option>}{secrets.filter((secret) => secret.configured).map((secret) => <option key={secret.id} value={secret.id}>{secret.name}</option>)}</select></FormField>
+        <FormField htmlFor="automation-webhook-secret" hint={t('automation.webhooks.writeOnly')} label={t('automation.webhooks.signingSecret')}><SelectField id="automation-webhook-secret" onValueChange={(selectedValue) => setSecretId(selectedValue)} required value={secretId} aria-invalid={Boolean(secretError)} aria-errormessage={secretError ? 'automation-webhook-secret-error' : undefined} options={[({ value: "", label: t('automation.webhooks.chooseSecret') }), editing && !secrets.some((secret) => secret.id === editing.signingSecretId) && ({ value: editing.signingSecretId, label: t('automation.webhooks.secretUnavailable'), disabled: true }), secrets.filter((secret) => secret.configured).map((secret) => ({ value: secret.id, label: secret.name }))]} /></FormField>
         {secretError && <p className="m-0 text-[11px] font-semibold text-danger" id="automation-webhook-secret-error" role="alert">{secretError}</p>}
       </div>
       {secrets.some((secret) => secret.configured)
@@ -244,7 +249,7 @@ function WebhookForm({ editing, secrets, onCancel, onSaved }: {
       {error !== undefined && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger sm:col-span-2" role="alert">{safeErrorMessage(error, t)}</p>}
       <div className="flex flex-wrap items-center gap-2 pt-1 sm:col-span-2"><Button disabled={saving || !name.trim() || !targetUrl.trim() || !secretId || !secrets.some((secret) => secret.id === secretId && secret.configured)} type="submit" variant="primary">{saving ? t('automation.webhooks.saving') : t('automation.webhooks.save')}</Button><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>
     </form>
-  </Surface>;
+  </Sheet>;
 }
 
 export function EventHooksPanel({ params, setParams }: PanelProps) {
@@ -258,6 +263,7 @@ export function EventHooksPanel({ params, setParams }: PanelProps) {
   const [reload, setReload] = useState(0);
   const [busyId, setBusyId] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [savedId, setSavedId] = useState<string>();
   const search = params.get('q') ?? '';
   useEffect(() => {
     const controller = new AbortController();
@@ -271,11 +277,12 @@ export function EventHooksPanel({ params, setParams }: PanelProps) {
     }).catch(() => { if (!controller.signal.aborted) setState('error'); });
     return () => controller.abort();
   }, [reload]);
-  const visible = useMemo(() => items.filter((item) => !search || `${item.name} ${item.collectionName} ${item.webhookName}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
+  const visible = useMemo(() => items.filter((item) => item.id === savedId || !search || `${item.name} ${item.collectionName} ${item.webhookName}`.toLowerCase().includes(search.toLowerCase())), [items, savedId, search]);
   const editId = params.get('edit');
   const editing = editId ? items.find((item) => item.id === editId) : undefined;
   const formOpen = params.get('create') === '1' || Boolean(editId);
-  function updateSearch(value: string) { const next = new URLSearchParams(params); if (value) next.set('q', value); else next.delete('q'); setParams(next, { replace: true }); }
+  function updateSearch(value: string) {
+    setSavedId(undefined); const next = new URLSearchParams(params); if (value) next.set('q', value); else next.delete('q'); setParams(next, { replace: true }); }
   function closeForm() { const next = new URLSearchParams(params); next.delete('create'); next.delete('edit'); setParams(next); }
   async function toggle(item: EventHookSummary) {
     setBusyId(item.id);
@@ -284,16 +291,16 @@ export function EventHooksPanel({ params, setParams }: PanelProps) {
     finally { setBusyId(undefined); }
   }
   return <section aria-labelledby="automation-event-hooks-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id="automation-event-hooks-heading">{t('automation.tabs.eventHooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.eventHooks.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.eventHooks.create')}</Button></div>
-    <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><label className="relative min-w-[200px] flex-1 md:max-w-sm"><span className="sr-only">{t('automation.common.search')}</span><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} /><Input aria-label={t('automation.common.search')} className="pl-9" onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} type="search" value={search} /></label><span className="text-xs text-muted-foreground">{t('automation.eventHooks.list')} · {visible.length}</span></Surface>
+    <div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id="automation-event-hooks-heading">{t('automation.tabs.eventHooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.eventHooks.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.eventHooks.create')}</Button></div>
+    <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><SearchInput aria-label={t('automation.common.search')} onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" /><span className="text-xs text-muted-foreground">{t('automation.eventHooks.list')} · {visible.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}
     {failedAction && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
     {webhooksUnavailable && <PartialState>{t('automation.webhooks.list')} · {t('automation.common.loadFailed')}</PartialState>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}
     {state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && visible.length === 0 && <EmptyState description={items.length ? t('automation.common.emptySearch') : t('automation.eventHooks.emptyDescription')} title={items.length ? t('automation.common.emptySearch') : t('automation.eventHooks.emptyTitle')}>{items.length > 0 && search && <Button onClick={() => updateSearch('')} size="small" type="button" variant="quiet">{t('automation.common.clearSearch')}</Button>}</EmptyState>}
-    {state === 'ready' && visible.length > 0 && <div aria-label={t('automation.eventHooks.list')} className="flex min-w-0 flex-col gap-3">{visible.map((item) => <article className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.collectionName} · {t(`automation.eventHooks.eventTypes.${eventTypeKey(item.eventType)}` as TranslationKey)} · {item.webhookName}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.common.updated', { date: formatDate(item.updatedAt) })}</p>{item.enabled && !webhooks.find((hook) => hook.id === item.webhookId)?.enabled && <p className="m-0 mt-1.5 rounded-md border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning">{t('automation.eventHooks.webhookDormant')}</p>}</div><StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.eventHooks.edit', { name: item.name })}</Button><Button disabled={busyId === item.id} onClick={() => void toggle(item)} size="small" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button></div></article>)}</div>}
-    {state === 'ready' && formOpen && <EventHookForm editing={editing} collections={collections} webhooks={webhooks} onCancel={closeForm} onSaved={(created) => { setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
+    {state === 'ready' && visible.length > 0 && <div aria-label={t('automation.eventHooks.list')} className="flex min-w-0 flex-col gap-2">{visible.map((item) => <article className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5" data-automation-card key={item.id}><div className="min-w-0 flex-1 basis-56"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.collectionName} · {t(`automation.eventHooks.eventTypes.${eventTypeKey(item.eventType)}` as TranslationKey)} · {item.webhookName} · {t('automation.common.updated', { date: formatDate(item.updatedAt) })}</p>{item.enabled && !webhooks.find((hook) => hook.id === item.webhookId)?.enabled && <p className="m-0 mt-1.5 rounded-md border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning">{t('automation.eventHooks.webhookDormant')}</p>}</div><div className="ml-auto flex flex-wrap items-center justify-end gap-1.5"><StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip><Button aria-label={t('automation.eventHooks.edit', { name: item.name })} onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" variant="secondary"><Pencil aria-hidden="true" size={14} />{t('automation.common.edit')}</Button><Button disabled={busyId === item.id} onClick={() => void toggle(item)} size="small" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button></div></article>)}</div>}
+    {state === 'ready' && formOpen && (!editId || editing) && <EventHookForm key={editId ?? 'new'} editing={editing} collections={collections} webhooks={webhooks} onCancel={closeForm} onSaved={(created, id) => { setSavedId(id); setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
   </section>;
 }
 
@@ -307,7 +314,7 @@ function deliveryEventTypeLabel(type: string, t: ReturnType<typeof useI18n>['t']
 }
 
 function EventHookForm({ editing, collections, webhooks, onCancel, onSaved }: {
-  editing?: EventHookSummary; collections: CollectionOption[]; webhooks: WebhookSummary[]; onCancel: () => void; onSaved: (created: boolean) => void;
+  editing?: EventHookSummary; collections: CollectionOption[]; webhooks: WebhookSummary[]; onCancel: () => void; onSaved: (created: boolean, id: string) => void;
 }) {
   const { t } = useI18n();
   const [name, setName] = useState(editing?.name ?? '');
@@ -318,7 +325,7 @@ function EventHookForm({ editing, collections, webhooks, onCancel, onSaved }: {
   const [error, setError] = useState<unknown>();
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError(undefined);
-    try { const input: EventHookInput = { name: name.trim(), collectionId, eventType, webhookId }; if (editing) await updateEventHook(editing.id, input); else await createEventHook(input); onSaved(!editing); }
+    try { const input: EventHookInput = { name: name.trim(), collectionId, eventType, webhookId }; const saved = editing ? await updateEventHook(editing.id, input) : await createEventHook(input); onSaved(!editing, saved.id); }
     catch (reason) { setError(reason); }
     finally { setSaving(false); }
   }
@@ -326,22 +333,22 @@ function EventHookForm({ editing, collections, webhooks, onCancel, onSaved }: {
   const collectionError = fieldErrorMessage(error, '/collectionId', t);
   const eventTypeError = fieldErrorMessage(error, '/eventType', t);
   const webhookError = fieldErrorMessage(error, '/webhookId', t);
-  return <Surface className="flex min-w-0 flex-col gap-4 border-primary p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="eyebrow">{editing ? t('automation.common.edit') : t('automation.common.create')}</p><h3>{editing ? t('automation.eventHooks.editTitle') : t('automation.eventHooks.createTitle')}</h3></div><Button onClick={onCancel} size="small" type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>
+  return <Sheet open title={editing ? t('automation.eventHooks.editTitle') : t('automation.eventHooks.createTitle')} onClose={() => { if (!saving) onCancel(); }} closeLabel={t('automation.common.close')} size="wide">
     <form className="grid max-w-[64rem] gap-4 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-event-name" label={t('automation.common.name')}><input autoComplete="off" id="automation-event-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} aria-invalid={Boolean(nameError)} /></FormField>
+        <FormField htmlFor="automation-event-name" label={t('automation.common.name')}><Input autoComplete="off" id="automation-event-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} aria-invalid={Boolean(nameError)} /></FormField>
         {nameError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{nameError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-event-collection" label={t('automation.eventHooks.collection')}><select aria-invalid={Boolean(collectionError)} id="automation-event-collection" onChange={(event) => setCollectionId(event.target.value)} required value={collectionId}><option value="">{t('automation.eventHooks.chooseCollection')}</option>{collections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+        <FormField htmlFor="automation-event-collection" label={t('automation.eventHooks.collection')}><SelectField aria-invalid={Boolean(collectionError)} id="automation-event-collection" onValueChange={(selectedValue) => setCollectionId(selectedValue)} required value={collectionId} options={[({ value: "", label: t('automation.eventHooks.chooseCollection') }), collections.map((item) => ({ value: item.id, label: item.name }))]} /></FormField>
         {collectionError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{collectionError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-event-type" label={t('automation.eventHooks.eventType')}><select aria-invalid={Boolean(eventTypeError)} id="automation-event-type" onChange={(event) => setEventType(event.target.value as EventHookInput['eventType'])} value={eventType}><option value="record.created">{t('automation.eventHooks.eventTypes.created')}</option><option value="record.updated">{t('automation.eventHooks.eventTypes.updated')}</option><option value="record.deleted">{t('automation.eventHooks.eventTypes.deleted')}</option></select></FormField>
+        <FormField htmlFor="automation-event-type" label={t('automation.eventHooks.eventType')}><SelectField aria-invalid={Boolean(eventTypeError)} id="automation-event-type" onValueChange={(selectedValue) => setEventType(selectedValue as EventHookInput['eventType'])} value={eventType} options={[({ value: "record.created", label: t('automation.eventHooks.eventTypes.created') }), ({ value: "record.updated", label: t('automation.eventHooks.eventTypes.updated') }), ({ value: "record.deleted", label: t('automation.eventHooks.eventTypes.deleted') })]} /></FormField>
         {eventTypeError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{eventTypeError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-event-webhook" label={t('automation.eventHooks.webhook')}><select aria-invalid={Boolean(webhookError)} id="automation-event-webhook" onChange={(event) => setWebhookId(event.target.value)} required value={webhookId}><option value="">{t('automation.eventHooks.chooseWebhook')}</option>{webhooks.map((item) => <option key={item.id} value={item.id}>{item.name}{item.enabled ? '' : ` · ${t('automation.common.disabled')}`}</option>)}</select></FormField>
+        <FormField htmlFor="automation-event-webhook" label={t('automation.eventHooks.webhook')}><SelectField aria-invalid={Boolean(webhookError)} id="automation-event-webhook" onValueChange={(selectedValue) => setWebhookId(selectedValue)} required value={webhookId} options={[({ value: "", label: t('automation.eventHooks.chooseWebhook') }), webhooks.map((item) => ({ value: item.id, label: <>{item.name}{item.enabled ? '' : ` · ${t('automation.common.disabled')}`}</> }))]} /></FormField>
         {webhookError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{webhookError}</p>}
       </div>
       {collections.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.eventHooks.noCollections')} <Link className="font-semibold text-primary hover:underline" to="/collections">{t('automation.eventHooks.collectionsLink')}</Link></p>}
@@ -351,7 +358,7 @@ function EventHookForm({ editing, collections, webhooks, onCancel, onSaved }: {
       {error !== undefined && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger sm:col-span-2" role="alert">{safeErrorMessage(error, t)}</p>}
       <div className="flex flex-wrap items-center gap-2 pt-1 sm:col-span-2"><Button disabled={saving || !name.trim() || !collectionId || !webhookId} type="submit" variant="primary">{saving ? t('automation.eventHooks.saving') : t('automation.eventHooks.save')}</Button><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>
     </form>
-  </Surface>;
+  </Sheet>;
 }
 
 // 手动运行的 422 是字段级校验：`/webhookId`（目标 Webhook 未启用）与 `/signingSecretId`
@@ -380,6 +387,7 @@ export function JobsPanel({ onRunRecorded, params, setParams }: PanelProps & {
   const [reload, setReload] = useState(0);
   const [busyId, setBusyId] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [savedId, setSavedId] = useState<string>();
   const [runId, setRunId] = useState<string>();
   const [runResult, setRunResult] = useState<{ jobName: string; deliveryId: string }>();
   const [runFailure, setRunFailure] = useState<{ jobName: string; message: string }>();
@@ -390,9 +398,9 @@ export function JobsPanel({ onRunRecorded, params, setParams }: PanelProps & {
     void Promise.all([listJobs(controller.signal), listWebhooks(controller.signal).catch(() => undefined)]).then(([jobs, hooks]) => { if (!controller.signal.aborted) { setItems(jobs); setWebhooks(hooks ?? []); setWebhooksUnavailable(hooks === undefined); setState('ready'); } }).catch(() => { if (!controller.signal.aborted) setState('error'); });
     return () => controller.abort();
   }, [reload]);
-  const visible = useMemo(() => items.filter((item) => !search || `${item.name} ${item.webhookName}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
+  const visible = useMemo(() => items.filter((item) => item.id === savedId || !search || `${item.name} ${item.webhookName}`.toLowerCase().includes(search.toLowerCase())), [items, savedId, search]);
   const editId = params.get('edit'); const editing = editId ? items.find((item) => item.id === editId) : undefined; const formOpen = params.get('create') === '1' || Boolean(editId);
-  function updateSearch(value: string) { const next = new URLSearchParams(params); if (value) next.set('q', value); else next.delete('q'); setParams(next, { replace: true }); }
+  function updateSearch(value: string) { setSavedId(undefined); const next = new URLSearchParams(params); if (value) next.set('q', value); else next.delete('q'); setParams(next, { replace: true }); }
   function closeForm() { const next = new URLSearchParams(params); next.delete('create'); next.delete('edit'); setParams(next); }
   async function toggle(item: JobSummary) { setBusyId(item.id); try { await setJobEnabled(item.id, !item.enabled); setReload((value) => value + 1); } catch { setFailedAction(true); } finally { setBusyId(undefined); } }
 
@@ -420,8 +428,8 @@ export function JobsPanel({ onRunRecorded, params, setParams }: PanelProps & {
   }
 
   return <section aria-labelledby="automation-jobs-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id="automation-jobs-heading">{t('automation.tabs.jobs')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.jobs.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.jobs.create')}</Button></div>
-    <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><label className="relative min-w-[200px] flex-1 md:max-w-sm"><span className="sr-only">{t('automation.common.search')}</span><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} /><Input aria-label={t('automation.common.search')} className="pl-9" onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} type="search" value={search} /></label><span className="text-xs text-muted-foreground">{t('automation.jobs.list')} · {visible.length}</span></Surface>
+    <div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id="automation-jobs-heading">{t('automation.tabs.jobs')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.jobs.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.jobs.create')}</Button></div>
+    <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><SearchInput aria-label={t('automation.common.search')} onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" /><span className="text-xs text-muted-foreground">{t('automation.jobs.list')} · {visible.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}{failedAction && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
     {webhooksUnavailable && <PartialState>{t('automation.webhooks.list')} · {t('automation.common.loadFailed')}</PartialState>}
     {/* 手动运行结果耐久留在面板内：成功直达执行历史，失败说明恢复动作。 */}
@@ -435,29 +443,43 @@ export function JobsPanel({ onRunRecorded, params, setParams }: PanelProps & {
     {runFailure && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert"><strong className="font-semibold">{runFailure.jobName}</strong> · <span>{runFailure.message}</span></p>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}{state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && visible.length === 0 && <EmptyState description={items.length ? t('automation.common.emptySearch') : t('automation.jobs.emptyDescription')} title={items.length ? t('automation.common.emptySearch') : t('automation.jobs.emptyTitle')}>{items.length > 0 && search && <Button onClick={() => updateSearch('')} size="small" type="button" variant="quiet">{t('automation.common.clearSearch')}</Button>}</EmptyState>}
-    {state === 'ready' && visible.length > 0 && <div aria-label={t('automation.jobs.list')} className="flex min-w-0 flex-col gap-3">{visible.map((item) => <article className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{item.cron} UTC · {item.webhookName}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.jobs.nextRun')}: {formatDate(item.nextRunAt)}</p>{item.enabled && !webhooks.find((hook) => hook.id === item.webhookId)?.enabled && <p className="m-0 mt-1.5 rounded-md border border-warning/30 bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning">{t('automation.jobs.webhookDormant')}</p>}</div><StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.jobs.edit', { name: item.name })}</Button><Button disabled={busyId === item.id || runId === item.id} onClick={() => void toggle(item)} size="small" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button><Button disabled={runId === item.id} onClick={() => void runNow(item)} size="small" type="button" variant="secondary">{runId === item.id ? t('schedules.running') : t('schedules.runNow')}</Button></div></article>)}</div>}
-    {state === 'ready' && formOpen && <JobForm editing={editing} webhooks={webhooks} onCancel={closeForm} onSaved={(created) => { setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
+    {state === 'ready' && visible.length > 0 && <div aria-label={t('automation.jobs.list')} className="flex min-w-0 flex-col gap-2">
+      {visible.map((item) => <article className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5" data-automation-card key={item.id}>
+        <div className="min-w-0 flex-1 basis-56">
+          <h3 className="truncate text-sm font-semibold text-foreground">{item.name}</h3>
+          <p className="mt-0.5 break-words text-xs text-muted-foreground">{item.cron} UTC · {item.webhookName} · {t('automation.jobs.nextRun')}: {formatDate(item.nextRunAt)}</p>
+          {item.enabled && !webhooksUnavailable && !webhooks.find((hook) => hook.id === item.webhookId)?.enabled && <p className="m-0 mt-1.5 text-[11px] text-warning">{t('automation.jobs.webhookDormant')}</p>}
+        </div>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          <StatusChip state={item.enabled ? 'enabled' : 'disabled'}>{item.enabled ? t('automation.common.enabled') : t('automation.common.disabled')}</StatusChip>
+          <Button aria-label={t('automation.jobs.edit', { name: item.name })} onClick={() => { const next = new URLSearchParams(params); next.delete('create'); next.set('edit', item.id); setParams(next); }} size="small" type="button" variant="secondary"><Pencil aria-hidden="true" size={14} />{t('automation.common.edit')}</Button>
+          <Button disabled={busyId === item.id || runId === item.id} onClick={() => void toggle(item)} size="small" variant={item.enabled ? 'danger' : 'secondary'}>{busyId === item.id ? t('automation.common.updating') : item.enabled ? t('automation.common.disable') : t('automation.common.enable')}</Button>
+          <Button disabled={busyId === item.id || runId === item.id} onClick={() => void runNow(item)} size="small" type="button" variant="secondary">{runId === item.id ? t('schedules.running') : t('schedules.runNow')}</Button>
+        </div>
+      </article>)}
+    </div>}
+    {state === 'ready' && formOpen && (!editId || editing) && <JobForm key={editId ?? 'new'} editing={editing} webhooks={webhooks} onCancel={closeForm} onSaved={(created, id) => { setSavedId(id); setNotice(t(created ? 'automation.common.created' : 'automation.common.saved')); closeForm(); setReload((value) => value + 1); }} />}
   </section>;
 }
 
-function JobForm({ editing, webhooks, onCancel, onSaved }: { editing?: JobSummary; webhooks: WebhookSummary[]; onCancel: () => void; onSaved: (created: boolean) => void }) {
+function JobForm({ editing, webhooks, onCancel, onSaved }: { editing?: JobSummary; webhooks: WebhookSummary[]; onCancel: () => void; onSaved: (created: boolean, id: string) => void }) {
   const { t, formatDate } = useI18n();
   const [name, setName] = useState(editing?.name ?? ''); const [webhookId, setWebhookId] = useState(editing?.webhookId ?? ''); const [cron, setCron] = useState(editing?.cron ?? ''); const [now] = useState(() => new Date()); const [saving, setSaving] = useState(false); const [error, setError] = useState<unknown>();
   const next = nextCronOccurrence(cron, now); const validCron = Boolean(next);
   const nameError = fieldErrorMessage(error, '/name', t); const webhookError = fieldErrorMessage(error, '/webhookId', t); const cronError = fieldErrorMessage(error, '/cron', t);
-  async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); setSaving(true); setError(undefined); try { const input: JobInput = { name: name.trim(), webhookId, cron: cron.trim() }; if (editing) await updateJob(editing.id, input); else await createJob(input); onSaved(!editing); } catch (reason) { setError(reason); } finally { setSaving(false); } }
-  return <Surface className="flex min-w-0 flex-col gap-4 border-primary p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="eyebrow">{editing ? t('automation.common.edit') : t('automation.common.create')}</p><h3>{editing ? t('automation.jobs.editTitle') : t('automation.jobs.createTitle')}</h3></div><Button onClick={onCancel} size="small" type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>
+  async function submit(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); setSaving(true); setError(undefined); try { const input: JobInput = { name: name.trim(), webhookId, cron: cron.trim() }; const saved = editing ? await updateJob(editing.id, input) : await createJob(input); onSaved(!editing, saved.id); } catch (reason) { setError(reason); } finally { setSaving(false); } }
+  return <Sheet open title={editing ? t('automation.jobs.editTitle') : t('automation.jobs.createTitle')} onClose={() => { if (!saving) onCancel(); }} closeLabel={t('automation.common.close')} size="wide">
     <form className="grid max-w-[64rem] gap-4 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-job-name" label={t('automation.common.name')}><input autoComplete="off" id="automation-job-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} aria-invalid={Boolean(nameError)} /></FormField>
+        <FormField htmlFor="automation-job-name" label={t('automation.common.name')}><Input autoComplete="off" id="automation-job-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} aria-invalid={Boolean(nameError)} /></FormField>
         {nameError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{nameError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-job-webhook" label={t('automation.common.webhook')}><select aria-invalid={Boolean(webhookError)} id="automation-job-webhook" onChange={(event) => setWebhookId(event.target.value)} required value={webhookId}><option value="">{t('automation.eventHooks.chooseWebhook')}</option>{webhooks.map((item) => <option key={item.id} value={item.id}>{item.name}{item.signingConfigured ? '' : ` · ${t('automation.webhooks.secretUnavailable')}`}</option>)}</select></FormField>
+        <FormField htmlFor="automation-job-webhook" label={t('automation.common.webhook')}><SelectField aria-invalid={Boolean(webhookError)} id="automation-job-webhook" onValueChange={(selectedValue) => setWebhookId(selectedValue)} required value={webhookId} options={[({ value: "", label: t('automation.eventHooks.chooseWebhook') }), webhooks.map((item) => ({ value: item.id, label: <>{item.name}{item.signingConfigured ? '' : ` · ${t('automation.webhooks.secretUnavailable')}`}</> }))]} /></FormField>
         {webhookError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{webhookError}</p>}
       </div>
       <div className="grid content-start gap-1.5">
-        <FormField htmlFor="automation-job-cron" hint={t('automation.jobs.cronHint')} label={t('automation.jobs.cron')}><input autoComplete="off" id="automation-job-cron" onChange={(event) => setCron(event.target.value)} placeholder="0 9 * * *" required value={cron} aria-invalid={Boolean(cron.trim()) && !validCron} /></FormField>
+        <FormField htmlFor="automation-job-cron" hint={t('automation.jobs.cronHint')} label={t('automation.jobs.cron')}><Input autoComplete="off" id="automation-job-cron" onChange={(event) => setCron(event.target.value)} placeholder="0 9 * * *" required value={cron} aria-invalid={Boolean(cron.trim()) && !validCron} /></FormField>
         {Boolean(cron.trim()) && !validCron && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{cronError ?? t('automation.jobs.cronInvalid')}</p>}{validCron && cronError && <p className="m-0 text-[11px] font-semibold text-danger" role="alert">{cronError}</p>}
       </div>
       {webhooks.length === 0 && <p className="m-0 text-xs leading-relaxed text-muted-foreground sm:col-span-2">{t('automation.jobs.noWebhooks')} <Link className="font-semibold text-primary hover:underline" to="/events?tab=webhooks&create=1">{t('automation.jobs.createWebhookLink')}</Link></p>}
@@ -467,7 +489,7 @@ function JobForm({ editing, webhooks, onCancel, onSaved }: { editing?: JobSummar
       {error !== undefined && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger sm:col-span-2" role="alert">{safeErrorMessage(error, t)}</p>}
       <div className="flex flex-wrap items-center gap-2 pt-1 sm:col-span-2"><Button disabled={saving || !name.trim() || !webhookId || !validCron} type="submit" variant="primary">{saving ? t('automation.jobs.saving') : t('automation.jobs.save')}</Button><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('automation.common.cancel')}</Button></div>
     </form>
-  </Surface>;
+  </Sheet>;
 }
 
 export type DeliveriesPanelCopy = { title: string; description: string; emptyTitle?: string; emptyDescription?: string };
@@ -508,21 +530,22 @@ export function DeliveriesPanel({ copy, fixedSourceType, params, reloadKey = 0, 
   const title = copy?.title ?? t('automation.deliveries.list');
   const description = copy?.description ?? t('automation.deliveries.description');
   return <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id={headingId}>{title}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{description}</p></div></div>
-    <Surface className="flex flex-wrap items-end justify-between gap-3 p-3"><div aria-label={t('automation.deliveries.filters')} className="flex flex-wrap items-end gap-3">{!fixedSourceType && <label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.source')}<select aria-label={t('automation.deliveries.source')} className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => changeFilter('source', event.target.value)} value={requestedSource ?? ''}><option value="">{t('automation.deliveries.allSources')}</option><option value="eventHook">{t('automation.sources.eventHook')}</option><option value="job">{t('automation.sources.job')}</option><option value="test">{t('automation.sources.test')}</option></select></label>}<label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.status')}<select aria-label={t('automation.deliveries.status')} className="min-h-9 rounded-lg border border-input bg-card px-3 py-2 text-xs text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring" onChange={(event) => changeFilter('status', event.target.value)} value={status ?? ''}><option value="">{t('automation.deliveries.allStatuses')}</option>{(['pending', 'running', 'succeeded', 'failed', 'cancelled'] as DeliveryStatus[]).map((value) => <option key={value} value={value}>{t(`automation.statuses.${value}` as TranslationKey)}</option>)}</select></label></div><span className="text-xs text-muted-foreground">{items.length}</span></Surface>
+    <div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id={headingId}>{title}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{description}</p></div><Button disabled={state === 'loading'} onClick={() => setReload((value) => value + 1)} type="button"><RefreshCw aria-hidden="true" size={15} />{t('automation.common.refresh')}</Button></div>
+    <Surface className="flex flex-wrap items-end justify-between gap-3 p-3"><div aria-label={t('automation.deliveries.filters')} className="flex flex-wrap items-end gap-3">{!fixedSourceType && <Label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.source')}<SelectField aria-label={t('automation.deliveries.source')} onValueChange={(selectedValue) => changeFilter('source', selectedValue)} value={requestedSource ?? ''} options={[({ value: "", label: t('automation.deliveries.allSources') }), ({ value: "eventHook", label: t('automation.sources.eventHook') }), ({ value: "job", label: t('automation.sources.job') }), ({ value: "test", label: t('automation.sources.test') })]} /></Label>}<Label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.status')}<SelectField aria-label={t('automation.deliveries.status')} onValueChange={(selectedValue) => changeFilter('status', selectedValue)} value={status ?? ''} options={[({ value: "", label: t('automation.deliveries.allStatuses') }), (['pending', 'running', 'succeeded', 'failed', 'cancelled'] as DeliveryStatus[]).map((value) => ({ value: value, label: t(`automation.statuses.${value}` as TranslationKey) }))]} /></Label></div><span className="text-xs text-muted-foreground">{items.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}{error && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{error}</p>}
     {partial && <PartialState>{t('automation.deliveries.detail')} · {t('automation.common.loadFailed')}</PartialState>}
     {state === 'loading' && <LoadingState label={t('automation.common.loading')} />}{state === 'error' && <ErrorState description={t('automation.common.loadRetry')} title={t('automation.common.loadFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('automation.common.retry')}</Button></ErrorState>}
     {state === 'ready' && items.length === 0 && <EmptyState description={copy?.emptyDescription ?? t('automation.deliveries.emptyDescription')} title={copy?.emptyTitle ?? t('automation.deliveries.emptyTitle')} />}
-    {state === 'ready' && items.length > 0 && <div aria-label={t('automation.deliveries.list')} className="flex min-w-0 flex-col gap-3">{items.map((item) => <article className={`flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5${item.status === 'failed' ? ' border-danger/30' : ''}`} data-automation-card key={item.id}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-foreground">{item.webhookName}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{t(`automation.sources.${item.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(item.eventType, t)} · {formatDate(item.createdAt)}</p>{showTriggerColumn && <p className="mt-0.5 break-words text-xs text-muted-foreground"><span className="font-medium text-ink-secondary">{t('schedules.trigger')}</span>: <span>{deliveryTriggerLabel(item.eventType, t)}</span></p>}<p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.deliveries.attempts')}: {item.attemptCount} · {item.lastHttpStatus ?? '—'}</p>{item.errorCode !== 'none' && <p className="m-0 mt-1.5 flex items-center gap-1.5 text-[11px] text-danger"><CircleAlert aria-hidden="true" className="shrink-0" size={14} />{errorLabel(item.errorCode, t)}</p>}</div><StatusChip state={item.status}>{t(`automation.statuses.${item.status}` as TranslationKey)}</StatusChip></div><div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.set('deliveryId', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.deliveries.view')}</Button></div></article>)}</div>}
+    {state === 'ready' && items.length > 0 && <div aria-label={t('automation.deliveries.list')} className="flex min-w-0 flex-col gap-2">{items.map((item) => <article className={`flex min-w-0 flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5${item.status === 'failed' ? ' border-danger/30' : ''}`} data-automation-card key={item.id}><div className="min-w-0 flex-1 basis-56"><h3 className="truncate text-sm font-semibold text-foreground">{item.webhookName}</h3><p className="mt-0.5 break-words text-xs text-muted-foreground">{t(`automation.sources.${item.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(item.eventType, t)} · {formatDate(item.createdAt)}</p>{showTriggerColumn && <p className="mt-0.5 break-words text-xs text-muted-foreground"><span className="font-medium text-ink-secondary">{t('schedules.trigger')}</span>: <span>{deliveryTriggerLabel(item.eventType, t)}</span></p>}<p className="mt-0.5 break-words text-xs text-muted-foreground">{t('automation.deliveries.attempts')}: {item.attemptCount} · {item.lastHttpStatus ?? '—'}</p>{item.errorCode !== 'none' && <p className="m-0 mt-1.5 flex items-center gap-1.5 text-[11px] text-danger"><CircleAlert aria-hidden="true" className="shrink-0" size={14} />{errorLabel(item.errorCode, t)}</p>}</div><div className="ml-auto flex flex-wrap items-center justify-end gap-1.5"><StatusChip state={item.status}>{t(`automation.statuses.${item.status}` as TranslationKey)}</StatusChip><Button onClick={() => { const next = new URLSearchParams(params); next.set('deliveryId', item.id); setParams(next); }} size="small" variant="quiet">{t('automation.deliveries.view')}</Button></div></article>)}</div>}
     {state === 'ready' && nextCursor && <div className="flex flex-wrap items-center gap-2"><Button onClick={() => { const next = new URLSearchParams(params); next.set('cursor', nextCursor); setParams(next); }} type="button">{t('automation.common.next')}</Button></div>}
-    {detail && <Surface className="flex min-w-0 flex-col gap-4 border-primary p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="eyebrow">{t('automation.deliveries.detail')}</p><h3>{detail.webhookName}</h3><p className="mt-0.5 text-xs text-muted-foreground">{t(`automation.sources.${detail.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(detail.eventType, t)} · {t(`automation.statuses.${detail.status}` as TranslationKey)}</p></div><Button onClick={closeDetail} size="small" type="button" variant="quiet">{t('automation.common.close')}</Button></div>
+    {detail && <Sheet open title={detail.webhookName} onClose={closeDetail} closeLabel={t('automation.common.close')} size="wide">
+      <p className="m-0 text-xs text-muted-foreground">{t(`automation.sources.${detail.sourceType}` as TranslationKey)} · {deliveryEventTypeLabel(detail.eventType, t)} · {t(`automation.statuses.${detail.status}` as TranslationKey)}</p>
       {configChanged && <p className="m-0 rounded-md border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-xs leading-relaxed text-warning">{t('automation.deliveries.configChanged')}</p>}
       <div className="border-t pt-4"><dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs"><dt className="text-muted-foreground">{t('automation.deliveries.deliveryId')}</dt><dd className="m-0 break-words"><code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">{detail.id}</code></dd><dt className="text-muted-foreground">{t('automation.deliveries.createdAt')}</dt><dd className="m-0 break-words text-ink-secondary">{formatDate(detail.createdAt)}</dd><dt className="text-muted-foreground">{t('automation.deliveries.outcome')}</dt><dd className="m-0 break-words text-ink-secondary">{errorLabel(detail.errorCode, t)}</dd><dt className="text-muted-foreground">{t('automation.deliveries.attempts')}</dt><dd className="m-0 break-words text-ink-secondary">{detail.attemptCount}</dd>{showTriggerColumn && <><dt className="text-muted-foreground">{t('schedules.trigger')}</dt><dd className="m-0 break-words text-ink-secondary">{deliveryTriggerLabel(detail.eventType, t)}</dd></>}</dl></div>
       <h4 className="m-0 text-sm font-semibold text-foreground">{t('automation.deliveries.attemptHistory')}</h4>{detail.attempts.length === 0 ? <p className="m-0 text-xs text-muted-foreground">{t('automation.deliveries.noAttempts')}</p> : <Table><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40"><TableHead scope="col">{t('automation.deliveries.round')}</TableHead><TableHead scope="col">{t('automation.deliveries.attempt')}</TableHead><TableHead scope="col">{t('automation.deliveries.attemptStatus')}</TableHead><TableHead scope="col">{t('automation.deliveries.startedAt')}</TableHead><TableHead scope="col">{t('automation.deliveries.duration')}</TableHead><TableHead scope="col">{t('automation.deliveries.httpStatus')}</TableHead><TableHead scope="col">{t('automation.deliveries.errorCode')}</TableHead></TableRow></TableHeader><TableBody>{detail.attempts.map((attempt, index) => <TableRow key={`${attempt.round}-${attempt.attempt}-${index}`}><TableCell>{attempt.round}</TableCell><TableCell>{attempt.attempt}</TableCell><TableCell>{t(`automation.statuses.${attempt.status}` as TranslationKey)}</TableCell><TableCell>{formatDate(attempt.startedAt)}</TableCell><TableCell>{attempt.durationMs} ms</TableCell><TableCell>{attempt.httpStatus ?? '—'}</TableCell><TableCell>{errorLabel(attempt.errorCode, t)}</TableCell></TableRow>)}</TableBody></Table>}
       {detail.status === 'failed' && !canRetry && <p className="m-0 text-xs leading-relaxed text-ink-secondary">{detail.manualRedriveCount >= 3 ? t('automation.deliveries.retryLimit') : detail.errorCode === 'capacityExceeded' ? t('automation.deliveries.capacity') : t('automation.deliveries.retryUnavailable')}</p>}
       {canRetry && <div className="flex flex-wrap items-center gap-2 border-t pt-4"><Button disabled={busy} onClick={() => void retry()} type="button" variant="primary">{busy ? t('automation.deliveries.retrying') : t('automation.deliveries.retry')}</Button></div>}
-    </Surface>}
+    </Sheet>}
   </section>;
 }
 

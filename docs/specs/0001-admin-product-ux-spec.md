@@ -108,7 +108,7 @@ SYSTEM
 | --- | --- | --- |
 | 总览 | 无 | 总览是一屏工作台，不通过 Tab 拆分状态 |
 | 集合 | 列表页无 Tab；进入 Collection 后：`记录` / `Schema` / `访问规则` / `API` | Relations 与 Indexes 作为 Schema 内容呈现，不再拆二级页 |
-| API 工作区 | `端点` / `调试台` / `OpenAPI` / `请求日志` | SDK / Contract 从 OpenAPI 上下文提供；MCP 以开发者接入卡片、命令面板或关联入口提供 |
+| API 工作区 | `端点` / `OpenAPI` / `请求日志` | SDK / Contract 从 OpenAPI 上下文提供；MCP 以开发者接入卡片、命令面板或关联入口提供 |
 | Hooks & Events | `Hooks` / `Webhooks` / `事件触发` / `投递历史` | 只处理事件驱动能力；不包含定时任务 |
 | 定时任务 | `任务` / `执行历史` | 任务页负责 Cron / 固定时间、时区、启停、最近/下次执行和手动运行 |
 | 变更 | `待应用` / `已应用历史` / `结构漂移` | Drift 只能生成受控修复变更，不允许静默修复 |
@@ -475,7 +475,7 @@ Collection API 是全局 API & SDK 工作区的 Collection 过滤视图。保留
 
 ## 7.1 页面结构
 
-页面任务：**找到应用调用方式，验证一次真实请求，并把正确配置带回应用。** 二级 Tab 固定为 `端点`、`调试台`、`OpenAPI`、`请求日志`。
+页面任务：**找到应用调用方式，验证一次真实请求，并把正确配置带回应用。** 二级 Tab 固定为 `端点`、`OpenAPI`、`请求日志`。
 
 ~~~text
 API & SDK
@@ -489,7 +489,9 @@ POST /api/collections/... Headers / Params / Body
                            Status · Duration · Request ID
 ~~~
 
-- Endpoint 列表按 Collection 与行为浏览，不要求用户从原始 OpenAPI JSON 开始。
+- Endpoint 列表按 Collection 与行为浏览，并在同一工作面直接调试请求，不再提供独立调试台 Tab。
+- 旧 `/api?tab=playground` 链接映射到端点 Tab，保留集合、端点与请求参数。
+- 不要求用户从原始 OpenAPI JSON 开始。
 - 请求工作区显示方法、路径、必需参数、认证要求和可编辑请求体。
 - 可复制 Base URL、示例命令、请求体和响应；Copy 成功在控件自身反馈。
 - 运行后固定展示状态码、耗时和 Request ID。错误保留结构化 code 与可读解释。
@@ -502,10 +504,15 @@ POST /api/collections/... Headers / Params / Body
 
 Hooks & Events 只汇总事件驱动能力，二级 Tab 固定为 `Hooks`、`Webhooks`、`事件触发`、`投递历史`。定时任务不再属于该页面，而是独立一级入口 `定时任务`，其二级 Tab 为 `任务`、`执行历史`。
 
+- 所有工作面页签统一使用短暂的加载过渡。导航立即响应，连续切换只挂载最后选择的内容；首次进入和同页签筛选不增加等待，接口加载和错误状态仍由各工作面显示。
+- 各 Tab 使用相同的右侧主动作、搜索或筛选工具栏、数量、列表及加载 / 空 / 错误状态。列表使用紧凑行布局，左侧显示名称与摘要，右侧显示状态与操作；窄屏允许操作换行并继续右对齐。编辑入口使用明确按钮和图标。各 Tab 分别恢复本页签筛选，不把其它页签的搜索与筛选带过来。
+- Hooks 列表通过「创建 Hook」进入 `/events/hooks/new` 独立工作面，不常驻创建表单。创建失败保留输入；成功进入 Hook 详情，继续配置绑定。取消返回原列表搜索上下文。
+- Webhooks 与事件触发通过主按钮进入宽侧栏创建 / 编辑，取消保留原列表筛选，失败保留输入，保存成功关闭侧栏并刷新列表。
+- 投递历史提供刷新与筛选，不提供创建入口；投递详情在宽侧栏显示。
 - Hook 页说明触发事件、脚本、配置状态和最近运行结果。Secrets 在需要时以受控链接进入管理；页面不输出 Secret 值。
 - Webhook 配置页显示目标 URL、事件范围、启停和投递状态，不把外部投递描述成 SQLite 事务回滚。
 - Event Trigger 明确显示 Collection 事件和目标 Webhook。
-- 定时任务页显示 Cron / 固定时间规则、时区、启停、最近一次与下一次运行时间，并支持手动执行。
+- 定时任务页使用相同的紧凑列表，左侧显示名称、Cron、UTC、目标 Webhook 与下一次运行时间，右侧统一显示状态、编辑、启停和立即运行。创建 / 编辑使用宽侧栏；取消保留筛选，失败保留输入，保存后关闭侧栏并原地显示结果。执行历史沿用紧凑行与宽侧栏详情。
 - Delivery history 支持按目标、状态和时间检索；失败条目提供响应摘要、重试状态、关联 Request / Activity 与当前恢复动作。
 - 任何实际重试都展示投递副作用事实和新的尝试记录；重复投递不能伪装成恰好一次。
 - 没有配置时分别提供能完成初始化的主操作，不用单一“Add integration”掩盖配置对象差异。
@@ -526,6 +533,8 @@ Hooks & Events 只汇总事件驱动能力，二级 Tab 固定为 `Hooks`、`Web
 ## 9.2 Activity
 
 活动记录是单一管理面审计时间线，不设置二级 Tab。它展示各子系统有界的管理操作、安全事实和结果，并通过 Actor、Action、Resource、Result 与时间筛选，不把 API 请求日志、Webhook 投递或定时任务执行复制进来。
+
+审计筛选默认只展示搜索、操作者和操作；主体 ID、资源类型 / ID、起止时间收进「更多筛选」。已有高级筛选条件自动展开，收起不清除输入，提交仍保留全部条件。说明置于筛选区下方，不在单个控件下撑高布局。
 
 两者支持按 Actor、Action、Resource、Result 与时间过滤。字段映射为 Owner、Administrator、Service Account 等产品术语。原始身份标识可在技术详情中查看。
 
@@ -644,7 +653,7 @@ API、数据库、Runtime 里的稳定标识、Collection 名称、字段名、I
 
 ## 12.3 写作规则
 
-- 页面标题说明任务或对象，副标题说明用户能在此完成什么。
+- 一级页面与二级工作面不再展示重复标题、眉题和介绍文字，导航直接连接操作与内容；创建、刷新等操作右对齐。保留屏幕阅读器需要的标题语义，以及对象名称、业务分组、状态、字段帮助和恢复提示。
 - Primary Action 使用动作 + 对象，如 `Create Collection`、`Run request`、`Apply changes`。
 - 表单每个输入都有可见 Label、持久说明（复杂字段）、Required 标记和字段级错误。
 - 成功文案写出已完成的持久结果；Toast 仅用于补充。
@@ -740,9 +749,10 @@ Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态�
 | --- | --- | --- |
 | 总览 | `/` | 无 |
 | 集合 | `/collections`、`/collections/new`、`/collections/:collectionId` | 嵌套路径 `index`=记录、`model`、`access`、`api` |
-| API 工作区 | `/api` | `?tab=endpoints｜playground｜openapi｜logs`（缺省 endpoints） |
+| API 工作区 | `/api` | `?tab=endpoints｜openapi｜logs`（缺省 endpoints） |
 | 请求详情 | `/api/requests/:requestId` | `?from=` 返回上下文 |
 | Hooks & Events | `/events` | `?tab=hooks｜webhooks｜triggers｜deliveries`（缺省 hooks） |
+| Hook 创建 | `/events/hooks/new` | 独立代码编辑工作面 |
 | Hook 详情 | `/events/hooks/:extensionId` | `?tab=settings｜runs` |
 | 定时任务 | `/schedules` | `?tab=jobs｜history`（缺省 jobs） |
 | 变更 | `/changes` | `?tab=pending｜history｜drift`（缺省 pending） |

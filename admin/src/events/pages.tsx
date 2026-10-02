@@ -1,3 +1,4 @@
+import { TabContent } from '../components/tab-content';
 import { useMemo } from 'react';
 import { Activity, Radio, Webhook as WebhookIcon, Workflow } from 'lucide-react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -49,6 +50,10 @@ export function EventsPage() {
       execute: () => navigate('/events?tab=deliveries'),
     },
     {
+      id: 'events.create-hook', category: 'commands.categories.automation', label: () => t('extensions.createAction'),
+      execute: () => navigate('/events/hooks/new'),
+    },
+    {
       id: 'events.create-webhook', category: 'commands.categories.automation', label: () => t('commands.createWebhook'),
       execute: () => navigate('/events?tab=webhooks&create=1'),
     },
@@ -60,16 +65,18 @@ export function EventsPage() {
   useRegisterCommands(commands);
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="min-w-0">
+    <header className="sr-only">
       <p className="eyebrow">{t('events.eyebrow')}</p>
       <h1>{t('events.title')}</h1>
       <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('events.description')}</p>
     </header>
     <PanelTabNav active={activeTab} idPrefix="events" label={t('events.tabsLabel')} tabs={eventsTabs} />
+    <TabContent activeKey={activeTab}>
     {activeTab === 'hooks' && <HooksPanel />}
     {activeTab === 'webhooks' && <WebhooksPanel params={params} setParams={setParams} />}
     {activeTab === 'triggers' && <EventHooksPanel params={params} setParams={setParams} />}
     {activeTab === 'deliveries' && <DeliveriesPanel params={params} setParams={setParams} />}
+    </TabContent>
   </div>;
 }
 

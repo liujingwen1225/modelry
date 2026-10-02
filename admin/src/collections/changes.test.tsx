@@ -45,10 +45,10 @@ describe('Changes page', () => {
     expect(screen.getByText('Review the current model.')).toBeInTheDocument();
     expect(screen.getByText('Retry the apply.')).toBeInTheDocument();
     expect(screen.getByText('PROJECTION_REPAIR_REQUIRED')).toBeInTheDocument();
-    const technicalDetails = screen.getByText('Technical details').closest('details');
+    const technicalDetails = screen.getByText('Technical details').closest('[data-slot=collapsible]');
     expect(technicalDetails).not.toBeNull();
     await user.click(screen.getByText('Technical details'));
-    expect(technicalDetails).toHaveProperty('open', true);
+    expect(technicalDetails).toHaveAttribute('data-open');
     expect(technicalDetails?.textContent).toContain('attempt_1');
     expect(technicalDetails?.textContent).toContain('PROJECTION_REPAIR_REQUIRED');
     expect(technicalDetails?.textContent).toContain('2026-09-24T10:00:00Z');

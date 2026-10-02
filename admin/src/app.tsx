@@ -24,7 +24,7 @@ import { SettingsLayout } from './settings/layout';
 import { RuntimeSettingsPage, SettingsGeneralPage } from './settings/pages';
 import { FileStoragePage } from './storage/pages';
 import { MailPage } from './mail/pages';
-import { SecretsPage } from './extensions/pages';
+import { HookCreatePage, SecretsPage } from './extensions/pages';
 import { DataTransferPage, BackupRestorePage } from './portability/pages';
 import { MCPGuidePage } from './developer/pages';
 import { mapLegacyPath } from './route-map';
@@ -103,11 +103,12 @@ function AuthenticatedWorkspace() {
           <Route element={<CollectionSecurityPage />} path="access" />
           <Route element={<CollectionAPIPage />} path="api" />
         </Route>
-        {/* BUILD — API 工作区（端点 | 调试台 | OpenAPI | 请求日志） */}
+        {/* BUILD — API 工作区（端点 | OpenAPI | 请求日志） */}
         <Route element={<ApiWorkspacePage />} path="/api" />
         <Route element={<RequestDetailPage />} path="/api/requests/:requestId" />
         {/* BUILD — Hooks & Events（Hooks | Webhooks | 事件触发 | 投递历史） */}
         <Route element={<EventsPage />} path="/events" />
+        <Route element={<HookCreatePage />} path="/events/hooks/new" />
         <Route element={<HookDetailPage />} path="/events/hooks/:extensionId" />
         {/* BUILD — 定时任务（任务 | 执行历史） */}
         <Route element={<SchedulesPage />} path="/schedules" />

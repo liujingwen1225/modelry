@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer as createTCPServer } from 'node:net';
@@ -272,7 +273,7 @@ test.afterAll(async () => {
 });
 
 async function signOut(page: Page) {
-  await page.locator('[data-owner-menu] summary').click();
+  await page.locator('[data-owner-menu] > button').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 }
@@ -337,14 +338,14 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Mail', level: 1 })).toBeVisible();
-  await page.getByLabel('Enabled').selectOption('enabled');
+  await selectOption(page, page.getByLabel('Enabled'), 'enabled');
   await page.getByLabel('Host').fill('127.0.0.1');
   await page.getByLabel('Port', { exact: true }).fill(String(fakeSMTP!.port));
-  await page.getByLabel('Transport security').selectOption('plaintext');
+  await selectOption(page, page.getByLabel('Transport security'), 'plaintext');
   await page.getByLabel('From address').fill('modelry@example.test');
   await page.getByLabel('From name').fill('Modelry');
-  await page.getByLabel('Username Secret').selectOption(usernameSecretId);
-  await page.getByLabel('Password Secret').selectOption(passwordSecretId);
+  await selectOption(page, page.getByLabel('Username Secret'), usernameSecretId);
+  await selectOption(page, page.getByLabel('Password Secret'), passwordSecretId);
   await page.getByRole('button', { name: 'Save Mail provider' }).click();
   await expect(page.getByText('Mail provider saved.')).toBeVisible();
 
@@ -372,7 +373,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   const createDialog = page.getByRole('dialog');
   await createDialog.getByLabel('Email').fill(administratorEmail);
   await createDialog.getByLabel('Initial password').fill(administratorPassword);
-  await createDialog.getByLabel('Permission preset').selectOption('custom');
+  await selectOption(page, createDialog.getByLabel('Permission preset'), 'custom');
   await createDialog.getByLabel('collections.read').check();
   await createDialog.getByRole('button', { name: 'Create Administrator' }).click();
   await expect(page.getByRole('cell', { name: administratorEmail, exact: true })).toBeVisible();
@@ -382,7 +383,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   await signOut(page);
   expectRestrictedAdministratorDenials();
   await signIn(page, administratorEmail, administratorPassword);
-  await expect(page.locator('[data-owner-menu] summary')).toHaveAttribute('aria-label', 'Owner menu for ' + administratorEmail);
+  await expect(page.locator('[data-owner-menu] > button')).toHaveAttribute('aria-label', 'Owner menu for ' + administratorEmail);
 
 
   // Navigation 只显示该 Permission 允许的入口：collections.read 覆盖 Collections 与 API workspace；

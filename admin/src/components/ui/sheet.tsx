@@ -60,7 +60,7 @@ function SheetCloseButton({ className, ...props }: React.ComponentProps<typeof D
     <DialogPrimitive.Close
       data-slot="sheet-close"
       className={cn(
-        'grid size-8 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        'grid size-8 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none',
         className,
       )}
       {...props}

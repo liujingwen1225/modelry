@@ -1,6 +1,7 @@
+import { TabContent } from '../components/tab-content';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Download, RefreshCw } from 'lucide-react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, Navigate } from 'react-router-dom';
 import { Button, ButtonLink } from '../components/button';
 import { CopyButton } from '../components/copy-button';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
@@ -11,20 +12,18 @@ import { RequestsPage } from './requests';
 import { ApiEndpointBrowser } from './workspace';
 import { fetchApplicationAPIContract, type ApplicationAPIContract } from '../portability/client';
 
-// Spec 0001 §3 / §7.1：API 工作区是唯一的一级页面，四个 Tab 存在 URL 的 `?tab=` 里，
+// Spec 0001 §3 / §7.1：API 工作区是唯一的一级页面，三个 Tab 存在 URL 的 `?tab=` 里，
 // 因此分享、刷新与前进/后退都落在同一个工作面：
 //   endpoints（默认，端点浏览 + 内嵌 Runner）
-//   playground（全宽请求工作面）
 //   openapi（当前 Runtime 真实提供的契约 + 接入卡片）
 //   logs（应用请求日志，保留 search / filter / sort / cursor / collection）
 // 请求详情仍是独立路由 /api/requests/:requestId。
 
-const workspaceTabs = ['endpoints', 'playground', 'openapi', 'logs'] as const;
+const workspaceTabs = ['endpoints', 'openapi', 'logs'] as const;
 type WorkspaceTab = typeof workspaceTabs[number];
 
 const workspaceTabLabels: Record<WorkspaceTab, TranslationKey> = {
   endpoints: 'api.workspaceTabs.endpoints',
-  playground: 'api.workspaceTabs.playground',
   openapi: 'api.workspaceTabs.openapi',
   logs: 'api.workspaceTabs.logs',
 };
@@ -47,16 +46,23 @@ export function ApiWorkspacePage() {
 
   // Tab 是 URL 状态：用真实链接表达，可分享、可新开标签页、可前进后退（spec 0001 §15）。
   // 切换 Tab 只改 `tab`：collection / endpoint / runLimit / runSearch / runFilter / runSort
-  // 等共享上下文保留下来，从端点列表进入调试台时选中端点与输入因此不会丢（spec 0001 §7.1）。
+  // 等共享上下文保留下来，返回端点时仍恢复原来的请求输入（spec 0001 §7.1）。
   function tabTarget(tab: WorkspaceTab): string {
     const next = new URLSearchParams(params);
     next.set('tab', tab);
     return `/api?${next.toString()}`;
   }
 
+  // 先归一旧链接，再挂载端点工作面，避免端点初始化覆盖旧链接的参数。
+  if (params.get('tab') === 'playground') {
+    const next = new URLSearchParams(params);
+    next.set('tab', 'endpoints');
+    return <Navigate replace to={`/api?${next.toString()}`} />;
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
+      <header className="sr-only">
         <p className="eyebrow">API</p>
         <h1>{t('api.workspaceTitle')}</h1>
         <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('api.workspaceDescription')}</p>
@@ -75,7 +81,7 @@ export function ApiWorkspacePage() {
         {workspaceTabs.map((tab) => (
           <Link
             aria-current={activeTab === tab ? 'page' : undefined}
-            className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             key={tab}
             replace
             to={tabTarget(tab)}
@@ -85,25 +91,13 @@ export function ApiWorkspacePage() {
         ))}
       </nav>
 
-      {activeTab === 'endpoints' && <ApiEndpointBrowser variant="inline" />}
-      {activeTab === 'playground' && <PlaygroundTab />}
+    <TabContent activeKey={activeTab}>
+      {activeTab === 'endpoints' && <ApiEndpointBrowser />}
       {activeTab === 'openapi' && <OpenApiTab />}
       {activeTab === 'logs' && <RequestLogPage />}
+    </TabContent>
     </div>
   );
-}
-
-// 调试台：请求工作面占满整宽——方法/路径、参数与请求体、Run request，
-// 然后固定展示 Response 的 status、duration 与 Request ID（spec 0001 §7.1）。
-function PlaygroundTab() {
-  const { t } = useI18n();
-  return <div className="flex min-w-0 flex-col gap-4">
-    <header className="min-w-0">
-      <h2>{t('api.playgroundTitle')}</h2>
-      <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.playgroundDescription')}</p>
-    </header>
-    <ApiEndpointBrowser variant="workspace" />
-  </div>;
 }
 
 // /api?tab=logs：请求日志复用既有 RequestsPage 的筛选、分页与 allowlist 字段，
@@ -166,7 +160,7 @@ function OpenApiTab() {
   }
 
   return <div className="flex min-w-0 flex-col gap-4">
-    <header className="min-w-0">
+    <header className="sr-only">
       <h2>{t('api.openApiTabTitle')}</h2>
       <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.openApiTabDescription')}</p>
     </header>

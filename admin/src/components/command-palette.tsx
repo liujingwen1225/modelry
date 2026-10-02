@@ -1,3 +1,4 @@
+import { Button as ControlButton } from '@/components/ui/button';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Command, Search, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -213,9 +214,9 @@ export function CommandPaletteControl() {
   const shortcutName = /⌘/.test(shortcut) ? 'Meta+K' : 'Control+K';
   return (
     <>
-      <button
+      <ControlButton variant="unstyled"
         aria-keyshortcuts={shortcutName}
-        className="flex min-h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-card px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-[681px]:min-h-[34px] min-[681px]:gap-[7px] min-[681px]:px-2"
+        className="flex min-h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-card px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:min-h-[34px] min-[681px]:gap-[7px] min-[681px]:px-2"
         data-command-palette-trigger
         onClick={showPalette}
         ref={triggerRef}
@@ -225,7 +226,7 @@ export function CommandPaletteControl() {
         <Command aria-hidden="true" size={15} />
         <span className="hidden min-[901px]:inline">{t('shell.paletteTrigger')}</span>
         <kbd className="hidden rounded border border-border bg-secondary px-[5px] py-[3px] font-[inherit] text-[10px] leading-[1.2] whitespace-nowrap text-muted-foreground min-[901px]:inline-block">{shortcut}</kbd>
-      </button>
+      </ControlButton>
       {open && <CommandPaletteDialog commands={commands} context={context} onClose={closePalette} shortcut={shortcut} />}
     </>
   );

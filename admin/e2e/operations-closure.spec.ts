@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -255,8 +256,8 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   await page.goto(runtimeURL + '/collections/' + collectionId + '/security');
   await expect(page).toHaveURL(runtimeURL + '/collections/' + collectionId + '/access');
   await expect(page.getByRole('heading', { name: 'Simulate a request' })).toBeVisible();
-  await page.getByLabel('Operation').selectOption('list');
-  await page.getByLabel('Request identity').selectOption('anonymous');
+  await selectOption(page, page.getByLabel('Operation'), 'list');
+  await selectOption(page, page.getByLabel('Request identity'), 'anonymous');
   await page.getByRole('button', { name: 'Simulate' }).click();
   const deniedPanel = page.locator('[data-simulation-decision="deny"]');
   await expect(deniedPanel).toBeVisible();

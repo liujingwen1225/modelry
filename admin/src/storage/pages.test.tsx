@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -74,13 +75,13 @@ describe('File Storage Admin surface', () => {
     const fetchMock = setupFetch();
     render(<App />);
     await screen.findByRole('heading', { name: 'Files & storage' });
-    await userEvent.selectOptions(screen.getByLabelText('Provider'), 's3');
+    await selectOption(userEvent, screen.getByLabelText('Provider'), 's3');
     expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
     await userEvent.type(screen.getByLabelText('Endpoint'), 'https://s3.example.test');
     await userEvent.type(screen.getByLabelText('Region'), 'us-east-1');
     await userEvent.type(screen.getByLabelText('Bucket'), 'modelry');
-    await userEvent.selectOptions(screen.getByLabelText('Access key Secret'), 'sec_access');
-    await userEvent.selectOptions(screen.getByLabelText('Secret key Secret'), 'sec_secret');
+    await selectOption(userEvent, screen.getByLabelText('Access key Secret'), 'sec_access');
+    await selectOption(userEvent, screen.getByLabelText('Secret key Secret'), 'sec_secret');
     await userEvent.click(screen.getByRole('button', { name: 'Test connection' }));
     expect(await screen.findByText(/S3-compatible Storage is responding/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save provider' }));
@@ -95,7 +96,7 @@ describe('File Storage Admin surface', () => {
     setupFetch({ saveError: { status: 409, code: 'MIGRATION_REQUIRED' } });
     render(<App />);
     await screen.findByRole('heading', { name: 'Files & storage' });
-    await userEvent.selectOptions(screen.getByLabelText('Provider'), 's3');
+    await selectOption(userEvent, screen.getByLabelText('Provider'), 's3');
     await userEvent.click(screen.getByRole('button', { name: 'Save provider' }));
     expect(await screen.findByText(/Move the files before changing their storage location/)).toBeInTheDocument();
   });

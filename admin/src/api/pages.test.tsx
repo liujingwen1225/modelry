@@ -7,8 +7,8 @@ import { LocaleProvider } from '../i18n/i18n';
 import { CommandRegistryProvider } from '../components/command-registry';
 import { ApiWorkspacePage } from './pages';
 
-// Spec 0001 §3 / §7.1 / §9.1：API 工作区只有一个一级页面，四个 Tab 存在 URL 的 ?tab= 里，
-// 端点 / 调试台 / OpenAPI / 请求日志都要能在刷新与分享后回到同一个工作面。
+// Spec 0001 §3 / §7.1 / §9.1：API 工作区只有一个一级页面，三个 Tab 存在 URL 的 ?tab= 里，
+// 端点 / OpenAPI / 请求日志都要能在刷新与分享后回到同一个工作面。
 const mocks = vi.hoisted(() => ({
   getRequestRecord: vi.fn(),
   listRequestRecords: vi.fn(),
@@ -68,6 +68,7 @@ describe('API workspace tabs', () => {
     expect(screen.getByRole('navigation', { name: 'API workspace sections' })).toBeInTheDocument();
     // Tab 是 URL 状态，因此必须是真实链接（可分享、可新开标签页）。
     expect(screen.getByRole('link', { name: 'Endpoints' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'Request workspace' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /List records/ })).toBeInTheDocument();
   });
 
@@ -79,19 +80,27 @@ describe('API workspace tabs', () => {
     expect(await screen.findByRole('button', { name: /List records/ })).toBeInTheDocument();
   });
 
-  it('keeps the selected endpoint and its input when entering the request workspace', async () => {
-    const user = userEvent.setup();
-    renderWorkspace('/api?tab=endpoints&collection=col_posts&endpoint=createApplicationRecord&runSort=title');
+  it('opens legacy playground links in endpoints and preserves request context', async () => {
+    renderWorkspace('/api?tab=playground&collection=col_posts&endpoint=createApplicationRecord&runSort=title');
 
-    await user.click(await screen.findByRole('link', { name: 'Request workspace' }));
-
+    expect(await screen.findByRole('button', { name: 'Send POST request' })).toBeInTheDocument();
     const entry = screen.getByTestId('current-location').textContent ?? '';
-    expect(entry).toContain('tab=playground');
+    expect(entry).toContain('tab=endpoints');
     expect(entry).toContain('collection=col_posts');
     expect(entry).toContain('endpoint=createApplicationRecord');
     expect(entry).toContain('runSort=title');
-    expect(screen.getByRole('link', { name: 'Request workspace' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Endpoints' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'Request workspace' })).not.toBeInTheDocument();
+  });
+
+  it('preserves request context when switching between OpenAPI and endpoints', async () => {
+    const user = userEvent.setup();
+    renderWorkspace('/api?tab=endpoints&collection=col_posts&endpoint=createApplicationRecord&runSort=title');
+    await user.click(await screen.findByRole('link', { name: 'OpenAPI' }));
+    await screen.findByRole('heading', { name: 'OpenAPI contract' });
+    await user.click(screen.getByRole('link', { name: 'Endpoints' }));
     expect(await screen.findByRole('button', { name: 'Send POST request' })).toBeInTheDocument();
+    expect(screen.getByTestId('current-location').textContent).toContain('runSort=title');
   });
 
   it('shows the real contract and only real integration actions in the OpenAPI tab', async () => {

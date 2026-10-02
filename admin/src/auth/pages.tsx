@@ -1,7 +1,9 @@
+import { Input } from '@/components/ui/input';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, Check, CircleAlert, Command, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { ApiClientError } from '../api/client';
 import { Button } from '../components/button';
+import { ButtonAnchor } from '@/components/ui/button';
 import { FormField } from '../components/form-field';
 import { LoadingState, StatusChip } from '../components/states';
 import { Surface } from '../components/surface';
@@ -120,7 +122,7 @@ function AuthInput({
   const errorId = `${id}-error`;
   return (
     <FormField htmlFor={id} label={label}>
-      <input
+      <Input
         aria-describedby={error ? errorId : undefined}
         aria-invalid={error ? 'true' : undefined}
         autoComplete={autoComplete}
@@ -241,7 +243,7 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
     return (
       <AuthFrame eyebrow={t('ownerAuth.firstRun')} mode="setup">
         <div className="mb-5"><h1 className={titleClass}>{t('ownerAuth.setupAlreadyComplete')}</h1><p className={copyClass}>{t('ownerAuth.setupAlreadyCompleteDescription')}</p></div>
-        <a className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-input bg-card px-3.5 text-xs font-semibold text-ink-secondary transition-colors hover:border-primary hover:bg-accent-cta-soft hover:text-accent-cta-ink" href={loginHref}>{t('ownerAuth.signIn')} <ArrowRight aria-hidden="true" size={15} /></a>
+        <ButtonAnchor className="min-h-10 w-full" href={loginHref}>{t('ownerAuth.signIn')} <ArrowRight aria-hidden="true" size={15} /></ButtonAnchor>
       </AuthFrame>
     );
   }

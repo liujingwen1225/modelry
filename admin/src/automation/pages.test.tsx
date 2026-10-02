@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { selectOption } from '@/test-select';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -55,7 +56,7 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
     expect(screen.getByLabelText('Current URL')).toHaveTextContent('/events?tab=webhooks&q=mail');
   });
 
-  it('keeps tabs as shareable links that preserve the rest of the query', async () => {
+  it('keeps tabs shareable and restores each tab’s own filters', async () => {
     vi.stubGlobal('fetch', vi.fn((path: string) => {
       if (path === '/admin/api/v1/webhooks') return Promise.resolve(Response.json({ data: [] }));
       if (path === '/admin/api/v1/secrets') return Promise.resolve(Response.json({ data: [] }));
@@ -66,11 +67,12 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
     renderSurface('/events?tab=deliveries&status=failed');
     expect(await screen.findByRole('link', { name: 'Delivery history' })).toHaveAttribute('aria-current', 'page');
     const webhooks = screen.getByRole('link', { name: 'Webhooks' });
-    expect(webhooks).toHaveAttribute('href', '/events?tab=webhooks&status=failed');
+    expect(webhooks).toHaveAttribute('href', '/events?tab=webhooks');
     await user.click(webhooks);
 
-    expect(screen.getByLabelText('Current URL')).toHaveTextContent('/events?tab=webhooks&status=failed');
+    expect(screen.getByLabelText('Current URL')).toHaveTextContent('/events?tab=webhooks');
     expect(screen.getByRole('link', { name: 'Webhooks' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Delivery history' })).toHaveAttribute('href', '/events?tab=deliveries&status=failed');
   });
 
   it('creates a Webhook with a write-only Secret selector and keeps the search context', async () => {
@@ -96,19 +98,22 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
     renderSurface('/events?tab=webhooks&q=mail');
     await user.click(await screen.findByRole('button', { name: 'Create Webhook' }));
     expect(screen.getByLabelText('Current URL')).toHaveTextContent('/events?tab=webhooks&q=mail&create=1');
+    expect(await screen.findByRole('dialog', { name: 'New Webhook' })).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Billing receiver');
     await user.type(screen.getByLabelText('HTTPS destination'), 'https://billing.example.test/hooks');
-    await user.selectOptions(screen.getByLabelText('Signing Secret'), 'sec_mail');
+    await selectOption(user, screen.getByLabelText('Signing Secret'), 'sec_mail');
     expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
     expect(screen.queryByText('never-render-this-secret')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Webhook' }));
 
     expect(await screen.findByText('Created successfully.')).toBeInTheDocument();
+    expect(await screen.findByText('Billing receiver')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New Webhook' })).not.toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/webhooks', expect.objectContaining({
       method: 'POST', body: JSON.stringify({ name: 'Billing receiver', targetUrl: 'https://billing.example.test/hooks', signingSecretId: 'sec_mail' }),
     }));
     expect(screen.getByLabelText('Current URL')).toHaveTextContent('/events?tab=webhooks&q=mail');
-    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+    await user.clear(screen.getByRole('searchbox'));
     expect(await screen.findByText('Billing receiver')).toBeInTheDocument();
     expect(screen.queryByText('never-render-this-secret')).not.toBeInTheDocument();
   });
@@ -131,7 +136,7 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
     await user.click(await screen.findByRole('button', { name: 'Create Webhook' }));
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Receiver');
     await user.type(screen.getByRole('textbox', { name: /HTTPS destination/ }), privateValue);
-    await user.selectOptions(screen.getByLabelText('Signing Secret'), 'sec_mail');
+    await selectOption(user, screen.getByLabelText('Signing Secret'), 'sec_mail');
     await user.click(screen.getByRole('button', { name: 'Save Webhook' }));
 
     expect(await screen.findByText('Enter an allowed HTTPS URL.')).toBeInTheDocument();
@@ -197,11 +202,12 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
 
     renderSurface('/events?tab=triggers&q=order');
     await user.click(await screen.findByRole('button', { name: 'Create event trigger' }));
+    expect(await screen.findByRole('dialog', { name: 'New event trigger' })).toBeInTheDocument();
     expect(screen.getByText(/including applicable before and after field values/)).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Order created');
-    await user.selectOptions(screen.getByLabelText('Collection'), 'col_orders');
-    await user.selectOptions(screen.getByLabelText('Record Event'), 'record.created');
-    await user.selectOptions(screen.getByLabelText('Webhook'), 'whk_mail');
+    await selectOption(user, screen.getByLabelText('Collection'), 'col_orders');
+    await selectOption(user, screen.getByLabelText('Record Event'), 'record.created');
+    await selectOption(user, screen.getByLabelText('Webhook'), 'whk_mail');
     await user.click(screen.getByRole('button', { name: 'Save event trigger' }));
 
     expect(await screen.findByText('Created successfully.')).toBeInTheDocument();
@@ -221,6 +227,7 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
 
     renderSurface('/events?tab=triggers');
     await user.click(await screen.findByRole('button', { name: 'Create event trigger' }));
+    expect(await screen.findByRole('dialog', { name: 'New event trigger' })).toBeInTheDocument();
 
     expect(screen.getByRole('link', { name: 'Create Webhook' })).toHaveAttribute('href', '/events?tab=webhooks&create=1');
   });
@@ -239,8 +246,9 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
 
     renderSurface('/schedules?tab=jobs');
     await user.click(await screen.findByRole('button', { name: 'Create scheduled trigger' }));
+    expect(await screen.findByRole('dialog', { name: 'New scheduled trigger' })).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Daily report');
-    await user.selectOptions(screen.getByLabelText('Webhook'), 'whk_mail');
+    await selectOption(user, screen.getByLabelText('Webhook'), 'whk_mail');
     const cron = screen.getByRole('textbox', { name: /Cron schedule/ });
     await user.type(cron, '0 9 * * *');
     expect(screen.getByText(/Next run preview \(UTC\)/)).toBeInTheDocument();

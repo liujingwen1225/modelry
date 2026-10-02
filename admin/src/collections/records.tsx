@@ -1,9 +1,15 @@
+import { Button as ControlButton } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { SearchInput } from '@/components/ui/search-input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ChevronLeft, ChevronRight, Clock3, Download, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, Download, Plus, RefreshCw, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
-import { Input } from '@/components/ui/input';
+import { Input, Textarea } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '../components/button';
 import { FormField } from '../components/form-field';
@@ -34,7 +40,6 @@ type Violation = { path?: string; message?: string; code?: string };
 type FilterDraft = { field: string; operator: string; value: string };
 
 // 工具栏内的筛选/排序控件共享同一套紧凑外观，直接对齐 FormField 中的原生 select/input 视觉。
-const toolbarControlClass = 'min-h-8 rounded-lg border border-input bg-card px-2.5 text-xs text-ink-secondary outline-none transition-[color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-55';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -118,8 +123,8 @@ function cursorHistory(searchParams: URLSearchParams) {
 function RecordPageTitle({ collection, onCreate }: { collection: Collection; onCreate: () => void }) {
   const { t } = useI18n();
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4" data-record-heading>
-      <div className="min-w-0">
+    <header className="flex min-w-0 flex-wrap items-center justify-end gap-3" data-record-heading>
+      <div className="sr-only">
         {/* 集合名可能是不含断点的长标识符，必须允许在任意位置换行（spec 0001 §16.1 不允许横向溢出）。 */}
         <p className="eyebrow [overflow-wrap:anywhere]">{collection.name} · {t('records.dataEyebrow')}</p>
         <h1>{t('records.title')}</h1>
@@ -309,51 +314,41 @@ export function CollectionRecordsPage() {
       <RecordPageTitle collection={collection} onCreate={openCreate} />
       {message && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><span className="min-w-0 flex-1">{t(message)}</span><Button aria-label={t('records.dismissMessage')} className="size-8 px-0" onClick={() => setMessage('')} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} /></Button></div>}
       <Surface className="flex flex-wrap items-center gap-3 p-3" variant="standard">
-        <label className="relative flex min-w-[200px] flex-1 items-center md:max-w-sm">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 text-muted-foreground" size={15} />
-          <span className="sr-only">{t('records.search')}</span>
-          <Input aria-label={t('records.search')} className="pl-9" onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} type="search" value={search} />
-        </label>
-        <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
-          <select aria-label={t('records.filterField')} className={toolbarControlClass} onChange={(event) => updateParams({ filterField: event.target.value || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field}>
-            <option value="">{t('records.noFilter')}</option>{availableFilterFields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}
-          </select>
-        </label>
+        <SearchInput aria-label={t('records.search')} onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
+        <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
+          <SelectField aria-label={t('records.filterField')} onValueChange={(selectedValue) => updateParams({ filterField: selectedValue || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field} options={[({ value: "", label: t('records.noFilter') }), availableFilterFields.map((field) => ({ value: field.name, label: field.name }))]} />
+        </Label>
         {filterDraft.field && <>
-          <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterOperator')}</span>
-            <select aria-label={t('records.filterOperator')} className={toolbarControlClass} onChange={(event) => {
-              const draft = { ...filterDraft, operator: event.target.value };
+          <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterOperator')}</span>
+            <SelectField aria-label={t('records.filterOperator')} onValueChange={(selectedValue) => {
+              const draft = { ...filterDraft, operator: selectedValue };
               updateParams({ filterOperator: draft.operator, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
-            }} value={filterDraft.operator}>
-              {(filterDraft.field && availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'text'
+            }} value={filterDraft.operator} options={[(filterDraft.field && availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'text'
                 ? ['eq', 'ne', 'contains']
                 : availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'number' || availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'dateTime'
-                  ? ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] : ['eq', 'ne']).map((operator) => <option key={operator} value={operator}>{operator}</option>)}
-            </select>
-          </label>
-          <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterValue')}</span>
+                  ? ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] : ['eq', 'ne']).map((operator) => ({ value: operator, label: operator }))]} />
+          </Label>
+          <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterValue')}</span>
             {availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'boolean'
-              ? <select aria-label={t('records.filterValue')} className={toolbarControlClass} onChange={(event) => {
-                const value = event.target.value;
+              ? <SelectField aria-label={t('records.filterValue')} onValueChange={(selectedValue) => {
+                const value = selectedValue;
                 const draft = { ...filterDraft, value };
                 updateParams({ filterValue: value, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
-              }} value={filterDraft.value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>
-              : <input aria-label={t('records.filterValue')} className={`${toolbarControlClass} w-[118px]`} onChange={(event) => {
+              }} value={filterDraft.value || 'true'} options={[({ value: "true", label: t('common.yes') }), ({ value: "false", label: t('common.no') })]} />
+              : <Input aria-label={t('records.filterValue')} className="w-[118px]" onChange={(event) => {
                 const field = availableFilterFields.find((item) => item.name === filterDraft.field);
                 const draft = { ...filterDraft, value: event.target.value };
                 const syntax = filterSyntax(draft, field);
                 updateParams({ filterValue: event.target.value || undefined, filter: syntax || undefined }, true);
               }} placeholder={t('records.value')} type={availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'number' ? 'number' : 'search'} value={filterDraft.value} />}
-          </label>
+          </Label>
           <Button aria-label={t('records.clearFilter')} onClick={() => updateParams({ filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small" variant="quiet"><X aria-hidden="true" size={14} /></Button>
         </>}
-        <label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span>{t('records.sort')}</span>
-          <select aria-label={t('records.sortField')} className={toolbarControlClass} onChange={(event) => updateParams({ sort: `${event.target.value} ${currentSortDirection}` }, true)} value={currentSortField}>
-            <option value="createdAt">{t('records.created')}</option><option value="updatedAt">{t('records.updated')}</option><option value="id">{t('records.id')}</option>{fields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}
-          </select>
-          <select aria-label={t('records.sortDirection')} className={toolbarControlClass} onChange={(event) => updateParams({ sort: `${currentSortField} ${event.target.value}` }, true)} value={currentSortDirection}><option value="desc">{t('records.newest')}</option><option value="asc">{t('records.oldest')}</option></select>
-        </label>
-        <details className="relative ml-auto"><summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</summary><div className="absolute right-0 top-[calc(100%+5px)] z-30 grid min-w-[160px] gap-2 rounded-lg border bg-card p-2.5 text-xs shadow-floating">{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <label className="flex items-center gap-2 text-ink-secondary" key={name}><input checked={visibleColumns.includes(name)} className="accent-primary" onChange={(event) => toggleColumn(name, event.target.checked)} type="checkbox" />{name}</label>)}</div></details>
+        <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span>{t('records.sort')}</span>
+          <SelectField aria-label={t('records.sortField')} onValueChange={(selectedValue) => updateParams({ sort: `${selectedValue} ${currentSortDirection}` }, true)} value={currentSortField} options={[({ value: "createdAt", label: t('records.created') }), ({ value: "updatedAt", label: t('records.updated') }), ({ value: "id", label: t('records.id') }), fields.map((field) => ({ value: field.name, label: field.name }))]} />
+          <SelectField aria-label={t('records.sortDirection')} onValueChange={(selectedValue) => updateParams({ sort: `${currentSortField} ${selectedValue}` }, true)} value={currentSortDirection} options={[({ value: "desc", label: t('records.newest') }), ({ value: "asc", label: t('records.oldest') })]} />
+        </Label>
+        <div className="relative ml-auto"><Popover><PopoverTrigger className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</PopoverTrigger><PopoverContent><div className="grid min-w-[160px] gap-2 text-xs">{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <Label className="flex items-center gap-2 text-ink-secondary" key={name}><Checkbox checked={visibleColumns.includes(name)} onCheckedChange={(checked) => toggleColumn(name, checked)} />{name}</Label>)}</div></PopoverContent></Popover></div>
       </Surface>
 
       {state === 'loading' && <LoadingState label={t('records.loading')} />}
@@ -370,7 +365,7 @@ export function CollectionRecordsPage() {
           </TableHeader>
           <TableBody>
             {page.data.map((record) => <TableRow key={record.id}>
-              {visibleColumns.map((name) => <TableCell className="max-w-[320px]" key={name}><button className={`block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-xs hover:text-primary ${name === visibleColumns[0] ? 'font-semibold text-primary' : 'text-ink-secondary'}`} onClick={() => openRecord(record.id)} type="button">{name === 'createdAt' || name === 'updatedAt' ? displayDate(record[name], formatDate) : formatValue(record[name], t)}</button></TableCell>)}
+              {visibleColumns.map((name) => <TableCell className="max-w-[320px]" key={name}><ControlButton variant="unstyled" className={`block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-xs hover:text-primary ${name === visibleColumns[0] ? 'font-semibold text-primary' : 'text-ink-secondary'}`} onClick={() => openRecord(record.id)} type="button">{name === 'createdAt' || name === 'updatedAt' ? displayDate(record[name], formatDate) : formatValue(record[name], t)}</ControlButton></TableCell>)}
               <TableCell className="w-px whitespace-nowrap"><div className="flex justify-end gap-1">{collection.type !== 'Auth' && <><Button onClick={() => openRecord(record.id, true)} size="small" variant="quiet">{t('records.edit')}</Button><Button aria-label={t('records.deleteRecordLabel', { id: record.id })} onClick={() => { setRowDeleteTarget(record); setRowDeleteError(undefined); }} size="small" variant="danger">{t('records.delete')}</Button></>}</div></TableCell>
             </TableRow>)}
           </TableBody>
@@ -650,8 +645,8 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
           value={values[field.name] ?? ''}
         />)}
         {collection.type === 'Auth' && isNew && <section className="grid gap-2 border-b pb-2.5"><h3 className="m-0 text-xs font-semibold text-foreground">{t('records.authentication')}</h3>
-          <FormField htmlFor="record-user-password" label={t('records.password')}><input autoComplete="new-password" disabled={saving} id="record-user-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField>
-          <FormField htmlFor="record-user-confirm-password" label={t('records.confirmPassword')}><input autoComplete="new-password" disabled={saving} id="record-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>
+          <FormField htmlFor="record-user-password" label={t('records.password')}><Input autoComplete="new-password" disabled={saving} id="record-user-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField>
+          <FormField htmlFor="record-user-confirm-password" label={t('records.confirmPassword')}><Input autoComplete="new-password" disabled={saving} id="record-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>
           {fieldErrors.confirmPassword && <span className="text-[11px] font-semibold text-danger" role="alert">{fieldErrors.confirmPassword}</span>}
         </section>}
         <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5" data-record-editor-actions><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={saving || Object.values(uploading).some(Boolean)} type="submit" variant="primary">{saving ? t('records.saving') : isNew ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : t('records.saveChanges')}</Button></div>
@@ -686,8 +681,8 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
   const inputType = field.type === 'files' ? 'file' : fieldInputType(field);
   let control;
   switch (inputType) {
-    case 'boolean': control = <select disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} value={value}><option value="">{t('records.notSet')}</option><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>; break;
-    case 'json': control = <textarea disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} rows={5} value={value} />; break;
+    case 'boolean': control = <SelectField disabled={disabled} id={inputId} onValueChange={(selectedValue) => onValue(selectedValue)} value={value} options={[({ value: "", label: t('records.notSet') }), ({ value: "true", label: t('common.yes') }), ({ value: "false", label: t('common.no') })]} />; break;
+    case 'json': control = <Textarea disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} rows={5} value={value} />; break;
     case 'file': {
       const rules = fileRules(field);
       if (field.type === 'files') {
@@ -708,7 +703,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
               </li>;
             })}
           </ul>
-          <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFilesLabel', { name: field.name })} className="w-full rounded-lg border border-dashed! border-input !bg-secondary p-1.5 text-[11px] text-ink-secondary file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px] file:font-semibold" disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
+          <Input accept={rules.allowed.join(',')} aria-label={t('records.fieldFilesLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
           <small className="text-[11px] text-muted-foreground">{t('records.filesHint', { max: rules.maxFiles, size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
           {list.length >= rules.maxFiles && <span className="text-[11px] font-semibold text-danger" role="alert">{t('records.maxFilesReached')}</span>}
           {uploading && <span className="text-[11px] text-muted-foreground" role="status">{t('records.uploading')}</span>}
@@ -718,7 +713,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
       }
       control = <div className="grid gap-2">
         {Boolean(record?.[field.name]) && <span className="flex items-center justify-between gap-2 text-[11px] text-ink-secondary">{t('records.fileAttachedToRecord')} <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">{t('records.replace')}</Button></span>}
-        <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFileLabel', { name: field.name })} className="w-full rounded-lg border border-dashed! border-input !bg-secondary p-1.5 text-[11px] text-ink-secondary file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px] file:font-semibold" disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
+        <Input accept={rules.allowed.join(',')} aria-label={t('records.fieldFileLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
         <small className="text-[11px] text-muted-foreground">{t('records.fileHint', { size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
         {uploading && <span className="text-[11px] text-muted-foreground" role="status">{t('records.uploading')}</span>}
         {upload && <span className="text-[11px] text-muted-foreground" role="status">{t('records.fileReady', { type: upload.contentType, size: formatNumber(upload.size) })}</span>}
@@ -726,7 +721,7 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
       </div>;
       break;
     }
-    default: control = <input autoComplete="off" disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} step={inputType === 'number' ? 'any' : undefined} type={inputType === 'number' ? 'number' : inputType === 'dateTime' ? 'datetime-local' : 'text'} value={value} />;
+    default: control = <Input autoComplete="off" disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} step={inputType === 'number' ? 'any' : undefined} type={inputType === 'number' ? 'number' : inputType === 'dateTime' ? 'datetime-local' : 'text'} value={value} />;
   }
   return <FormField htmlFor={inputId} hint={hint} label={`${field.name}${field.required ? t('records.required') : ''}`}>
     {control}
