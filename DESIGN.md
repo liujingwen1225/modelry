@@ -754,18 +754,29 @@ Local settings nav | Settings content
 
 ## 17. Focus、Keyboard 与 Accessibility
 
-### 17.1 Focus Ring
+### 17.1 Focus State
 
-**禁止全局清除 focus-visible 而不提供替代。**
+**Focus 必须可见，但不默认增加额外外圈。**
 
-所有交互组件必须统一使用可见 focus：
+Modelry 优先使用与 Quiet Workbench 一致的低装饰焦点反馈：
 
-- 2px semantic ring；
-- 足够 offset；
-- Light/Dark 都可见；
-- Sticky / Overlay 不遮挡。
+1. 轻微背景变化；
+2. 原有边框颜色或对比度增强；
+3. inset highlight / inset shadow；
+4. 文字或图标对比度轻微增强；
+5. 输入框、编辑器等需要明确输入焦点的控件，必要时才使用轻量 ring。
 
-不得使用：
+要求：
+
+- 键盘 Tab 移动时必须能判断当前焦点；
+- 鼠标点击不应无意义地出现强烈焦点装饰；
+- Light / Dark 都必须清晰可辨；
+- Focus 不新增第二层厚边框，不形成“一圈套一圈”的视觉效果；
+- Sticky / Overlay 不得遮挡焦点状态。
+
+可以移除浏览器默认 outline，但前提是组件提供了等价且可见的 focus state。
+
+不允许仅写：
 
 ~~~css
 :focus-visible {
@@ -774,7 +785,7 @@ Local settings nav | Settings content
 }
 ~~~
 
-除非同一组件立即提供等价、可见的 ring。
+然后没有任何可见替代状态。
 
 ### 17.2 Touch / Pointer Target
 
@@ -829,7 +840,7 @@ Local settings nav | Settings content
 - 让异常比正常状态更显眼；
 - 使用 shadcn/Base UI 作为通用原语；
 - 保证页面标题可见；
-- 保证 Focus 可见；
+- 保证 Focus 可见，但优先使用背景、现有边框或 inset 状态，不默认增加外圈；
 - 保证 44px hit target；
 - 使用 URL 保存可共享工作状态；
 - 中英文使用同一视觉层级；
@@ -844,7 +855,7 @@ Local settings nav | Settings content
 - 不要用 Emoji 做交互图标；
 - 不要隐藏页面标题只留下工具栏；
 - 不要为了“密度”缩小点击目标；
-- 不要全局关闭 focus ring；
+- 不要在没有替代状态的情况下全局关闭 focus-visible；
 - 不要给普通页面 Surface 使用大阴影；
 - 不要在页面里重新手写 Button / Input / Select / Dialog；
 - 不要让 Dashboard 指标压过真实工作对象；
@@ -916,7 +927,7 @@ components/modelry/
 
 ### P1 — Design-system correctness
 
-1. 恢复统一可见 focus ring；
+1. 建立统一可见、低装饰的 focus state；
 2. 正常 UI 字号全部提升到 ≥12px；
 3. 主要交互目标达到 ≥44px；
 4. 响应式断点与 390 / 768 / 1024 / 1440 对齐。
