@@ -11,7 +11,8 @@
 7. docs/05-product-experience-and-acceptance.md
 8. docs/06-product-architecture.md
 9. docs/specs/0001-admin-product-ux-spec.md
-10. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
+10. DESIGN.md（涉及 Admin / 前端 / UI / UX 实现时必须读取）
+11. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
 
 ## 当前产品定位
 
@@ -103,6 +104,16 @@ V0.1.x 产品成熟化已经完成。实时订阅、钩子、密钥配置、Webh
 - 先定义契约，再实现传输层。
 - Go 核心不要求用户编写 Go 插件；扩展面向 JavaScript / TypeScript。
 - 外部副作用不得被描述为可回滚数据库事务。
+
+## 前端设计规则
+
+涉及 Admin / 前端 / UI / UX 的实现必须同时遵守：
+
+- `docs/specs/0001-admin-product-ux-spec.md`：产品体验、信息架构、页面职责、用户旅程、状态与 URL；
+- `DESIGN.md`：视觉语言、排版、密度、Surface、组件组合、响应式与交互反馈；
+- `admin/src/components/ui/*`：shadcn/ui + Base UI 通用交互原语。
+
+不得通过页面级手写样式绕过设计系统重新建立第二套 Button、Input、Table、Dialog、Sheet、Badge 或状态体系。产品页面优先使用连续画布、层级、留白和分隔线组织内容，避免 Card Everywhere。
 
 ## 界面术语
 
