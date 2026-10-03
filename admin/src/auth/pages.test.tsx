@@ -20,6 +20,7 @@ describe('Owner bootstrap page', () => {
     await render(<BootstrapPage />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Checking project setup');
+    await waitFor(() => expect(resolveStatus).toBeTypeOf('function'));
     resolveStatus?.(Response.json({ state: 'required' }));
 
     expect(await screen.findByRole('heading', { name: 'Create your Modelry owner' })).toBeInTheDocument();
@@ -78,7 +79,7 @@ describe('Owner bootstrap page', () => {
         error: {
           code: 'VALIDATION_FAILED',
           message: 'The Owner could not be created.',
-          details: { violations: [{ path: '/email', code: 'INVALID', message: 'Enter a valid email address.' }] },
+          details: { violations: [{ path: '/email', code: 'INVALID_EMAIL', message: 'Enter a valid email address.' }] },
           hint: 'Correct the email and retry.',
           requestId: 'req_bootstrap_validation',
         },

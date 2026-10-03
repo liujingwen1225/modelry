@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -6,7 +7,9 @@ import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type RuntimeProcess = ChildProcessWithoutNullStreams;
 type ReadyRecord = { state: string; url: string; projectId: string };
@@ -59,11 +62,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
     ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0']
     : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'files-storage');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + stderr)), 60_000);
+    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + redactRuntimeText(stderr))), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -88,12 +92,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + stderr));
+      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + redactRuntimeText(stderr)));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error('Invalid READY record: ' + JSON.stringify(record));
@@ -252,6 +256,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('files-storage');
   if (fakeS3) await fakeS3.close();
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
@@ -283,13 +288,13 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
 
   // Collection with a required text field and an ordered files field.
   await page.getByLabel('Collection name').fill('documents');
-  const titleFieldRow = page.locator('.initial-field-row').nth(0);
+  const titleFieldRow = page.locator('[data-initial-field-row]').nth(0);
   await titleFieldRow.getByLabel('Field name 1').fill('title');
   await titleFieldRow.getByLabel('Required', { exact: true }).check();
   await titleFieldRow.getByLabel('Field name 1').press('Enter');
-  const filesFieldRow = page.locator('.initial-field-row').nth(1);
+  const filesFieldRow = page.locator('[data-initial-field-row]').nth(1);
   await filesFieldRow.getByLabel('Field name 2').fill('attachments');
-  await filesFieldRow.getByLabel('Type', { exact: true }).selectOption('files');
+  await selectOption(page, filesFieldRow.getByLabel('Type', { exact: true }), 'files');
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'documents' })).toBeVisible();
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
@@ -303,7 +308,7 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
     { name: 'second.txt', mimeType: 'text/plain', buffer: Buffer.from('second attachment bytes') },
   ]);
   await expect(page.getByText('first attachment bytes', { exact: false })).toHaveCount(0);
-  await page.locator('.record-editor-actions button[type="submit"]').click();
+  await page.locator('[data-record-editor-actions] button[type="submit"]').click();
   await expect(page.getByRole('heading', { name: /quarterly bundle|documents/ })).toBeVisible();
 
   const listed = await requestJSON(page, 'GET', '/admin/api/v1/collections/' + encodeURIComponent(collectionId) + '/records?limit=10');
@@ -331,16 +336,17 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
   await expect(page.getByRole('heading', { name: 'Files & storage' })).toBeVisible();
   await expect(page.getByText('Local', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Referenced files')).toBeVisible();
-  await expect(page.locator('.storage-status__facts')).toContainText('2');
+  await expect(page.locator('[data-storage-status-facts]')).toContainText('2');
 
-  // Two write-only Secrets hold the S3 credentials.
+  // Two write-only Secrets hold the S3 credentials. 旧 `/secrets` 深链归一为系统设置的 Secrets 分节。
   await page.goto(runtimeURL + '/secrets');
+  await expect(page).toHaveURL(runtimeURL + '/settings/secrets');
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   for (const secret of [{ name: 'S3 access key', value: s3AccessKey }, { name: 'S3 secret key', value: s3SecretKey }]) {
     await page.locator('#secret-name').fill(secret.name);
     await page.locator('#secret-value').fill(secret.value);
     const created2 = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/secrets');
-    await page.locator('.extension-secret-create form button[type="submit"]').click();
+    await page.locator('[data-extension-secret-create] form button[type="submit"]').click();
     expect((await created2).status()).toBe(201);
     await expect(page.locator('body')).not.toContainText(secret.value);
   }
@@ -348,22 +354,22 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
   // Configure the S3-compatible Provider and prove that referenced objects require a migration first.
   await page.goto(runtimeURL + '/settings/storage');
   await expect(page.getByRole('heading', { name: 'Files & storage' })).toBeVisible();
-  await page.getByLabel('Provider').selectOption('s3');
+  await selectOption(page, page.getByLabel('Provider'), 's3');
   await page.getByLabel('Endpoint').fill(fakeS3!.url);
   await page.getByLabel('Region').fill('us-east-1');
   await page.getByLabel('Bucket').fill(bucketName);
   await page.getByLabel('Key prefix').fill('modelry');
-  await page.getByLabel('Access key Secret').selectOption({ label: 'S3 access key' });
-  await page.getByLabel('Secret key Secret').selectOption({ label: 'S3 secret key' });
+  await selectOption(page, page.getByLabel('Access key Secret'), { label: 'S3 access key' });
+  await selectOption(page, page.getByLabel('Secret key Secret'), { label: 'S3 secret key' });
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByText(/S3-compatible Storage is responding/)).toBeVisible();
   expectedHTTPFailures.add('409 ' + new URL('/admin/api/v1/storage/files/provider', runtimeURL).toString());
   await page.getByRole('button', { name: 'Save provider' }).click();
-  await expect(page.getByText(/Start a migration before changing the Provider/)).toBeVisible();
+  await expect(page.getByText('Files are still in use. Move the files before changing their storage location.')).toBeVisible();
 
   // Start the durable migration and wait for the Provider switch.
   const migrationResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/storage/files/migrations');
-  await page.getByRole('button', { name: /Start migration/ }).click();
+  await page.getByRole('button', { name: /Move files/ }).click();
   const started = await migrationResponse;
   expect(started.status()).toBe(202);
   const migrationId = ((await started.json()) as { data: { id: string } }).data.id;

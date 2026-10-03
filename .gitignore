@@ -6,3 +6,10 @@ admin/playwright-report/
 admin/coverage/
 .env
 .env.*
+.codebuddy
+.workbuddy
+.idea
+.agents/
+.modelry-dev/
+/modelry
+/modelry.exe

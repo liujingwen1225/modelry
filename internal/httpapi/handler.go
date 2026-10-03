@@ -49,6 +49,8 @@ type StorageStatusResponse struct {
 	Database     Health             `json:"database"`
 	LocalStorage LocalStorageHealth `json:"localStorage"`
 	FileStorage  FileStorageHealth  `json:"fileStorage"`
+	// DatabaseSizeBytes 可读时为 SQLite 主数据库字节数；不可读时省略，界面显示 Unavailable。
+	DatabaseSizeBytes *int64 `json:"databaseSizeBytes,omitempty"`
 }
 
 type Diagnostics interface {
@@ -152,6 +154,7 @@ func storageStatusResponse(status diagnostics.StorageStatus) StorageStatusRespon
 			Message:        status.FileStorage.Message,
 			Hint:           status.FileStorage.Hint,
 		},
+		DatabaseSizeBytes: status.DatabaseSizeBytes,
 	}
 }
 

@@ -1,10 +1,13 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type ReadyRecord = { state: string; url: string; projectId: string };
 type RuntimeProcess = ChildProcessWithoutNullStreams;
@@ -41,7 +44,6 @@ let runtimeDirectory = '';
 let projectRoot = '';
 let runtimeBinary = '';
 let runtimeLauncher = '';
-let retentionFixture = '';
 let runtimeProcess: RuntimeProcess | undefined;
 let runtimeProcessId: number | undefined;
 let runtimeURL = '';
@@ -80,11 +82,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
     ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0']
     : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'realtime-events');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${stderr}`)), 60_000);
+    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${redactRuntimeText(stderr)}`)), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -109,12 +112,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${stderr}`));
+      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${redactRuntimeText(stderr)}`));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error(`Invalid READY record: ${JSON.stringify(record)}`);
@@ -297,7 +300,7 @@ async function expectOwnerSessionAfterRestart(page: Page) {
   await page.goto(runtimeURL);
   expect((await restoredSession).status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await expect(page.locator('.topbar')).toContainText(ownerEmail);
+  await expect(page.locator('[data-shell-topbar]')).toContainText(ownerEmail);
 }
 
 test.beforeAll(async () => {
@@ -306,9 +309,7 @@ test.beforeAll(async () => {
   await mkdir(projectRoot);
   buildAdmin();
   runtimeBinary = path.join(runtimeDirectory, process.platform === 'win32' ? 'modelry.exe' : 'modelry');
-  retentionFixture = path.join(runtimeDirectory, process.platform === 'win32' ? 'retention-fixture.exe' : 'retention-fixture');
   runChecked(goCommand, ['build', '-o', runtimeBinary, './cmd/modelry'], repositoryRoot);
-  runChecked(goCommand, ['build', '-o', retentionFixture, './admin/e2e/retention-fixture'], repositoryRoot);
   if (process.platform === 'win32') {
     runtimeLauncher = path.join(runtimeDirectory, 'modelry-e2e-launcher.exe');
     runChecked(goCommand, ['build', '-o', runtimeLauncher, './admin/e2e/windows-runtime-launcher'], repositoryRoot);
@@ -325,6 +326,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('realtime-events');
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
 
@@ -371,11 +373,13 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
   expect(collectionId).toMatch(/^col_/);
 
+  // 旧 `/collections/:id/security` 深链归一为新的 `/collections/:id/access` 访问规则工作面。
   await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/security`);
+  await expect(page).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/access`);
   await page.getByRole('button', { name: 'Edit List access' }).click();
   await page.getByLabel('Custom rule').check();
   await page.getByRole('button', { name: 'Add condition', exact: true }).click();
-  await page.getByLabel('Condition 1 field').selectOption({ label: 'visibility' });
+  await selectOption(page, page.getByLabel('Condition 1 field'), { label: 'visibility' });
   await page.getByLabel('Condition value', { exact: true }).fill('public');
   await page.getByRole('button', { name: 'Save pending rule' }).click();
   await page.getByRole('button', { name: /Apply 1 change/ }).click();
@@ -384,19 +388,19 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
 
   await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/api?tab=realtime`);
   await expect(page.getByRole('heading', { name: 'Committed Record Events' })).toBeVisible();
-  await expect(page.locator('.api-realtime__metadata')).toContainText('Custom rule');
-  await expect(page.locator('.api-realtime__metadata')).toContainText(`/api/v1/posts/events`);
-  await expect(page.locator('.api-realtime__example code')).toContainText("headers['Last-Event-ID']");
+  await expect(page.locator('[data-api-realtime-metadata]')).toContainText('Custom rule');
+  await expect(page.locator('[data-api-realtime-metadata]')).toContainText(`/api/v1/posts/events`);
+  await expect(page.locator('[data-api-realtime-example] code')).toContainText("headers['Last-Event-ID']");
 
-  await page.locator('.topbar').getByRole('button', { name: 'Search commands' }).click();
+  await page.locator('[data-shell-topbar]').getByRole('button', { name: 'Search commands' }).click();
   let palette = page.getByRole('dialog', { name: 'Command palette' });
   let paletteInput = palette.getByRole('combobox', { name: 'Search commands' });
   await paletteInput.fill('Open current Collection Realtime events');
   await expect(palette.getByRole('option', { name: 'Open current Collection Realtime events' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN');
+  await page.getByRole('button', { name: 'Switch language to Simplified Chinese' }).click();
   await expect(page.getByRole('heading', { name: '已提交的记录事件' })).toBeVisible();
-  await expect(page.locator('.api-realtime__example code')).toContainText('设置应用会话 token');
+  await expect(page.locator('[data-api-realtime-example] code')).toContainText('设置应用会话 token');
   await page.getByRole('button', { name: '搜索命令' }).click();
   palette = page.getByRole('dialog', { name: '命令面板' });
   paletteInput = palette.getByRole('combobox', { name: '搜索命令' });
@@ -405,9 +409,9 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/api?tab=realtime`);
   await expect(page.getByRole('heading', { name: '已提交的记录事件' })).toBeVisible();
-  await page.getByRole('combobox', { name: '语言' }).selectOption('en');
+  await page.getByRole('button', { name: '切换语言为 English' }).click();
   await expect(page.getByRole('heading', { name: 'Committed Record Events' })).toBeVisible();
-  await page.locator('.topbar').getByRole('button', { name: 'Switch to dark theme' }).click();
+  await page.locator('[data-shell-topbar]').getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   await startStream(page);
@@ -467,7 +471,6 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   expect(restartStream?.persisted).toBe('true');
   const expiredCursor = reconnectId ?? '';
   expect(expiredCursor).toMatch(/^evt_/);
-  const expiredSequence = Number(expiredCursor.slice(-20));
   await stopStream(page);
 
   const unreadStreamURL = new URL('/api/v1/posts/events', runtimeURL).toString();
@@ -489,10 +492,13 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
     return unreadRequest.status === 200 && (data?.durationMs ?? 0) > 0 && (data?.responseSizeBytes ?? 0) > 64 * 1024;
   }, { timeout: 10_000 }).toBe(true);
 
-  await stopRuntime();
+  // Cross the Runtime's 64 MiB Event retention bound through authenticated Record writes.
+  const retentionTitle = `RETENTION_WINDOW_${'r'.repeat(600 * 1024)}`;
+  for (let index = 0; index < 120; index += 1) {
+    await createRecordOutsideBrowser(page, collectionId, `${index}_${retentionTitle}`, 'public');
+  }
 
-  const databasePath = path.join(projectRoot, '.modelry', 'project.sqlite');
-  execFileSync(retentionFixture, [databasePath, collectionId, String(expiredSequence + 1)], { cwd: repositoryRoot, stdio: 'inherit' });
+  await stopRuntime();
   const recoveredRuntime = await startRuntime(projectRoot);
   expect(recoveredRuntime.projectId).toBe(firstRuntime.projectId);
   await expectOwnerSessionAfterRestart(page);
@@ -510,12 +516,13 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await startStream(page);
   const recoveryBaseline = await waitForFrame(page, 'stream.ready');
   expect(recoveryBaseline?.id).toMatch(/^cur_/);
-  const currentRecords = await requestJSON(page, 'GET', '/api/v1/posts');
+  const currentRecords = await requestJSON(page, 'GET', '/api/v1/posts?search=MARKER');
   expect(currentRecords.status).toBe(200);
-  expect(JSON.stringify(currentRecords.body)).not.toContain('PRIVATE_MARKER');
-  expect(JSON.stringify(currentRecords.body)).toContain('PUBLIC_MARKER');
-  expect(JSON.stringify(currentRecords.body)).toContain(replayedTitle);
-  expect(JSON.stringify(currentRecords.body)).toContain(restartReplayTitle);
+  const visibleTitles = ((currentRecords.body as { data: Array<{ title: string }> }).data ?? []).map((record) => record.title);
+  expect(visibleTitles).not.toContain('PRIVATE_MARKER');
+  expect(visibleTitles).toContain('PUBLIC_MARKER');
+  expect(visibleTitles).toContain(replayedTitle);
+  expect(visibleTitles).toContain(restartReplayTitle);
   await stopStream(page);
   expect(issues).toEqual([]);
 });

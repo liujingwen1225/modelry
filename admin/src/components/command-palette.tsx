@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { Button as ControlButton } from '@/components/ui/button';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Command, Search, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useOwnerSession } from '../auth/owner-session';
 import { useI18n } from '../i18n/i18n';
 import { fuzzyMatch, isCommandVisible, useCommandRegistry, type AdminCommand, type CommandContext } from './command-registry';
 import { collectionIdFromPathname } from './route-context';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { Button } from './button';
+import { Input } from '@/components/ui/input';
 
 function isMacPlatform(platform: string): boolean {
   return /mac|iphone|ipad/i.test(platform);
@@ -27,7 +31,7 @@ function CommandPaletteDialog({
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
   const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -54,6 +58,22 @@ function CommandPaletteDialog({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Tab') {
+      const popup = event.currentTarget;
+      const focusable = popup.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable.item(0);
+      const last = focusable.item(focusable.length - 1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -75,43 +95,30 @@ function CommandPaletteDialog({
       execute(selectedIndex);
       return;
     }
-    if (event.key === 'Tab') {
-      const activeElement = document.activeElement;
-      if (event.shiftKey && activeElement === inputRef.current) {
-        event.preventDefault();
-        closeRef.current?.focus();
-      } else if (!event.shiftKey && activeElement === closeRef.current) {
-        event.preventDefault();
-        inputRef.current?.focus();
-      } else if (activeElement !== inputRef.current && activeElement !== closeRef.current) {
-        event.preventDefault();
-        inputRef.current?.focus();
-      }
-    }
-  }
-
-  function dismissOutside(event: MouseEvent<HTMLDivElement>) {
-    if (event.target === event.currentTarget) onClose();
   }
 
   return (
-    <div className="command-palette-overlay" onMouseDown={dismissOutside}>
-      <section
-        aria-label={t('commands.paletteTitle')}
-        aria-modal="true"
-        className="command-palette"
-        data-command-palette="true"
-        onKeyDown={handleKeyDown}
-        role="dialog"
-      >
-        <div className="command-palette__search">
+    <DialogPrimitive.Root open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-30 bg-[rgb(12_19_23_/_48%)] backdrop-blur-[2px]" />
+        <DialogPrimitive.Viewport className="fixed inset-0 z-40 flex items-center justify-center p-4">
+          <DialogPrimitive.Popup
+            aria-labelledby={titleId}
+            className="flex max-h-[min(72vh,640px)] w-[min(100%,620px)] flex-col overflow-hidden rounded-lg border bg-card text-foreground shadow-floating outline-none"
+            data-command-palette="true"
+            initialFocus={inputRef}
+            onKeyDown={handleKeyDown}
+          >
+        <DialogPrimitive.Title className="sr-only" id={titleId}>{t('commands.paletteTitle')}</DialogPrimitive.Title>
+        <div className="flex min-h-[60px] items-center gap-3 border-b px-4 text-muted-foreground">
           <Search aria-hidden="true" size={18} />
-          <input
+          <Input
             aria-activedescendant={filtered[selectedIndex] ? `command-option-${filtered[selectedIndex].command.id}` : undefined}
             aria-controls="command-palette-options"
             aria-expanded="true"
             aria-label={t('commands.searchLabel')}
             autoComplete="off"
+            className="min-h-0 rounded-none border-0 bg-transparent px-0 py-0 text-sm focus-visible:border-0 focus-visible:outline-0 focus-visible:ring-0"
             onChange={(event) => { setQuery(event.target.value); setSelectedIndex(0); }}
             placeholder={t('commands.searchLabel')}
             ref={inputRef}
@@ -119,17 +126,17 @@ function CommandPaletteDialog({
             type="search"
             value={query}
           />
-          <button aria-label={t('shell.paletteClose')} className="command-palette__close" onClick={onClose} ref={closeRef} type="button">
+          <Button aria-label={t('shell.paletteClose')} className="size-8 min-h-8 shrink-0 px-0" onClick={onClose} type="button" variant="quiet">
             <X aria-hidden="true" size={16} />
-          </button>
+          </Button>
         </div>
-        <div aria-label={t('commands.paletteTitle')} className="command-palette__results" id="command-palette-options" role="listbox">
+        <div aria-label={t('commands.paletteTitle')} className="min-h-12 overflow-y-auto p-1.5" id="command-palette-options" role="listbox">
           {filtered.length > 0 && filtered.map(({ command, label }, index) => (
             <div
               aria-label={label}
               aria-disabled={command.isEnabled ? !command.isEnabled(context) : undefined}
               aria-selected={index === selectedIndex}
-              className={`command-palette__option${index === selectedIndex ? ' command-palette__option--active' : ''}`}
+              className={`flex min-h-10 items-center justify-between gap-3 rounded-md px-2.5 text-xs text-ink-secondary outline-none transition-colors hover:bg-accent-cta-soft hover:text-accent-cta-ink${index === selectedIndex ? ' bg-accent-cta-soft text-accent-cta-ink' : ''}`}
               id={`command-option-${command.id}`}
               key={command.id}
               onClick={() => execute(index)}
@@ -138,17 +145,19 @@ function CommandPaletteDialog({
               role="option"
             >
               <span>{label}</span>
-              <span className="command-palette__category">{t(command.category)}</span>
+              <span className="whitespace-nowrap text-[10px] text-subtle-foreground">{t(command.category)}</span>
             </div>
           ))}
         </div>
-        {filtered.length === 0 && <p className="command-palette__empty" role="status">{t('shell.paletteEmpty')}</p>}
-        <footer className="command-palette__footer">
+        {filtered.length === 0 && <p className="m-0 px-4 py-5 text-xs text-muted-foreground" role="status">{t('shell.paletteEmpty')}</p>}
+        <footer className="flex min-h-10 items-center justify-between gap-3 border-t px-3.5 text-[10px] text-subtle-foreground">
           <span>{t('shell.paletteHint')}</span>
-          <span><kbd>{shortcut}</kbd></span>
+          <span><kbd className="rounded border bg-muted px-1.5 py-0.5 text-subtle-foreground">{shortcut}</kbd></span>
         </footer>
-      </section>
-    </div>
+          </DialogPrimitive.Popup>
+        </DialogPrimitive.Viewport>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -205,18 +214,19 @@ export function CommandPaletteControl() {
   const shortcutName = /⌘/.test(shortcut) ? 'Meta+K' : 'Control+K';
   return (
     <>
-      <button
+      <ControlButton variant="unstyled"
         aria-keyshortcuts={shortcutName}
-        className="command-palette-trigger"
+        className="flex min-h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-card px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:min-h-[34px] min-[681px]:gap-[7px] min-[681px]:px-2"
+        data-command-palette-trigger
         onClick={showPalette}
         ref={triggerRef}
         title={`${t('shell.paletteTrigger')} (${shortcut})`}
         type="button"
       >
         <Command aria-hidden="true" size={15} />
-        <span className="command-palette-trigger__label">{t('shell.paletteTrigger')}</span>
-        <kbd>{shortcut}</kbd>
-      </button>
+        <span className="hidden min-[901px]:inline">{t('shell.paletteTrigger')}</span>
+        <kbd className="hidden rounded border border-border bg-secondary px-[5px] py-[3px] font-[inherit] text-[10px] leading-[1.2] whitespace-nowrap text-muted-foreground min-[901px]:inline-block">{shortcut}</kbd>
+      </ControlButton>
       {open && <CommandPaletteDialog commands={commands} context={context} onClose={closePalette} shortcut={shortcut} />}
     </>
   );

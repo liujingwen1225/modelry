@@ -55,17 +55,31 @@ describe('Community V0.1.x closure', () => {
 
   it('covers every accepted V0.1.x surface in both languages', () => {
     const surfaces = [
-      'navigation.activity', 'navigation.drift', 'navigation.runtimeSettings', 'navigation.portability',
-      'navigation.administrators', 'navigation.mail', 'navigation.automations', 'navigation.extensions',
-      'navigation.secrets', 'navigation.collections', 'navigation.changes', 'navigation.access',
+      // 新 IA 的一级入口与分组（spec 0001 §3.1）。
+      'navigation.workspace', 'navigation.build', 'navigation.operate', 'navigation.system',
+      'navigation.overview', 'navigation.collections', 'navigation.apiWorkspace', 'navigation.hooksEvents',
+      'navigation.scheduledJobs', 'navigation.changes', 'navigation.accessAuth', 'navigation.activity', 'navigation.settings',
+      // 二级工作面。
+      'api.workspaceTabs.endpoints', 'api.workspaceTabs.openapi', 'api.workspaceTabs.logs',
+      'events.tabs.hooks', 'events.tabs.webhooks', 'events.tabs.triggers', 'events.tabs.deliveries',
+      'schedules.tabs.jobs', 'schedules.tabs.history', 'schedules.runNow',
+      'changes.tabs.pending', 'changes.tabs.history', 'changes.tabs.drift',
+      'access.tabs.administrators', 'access.tabs.auth', 'access.tabs.tokens',
+      // 系统设置的本地导航。
+      'settings.navigation.general', 'settings.navigation.runtime', 'settings.navigation.filesStorage',
+      'settings.navigation.mail', 'settings.navigation.secrets', 'settings.navigation.dataTransfer',
+      'settings.navigation.backupRestore',
+      // 既有产品面继续共享同一份词条。
       'activity.title', 'drift.title', 'runtimeSettings.title', 'portability.title',
       'mail.title', 'storage.title', 'administrators.title', 'automation.title', 'extensions.title',
-      // V0.1 时代的四个产品面已经迁移到同一套 i18n，必须与 V0.1.x 面共享同一份词条。
       'collections.title', 'records.title', 'changes.title',
       'schema.title', 'schema.views.history', 'schema.previewReviewTitle',
       'security.title', 'security.tabs.rules', 'security.simulationTitle',
       'access.title', 'access.auditTitle', 'access.revealTitle',
       'api.workspaceTitle', 'api.requestDetailTitle', 'api.endpointTitles.listApplicationRecords',
+      // 总览的真实事实摘要与恢复文案。
+      'overview.cardsLabel', 'overview.continueTitle', 'overview.quickTitle', 'overview.recentActivityTitle',
+      'overview.runtimeTitle', 'overview.unavailable', 'overview.unknown',
     ];
     const english = flatten(en as unknown as Resource);
     const chinese = flatten(zhCN as unknown as Resource);
@@ -105,17 +119,17 @@ describe('Community V0.1.x closure', () => {
     setupFetch();
     render(<App />);
 
-    const topbar = await screen.findByRole('banner').catch(() => null) ?? document.querySelector('.topbar');
+    const topbar = await screen.findByRole('banner').catch(() => null) ?? document.querySelector('[data-shell-topbar]');
     expect(topbar).not.toBeNull();
-    const actions = (topbar as HTMLElement).querySelector('.topbar__actions') as HTMLElement;
+    const actions = (topbar as HTMLElement).querySelector('[data-shell-topbar-actions]') as HTMLElement;
     expect(actions).not.toBeNull();
     const order = Array.from(actions.children)
-      .filter((child) => !child.classList.contains('topbar__action-divider'))
+      .filter((child) => child.getAttribute('aria-hidden') !== 'true')
       .map((child) => {
-        if (child.classList.contains('command-palette-trigger')) return 'palette';
-        if (child.classList.contains('locale-switcher')) return 'language';
-        if (child.classList.contains('theme-button')) return 'theme';
-        if (child.classList.contains('owner-menu')) return 'user';
+        if (child.matches('[data-command-palette-trigger]')) return 'palette';
+        if (child.matches('[data-locale-switcher]')) return 'language';
+        if (child.matches('[data-theme-button]')) return 'theme';
+        if (child.matches('[data-owner-menu]')) return 'user';
         return 'runtime';
       });
     expect(order[0]).toBe('palette');
@@ -127,9 +141,9 @@ describe('Community V0.1.x closure', () => {
     expect(order.indexOf('language')).toBeLessThan(order.indexOf('theme'));
     expect(order.indexOf('theme')).toBeLessThan(order.indexOf('user'));
 
-    const themeButton = (topbar as HTMLElement).querySelector('.theme-button');
+    const themeButton = (topbar as HTMLElement).querySelector('[data-theme-button]');
     expect(themeButton).not.toBeNull();
-    expect(themeButton?.closest('.owner-menu')).toBeNull();
+    expect(themeButton?.closest('[data-owner-menu]')).toBeNull();
   });
 
   it('persists the theme choice outside the user menu', async () => {
@@ -140,7 +154,7 @@ describe('Community V0.1.x closure', () => {
     render(<App />);
 
     const themeButton = await waitFor(() => {
-      const button = document.querySelector('.theme-button');
+      const button = document.querySelector('[data-theme-button]');
       expect(button).not.toBeNull();
       return button as HTMLElement;
     });
@@ -157,14 +171,17 @@ describe('Community V0.1.x closure', () => {
     setupFetch('owner');
     const { unmount } = render(<App />);
 
-    await waitFor(() => expect(document.querySelector('.command-palette-trigger')).not.toBeNull());
-    await waitFor(() => expect(document.querySelector('a.nav-link[href="/activity"]')).not.toBeNull());
-    // Command Registry 通过 effect 提交 revision；等一个宏任务再打开面板，避免读到上一版命令。
+    await waitFor(() => expect(document.querySelector('[data-command-palette-trigger]')).not.toBeNull());
+    await userEvent.click(await screen.findByRole('link', { name: 'System settings' }));
+    const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings sections' });
+    // 活动记录是 OPERATE 组的一级入口，不再作为 Settings 子页。
+    expect(within(settingsNavigation).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
+    // 命令面板通过 effect 提交 revision；等一个宏任务再打开面板，避免读到上一版命令。
     await new Promise((resolve) => setTimeout(resolve, 0));
     await userEvent.keyboard('{Control>}k{/Control}');
     const palette = await screen.findByRole('dialog');
     const labels = within(palette).getAllByRole('option').map((option) => option.textContent ?? '');
-    for (const expected of ['Open Activity', 'Open Drift', 'Open Runtime settings', 'Open Developer and portability', 'Open Mail settings', 'Open Administrators']) {
+    for (const expected of ['Open Activity', 'Open Drift', 'Open Runtime settings', 'Open Backup and restore', 'Open Data import / export', 'Open API Contract / SDK', 'Open MCP connection guide', 'Open Mail settings', 'Open Administrators']) {
       expect(labels.join('|')).toContain(expected);
     }
     await userEvent.keyboard('{Escape}');
@@ -173,7 +190,7 @@ describe('Community V0.1.x closure', () => {
 
     setupFetch('administrator');
     render(<App />);
-    await waitFor(() => expect(document.querySelector('.command-palette-trigger')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-command-palette-trigger]')).not.toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 0));
     await userEvent.keyboard('{Control>}k{/Control}');
     const restricted = await screen.findByRole('dialog');
@@ -181,6 +198,24 @@ describe('Community V0.1.x closure', () => {
     expect(restrictedLabels).toContain('Open Activity');
     expect(restrictedLabels).not.toContain('Open Mail settings');
     expect(restrictedLabels).not.toContain('Open Administrators');
-    expect(restrictedLabels).not.toContain('Open Developer and portability');
+    for (const restrictedLabel of ['Open Backup and restore', 'Open Data import / export', 'Open API Contract / SDK', 'Open MCP connection guide']) {
+      expect(restrictedLabels).not.toContain(restrictedLabel);
+    }
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const adminSidebar = screen.getByRole('navigation', { name: 'Project navigation' });
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'System settings' }));
+    const adminSettings = await screen.findByRole('navigation', { name: 'Settings sections' });
+    // 只读管理员保留只读分节，Owner-only 分节（Secrets / 导入导出 / 备份恢复）不可见。
+    expect(within(adminSettings).getByRole('link', { name: 'General' })).toBeInTheDocument();
+    expect(within(adminSettings).getByRole('link', { name: 'Files & Storage' })).toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'Secrets' })).not.toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'Backup and restore' })).not.toBeInTheDocument();
+    expect(within(adminSettings).queryByRole('link', { name: 'Data import / export' })).not.toBeInTheDocument();
+    await userEvent.click(within(adminSidebar).getByRole('link', { name: 'Access & auth' }));
+    const adminAccess = await screen.findByRole('navigation', { name: 'Access sections' });
+    expect(within(adminAccess).getByRole('link', { name: 'Administrators' })).toBeInTheDocument();
+    expect(within(adminAccess).getByRole('link', { name: 'Application auth' })).toBeInTheDocument();
+    expect(within(adminAccess).getByRole('link', { name: 'API Tokens' })).toBeInTheDocument();
   });
 });

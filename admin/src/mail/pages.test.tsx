@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -74,11 +75,12 @@ describe('Mail settings Admin surface', () => {
     const fetchMock = setupFetch();
     render(<App />);
     await screen.findByRole('heading', { name: 'Mail', level: 1 });
+    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
 
-    await userEvent.selectOptions(screen.getByLabelText('Enabled'), 'enabled');
+    await selectOption(userEvent, screen.getByLabelText('Enabled'), 'enabled');
     await userEvent.type(screen.getByLabelText('Host'), 'smtp.example.test');
     await userEvent.type(screen.getByLabelText('From address'), 'noreply@example.test');
-    await userEvent.selectOptions(screen.getByLabelText('Password Secret'), 'sec_smtp');
+    await selectOption(userEvent, screen.getByLabelText('Password Secret'), 'sec_smtp');
     await userEvent.click(screen.getByRole('button', { name: 'Save Mail provider' }));
 
     await waitFor(() => expect(screen.getByText('Mail provider saved.')).toBeInTheDocument());

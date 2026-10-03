@@ -1,5 +1,10 @@
+import type { ReactNode } from 'react';
 import { useDiagnostics } from './diagnostics-context';
-import { Button, CopyButton, ErrorState, JsonViewer, StatusChip, Surface } from './ui';
+import { Button } from './button';
+import { CopyButton } from './copy-button';
+import { JsonViewer } from './json-viewer';
+import { ErrorState, StatusChip } from './states';
+import { Surface } from './surface';
 import type { HealthSnapshot } from '../api/status';
 import type { ApiClientError } from '../api/client';
 import { useI18n, type TranslationKey, type TranslationValues } from '../i18n/i18n';
@@ -16,17 +21,17 @@ function stateLabel(value: string, translate: (key: TranslationKey, values?: Tra
 }
 
 function ErrorDetails({ error }: { error: ApiClientError }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   return (
-    <div className="error-details">
-      <div className="error-details__title">
-        <code>{error.apiError.code}</code>
-        <span>{error.apiError.message}</span>
+    <div className="grid gap-2.25">
+      <div className="flex flex-wrap items-baseline gap-[7px] text-[11px] text-ink-secondary">
+        <code className="text-[10px] font-bold text-danger">{error.apiError.code}</code>
+        <span>{errorMessage(error.apiError.code) ?? t('errors.requestFailed')}</span>
       </div>
-      {error.apiError.hint && <p className="error-hint">{error.apiError.hint}</p>}
-      <div className="request-id-line">
+      <p className="text-[10px] text-muted-foreground">{t('common.tryAgainWhenAvailable')}</p>
+      <div className="flex items-center gap-[7px] text-[10px] text-muted-foreground">
         <span>{t('diagnostics.requestId')}</span>
-        <code>{error.apiError.requestId}</code>
+        <code className="text-[10px] text-ink-secondary [overflow-wrap:anywhere]">{error.apiError.requestId}</code>
         <CopyButton label={t('diagnostics.copyRequestId')} value={error.apiError.requestId} />
       </div>
       <JsonViewer label={t('diagnostics.errorDetails')} value={error.apiError.details} />
@@ -42,24 +47,29 @@ function HealthValue({
   label: string;
 }) {
   const { t } = useI18n();
-  if (resource.state === 'loading') return <span className="skeleton skeleton--inline" aria-label={t('diagnostics.loading', { label })} />;
+  if (resource.state === 'loading') return <span aria-label={t('diagnostics.loading', { label })} className="inline-block h-[23px] w-[65px] animate-pulse rounded-full bg-muted" />;
   if (resource.state !== 'ready' || !('value' in resource)) return <StatusChip state="unknown">{t('diagnostics.unknown')}</StatusChip>;
   return <StatusChip state={resource.value.state}>{stateLabel(resource.value.state, t)}</StatusChip>;
 }
 
+// RuntimeBadge 的每个分支都包在同一个 data-runtime-badge 容器里；
+// 状态胶囊本身由共享 StatusChip 渲染（它自带 data-status-chip）。
 export function RuntimeBadge() {
   const { runtime } = useDiagnostics();
   const { t } = useI18n();
+  const badge = (chip: ReactNode) => <span className="inline-flex items-center" data-runtime-badge>{chip}</span>;
+  // 窄屏只保留状态点：文字用 sr-only 隐藏，既让出顶栏空间，又保留无障碍名称。
+  const label = (text: string) => <span className="max-[1023px]:sr-only">{text}</span>;
 
   if (runtime.state === 'loading' && !runtime.value) {
-    return <StatusChip state="loading"><span className="pulse-dot" aria-hidden="true" /> {t('runtime.connecting')}</StatusChip>;
+    return badge(<StatusChip state="loading"><span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" /> {label(t('runtime.connecting'))}</StatusChip>);
   }
-  if (runtime.state === 'error') return <StatusChip state="unavailable">{t('runtime.unavailable')}</StatusChip>;
-  if (!runtime.value) return <StatusChip state="unknown">{t('runtime.unknown')}</StatusChip>;
+  if (runtime.state === 'error') return badge(<StatusChip state="unavailable">{label(t('runtime.unavailable'))}</StatusChip>);
+  if (!runtime.value) return badge(<StatusChip state="unknown">{label(t('runtime.unknown'))}</StatusChip>);
 
   const state = runtime.value.state;
-  const label = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: stateLabel(state, t) });
-  return <StatusChip state={state}>{state === 'ready' && <span className="pulse-dot" aria-hidden="true" />}{label}</StatusChip>;
+  const stateText = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: stateLabel(state, t) });
+  return badge(<StatusChip state={state}>{state === 'ready' && <span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{label(stateText)}</StatusChip>);
 }
 
 export function DiagnosticsCards() {
@@ -69,12 +79,12 @@ export function DiagnosticsCards() {
   const storageError = storage.state === 'error' && storage.error instanceof Error ? storage.error : null;
 
   return (
-    <div className="diagnostics-grid" aria-live="polite">
-      <Surface className="diagnostic-card" variant="raised">
-        <div className="diagnostic-card__top">
+    <div className="grid gap-3.5 sm:grid-cols-2" aria-live="polite">
+      <Surface className="min-h-[154px] p-4 md:min-h-[169px]" variant="raised">
+        <div className="flex items-start justify-between gap-3.75">
           <div>
-            <p className="eyebrow">{t('diagnostics.runtime.eyebrow')}</p>
-            <h3>{t('diagnostics.runtime.title')}</h3>
+            <p className="eyebrow mb-[3px]">{t('diagnostics.runtime.eyebrow')}</p>
+            <h3 className="text-[13px] font-semibold tracking-[-0.1px]">{t('diagnostics.runtime.title')}</h3>
           </div>
           {runtime.state === 'ready'
             ? <StatusChip state={runtime.value.state}>{stateLabel(runtime.value.state, t)}</StatusChip>
@@ -85,19 +95,19 @@ export function DiagnosticsCards() {
         {runtimeError instanceof Error ? (
           <ErrorDetailsPanel error={runtimeError} onRetry={refresh} />
         ) : (
-          <div className="diagnostic-rows">
-            <div><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.database } : runtime} /></div>
-            <div><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.localStorage } : runtime} /></div>
-            {runtime.state === 'ready' && <p className="diagnostic-note">{t('diagnostics.observed', { date: new Date(runtime.value.observedAt).toLocaleTimeString() })}</p>}
+          <div className="mt-4.25 grid gap-2.25">
+            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.database } : runtime} /></div>
+            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.localStorage } : runtime} /></div>
+            {runtime.state === 'ready' && <p className="mt-px mb-0 text-[10px] text-subtle-foreground">{t('diagnostics.observed', { date: new Date(runtime.value.observedAt).toLocaleTimeString() })}</p>}
           </div>
         )}
       </Surface>
 
-      <Surface className="diagnostic-card" variant="raised">
-        <div className="diagnostic-card__top">
+      <Surface className="min-h-[154px] p-4 md:min-h-[169px]" variant="raised">
+        <div className="flex items-start justify-between gap-3.75">
           <div>
-            <p className="eyebrow">{t('diagnostics.storage.eyebrow')}</p>
-            <h3>{t('diagnostics.storage.title')}</h3>
+            <p className="eyebrow mb-[3px]">{t('diagnostics.storage.eyebrow')}</p>
+            <h3 className="text-[13px] font-semibold tracking-[-0.1px]">{t('diagnostics.storage.title')}</h3>
           </div>
           {storage.state === 'ready'
             ? <StatusChip state={storage.value.localStorage.state}>{stateLabel(storage.value.localStorage.state, t)}</StatusChip>
@@ -108,18 +118,18 @@ export function DiagnosticsCards() {
         {storageError ? (
           <ErrorDetailsPanel error={storageError} onRetry={refresh} />
         ) : (
-          <div className="diagnostic-rows">
-            <div><span>{t('diagnostics.provider')}</span><strong>{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
-            <div><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
-            <div><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
+          <div className="mt-4.25 grid gap-2.25">
+            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.provider')}</span><strong className="text-[11px] font-semibold text-ink-secondary">{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
+            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
+            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
             {storage.state === 'ready' && storage.value.localStorage.path && (
-              <div className="diagnostic-path">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 text-[11px] text-muted-foreground">
                 <span>{t('diagnostics.localPath')}</span>
-                <code className="diagnostic-path__value">{storage.value.localStorage.path}</code>
+                <code className="text-right break-all text-ink-secondary">{storage.value.localStorage.path}</code>
                 <CopyButton label={t('diagnostics.copyLocalPath')} value={storage.value.localStorage.path} />
               </div>
             )}
-            {storage.state === 'ready' && storage.value.localStorage.message && <p className="diagnostic-note">{storage.value.localStorage.message}</p>}
+            {storage.state === 'ready' && storage.value.localStorage.message && <p className="mt-px mb-0 text-[10px] text-subtle-foreground">{t('diagnostics.resourceReady')}</p>}
           </div>
         )}
       </Surface>
@@ -131,8 +141,8 @@ function ErrorDetailsPanel({ error, onRetry }: { error: Error; onRetry: () => vo
   const { t } = useI18n();
   return (
     <ErrorState
-      className="resource-error"
-      description={error instanceof Error && 'apiError' in error ? t('diagnostics.structuredDetails') : error.message || t('diagnostics.requestFailed')}
+      className="mt-2.75 grid gap-2.25"
+      description={error instanceof Error && 'apiError' in error ? t('diagnostics.structuredDetails') : t('diagnostics.requestFailed')}
       title={t('diagnostics.statusRequestFailed')}
     >
       {error instanceof Error && 'apiError' in error && <ErrorDetails error={error as ApiClientError} />}

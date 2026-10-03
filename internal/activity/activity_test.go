@@ -26,7 +26,7 @@ type fakeStore struct{}
 func (fakeStore) WithReadSnapshot(_ context.Context, work func(storage.Executor) error) error { return work(nil) }
 
 func fact(id string, occurred time.Time, kind Kind) Fact {
-	return Fact{ID: id, Kind: kind, Status: "succeeded", OccurredAt: occurred, ResourceKind: "delivery", ResourceID: id, DeepLink: "/automations?tab=deliveries"}
+	return Fact{ID: id, Kind: kind, Status: "succeeded", OccurredAt: occurred, ResourceKind: "delivery", ResourceID: id, DeepLink: "/events?tab=deliveries"}
 }
 
 func TestActivityMergesSortsPaginatesAndFiltersWithoutOwningTables(t *testing.T) {

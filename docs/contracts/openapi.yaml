@@ -1118,6 +1118,38 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/overview':
+    get:
+      tags: [Runtime]
+      operationId: getOverview
+      summary: Read the Admin overview aggregate
+      description: |
+        Read-only aggregate of the durable facts the Admin overview needs. Every section is optional:
+        an absent section means the fact could not be read right now (the UI must show Unavailable /
+        Unknown), while a present section with zero counts is a real zero. When no section can be read
+        at all the route returns `503 RUNTIME_NOT_READY` instead of an empty project.
+        The Control Plane gate is `runtime.read`; `collections.recordCount` and
+        `collections.recent[].recordCount` additionally require `records.read`, and
+        `pendingChangeStatus` additionally requires `schema.read`.
+      security:
+        - OwnerSession: []
+        - ServiceAccountAPIKey: []
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
   '/admin/api/v1/collections':
     get:
       tags: [Collections]
@@ -3709,6 +3741,36 @@ paths:
           $ref: '#/components/responses/StructuredError'
         '5XX':
           $ref: '#/components/responses/StructuredError'
+  '/admin/api/v1/jobs/{jobId}/run':
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Automation]
+      operationId: runJob
+      summary: Run a Job once without changing its schedule
+      description: |
+        Creates one explicit manual-run Delivery with `sourceType: "job"` and `event.type: "job.manual"`.
+        The Job must exist and its Webhook must be enabled with a configured signing Secret, otherwise the
+        route returns `422 VALIDATION_FAILED`. Schedule state is never changed: `nextRunAt` is not advanced,
+        `lastRunAt` is not rewritten, and no scheduled slot is consumed, skipped or caught up.
+        Capacity behaves like the synthetic Webhook test: a full pending or payload quota still returns `202`
+        with a terminal `capacityExceeded` Delivery that made no network request.
+      security:
+        - OwnerSession: []
+      responses:
+        '202':
+          description: A manual-run Delivery was accepted for bounded processing, or persisted as a terminal capacity failure.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '4XX':
+          $ref: '#/components/responses/StructuredError'
+        '5XX':
+          $ref: '#/components/responses/StructuredError'
   '/admin/api/v1/deliveries':
     get:
       tags: [Automation]
@@ -4704,6 +4766,188 @@ components:
           $ref: '#/components/schemas/LocalStorageHealth'
         fileStorage:
           $ref: '#/components/schemas/FileStorageHealth'
+        databaseSizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: SQLite main database size in bytes (page_count × page_size). Omitted when it cannot be read; never reported as zero on failure.
+      additionalProperties: false
+    OverviewResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/OverviewSnapshot'
+    OverviewSnapshot:
+      type: object
+      description: |
+        Overview aggregate. Every section is optional: an absent section means the fact could not be read,
+        while a present section with zero counts is a real zero. Fields requiring a Permission the caller
+        does not hold are omitted individually.
+      required: [generatedAt, windowSeconds]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        windowSeconds:
+          type: integer
+          minimum: 0
+        collections:
+          $ref: '#/components/schemas/OverviewCollections'
+        requests:
+          $ref: '#/components/schemas/OverviewRequests'
+        events:
+          $ref: '#/components/schemas/OverviewEvents'
+        changes:
+          $ref: '#/components/schemas/OverviewChanges'
+        drift:
+          $ref: '#/components/schemas/OverviewDrift'
+      additionalProperties: false
+    OverviewCollections:
+      type: object
+      required: [count, withPendingChanges, withFailedChanges]
+      properties:
+        count:
+          type: integer
+          minimum: 0
+        recordCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Requires records.read; omitted without it.
+        withPendingChanges:
+          type: integer
+          minimum: 0
+        withFailedChanges:
+          type: integer
+          minimum: 0
+        recent:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/OverviewRecentCollection'
+      additionalProperties: false
+    OverviewRecentCollection:
+      type: object
+      required: [id, name, type, fieldCount, relationCount, indexCount, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        type:
+          type: string
+          enum: [Normal, Auth]
+        recordCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Requires records.read; omitted without it.
+        fieldCount:
+          type: integer
+          minimum: 0
+        relationCount:
+          type: integer
+          minimum: 0
+        indexCount:
+          type: integer
+          minimum: 0
+        pendingChangeStatus:
+          type: string
+          enum: [ready, needsReview, failed]
+          description: Requires schema.read; omitted without it or when there is no durable pending change.
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    OverviewRequests:
+      type: object
+      required: [windowSeconds, requestCount, clientErrorCount, serverErrorCount]
+      properties:
+        windowSeconds:
+          type: integer
+          minimum: 0
+        windowCoveredFrom:
+          type: string
+          format: date-time
+          description: Earliest in-window RequestRecord. Present when request-log retention covers less than the requested window.
+        requestCount:
+          type: integer
+          format: int64
+          minimum: 0
+        clientErrorCount:
+          type: integer
+          format: int64
+          minimum: 0
+        serverErrorCount:
+          type: integer
+          format: int64
+          minimum: 0
+        p95DurationMs:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Nearest-rank P95 of in-window durations. Omitted when the window holds no records.
+      additionalProperties: false
+    OverviewEvents:
+      type: object
+      required: [enabledHooks, enabledWebhooks, enabledEventHooks, enabledJobs, runCount, deliveryCount, failedDeliveryCount, pendingDeliveryCount]
+      properties:
+        enabledHooks:
+          type: integer
+          minimum: 0
+        enabledWebhooks:
+          type: integer
+          minimum: 0
+        enabledEventHooks:
+          type: integer
+          minimum: 0
+        enabledJobs:
+          type: integer
+          minimum: 0
+        runCount:
+          type: integer
+          format: int64
+          minimum: 0
+        deliveryCount:
+          type: integer
+          format: int64
+          minimum: 0
+        failedDeliveryCount:
+          type: integer
+          format: int64
+          minimum: 0
+        pendingDeliveryCount:
+          type: integer
+          format: int64
+          minimum: 0
+      additionalProperties: false
+    OverviewChanges:
+      type: object
+      required: [pendingCount, needsReviewCount, failedCount]
+      properties:
+        pendingCount:
+          type: integer
+          minimum: 0
+        needsReviewCount:
+          type: integer
+          minimum: 0
+        failedCount:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    OverviewDrift:
+      type: object
+      required: [state, differenceCount, checkedAt]
+      properties:
+        state:
+          type: string
+        differenceCount:
+          type: integer
+          minimum: 0
+        checkedAt:
+          type: string
+          format: date-time
       additionalProperties: false
     LocalStorageHealth:
       type: object
@@ -4754,6 +4998,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FieldDefinition'
+        omitSystemFields:
+          type: array
+          uniqueItems: true
+          maxItems: 2
+          description: 创建时省略可选时间字段；记录时间元数据仍由运行时管理。id 不可省略。
+          items:
+            type: string
+            enum: [createdAt, updatedAt]
         authentication:
           $ref: '#/components/schemas/AuthenticationConfiguration'
         accessRules:

@@ -1,5 +1,10 @@
+import { Input, Textarea } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useState } from 'react';
-import { Button, FormField, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { ApiClientError } from '../api/client';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import type { AccessRuleMode } from './client';
@@ -21,7 +26,7 @@ const PRINCIPALS: Array<{ value: PolicySimulationPrincipalKind; key: Translation
 
 // AccessRuleSimulation 让 Owner 在应用规则不变的前提下预演一次假设请求。
 export function AccessRuleSimulation({ collectionId }: { collectionId: string }) {
-  const { t } = useI18n();
+  const { t, errorMessage } = useI18n();
   const [operation, setOperation] = useState<(typeof OPERATIONS)[number]>('list');
   const [principalKind, setPrincipalKind] = useState<PolicySimulationPrincipalKind>('anonymous');
   const [principalId, setPrincipalId] = useState('');
@@ -57,51 +62,48 @@ export function AccessRuleSimulation({ collectionId }: { collectionId: string })
   }
 
   return (
-    <Surface className="security-simulation" variant="standard">
-      <div className="security-rules-heading">
-        <div>
+    <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
+        <div className="min-w-0">
           <h2>{t('security.simulationTitle')}</h2>
-          <p>{t('security.simulationDescription')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('security.simulationDescription')}</p>
         </div>
         <StatusChip state="info">{t('security.simulationPreview')}</StatusChip>
       </div>
-      <div className="security-simulation__fields">
+      <div className="grid gap-3.5 min-[561px]:grid-cols-2">
         <FormField htmlFor="simulate-operation" label={t('security.simulationOperation')}>
-          <select id="simulate-operation" onChange={(event) => setOperation(event.target.value as (typeof OPERATIONS)[number])} value={operation}>
-            {OPERATIONS.map((candidate) => <option key={candidate} value={candidate}>{t(`security.operations.${candidate}`)}</option>)}
-          </select>
+          <SelectField id="simulate-operation" onValueChange={(selectedValue) => setOperation(selectedValue as (typeof OPERATIONS)[number])} value={operation} options={[OPERATIONS.map((candidate) => ({ value: candidate, label: t(`security.operations.${candidate}`) }))]} />
         </FormField>
         <FormField htmlFor="simulate-principal" label={t('security.simulationPrincipal')}>
-          <select id="simulate-principal" onChange={(event) => setPrincipalKind(event.target.value as PolicySimulationPrincipalKind)} value={principalKind}>
-            {PRINCIPALS.map((candidate) => <option key={candidate.value} value={candidate.value}>{t(candidate.key)}</option>)}
-          </select>
+          <SelectField id="simulate-principal" onValueChange={(selectedValue) => setPrincipalKind(selectedValue as PolicySimulationPrincipalKind)} value={principalKind} options={[PRINCIPALS.map((candidate) => ({ value: candidate.value, label: t(candidate.key) }))]} />
         </FormField>
         {needsPrincipalId && (
           <FormField htmlFor="simulate-principal-id" label={t('security.simulationPrincipalId')}>
-            <input id="simulate-principal-id" onChange={(event) => setPrincipalId(event.target.value)} value={principalId} />
+            <Input id="simulate-principal-id" onChange={(event) => setPrincipalId(event.target.value)} value={principalId} />
           </FormField>
         )}
         <FormField htmlFor="simulate-record" label={t('security.simulationRecordId')}>
-          <input id="simulate-record" onChange={(event) => setRecordId(event.target.value)} value={recordId} />
+          <Input id="simulate-record" onChange={(event) => setRecordId(event.target.value)} value={recordId} />
         </FormField>
         <FormField htmlFor="simulate-payload" hint={t('security.simulationPayloadHint')} label={t('security.simulationPayload')}>
-          <textarea id="simulate-payload" onChange={(event) => setPayload(event.target.value)} rows={3} value={payload} />
+          <Textarea id="simulate-payload" onChange={(event) => setPayload(event.target.value)} rows={3} value={payload} />
         </FormField>
       </div>
-      <div className="security-rule-editor-actions">
+      <div className="flex flex-wrap justify-end gap-1.5 border-t pt-3">
         <Button disabled={busy} onClick={() => void simulate()} type="button" variant="primary">{busy ? t('security.simulationSimulating') : t('security.simulationSimulate')}</Button>
       </div>
       {result && (
-        <div className="security-simulation__result" data-simulation-decision={result.allowed ? 'allow' : 'deny'} role="status">
+        <div className="flex flex-col gap-2 rounded-lg border bg-secondary px-3.5 py-3 text-xs" data-simulation-decision={result.allowed ? 'allow' : 'deny'} role="status">
           <StatusChip state={result.allowed ? 'ready' : 'unavailable'}>{result.allowed ? t('security.simulationAllowed') : t('security.simulationDenied')}</StatusChip>
-          <span>{result.decidingMode ? t('security.simulationRule', { mode: decidingModeLabel ?? '' }) : ''}</span>
-          {result.code && <code>{result.code}</code>}
-          <p>{result.notice}</p>
+          <span className="text-ink-secondary">{result.decidingMode ? t('security.simulationRule', { mode: decidingModeLabel ?? '' }) : ''}</span>
+          {result.code && <code className="w-fit rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">{result.code}</code>}
+          <p className="m-0 text-[11px] text-muted-foreground">{t('security.simulationNotice')}</p>
         </div>
       )}
       {error !== undefined && (
-        <div className="security-dependency-error" role="alert">
-          {error instanceof ApiClientError ? error.apiError.message : t('security.simulationFailed')}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3 text-xs text-ink-secondary" role="alert">
+          <strong>{error instanceof ApiClientError ? errorMessage(error.apiError.code) ?? t('errors.requestFailed') : t('security.simulationFailed')}</strong>
+          {error instanceof ApiClientError && <span>{t('common.errorCode')}: {error.apiError.code} · {t('common.requestId')}: {error.apiError.requestId} · {t('common.tryAgainWhenAvailable')}</span>}
         </div>
       )}
     </Surface>

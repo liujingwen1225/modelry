@@ -1,10 +1,11 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Collection } from '../collections/client';
 import { LocaleProvider } from '../i18n/i18n';
-import { CollectionAPIPage, GlobalAPIPage, RequestDetailPage } from './workspace';
+import { CollectionAPIPage, EndpointWorkspace } from './workspace';
 
 const mocks = vi.hoisted(() => ({
   getRequestRecord: vi.fn(),
@@ -32,24 +33,9 @@ const fileCollection: Collection = {
   ...collection,
   fields: [...collection.fields, { id: 'fld_attachment', name: 'attachment', type: 'file' }],
 };
-const filesCollection: Collection = {
-  ...collection,
-  fields: [...collection.fields, { id: 'fld_attachments', name: 'attachments', type: 'files' }],
-};
 const authCollection: Collection = {
   id: 'col_members', name: 'members', type: 'Auth', schemaVersion: 1,
   fields: [{ id: 'fld_email', name: 'email', type: 'text', required: true }],
-};
-const requestRecord = {
-  requestId: 'req_12345678', time: '2026-09-24T10:00:00Z', collectionId: 'col_posts',
-  endpoint: '/api/v1/posts/rec_abc', method: 'GET', status: 403, durationMs: 18,
-  responseSizeBytes: 46,
-  authenticationOutcome: 'anonymous', authorizationOutcome: 'denied', errorCode: 'FORBIDDEN',
-};
-const fileRequestRecord = {
-  ...requestRecord,
-  requestId: 'req_file_123456', endpoint: '/api/v1/posts/rec_abc/files/attachment', status: 200,
-  authenticationOutcome: 'authenticated', authorizationOutcome: 'allowed', errorCode: undefined,
 };
 
 function CurrentLocation() {
@@ -67,6 +53,22 @@ function renderCollectionAPI(type: 'Normal' | 'Auth' = 'Normal', collectionOverr
 }
 
 describe('API Workspace', () => {
+  it('不同集合的同名端点只选中一项，并保留所选集合的深链接', async () => {
+    const user = userEvent.setup();
+    const other = { ...collection, id: 'col_notes', name: 'notes' };
+    const mounted = render(<LocaleProvider><MemoryRouter><CurrentLocation /><EndpointWorkspace collections={[collection, other]} /></MemoryRouter></LocaleProvider>);
+    const notesEndpoint = await screen.findByRole('button', { name: /GET.*List records.*\/api\/v1\/notes.*notes/ });
+    expect(document.querySelectorAll('[data-api-endpoint-option][aria-current="page"]')).toHaveLength(1);
+    await user.click(notesEndpoint);
+    expect(notesEndpoint).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelectorAll('[data-api-endpoint-option][aria-current="page"]')).toHaveLength(1);
+    expect(screen.getByTestId('current-location')).toHaveTextContent('endpoint=col_notes%3AlistApplicationRecords');
+    mounted.unmount();
+    render(<LocaleProvider><MemoryRouter initialEntries={['/?endpoint=col_notes%3AlistApplicationRecords']}><EndpointWorkspace collections={[collection, other]} /></MemoryRouter></LocaleProvider>);
+    expect(await screen.findByRole('button', { name: /GET.*List records.*\/api\/v1\/notes.*notes/ })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelectorAll('[data-api-endpoint-option][aria-current="page"]')).toHaveLength(1);
+  });
+
   beforeEach(() => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     mocks.getRequestRecord.mockReset();
@@ -99,7 +101,7 @@ describe('API Workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Committed Record Events' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Collection API sections' })).toBeInTheDocument();
     expect(await screen.findByText('Anyone')).toBeInTheDocument();
-    const sample = document.querySelector('.api-realtime__example pre code')?.textContent ?? '';
+    const sample = document.querySelector('[data-api-realtime-example] pre code')?.textContent ?? '';
     expect(sample).toContain('/api/v1/posts/events');
     expect(sample).toContain("headers['Last-Event-ID']");
     expect(sample).toContain('AbortController');
@@ -129,7 +131,7 @@ describe('API Workspace', () => {
 
     expect(await screen.findByRole('heading', { name: '已提交的记录事件' })).toBeInTheDocument();
     expect(screen.getByText('服务器发送事件流')).toBeInTheDocument();
-    expect(document.querySelector('.api-realtime__example pre code')?.textContent).toContain('设置应用会话 token');
+    expect(document.querySelector('[data-api-realtime-example] pre code')?.textContent).toContain('设置应用会话 token');
     expect(screen.getByRole('button', { name: '复制 JavaScript 示例' })).toBeInTheDocument();
   });
 
@@ -149,33 +151,6 @@ describe('API Workspace', () => {
     expect(screen.getByText('试一试该端点')).toBeInTheDocument();
     // operationId 与路由属于契约标识，必须保持原样。
     expect(screen.getAllByText(/listApplicationRecords/).length).toBeGreaterThan(0);
-  });
-
-  it('renders Requests and Request details in Simplified Chinese', async () => {
-    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
-    mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: 'cursor_2' });
-    mocks.getRequestRecord.mockResolvedValue(requestRecord);
-    mocks.listAllCollections.mockResolvedValue([collection]);
-    render(<LocaleProvider><MemoryRouter initialEntries={['/api?tab=requests&search=req_12']}><GlobalAPIPage /></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('heading', { name: 'API 工作区' })).toBeInTheDocument();
-    expect(await screen.findByRole('table', { name: '应用请求记录' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'req_12345678' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '应用筛选' })).toBeInTheDocument();
-    expect(screen.queryByText('Apply filters')).not.toBeInTheDocument();
-    // 端点路径、错误码等耐久遥测字段属于标识，必须保持原样。
-    expect(screen.getByText('FORBIDDEN')).toBeInTheDocument();
-
-    render(<LocaleProvider><MemoryRouter initialEntries={['/requests/req_12345678?from=%2Fapi%3Ftab%3Drequests']}><Routes>
-      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
-    </Routes></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('heading', { name: '请求详情' })).toBeInTheDocument();
-    expect(screen.getByText('46 字节')).toBeInTheDocument();
-    expect(screen.getByText('方法与路由')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回请求上下文' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '打开集合 API' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '在请求中查找' })).toBeInTheDocument();
   });
 
   it('does not expose generic Auth Collection writes and discovers canonical Auth routes', async () => {
@@ -199,7 +174,7 @@ describe('API Workspace', () => {
     await user.click(await screen.findByRole('button', { name: /Read a file attachment/ }));
     expect(await screen.findByText('Signed-in users')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Record ID'), 'rec_123');
-    await user.selectOptions(screen.getByLabelText('File field'), 'attachment');
+    await selectOption(user, screen.getByLabelText('File field'), 'attachment');
     await user.click(screen.getByText('View OpenAPI'));
     expect(screen.getAllByText(/readApplicationRecordFile/).length).toBeGreaterThan(0);
     expect(screen.getByText(/"\*\/\*"/)).toBeInTheDocument();
@@ -248,65 +223,4 @@ describe('API Workspace', () => {
     })));
   });
 
-  it('keeps Requests search, filter, sort and cursor pagination in the URL', async () => {
-    const user = userEvent.setup();
-    mocks.listRequestRecords.mockResolvedValue({ data: [requestRecord], nextCursor: 'cursor_2' });
-    render(<LocaleProvider><MemoryRouter initialEntries={['/api?tab=requests&search=req_12&filter=status+eq+403&sort=time+desc']}><CurrentLocation /><GlobalAPIPage /></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('link', { name: 'req_12345678' })).toBeInTheDocument();
-    expect(mocks.listRequestRecords).toHaveBeenCalledWith(expect.objectContaining({ search: 'req_12', filter: 'status eq 403', sort: 'time desc' }), expect.any(AbortSignal));
-    await user.click(screen.getByRole('button', { name: /Next/ }));
-    await waitFor(() => expect(screen.getByTestId('current-location').textContent).toContain('cursor=cursor_2'));
-    expect(screen.getByTestId('current-location').textContent).toContain('search=req_12');
-    expect(screen.getByTestId('current-location').textContent).toContain('filter=status');
-    expect(screen.getByTestId('current-location').textContent).toContain('back=');
-  });
-
-  it('loads durable Request Detail directly and links back to its Collection endpoint context', async () => {
-    mocks.getRequestRecord.mockResolvedValue(requestRecord);
-    mocks.listAllCollections.mockResolvedValue([collection]);
-    render(<LocaleProvider><MemoryRouter initialEntries={['/requests/req_12345678?from=%2Fapi%3Ftab%3Drequests']}><Routes>
-      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
-    </Routes></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByText('FORBIDDEN')).toBeInTheDocument();
-    expect(screen.getByText('denied')).toBeInTheDocument();
-    expect(screen.getByText('46 bytes')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to request context' })).toHaveAttribute('href', '/api?tab=requests');
-    expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=getApplicationRecord');
-  });
-
-  it('resolves Request Detail links when durable telemetry stores a route template', async () => {
-    mocks.getRequestRecord.mockResolvedValue({ ...fileRequestRecord, endpoint: '/api/v1/{collectionName}/{recordId}/files/{fieldName}' });
-    mocks.listAllCollections.mockResolvedValue([fileCollection]);
-    render(<LocaleProvider><MemoryRouter initialEntries={['/requests/req_file_123456']}><Routes>
-      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
-    </Routes></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
-  });
-
-  it('resolves ordered file read templates to the indexed endpoint', async () => {
-    mocks.getRequestRecord.mockResolvedValue({ ...fileRequestRecord, endpoint: '/api/v1/{collectionName}/{recordId}/files/{fieldName}/{fileIndex}' });
-    mocks.listAllCollections.mockResolvedValue([filesCollection]);
-    render(<LocaleProvider><MemoryRouter initialEntries={['/requests/req_file_ordered']}><Routes>
-      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
-    </Routes></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
-  });
-  it('preserves file endpoint context in Request Detail links', async () => {
-    mocks.getRequestRecord.mockResolvedValue(fileRequestRecord);
-    mocks.listAllCollections.mockResolvedValue([fileCollection]);
-    render(<LocaleProvider><MemoryRouter initialEntries={['/requests/req_file_123456']}><Routes>
-      <Route element={<RequestDetailPage />} path="/requests/:requestId" />
-    </Routes></MemoryRouter></LocaleProvider>);
-
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
-    expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=readApplicationRecordFile');
-  });
 });

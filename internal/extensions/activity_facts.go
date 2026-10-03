@@ -43,7 +43,7 @@ func (service *Service) ActivityFacts(ctx context.Context, query storage.Executo
 			ID: "af_extension_run_" + id, Kind: activity.KindExtensionRun, Status: status,
 			OccurredAt: occurred.UTC(), ResourceKind: "extensionRun", ResourceID: id,
 			CollectionID: collectionID, Title: name,
-			DeepLink: "/extensions/" + extensionID + "?tab=runs&run=" + id,
+			DeepLink: "/events/hooks/" + extensionID + "?tab=runs&run=" + id,
 		}
 		if completedAt.Valid {
 			if finished, err := time.Parse(time.RFC3339Nano, completedAt.String); err == nil && finished.After(occurred) {

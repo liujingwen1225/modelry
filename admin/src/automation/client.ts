@@ -69,7 +69,9 @@ function safeRequestError(value: unknown, response: Response): ApiClientError {
   const requestId = response.headers.get('X-Request-Id')
     ?? (typeof envelope.requestId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(envelope.requestId) ? envelope.requestId : 'unavailable');
   const paths = new Set(['/name', '/targetUrl', '/signingSecretId', '/collectionId', '/eventType', '/webhookId', '/cron']);
-  const codes = new Set(['required', 'invalidName', 'invalidWebhookUrl', 'invalidSecretReference', 'invalidCollection', 'invalidEventType', 'duplicateEventHook', 'invalidCron', 'tooManyWebhooks', 'tooManyEventHooks', 'tooManyJobs']);
+  // `invalidWebhook` 由手动运行（POST /jobs/{jobId}/run）与投递创建在 Webhook 未启用时返回，
+  // 与 `invalidSecretReference` 一样是页面必须能识别并给出恢复路径的字段级校验码。
+  const codes = new Set(['required', 'invalidName', 'invalidWebhookUrl', 'invalidSecretReference', 'invalidWebhook', 'invalidCollection', 'invalidEventType', 'duplicateEventHook', 'invalidCron', 'tooManyWebhooks', 'tooManyEventHooks', 'tooManyJobs']);
   const violations = code === 'VALIDATION_FAILED' && isRecord(envelope.details) && Array.isArray(envelope.details.violations)
     ? envelope.details.violations.filter(isRecord).flatMap((item) =>
       typeof item.path === 'string' && paths.has(item.path) && typeof item.code === 'string' && codes.has(item.code)
@@ -257,6 +259,13 @@ export async function setJobEnabled(id: string, enabled: boolean): Promise<{ id:
   const result = unwrap(await request(`/admin/api/v1/jobs/${encodeURIComponent(id)}/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }));
   const item = isRecord(result) ? result : {};
   return { id: text(item.id), enabled: item.enabled === true, nextRunAt: text(item.nextRunAt) };
+}
+
+// 手动运行只创建一条显式投递，并返回服务器权威的 Delivery：
+// 它不推进 nextRunAt、不消费计划槽位；Webhook 未启用或签名 Secret 未配置时返回 422 字段级校验；
+// 容量已满时仍返回 202，但 Delivery 是终态 capacityExceeded（automation-http-contract §/jobs/{jobId}/run）。
+export async function runJob(jobId: string): Promise<DeliverySummary> {
+  return delivery(unwrap(await request(`/admin/api/v1/jobs/${encodeURIComponent(jobId)}/run`, { method: 'POST' })));
 }
 
 export async function listDeliveries(options: {

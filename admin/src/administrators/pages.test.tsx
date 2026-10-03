@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -52,6 +53,19 @@ describe('Administrators Admin surface', () => {
     expect(within(table).getByText('colleague@example.test')).toBeInTheDocument();
     expect(within(table).getByText('Read only')).toBeInTheDocument();
     expect(within(table).getByText('Active')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Control Plane');
+  });
+
+  it('uses user-facing administrator access wording in Simplified Chinese', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    window.history.pushState({}, '', '/administrators');
+    setupFetch();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: '管理员' })).toBeInTheDocument();
+    // 新 IA：页面标题是「访问与认证」，管理员是其中的一个工作面。
+    expect(document.body.textContent).toContain('访问与认证');
+    expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
   });
 
   it('creates an Administrator with a normalised Custom Permission', async () => {
@@ -65,7 +79,7 @@ describe('Administrators Admin surface', () => {
     const dialog = within(await screen.findByRole('dialog'));
     await userEvent.type(dialog.getByLabelText('Email'), 'second@example.test');
     await userEvent.type(dialog.getByLabelText('Initial password'), 'administrator-password');
-    await userEvent.selectOptions(dialog.getByLabelText('Permission preset'), 'custom');
+    await selectOption(userEvent, dialog.getByLabelText('Permission preset'), 'custom');
     await userEvent.click(dialog.getByLabelText('audit.read'));
     await userEvent.click(dialog.getByRole('button', { name: 'Create Administrator' }));
 
@@ -89,7 +103,15 @@ describe('Administrators Admin surface', () => {
     const sessionsDialog = within(await screen.findByRole('dialog', { name: 'Administrator sessions' }));
     expect(await sessionsDialog.findByText(/Expires/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete colleague@example.test' }));
+    // A real browser keeps the page behind a modal dialog inert, so close the
+    // sessions dialog before using the row-level Delete action. The dialog has
+    // both a header X (aria-label) and a body "Close dialog" button; use the body one.
+    const bodyCloseButton = sessionsDialog
+      .getAllByRole('button', { name: 'Close dialog' })
+      .find((element) => element.getAttribute('data-slot') !== 'dialog-close');
+    expect(bodyCloseButton).toBeDefined();
+    await userEvent.click(bodyCloseButton!);
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete colleague@example.test' }));
     await userEvent.click(screen.getByRole('button', { name: 'Delete Administrator' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input) === '/admin/api/v1/administrators/adm_1' && (init as RequestInit | undefined)?.method === 'DELETE')).toBe(true));
   });

@@ -1,17 +1,67 @@
+import { Input } from '@/components/ui/input';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Settings2 } from 'lucide-react';
-import { Button, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { DiagnosticsCards } from '../components/runtime-status';
+import { useDiagnostics } from '../components/diagnostics-context';
+import { FormField } from '../components/form-field';
+import { LanguageSwitcher } from '../components/language-switcher';
+import { ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
+import { useTheme } from '../components/theme-context';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { fetchRuntimeSettings, saveRuntimeSettings, type RuntimeSetting, type RuntimeSettings } from './client';
-import './settings.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
 function sourceKey(source: RuntimeSetting['source']): TranslationKey {
   return ('runtimeSettings.sources.' + source) as TranslationKey;
+}
+
+// Spec 0001 §11.2：常规分节只放真实可用的实例状态与浏览器本地界面偏好。
+// 后端没有实例名称 / 时区等设置，因此不把它们做成输入框（不允许 Placeholder Action）。
+export function SettingsGeneralPage() {
+  const { t } = useI18n();
+  const { theme, toggleTheme } = useTheme();
+  const { refresh } = useDiagnostics();
+
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      <section aria-labelledby="settings-general-status" className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="settings-general-status">{t('settings.generalStatusTitle')}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t('settings.diagnosticsDescription')}</p>
+          </div>
+          <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={15} /> {t('settings.refresh')}</Button>
+        </div>
+        <DiagnosticsCards />
+      </section>
+
+      <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+        <div className="min-w-0">
+          <h2 className="m-0">{t('settings.generalPreferencesTitle')}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t('settings.generalPreferencesDescription')}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalLanguageLabel')}</span>
+            <LanguageSwitcher />
+          </div>
+          <div className="grid gap-1.5">
+            <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalThemeLabel')}</span>
+            <Button onClick={toggleTheme} size="small" type="button" variant="secondary">
+              {theme === 'dark' ? t('shell.themeSwitchToLight') : t('shell.themeSwitchToDark')}
+            </Button>
+          </div>
+        </div>
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('settings.generalReadOnly')}</p>
+      </Surface>
+    </div>
+  );
 }
 
 export function RuntimeSettingsPage() {
@@ -74,10 +124,10 @@ export function RuntimeSettingsPage() {
 
   const invalid = retentionDays.trim() === '' || Number(retentionDays) < 1 || Number(retentionDays) > 3650;
 
-  if (state === 'loading') return <div className="page-stack"><LoadingState label={t('runtimeSettings.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('runtimeSettings.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="page-stack">
+      <div className="flex min-w-0 flex-col gap-6">
         <ErrorState description={t('runtimeSettings.loadFailedDescription')} title={t('runtimeSettings.loadFailed')}>
           <Button onClick={() => window.location.reload()} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('runtimeSettings.retry')}</Button>
         </ErrorState>
@@ -87,60 +137,63 @@ export function RuntimeSettingsPage() {
   if (!settings) return null;
 
   return (
-    <div className="page-stack runtime-settings-page">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{t('runtimeSettings.eyebrow')}</p>
-          <h1>{t('runtimeSettings.title')}</h1>
-          <p className="page-description">{t('runtimeSettings.description')}</p>
-        </div>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="sr-only">
+        <p className="eyebrow">{t('runtimeSettings.eyebrow')}</p>
+        <h1>{t('runtimeSettings.title')}</h1>
+        <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('runtimeSettings.description')}</p>
       </header>
 
-      <Surface className="runtime-settings" variant="standard">
-        <div className="runtime-settings__heading">
-          <span className="scope-icon"><Settings2 aria-hidden="true" size={17} /></span>
-          <div>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="flex flex-wrap items-center gap-3">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><Settings2 size={17} /></span>
+          <div className="min-w-0">
             <p className="eyebrow">{t('runtimeSettings.current.eyebrow')}</p>
             <h2>{t('runtimeSettings.current.title')}</h2>
           </div>
         </div>
-        <dl className="runtime-settings__facts">
-          <div>
-            <dt>{t('runtimeSettings.listenAddress.label')}</dt>
-            <dd>
-              <code>{settings.listenAddress.value}</code>
+        <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
+            <dt className="text-[11px] font-semibold text-muted-foreground">{t('runtimeSettings.listenAddress.label')}</dt>
+            <dd className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
+              <code className="break-words font-mono">{settings.listenAddress.value}</code>
               <StatusChip state="info">{t(sourceKey(settings.listenAddress.source))}</StatusChip>
               {settings.listenAddress.restartRequired && <StatusChip state="degraded">{t('runtimeSettings.restartRequired')}</StatusChip>}
             </dd>
           </div>
-          <div>
-            <dt>{t('runtimeSettings.requestRetention.label')}</dt>
-            <dd>
-              <code>{settings.requestRetentionDays.value}</code>
+          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
+            <dt className="text-[11px] font-semibold text-muted-foreground">{t('runtimeSettings.requestRetention.label')}</dt>
+            <dd className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
+              <code className="break-words font-mono">{settings.requestRetentionDays.value}</code>
               <StatusChip state="info">{t(sourceKey(settings.requestRetentionDays.source))}</StatusChip>
               {settings.requestRetentionDays.restartRequired && <StatusChip state="degraded">{t('runtimeSettings.restartRequired')}</StatusChip>}
             </dd>
           </div>
-          <div><dt>{t('runtimeSettings.current.revision')}</dt><dd>{settings.revision}</dd></div>
+          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
+            <dt className="text-[11px] font-semibold text-muted-foreground">{t('runtimeSettings.current.revision')}</dt>
+            <dd className="m-0 break-words text-xs text-ink-secondary">{settings.revision}</dd>
+          </div>
         </dl>
-        <p className="runtime-settings__hint">{t('runtimeSettings.current.flagHint')}</p>
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('runtimeSettings.current.flagHint')}</p>
       </Surface>
 
-      <Surface className="runtime-settings" variant="standard">
-        <h2>{t('runtimeSettings.edit.title')}</h2>
-        <p className="section-description">{t('runtimeSettings.edit.description')}</p>
-        <form className="runtime-settings__form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="min-w-0">
+          <h2>{t('runtimeSettings.edit.title')}</h2>
+          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('runtimeSettings.edit.description')}</p>
+        </div>
+        <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <FormField hint={t('runtimeSettings.listenAddress.hint')} htmlFor="runtime-listen-address" label={t('runtimeSettings.listenAddress.label')}>
-            <input id="runtime-listen-address" onChange={(event) => setListenAddress(event.target.value)} placeholder={settings.listenAddress.value} value={listenAddress} />
+            <Input id="runtime-listen-address" onChange={(event) => setListenAddress(event.target.value)} placeholder={settings.listenAddress.value} value={listenAddress} />
           </FormField>
           <FormField hint={t('runtimeSettings.requestRetention.hint')} htmlFor="runtime-request-retention" label={t('runtimeSettings.requestRetention.label')}>
-            <input id="runtime-request-retention" max="3650" min="1" onChange={(event) => setRetentionDays(event.target.value)} type="number" value={retentionDays} />
+            <Input id="runtime-request-retention" max="3650" min="1" onChange={(event) => setRetentionDays(event.target.value)} type="number" value={retentionDays} />
           </FormField>
-          <div className="runtime-settings__actions">
+          <div className="flex justify-end">
             <Button disabled={busy || invalid} type="submit" variant="primary">{busy ? t('runtimeSettings.saving') : t('runtimeSettings.save')}</Button>
           </div>
         </form>
-        <p className="runtime-settings__hint">{t('runtimeSettings.edit.restartHint')}</p>
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('runtimeSettings.edit.restartHint')}</p>
       </Surface>
 
       {error !== undefined && (
@@ -149,7 +202,7 @@ export function RuntimeSettingsPage() {
           title={t('runtimeSettings.saveFailed')}
         />
       )}
-      {notice !== null && <p role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
     </div>
   );
 }

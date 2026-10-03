@@ -1,10 +1,13 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type ReadyRecord = { state: string; url: string; projectId: string };
 type RuntimeProcess = ChildProcessWithoutNullStreams;
@@ -65,11 +68,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
     ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0']
     : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'extensions-lifecycle');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${stderr}`)), 60_000);
+    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${redactRuntimeText(stderr)}`)), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -94,12 +98,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${stderr}`));
+      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${redactRuntimeText(stderr)}`));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error(`Invalid READY record: ${JSON.stringify(record)}`);
@@ -192,6 +196,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('extensions-lifecycle');
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
 
@@ -222,18 +227,20 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await expect(page).toHaveURL(/\/collections\/new$/);
   await page.getByLabel('Collection name').fill('lifecycle-items');
   await page.getByLabel('Field name 1').fill('title');
-  await page.getByLabel('Required', { exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Required', exact: true }).check();
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'lifecycle-items' })).toBeVisible();
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
   expect(collectionId).toMatch(/^col_/);
 
+  // 旧 `/secrets` 深链归一为系统设置的 Secrets 分节。
   await page.goto(`${runtimeURL}/secrets`);
+  await expect(page).toHaveURL(`${runtimeURL}/settings/secrets`);
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   await page.locator('#secret-name').fill('Lifecycle secret');
   await page.locator('#secret-value').fill(secretMarker);
   const secretResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/secrets');
-  await page.locator('.extension-secret-create form button[type="submit"]').click();
+  await page.locator('[data-extension-secret-create] form button[type="submit"]').click();
   const createdSecret = await secretResponse;
   expect(createdSecret.status()).toBe(201);
   expect(await createdSecret.text()).not.toContain(secretMarker);
@@ -246,25 +253,30 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 
-  await page.goto(`${runtimeURL}/extensions`);
+  // 旧 `/automations/hooks` 深链归一为 Hooks & Events 的 Hooks 工作面。
+  await page.goto(`${runtimeURL}/automations/hooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=hooks`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
+  await page.getByRole('link', { name: 'Create Hook', exact: true }).click();
+  await expect(page).toHaveURL(/\/events\/hooks\/new$/);
   await page.locator('#extension-create-name').fill('Lifecycle guard');
-  await page.locator('#extension-create-language').selectOption('typescript');
+  await selectOption(page, page.locator('#extension-create-language'), 'typescript');
   await page.locator('#extension-create-source').fill('export function beforeCreate() { return { action: "reject" }; }');
-  await page.locator('.extension-create-card form button[type="submit"]').click();
+  await page.locator('[data-extension-create-card] form button[type="submit"]').click();
   await expect(page.getByRole('heading', { name: 'Lifecycle guard' })).toBeVisible();
   const extensionId = decodeURIComponent(new URL(page.url()).pathname.split('/').at(-1) ?? '');
   expect(extensionId).toMatch(/^ext_/);
 
   await page.getByRole('button', { name: 'Add binding' }).click();
-  await page.locator('#binding-collection-0').selectOption(collectionId);
+  await selectOption(page, page.locator('#binding-collection-0'), collectionId);
   await page.getByRole('button', { name: 'Add binding' }).click();
-  await page.locator('#binding-collection-1').selectOption(collectionId);
-  await page.locator('#binding-phase-1').selectOption('afterCommit');
+  await selectOption(page, page.locator('#binding-collection-1'), collectionId);
+  await selectOption(page, page.locator('#binding-phase-1'), 'afterCommit');
   await page.getByRole('button', { name: 'Add alias' }).click();
   await page.locator('#secret-alias-0').fill('MAIL_KEY');
-  const secretId = await page.locator('#secret-id-0').inputValue();
+  const secretId = await page.locator('#secret-id-0').getAttribute('data-value');
   expect(secretId).toMatch(/^sec_/);
-  await page.locator('.extension-editor button[type="submit"]').click();
+  await page.locator('[data-extension-editor] button[type="submit"]').click();
   await expect(page.getByRole('button', { name: 'Enable' })).toBeEnabled();
   await page.getByRole('button', { name: 'Enable' }).click();
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
@@ -286,7 +298,7 @@ export function afterCommitCreate() {
   if (typeof secret !== "string" || secret.length !== ${secretMarker.length}) throw new Error("secret lookup failed");
 }`;
   await page.locator('#extension-source').fill(allowedSource);
-  await page.locator('.extension-editor button[type="submit"]').click();
+  await page.locator('[data-extension-editor] button[type="submit"]').click();
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
   const allowed = await requestJSON(page, 'POST', `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records`, {
     values: { title: 'ALLOWED_MARKER' },
@@ -319,7 +331,8 @@ export function afterCommitCreate() {
   expect(postHookRestart.projectId).toBe(firstRuntime.projectId);
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await page.goto(`${runtimeURL}/extensions/${encodeURIComponent(extensionId)}`);
+  await page.goto(`${runtimeURL}/automations/hooks/${encodeURIComponent(extensionId)}`);
+  await expect(page).toHaveURL(`${runtimeURL}/events/hooks/${encodeURIComponent(extensionId)}`);
   await expect(page.getByRole('button', { name: 'Disable' })).toBeVisible();
 
   const longRunningSource = `export function beforeCreate(context: { values: Record<string, unknown> }) {
@@ -327,7 +340,7 @@ export function afterCommitCreate() {
 }
 export function afterCommitCreate() { while (true) {} }`;
   await page.locator('#extension-source').fill(longRunningSource);
-  await page.locator('.extension-editor button[type="submit"]').click();
+  await page.locator('[data-extension-editor] button[type="submit"]').click();
   const interruptedWrite = await requestJSON(page, 'POST', `/admin/api/v1/collections/${encodeURIComponent(collectionId)}/records`, {
     values: { title: 'RESTART_MARKER' },
   });
@@ -343,13 +356,15 @@ export function afterCommitCreate() { while (true) {} }`;
   expect(restartedRuntime.projectId).toBe(firstRuntime.projectId);
   await page.goto(runtimeURL);
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await page.goto(`${runtimeURL}/extensions/${encodeURIComponent(extensionId)}?tab=runs`);
+  await page.goto(`${runtimeURL}/automations/hooks/${encodeURIComponent(extensionId)}?tab=runs`);
+  await expect(page).toHaveURL(`${runtimeURL}/events/hooks/${encodeURIComponent(extensionId)}?tab=runs`);
   await expect(page.getByRole('heading', { name: 'Lifecycle guard' })).toBeVisible();
   await expect.poll(async () => {
     const runs = await listRuns(page, extensionId);
     return runs.find((run) => run.recordId === interruptedRecordId && run.phase === 'afterCommit')?.status;
   }, { timeout: 10_000 }).toBe('interrupted');
-  await expect(page.getByRole('tab', { name: 'Runs' })).toHaveAttribute('aria-selected', 'true');
+  // Hook 详情的二级工作面也是真实链接，当前 Tab 用 aria-current 表达。
+  await expect(page.getByRole('navigation', { name: 'Hook sections' }).getByRole('link', { name: 'Hook Runs' })).toHaveAttribute('aria-current', 'page');
 
   await page.getByRole('button', { name: 'Disable' }).click();
   await expect(page.getByRole('button', { name: 'Enable' })).toBeVisible();
@@ -361,4 +376,75 @@ export function afterCommitCreate() { while (true) {} }`;
   expect(JSON.stringify(disabledWrite.body)).not.toContain('DISABLED_MARKER-hooked');
   expect(JSON.stringify(await listRuns(page, extensionId))).not.toContain((disabledWrite.body as { data: { id: string } }).data.id);
   expect(issues).toEqual([]);
+});
+
+test('Hooks & Events 创建工作面、侧栏和耐久结果保持一致', async ({ page }) => {
+  const first = await startRuntime(projectRoot);
+  await page.goto(runtimeURL);
+  await page.getByLabel('Email').fill(ownerEmail);
+  await page.getByLabel('Password').fill(ownerPassword);
+  await page.getByRole('button', { name: 'Complete setup' }).click();
+  await page.getByLabel('Collection name').fill('workflow-items');
+  await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'workflow-items' })).toBeVisible();
+  const collectionId = new URL(page.url()).pathname.split('/')[2];
+
+  await page.goto(`${runtimeURL}/events?tab=hooks`);
+  await expect(page.locator('#extension-create-name')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Create Hook', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Create a Hook', level: 1 })).toBeVisible();
+  await page.locator('#extension-create-name').fill('Workflow guard');
+  await page.getByRole('button', { name: 'Create Hook', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Workflow guard', level: 1 })).toBeVisible();
+  const hookId = new URL(page.url()).pathname.split('/').at(-1)!;
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Workflow guard', level: 1 })).toBeVisible();
+
+  // 前置密钥只用于签名配置，整个验收不启用 Webhook，也不发送外部请求。
+  const secret = await requestJSON(page, 'POST', '/admin/api/v1/secrets', { name: 'Workflow signing', value: secretMarker });
+  expect(secret.status).toBe(201);
+  const secretId = (secret.body as { data: { id: string } }).data.id;
+  await page.goto(`${runtimeURL}/events?tab=webhooks`);
+  await page.getByRole('button', { name: 'Create Webhook', exact: true }).click();
+  const webhookForm = page.getByRole('dialog', { name: 'New Webhook' });
+  await expect(webhookForm).toBeVisible();
+  await webhookForm.getByLabel('Name', { exact: true }).fill('Workflow receiver');
+  await webhookForm.getByLabel('HTTPS destination').fill('https://example.test/hooks');
+  await selectOption(page, webhookForm.getByLabel('Signing Secret'), secretId);
+  await webhookForm.getByRole('button', { name: 'Save Webhook' }).click();
+  await expect(webhookForm).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Workflow receiver' })).toBeVisible();
+  const webhookList = await requestJSON(page, 'GET', '/admin/api/v1/webhooks');
+  const webhookId = (webhookList.body as { data: { id: string; name: string }[] }).data.find(item => item.name === 'Workflow receiver')!.id;
+
+  await page.getByRole('link', { name: 'Event triggers', exact: true }).click();
+  await page.getByRole('button', { name: 'Create event trigger' }).click();
+  const triggerForm = page.getByRole('dialog', { name: 'New event trigger' });
+  await expect(triggerForm).toBeVisible();
+  await triggerForm.getByLabel('Name', { exact: true }).fill('Workflow event');
+  await selectOption(page, triggerForm.getByLabel('Collection', { exact: true }), collectionId);
+  await selectOption(page, triggerForm.getByLabel('Webhook', { exact: true }), webhookId);
+  await triggerForm.getByRole('button', { name: 'Save event trigger' }).click();
+  await expect(triggerForm).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Workflow event' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Delivery history', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible();
+  await page.goto(`${runtimeURL}/events?tab=hooks&q=Workflow`);
+  await page.getByRole('link', { name: 'Webhooks', exact: true }).click();
+  await expect(page.getByRole('searchbox')).toHaveValue('');
+  await page.getByRole('link', { name: 'Hooks', exact: true }).click();
+  await expect(page.getByRole('searchbox')).toHaveValue('Workflow');
+
+  await stopRuntime();
+  const restarted = await startRuntime(projectRoot);
+  expect(restarted.projectId).toBe(first.projectId);
+  await page.goto(`${runtimeURL}/events/hooks/${hookId}`);
+  await expect(page.getByRole('heading', { name: 'Workflow guard', level: 1 })).toBeVisible();
+  await page.goto(`${runtimeURL}/events?tab=webhooks`);
+  await expect(page.getByRole('heading', { name: 'Workflow receiver' })).toBeVisible();
+  await page.goto(`${runtimeURL}/events?tab=triggers`);
+  await expect(page.getByRole('heading', { name: 'Workflow event' })).toBeVisible();
+  // 先关闭页面，让重启期间取消的网络请求结束，再由证据夹具收集最终结果。
+  await page.close();
 });

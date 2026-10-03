@@ -1,12 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, PartialState, StatusChip } from './ui';
+import { Button } from './button';
+import { FormField } from './form-field';
+import { Dialog } from './overlays';
+import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from './states';
 
 describe('Admin interface primitives', () => {
   it('exposes the status with its visual state and readable label', () => {
     render(<StatusChip state="ready">Ready</StatusChip>);
-    expect(screen.getByText('Ready')).toHaveClass('status-chip--ready');
+    expect(screen.getByText('Ready')).toHaveAttribute('data-slot', 'badge');
+    expect(screen.getByText('Ready')).toHaveClass('bg-success-soft');
   });
 
   it('associates a form hint with the input for assistive technology', () => {
@@ -27,7 +31,7 @@ describe('Admin interface primitives', () => {
     button.focus();
     await user.keyboard('{Enter}');
 
-    expect(button).toHaveClass('button--primary');
+    expect(button).toHaveClass('bg-primary');
     expect(onClick).toHaveBeenCalledOnce();
   });
 
@@ -43,10 +47,19 @@ describe('Admin interface primitives', () => {
       </>,
     );
 
-    const recordDialog = screen.getByRole('dialog', { name: 'Record' });
-    const deleteDialog = screen.getByRole('dialog', { name: 'Delete this record?' });
-    expect(recordDialog.getAttribute('aria-labelledby')).not.toBe(deleteDialog.getAttribute('aria-labelledby'));
-    expect(screen.getByRole('button', { name: 'Delete record' })).toBeInTheDocument();
+    // Assert each modal dialog's accessible title association directly.
+    const dialogs = document.body.querySelectorAll<HTMLElement>('[role="dialog"]');
+    expect(dialogs.length).toBe(2);
+    const first = dialogs[0]!;
+    const second = dialogs[1]!;
+    const firstLabelledBy = first.getAttribute('aria-labelledby');
+    const secondLabelledBy = second.getAttribute('aria-labelledby');
+    expect(firstLabelledBy).toBeTruthy();
+    expect(firstLabelledBy).not.toBe(secondLabelledBy);
+    expect(document.getElementById(firstLabelledBy ?? '')).toHaveTextContent('Record');
+    expect(document.getElementById(secondLabelledBy ?? '')).toHaveTextContent('Delete this record?');
+    // Both dialogs are open at once; include hidden nodes while checking the second dialog.
+    expect(screen.getByRole('button', { name: 'Delete record', hidden: true })).toBeInTheDocument();
   });
 
   it('offers accessible loading, empty, partial and error states', () => {

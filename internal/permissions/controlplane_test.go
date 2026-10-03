@@ -26,6 +26,9 @@ func TestControlPlaneOperationMapsAdministratorsAndMail(t *testing.T) {
 		{http.MethodPost, "/admin/api/v1/mail/test", OperationMailManage},
 		{http.MethodGet, "/admin/api/v1/mail/deliveries", OperationMailRead},
 		{http.MethodPost, "/admin/api/v1/mail/deliveries/mail_0123456789abcdef0123456789abcdef/retry", OperationMailManage},
+		// 总览聚合与 Home 导航项共用 runtime.read 门限；各 section 内部仍按
+		// records.read / schema.read 逐项裁剪。
+		{http.MethodGet, "/admin/api/v1/overview", OperationRuntimeRead},
 	}
 	for _, testCase := range cases {
 		got, ok := ControlPlaneOperation(testCase.method, testCase.path)
@@ -41,6 +44,9 @@ func TestControlPlaneOperationMapsAdministratorsAndMail(t *testing.T) {
 		{http.MethodPut, "/admin/api/v1/administrators"},
 		{http.MethodGet, "/admin/api/v1/administrators/adm_x/sessions/revoke-all"},
 		{http.MethodPost, "/admin/api/v1/mail/deliveries"},
+		// 总览是只读聚合：非 GET 与自动化路由都不参与 Control Plane 映射。
+		{http.MethodPost, "/admin/api/v1/overview"},
+		{http.MethodPost, "/admin/api/v1/jobs/job_0123456789abcdef0123456789abcdef/run"},
 	}
 	for _, testCase := range against {
 		if _, ok := ControlPlaneOperation(testCase.method, testCase.path); ok {

@@ -177,6 +177,25 @@ func (store *Store) ProjectID() string {
 	return store.projectID
 }
 
+// DatabaseSizeBytes 返回 SQLite 主数据库当前占用的字节数（page_count × page_size）。
+// 它是只读诊断事实，不包含 WAL 或临时文件，也不暴露任何路径。
+func (store *Store) DatabaseSizeBytes(ctx context.Context) (int64, error) {
+	if store == nil || store.db == nil || store.IsClosed() {
+		return 0, errors.New("SQLite store is not open")
+	}
+	var pageCount, pageSize int64
+	if err := store.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return 0, fmt.Errorf("cannot read project database page count: %w", err)
+	}
+	if err := store.db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+		return 0, fmt.Errorf("cannot read project database page size: %w", err)
+	}
+	if pageCount < 0 || pageSize < 0 {
+		return 0, errors.New("project database reported a negative size")
+	}
+	return pageCount * pageSize, nil
+}
+
 // WithTransaction 在一个短事务中执行模块操作。
 // 只读 Store 上它退化为只读快照，因此复用 Runtime 读取路径的模块无需分支。
 func (store *Store) WithTransaction(ctx context.Context, work func(Executor) error) error {

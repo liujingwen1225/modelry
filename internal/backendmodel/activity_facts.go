@@ -100,7 +100,8 @@ func (service *Service) activityChangeFacts(ctx context.Context, query storage.E
 		switch status {
 		case "ready", "needsReview", "pending":
 			fact.Kind = activity.KindChangePending
-			fact.DeepLink = "/collections/" + collectionID + "/schema"
+			// 集合的 Schema 工作面在新 IA 中是 `/collections/:id/model`（spec 0001 §3.2/§15）。
+			fact.DeepLink = "/collections/" + collectionID + "/model"
 		case "failed":
 			fact.Kind = activity.KindChangeFailed
 		default:

@@ -1,19 +1,26 @@
+import { Input, Textarea } from '@/components/ui/input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Package, RefreshCw, Upload } from 'lucide-react';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useRegisterCommands, type AdminCommand } from '../components/command-registry';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { listAllCollections } from '../collections/client';
 import {
-  createBackup, exportCollection, fetchApplicationAPIContract, importCollection, preflightRestoreBundle,
-  type ApplicationAPIContract, type BackupPreflight, type ImportSummary,
+  createBackup, exportCollection, importCollection, preflightRestoreBundle,
+  type BackupPreflight, type ImportSummary,
 } from './client';
-import './portability.css';
 
 type LoadState = 'loading' | 'error' | 'ready';
 type Collection = { id: string; name: string };
+// 契约 / SDK 工作面已经归入 API 工作区的 OpenAPI Tab（spec 0001 §3.1、§15），
+// 因此这里只剩系统设置里的「备份与恢复」与「数据导入导出」两个分节。
+type Surface = 'backup' | 'data';
 
 function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -26,11 +33,10 @@ function saveBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-export function PortabilityPage() {
+function PortabilitySurface({ surface }: { surface: Surface }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
-  const [contract, setContract] = useState<ApplicationAPIContract | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,35 +49,30 @@ export function PortabilityPage() {
   useEffect(() => {
     const controller = new AbortController();
     setState('loading');
-    Promise.all([
-      fetchApplicationAPIContract(controller.signal),
-      listAllCollections(controller.signal).catch(() => [] as Collection[]),
-    ]).then(
-      ([value, listed]) => {
-        if (controller.signal.aborted) return;
-        setContract(value);
+    const load = surface === 'data'
+      ? listAllCollections(controller.signal).then((listed) => {
         setCollections(listed.map((item) => ({ id: item.id, name: item.name })));
         setSelected(listed[0]?.id ?? '');
-        setState('ready');
-      },
-      (reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(reason);
-        setState('error');
-      },
+      })
+      : Promise.resolve();
+    void load.then(
+      () => { if (!controller.signal.aborted) setState('ready'); },
+      (reason: unknown) => { if (!controller.signal.aborted) { setError(reason); setState('error'); } },
     );
     return () => controller.abort();
-  }, []);
+  }, [surface]);
 
   const commands = useMemo<AdminCommand[]>(() => [
     {
-      id: 'surface.portability',
+      id: `surface.${surface}`,
       category: 'commands.categories.system',
-      label: () => t('commands.portability'),
+      label: () => t(surface === 'backup' ? 'commands.backupRestore' : 'commands.dataTransfer'),
       keywords: () => [t('portability.searchKeywords')],
-      execute: () => navigate('/settings/portability'),
+      // 新 IA：备份与恢复、数据导入导出留在系统设置（spec 0001 §3.1、§11.2）；
+      // API 契约 / SDK 归入 API 工作区的 OpenAPI 工作面，因此不再有 `/settings/developer`。
+      execute: () => navigate(surface === 'backup' ? '/settings/backups' : '/settings/data'),
     },
-  ], [navigate, t]);
+  ], [navigate, surface, t]);
   useRegisterCommands(commands);
 
   async function backup() {
@@ -150,44 +151,45 @@ export function PortabilityPage() {
     }
   }
 
-  if (state === 'loading') return <div className="page-stack"><LoadingState label={t('portability.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('portability.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="page-stack">
+      <div className="flex min-w-0 flex-col gap-6">
         <ErrorState description={t('portability.loadFailedDescription')} title={t('portability.loadFailed')}>
           <Button onClick={() => window.location.reload()} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('portability.retry')}</Button>
         </ErrorState>
       </div>
     );
   }
-  if (!contract) return null;
+  const titleKey = surface === 'backup' ? 'portability.surfaces.backupTitle' : 'portability.surfaces.dataTitle';
+  const descriptionKey = surface === 'backup' ? 'portability.surfaces.backupDescription' : 'portability.surfaces.dataDescription';
+  // 眉标沿用系统设置分节词汇（spec 0001 §3.1、§11.2）。
+  const eyebrowKey = surface === 'backup' ? 'settings.navigation.backupRestore' : 'settings.navigation.dataTransfer';
 
   return (
-    <div className="page-stack portability-page">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{t('portability.eyebrow')}</p>
-          <h1>{t('portability.title')}</h1>
-          <p className="page-description">{t('portability.description')}</p>
-        </div>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="sr-only">
+        <p className="eyebrow">{t(eyebrowKey)}</p>
+        <h1>{t(titleKey as TranslationKey)}</h1>
+        <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t(descriptionKey as TranslationKey)}</p>
       </header>
 
-      <Surface className="portability-card" variant="standard">
-        <div className="portability-card__heading">
-          <span className="scope-icon"><Package aria-hidden="true" size={17} /></span>
-          <div>
+      {surface === 'backup' && <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="flex flex-wrap items-center gap-3">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><Package size={17} /></span>
+          <div className="min-w-0">
             <p className="eyebrow">{t('portability.backup.eyebrow')}</p>
             <h2>{t('portability.backup.title')}</h2>
           </div>
         </div>
-        <p className="section-description">{t('portability.backup.description')}</p>
-        <div className="portability-actions">
+        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('portability.backup.description')}</p>
+        <div className="flex flex-wrap items-center gap-2">
           <Button disabled={busy !== null} onClick={() => void backup()} size="small" type="button" variant="primary">
             <Download aria-hidden="true" size={14} /> {busy === 'backup' ? t('portability.backup.running') : t('portability.backup.action')}
           </Button>
         </div>
         <FormField hint={t('portability.restore.hint')} htmlFor="portability-restore-bundle" label={t('portability.restore.label')}>
-          <input
+          <Input
             accept="application/x-tar,.tar"
             id="portability-restore-bundle"
             onChange={(event) => void preflightBundle(event.target.files?.[0])}
@@ -196,47 +198,47 @@ export function PortabilityPage() {
         </FormField>
         {busy === 'preflight' && <LoadingState label={t('portability.restore.running')} />}
         {preflight && (
-          <div className="portability-preflight" data-preflight-compatible={preflight.compatible ? 'true' : 'false'} role="status">
+          <div className="flex min-w-0 flex-col gap-3 border-t pt-3" data-preflight-compatible={preflight.compatible ? 'true' : 'false'} role="status">
             <StatusChip state={preflight.compatible ? 'ready' : 'unavailable'}>
               {preflight.compatible ? t('portability.restore.compatible') : t('portability.restore.incompatible')}
             </StatusChip>
-            <dl className="portability-facts">
-              <div><dt>{t('portability.facts.projectId')}</dt><dd><code>{preflight.projectId ?? '—'}</code></dd></div>
-              <div><dt>{t('portability.facts.runtimeVersion')}</dt><dd>{preflight.runtimeVersion ?? '—'}</dd></div>
-              <div><dt>{t('portability.facts.collections')}</dt><dd>{preflight.counts.collections}</dd></div>
-              <div><dt>{t('portability.facts.records')}</dt><dd>{preflight.counts.records}</dd></div>
-              <div><dt>{t('portability.facts.objects')}</dt><dd>{preflight.counts.objects}</dd></div>
+            <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.projectId')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary"><code className="font-mono">{preflight.projectId ?? '—'}</code></dd></div>
+              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.runtimeVersion')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.runtimeVersion ?? '—'}</dd></div>
+              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.collections')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.collections}</dd></div>
+              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.records')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.records}</dd></div>
+              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.objects')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.objects}</dd></div>
             </dl>
             {preflight.findings.length > 0 && (
-              <ul className="portability-findings">
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-xs">
                 {preflight.findings.map((finding) => (
-                  <li key={finding.code + finding.message}>
+                  <li className="flex items-center gap-2" key={finding.code + finding.message}>
                     <StatusChip state={finding.severity === 'error' ? 'unavailable' : finding.severity === 'warning' ? 'degraded' : 'info'}>
                       {t(('portability.severities.' + finding.severity) as TranslationKey)}
                     </StatusChip>
-                    <span>{finding.message}</span>
+                    <span className="min-w-0 text-ink-secondary">{finding.message}</span>
                   </li>
                 ))}
               </ul>
             )}
-            <p className="portability-hint">{t('portability.restore.adminHint')}</p>
+            <p className="m-0 text-[11px] text-muted-foreground">{t('portability.restore.adminHint')}</p>
           </div>
         )}
-      </Surface>
+      </Surface>}
 
-      <Surface className="portability-card" variant="standard">
-        <h2>{t('portability.transfer.title')}</h2>
-        <p className="section-description">{t('portability.transfer.description')}</p>
+      {surface === 'data' && <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <div className="min-w-0">
+          <h2>{t('portability.transfer.title')}</h2>
+          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('portability.transfer.description')}</p>
+        </div>
         {collections.length === 0
           ? <EmptyState description={t('portability.transfer.emptyDescription')} title={t('portability.transfer.empty')} />
           : (
             <>
               <FormField htmlFor="portability-collection" label={t('portability.transfer.collection')}>
-                <select id="portability-collection" onChange={(event) => setSelected(event.target.value)} value={selected}>
-                  {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
-                </select>
+                <SelectField id="portability-collection" onValueChange={(selectedValue) => setSelected(selectedValue)} value={selected} options={[collections.map((collection) => ({ value: collection.id, label: collection.name }))]} />
               </FormField>
-              <div className="portability-actions">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button disabled={busy !== null} onClick={() => void exportRecords()} size="small" type="button" variant="secondary">
                   <Download aria-hidden="true" size={14} /> {t('portability.transfer.export')}
                 </Button>
@@ -245,14 +247,14 @@ export function PortabilityPage() {
                 </Button>
               </div>
               <FormField hint={t('portability.transfer.ndjsonHint')} htmlFor="portability-import" label={t('portability.transfer.ndjson')}>
-                <textarea id="portability-import" onChange={(event) => setImportText(event.target.value)} rows={5} value={importText} />
+                <Textarea id="portability-import" onChange={(event) => setImportText(event.target.value)} rows={5} value={importText} />
               </FormField>
               {importSummary && (
-                <div className="portability-import" role="status">
+                <div className="flex flex-col gap-2 rounded-lg border bg-secondary px-3 py-3" role="status">
                   <StatusChip state={importSummary.failed === 0 ? 'ready' : 'degraded'}>
                     {t('portability.transfer.summary', { created: importSummary.created, failed: importSummary.failed })}
                   </StatusChip>
-                  <ul>
+                  <ul className="m-0 flex list-disc flex-col gap-1 pl-[18px] text-xs text-ink-secondary">
                     {importSummary.results.filter((result) => result.status === 'failed').slice(0, 5).map((result) => (
                       <li key={result.index}>{t('portability.transfer.rowFailed', { index: result.index, code: result.code ?? 'INTERNAL_ERROR' })}</li>
                     ))}
@@ -261,40 +263,13 @@ export function PortabilityPage() {
               )}
             </>
           )}
-      </Surface>
-
-      <Surface className="portability-card" variant="standard">
-        <h2>{t('portability.contract.title')}</h2>
-        <p className="section-description">{t('portability.contract.description')}</p>
-        <dl className="portability-facts">
-          <div><dt>{t('portability.facts.runtimeVersion')}</dt><dd>{contract.version}</dd></div>
-          <div><dt>{t('portability.contract.hash')}</dt><dd><code data-testid="contract-hash">{contract.contentHash}</code></dd></div>
-          <div><dt>{t('portability.facts.collections')}</dt><dd>{contract.collections.length}</dd></div>
-        </dl>
-        <div className="portability-actions">
-          <Button
-            onClick={() => saveBlob(new Blob([JSON.stringify(contract, null, 2)], { type: 'application/json' }), 'application-api.json')}
-            size="small"
-            type="button"
-            variant="secondary"
-          >
-            <Download aria-hidden="true" size={14} /> {t('portability.contract.download')}
-          </Button>
-        </div>
-        <p className="portability-hint">{t('portability.contract.generateHint')}</p>
-        <ul className="portability-endpoints">
-          {contract.collections.slice(0, 5).map((collection) => (
-            <li key={collection.id}>
-              <strong>{collection.name}</strong>
-              <span>{collection.type}</span>
-              <code>{collection.endpoints.length} {t('portability.contract.endpoints')}</code>
-            </li>
-          ))}
-        </ul>
-      </Surface>
+      </Surface>}
 
       {error !== undefined && <ErrorState description={actionMessage(error)} title={t('portability.actionFailed')} />}
-      {notice !== null && <p role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
     </div>
   );
 }
+
+export function BackupRestorePage() { return <PortabilitySurface surface="backup" />; }
+export function DataTransferPage() { return <PortabilitySurface surface="data" />; }

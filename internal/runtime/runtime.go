@@ -27,6 +27,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/filestore"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/mail"
+	"github.com/liujingwen1225/modelry/internal/overview"
 	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/project"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
@@ -248,6 +249,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Portability: %w", err)
 	}
+	// 总览聚合只读取各领域的事实，不拥有自己的表。
+	overviewService, err := overview.NewService(backendModel, requestService, automationService, extensionService, driftService)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Overview: %w", err)
+	}
 	instance := &Runtime{
 		root:           root,
 		lock:           lock,
@@ -295,6 +301,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		}),
 		accesscontrol.NewModule(accessRules),
 		automation.NewModule(automationService),
+		overview.NewModule(overviewService),
 		filestore.NewModule(fileService),
 		extensions.NewModule(extensionService),
 		appauth.NewModule(authService),
@@ -536,8 +543,22 @@ func (instance *Runtime) StorageStatus() diagnostics.StorageStatus {
 			Provider: "Local",
 			Path:     instance.root.Files,
 		},
-		FileStorage: instance.fileStorageStatus(),
+		FileStorage:       instance.fileStorageStatus(),
+		DatabaseSizeBytes: instance.databaseSizeBytes(),
 	}
+}
+
+// databaseSizeBytes 返回 SQLite 主数据库大小。读不到时返回 nil，
+// 让 Storage Status 显示 Unavailable，而不是把失败当成 0 字节。
+func (instance *Runtime) databaseSizeBytes() *int64 {
+	if instance == nil || instance.store == nil {
+		return nil
+	}
+	size, err := instance.store.DatabaseSizeBytes(context.Background())
+	if err != nil {
+		return nil
+	}
+	return &size
 }
 
 // fileStorageStatus 返回 Provider 中立的活动 Provider 健康快照。

@@ -789,15 +789,14 @@ func validateModel(collection Collection) error {
 	}
 	fieldIDs := make(map[string]struct{}, len(collection.Fields))
 	fieldNames := make(map[string]struct{}, len(collection.Fields))
-	systemCount := 0
+	systems := make(map[string]bool)
 	for _, field := range collection.Fields {
 		if field.System {
-			systemCount++
-			switch field.Name {
-			case "id", "createdAt", "updatedAt":
-			default:
-				return fmt.Errorf("%w: unknown system field", ErrInvalidArgument)
+			canonical, found := fieldByName(systemFields(), field.Name)
+			if !found || systems[field.Name] || field.ID != canonical.ID || field.Type != canonical.Type || !field.Required || field.Unique || field.Relation != nil || len(field.Default) > 0 || len(field.Validation) > 0 {
+				return fmt.Errorf("%w: invalid system field", ErrInvalidArgument)
 			}
+			systems[field.Name] = true
 			continue
 		}
 		if !validOpaqueID(field.ID, "fld_") {
@@ -816,8 +815,8 @@ func validateModel(collection Collection) error {
 		}
 		fieldNames[key] = struct{}{}
 	}
-	if systemCount != 3 {
-		return fmt.Errorf("%w: the three locked system fields are required", ErrInvalidArgument)
+	if !systems["id"] {
+		return fmt.Errorf("%w: the locked id system field is required", ErrInvalidArgument)
 	}
 	if collection.Type == CollectionTypeAuth {
 		email, found := fieldByName(collection.Fields, "email")

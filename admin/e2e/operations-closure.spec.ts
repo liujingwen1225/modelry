@@ -1,10 +1,13 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type RuntimeProcess = ChildProcessWithoutNullStreams;
 type ReadyRecord = { state: string; url: string; projectId: string };
@@ -54,11 +57,12 @@ async function startRuntime(root: string, withListenFlag: boolean): Promise<Read
   if (withListenFlag) runtimeArgs.push('--listen', '127.0.0.1:0');
   const args = isWindows ? [runtimeBinary, ...runtimeArgs] : runtimeArgs;
   const child = spawn(command, args, { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'operations-closure');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + stderr)), 60_000);
+    const timeout = setTimeout(() => reject(new Error('Runtime did not emit READY. stderr: ' + redactRuntimeText(stderr))), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -83,12 +87,12 @@ async function startRuntime(root: string, withListenFlag: boolean): Promise<Read
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + stderr));
+      reject(new Error('Runtime exited before READY (code=' + String(code) + ', signal=' + String(signal) + '). stderr: ' + redactRuntimeText(stderr)));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error('Invalid READY record: ' + JSON.stringify(record));
@@ -139,7 +143,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('.topbar')).toBeVisible();
+  await expect(page.locator('[data-shell-topbar]')).toBeVisible();
 }
 
 test.beforeAll(async () => {
@@ -165,6 +169,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('operations-closure');
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
 
@@ -226,25 +231,33 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   });
   expect([200, 201]).toContain(pending.status);
 
+  // 旧 `/settings/drift` 深链仍然可用，但会被 route mapper 归一为 `/changes?tab=drift`；
+  // 结构漂移在新 IA 中是「变更」工作区的一个工作面，因此标题是 h2。
   await page.goto(runtimeURL + '/settings/drift');
-  await expect(page.getByRole('heading', { name: 'Drift', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/changes\?tab=drift$/);
+  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Storage consistency', level: 2 })).toBeVisible();
   await expect(page.getByText('A saved change is waiting for review')).toBeVisible();
-  await expect(page.getByText('No drift detected')).toBeVisible();
+  await expect(page.getByText('No differences found')).toBeVisible();
 
-  await page.goto(runtimeURL + '/activity');
+  // Activity 默认来源是管理面审计；子系统事实时间线由 `?source=facts` 筛选。
+  await page.goto(runtimeURL + '/activity?source=facts');
   await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
   const pendingRow = page.locator('li[data-activity-kind="change.pending"]').first();
   await expect(pendingRow).toBeVisible();
   await expect(pendingRow.getByText('posts')).toBeVisible();
-  await expect(pendingRow.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/collections/' + collectionId + '/schema');
+  // 待应用变更的深链接指向新的集合结构工作面 `/collections/:id/model`。
+  await expect(pendingRow.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/collections/' + collectionId + '/model');
   // Activity 不是请求日志：请求面产生的 RequestRecord 不出现在这里。
   expect(await page.locator('li[data-activity-kind="request.record"]').count()).toBe(0);
 
   // Policy Simulation：先预演默认 noAccess，再用真实匿名请求交叉验证同一 evaluator。
+  // 旧 `/collections/:id/security` 深链归一为 `/collections/:id/access`。
   await page.goto(runtimeURL + '/collections/' + collectionId + '/security');
+  await expect(page).toHaveURL(runtimeURL + '/collections/' + collectionId + '/access');
   await expect(page.getByRole('heading', { name: 'Simulate a request' })).toBeVisible();
-  await page.getByLabel('Operation').selectOption('list');
-  await page.getByLabel('Principal').selectOption('anonymous');
+  await selectOption(page, page.getByLabel('Operation'), 'list');
+  await selectOption(page, page.getByLabel('Request identity'), 'anonymous');
   await page.getByRole('button', { name: 'Simulate' }).click();
   const deniedPanel = page.locator('[data-simulation-decision="deny"]');
   await expect(deniedPanel).toBeVisible();
@@ -280,7 +293,7 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   const changeVersion = (pendingChange.body as { data: { version: number } }).data.version;
   const appliedChange = await requestJSON(page, 'POST', '/admin/api/v1/collections/' + collectionId + '/schema/apply', { expectedVersion: changeVersion, confirmRisk: true });
   expect([200, 201]).toContain(appliedChange.status);
-  await page.goto(runtimeURL + '/activity');
+  await page.goto(runtimeURL + '/activity?source=facts');
   await expect(page.locator('li[data-activity-kind="change.applied"]').first()).toBeVisible();
 
   // 关闭并重启：Project Runtime Settings 决定监听地址，且不再要求重启。
@@ -289,7 +302,7 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
   expectFailure(401, '/admin/api/v1/auth/session');
   await page.goto(runtimeURL);
   // Cookie 不区分端口：同一主机的耐久会话可能仍然有效，此时无需再次登录。
-  if (await page.locator('.topbar').count() === 0) {
+  if (await page.locator('[data-shell-topbar]').count() === 0) {
     await signIn(page, ownerEmail, ownerPassword);
   }
   const afterRestart = await requestJSON(page, 'GET', '/admin/api/v1/settings');

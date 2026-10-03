@@ -1,9 +1,21 @@
+import { Button as ControlButton } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { SearchInput } from '@/components/ui/search-input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ChevronLeft, ChevronRight, Clock3, Download, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, Download, Plus, RefreshCw, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
-import { Button, Dialog, EmptyState, ErrorState, FormField, LoadingState, Sheet, Surface } from '../components/ui';
+import { Input, Textarea } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '../components/button';
+import { FormField } from '../components/form-field';
+import { Dialog, Sheet } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState, SpinnerLoadingState } from '../components/states';
+import { Surface } from '../components/surface';
 import {
   createRecord,
   createApplicationUser,
@@ -27,22 +39,33 @@ import { useCollectionWorkspace } from './workspace-context';
 type Violation = { path?: string; message?: string; code?: string };
 type FilterDraft = { field: string; operator: string; value: string };
 
+// 工具栏内的筛选/排序控件共享同一套紧凑外观，直接对齐 FormField 中的原生 select/input 视觉。
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function errorCopy(error: unknown, fallback: string, translate: ReturnType<typeof useI18n>['t']) {
+function errorCopy(
+  error: unknown,
+  fallback: string,
+  translate: ReturnType<typeof useI18n>['t'],
+  errorMessage: ReturnType<typeof useI18n>['errorMessage'],
+  validationMessage: ReturnType<typeof useI18n>['validationMessage'],
+) {
   if (error instanceof ApiClientError) {
     const violations = Array.isArray(error.apiError.details.violations)
-      ? error.apiError.details.violations.filter(isRecord).map((item) => ({ path: String(item.path ?? ''), message: String(item.message ?? item.code ?? translate('records.reviewThisValue')) }))
+      ? error.apiError.details.violations.filter(isRecord).map((item) => ({
+        path: String(item.path ?? ''),
+        message: (typeof item.code === 'string' ? validationMessage(item.code) : undefined) ?? translate('records.reviewThisValue'),
+      }))
       : [];
     return {
-      title: error.apiError.message,
-      message: [error.apiError.code, error.apiError.hint, `Request ID: ${error.apiError.requestId}`].filter(Boolean).join(' · '),
+      title: errorMessage(error.apiError.code) ?? translate('errors.requestFailed'),
+      message: [translate('common.errorCode'), error.apiError.code, `${translate('common.requestId')}: ${error.apiError.requestId}`, translate('common.tryAgainWhenAvailable')].join(' · '),
       violations,
     };
   }
-  return { title: fallback, message: error instanceof Error ? error.message : translate('records.tryAgainWhenAvailable'), violations: [] as Violation[] };
+  return { title: fallback, message: translate('common.tryAgainWhenAvailable'), violations: [] as Violation[] };
 }
 
 function scalarFields(fields: FieldDefinition[]) {
@@ -100,19 +123,25 @@ function cursorHistory(searchParams: URLSearchParams) {
 function RecordPageTitle({ collection, onCreate }: { collection: Collection; onCreate: () => void }) {
   const { t } = useI18n();
   return (
-    <header className="page-heading collection-heading records-heading">
-      <div><p className="eyebrow">{collection.name} · {t('records.dataEyebrow')}</p><h1>{t('records.title')}</h1><p className="page-description">{t('records.description', { name: collection.name })}</p></div>
+    <header className="flex min-w-0 flex-wrap items-center justify-end gap-3" data-record-heading>
+      <div className="sr-only">
+        {/* 集合名可能是不含断点的长标识符，必须允许在任意位置换行（spec 0001 §16.1 不允许横向溢出）。 */}
+        <p className="eyebrow [overflow-wrap:anywhere]">{collection.name} · {t('records.dataEyebrow')}</p>
+        <h1>{t('records.title')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{t('records.description', { name: collection.name })}</p>
+      </div>
       <Button onClick={onCreate} variant="primary"><Plus aria-hidden="true" size={15} />{t(collection.type === 'Auth' ? 'records.createUser' : 'records.createRecord')}</Button>
     </header>
   );
 }
 
 export function CollectionRecordsPage() {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, errorMessage, validationMessage } = useI18n();
   const { collection } = useCollectionWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState<Page<CollectionRecord>>({ data: [] });
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const initiallyLoaded = useRef(false);
   const [error, setError] = useState<unknown>();
   const [reloadKey, setReloadKey] = useState(0);
   const [message, setMessage] = useState<TranslationKey | ''>('');
@@ -155,10 +184,12 @@ export function CollectionRecordsPage() {
     setError(undefined);
     void listRecords(collection.id, options, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
+      initiallyLoaded.current = true;
       setPage(result);
       setState('ready');
     }).catch((reason: unknown) => {
       if (controller.signal.aborted) return;
+      initiallyLoaded.current = true;
       setError(reason);
       setState('error');
     });
@@ -281,82 +312,81 @@ export function CollectionRecordsPage() {
       setRowDeleting(false);
     }
   }
+  if (state === 'loading' && !initiallyLoaded.current) return <SpinnerLoadingState label={t('records.loading')} />;
   return (
-    <div className="page-stack collection-page records-page">
+    <div className="flex min-w-0 flex-col gap-6" data-record-page>
       <RecordPageTitle collection={collection} onCreate={openCreate} />
-      {message && <div className="records-success" role="status"><span>{t(message)}</span><button aria-label={t('records.dismissMessage')} onClick={() => setMessage('')} type="button"><X aria-hidden="true" size={14} /></button></div>}
-      <Surface className="records-toolbar" variant="standard">
-        <label className="collection-search records-search">
-          <Search aria-hidden="true" size={15} />
-          <span className="sr-only">{t('records.search')}</span>
-          <input aria-label={t('records.search')} onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} type="search" value={search} />
-        </label>
-        <label className="records-control"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
-          <select aria-label={t('records.filterField')} onChange={(event) => updateParams({ filterField: event.target.value || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field}>
-            <option value="">{t('records.noFilter')}</option>{availableFilterFields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}
-          </select>
-        </label>
+      {message && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><span className="min-w-0 flex-1">{t(message)}</span><Button aria-label={t('records.dismissMessage')} className="size-8 px-0" onClick={() => setMessage('')} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} /></Button></div>}
+      <Surface className="flex flex-wrap items-center gap-3 p-3" variant="standard">
+        <SearchInput aria-label={t('records.search')} onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
+        <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
+          <SelectField aria-label={t('records.filterField')} onValueChange={(selectedValue) => updateParams({ filterField: selectedValue || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field} options={[({ value: "", label: t('records.noFilter') }), availableFilterFields.map((field) => ({ value: field.name, label: field.name }))]} />
+        </Label>
         {filterDraft.field && <>
-          <label className="records-control"><span className="sr-only">{t('records.filterOperator')}</span>
-            <select aria-label={t('records.filterOperator')} onChange={(event) => {
-              const draft = { ...filterDraft, operator: event.target.value };
+          <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterOperator')}</span>
+            <SelectField aria-label={t('records.filterOperator')} onValueChange={(selectedValue) => {
+              const draft = { ...filterDraft, operator: selectedValue };
               updateParams({ filterOperator: draft.operator, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
-            }} value={filterDraft.operator}>
-              {(filterDraft.field && availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'text'
+            }} value={filterDraft.operator} options={[(filterDraft.field && availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'text'
                 ? ['eq', 'ne', 'contains']
                 : availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'number' || availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'dateTime'
-                  ? ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] : ['eq', 'ne']).map((operator) => <option key={operator} value={operator}>{operator}</option>)}
-            </select>
-          </label>
-          <label className="records-control records-filter-value"><span className="sr-only">{t('records.filterValue')}</span>
+                  ? ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] : ['eq', 'ne']).map((operator) => ({ value: operator, label: operator }))]} />
+          </Label>
+          <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterValue')}</span>
             {availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'boolean'
-              ? <select aria-label={t('records.filterValue')} onChange={(event) => {
-                const value = event.target.value;
+              ? <SelectField aria-label={t('records.filterValue')} onValueChange={(selectedValue) => {
+                const value = selectedValue;
                 const draft = { ...filterDraft, value };
                 updateParams({ filterValue: value, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
-              }} value={filterDraft.value || 'true'}><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>
-              : <input aria-label={t('records.filterValue')} onChange={(event) => {
+              }} value={filterDraft.value || 'true'} options={[({ value: "true", label: t('common.yes') }), ({ value: "false", label: t('common.no') })]} />
+              : <Input aria-label={t('records.filterValue')} className="w-[118px]" onChange={(event) => {
                 const field = availableFilterFields.find((item) => item.name === filterDraft.field);
                 const draft = { ...filterDraft, value: event.target.value };
                 const syntax = filterSyntax(draft, field);
                 updateParams({ filterValue: event.target.value || undefined, filter: syntax || undefined }, true);
               }} placeholder={t('records.value')} type={availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'number' ? 'number' : 'search'} value={filterDraft.value} />}
-          </label>
+          </Label>
           <Button aria-label={t('records.clearFilter')} onClick={() => updateParams({ filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small" variant="quiet"><X aria-hidden="true" size={14} /></Button>
         </>}
-        <label className="records-control"><span>{t('records.sort')}</span>
-          <select aria-label={t('records.sortField')} onChange={(event) => updateParams({ sort: `${event.target.value} ${currentSortDirection}` }, true)} value={currentSortField}>
-            <option value="createdAt">{t('records.created')}</option><option value="updatedAt">{t('records.updated')}</option><option value="id">{t('records.id')}</option>{fields.map((field) => <option key={field.name} value={field.name}>{field.name}</option>)}
-          </select>
-          <select aria-label={t('records.sortDirection')} onChange={(event) => updateParams({ sort: `${currentSortField} ${event.target.value}` }, true)} value={currentSortDirection}><option value="desc">{t('records.newest')}</option><option value="asc">{t('records.oldest')}</option></select>
-        </label>
-        <details className="records-columns"><summary>{t('records.columns')}</summary><div>{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <label key={name}><input checked={visibleColumns.includes(name)} onChange={(event) => toggleColumn(name, event.target.checked)} type="checkbox" />{name}</label>)}</div></details>
+        <Label className="inline-flex min-h-8 items-center gap-2 text-[11px] font-semibold text-muted-foreground"><span>{t('records.sort')}</span>
+          <SelectField aria-label={t('records.sortField')} onValueChange={(selectedValue) => updateParams({ sort: `${selectedValue} ${currentSortDirection}` }, true)} value={currentSortField} options={[({ value: "createdAt", label: t('records.created') }), ({ value: "updatedAt", label: t('records.updated') }), ({ value: "id", label: t('records.id') }), fields.map((field) => ({ value: field.name, label: field.name }))]} />
+          <SelectField aria-label={t('records.sortDirection')} onValueChange={(selectedValue) => updateParams({ sort: `${currentSortField} ${selectedValue}` }, true)} value={currentSortDirection} options={[({ value: "desc", label: t('records.newest') }), ({ value: "asc", label: t('records.oldest') })]} />
+        </Label>
+        <div className="relative ml-auto"><Popover><PopoverTrigger className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</PopoverTrigger><PopoverContent><div className="grid min-w-[160px] gap-2 text-xs">{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <Label className="flex items-center gap-2 text-ink-secondary" key={name}><Checkbox checked={visibleColumns.includes(name)} onCheckedChange={(checked) => toggleColumn(name, checked)} />{name}</Label>)}</div></PopoverContent></Popover></div>
       </Surface>
 
-      {state === 'loading' && <LoadingState label={t('records.loading')} />}
-      {state === 'error' && (() => { const copy = errorCopy(error, t('records.loadFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
+      {state === 'loading' && <SpinnerLoadingState label={t('records.loading')} />}
+      {state === 'error' && (() => { const copy = errorCopy(error, t('records.loadFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
       {state === 'ready' && page.data.length === 0 && !search && !filter && history.length === 0 && <EmptyState description={t('records.emptyDescription')} title={t('records.emptyTitle')}><Button onClick={openCreate} variant="primary"><Plus aria-hidden="true" size={14} />{t('records.createFirst')}</Button></EmptyState>}
       {state === 'ready' && page.data.length === 0 && (search || filter || history.length > 0) && <EmptyState description={t('records.noMatchDescription')} title={t('records.noMatchTitle')}><Button onClick={() => updateParams({ search: undefined, filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small">{t('records.clearSearchAndFilter')}</Button></EmptyState>}
       {state === 'ready' && page.data.length > 0 && <>
-        <div className="records-table-wrap"><table className="records-table"><caption>{t('records.tableCaption', { name: collection.name, page: history.length + 1 })}</caption><thead><tr>{visibleColumns.map((name) => <th key={name} scope="col">{name === 'id' ? t('records.id') : name === 'createdAt' ? t('records.created') : name === 'updatedAt' ? t('records.updated') : name}</th>)}<th scope="col"><span className="sr-only">{t('records.actions')}</span></th></tr></thead>
-          <tbody>{page.data.map((record) => <tr key={record.id}>
-            {visibleColumns.map((name) => <td key={name}><button className="records-cell-link" onClick={() => openRecord(record.id)} type="button">{name === 'createdAt' || name === 'updatedAt' ? displayDate(record[name], formatDate) : formatValue(record[name], t)}</button></td>)}
-            <td className="records-row-actions">{collection.type !== 'Auth' && <><Button onClick={() => openRecord(record.id, true)} size="small" variant="quiet">{t('records.edit')}</Button><Button aria-label={t('records.deleteRecordLabel', { id: record.id })} onClick={() => { setRowDeleteTarget(record); setRowDeleteError(undefined); }} size="small" variant="danger">{t('records.delete')}</Button></>}</td>
-          </tr>)}</tbody>
-        </table></div>
-        <nav aria-label={t('records.pages')} className="records-pagination"><span>{t('records.page', { page: history.length + 1 })}</span><div><Button disabled={!history.length} onClick={previousPage} size="small"><ChevronLeft aria-hidden="true" size={14} />{t('records.previous')}</Button><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('records.next')}<ChevronRight aria-hidden="true" size={14} /></Button></div></nav>
+        <Table aria-label={t('records.tableCaption', { name: collection.name, page: history.length + 1 })} data-record-table>
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              {visibleColumns.map((name) => <TableHead key={name} scope="col">{name === 'id' ? t('records.id') : name === 'createdAt' ? t('records.created') : name === 'updatedAt' ? t('records.updated') : name}</TableHead>)}
+              <TableHead scope="col"><span className="sr-only">{t('records.actions')}</span></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {page.data.map((record) => <TableRow key={record.id}>
+              {visibleColumns.map((name) => <TableCell className="max-w-[320px]" key={name}><ControlButton variant="unstyled" className={`block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-xs hover:text-primary ${name === visibleColumns[0] ? 'font-semibold text-primary' : 'text-ink-secondary'}`} onClick={() => openRecord(record.id)} type="button">{name === 'createdAt' || name === 'updatedAt' ? displayDate(record[name], formatDate) : formatValue(record[name], t)}</ControlButton></TableCell>)}
+              <TableCell className="w-px whitespace-nowrap"><div className="flex justify-end gap-1">{collection.type !== 'Auth' && <><Button onClick={() => openRecord(record.id, true)} size="small" variant="quiet">{t('records.edit')}</Button><Button aria-label={t('records.deleteRecordLabel', { id: record.id })} onClick={() => { setRowDeleteTarget(record); setRowDeleteError(undefined); }} size="small" variant="danger">{t('records.delete')}</Button></>}</div></TableCell>
+            </TableRow>)}
+          </TableBody>
+        </Table>
+        <nav aria-label={t('records.pages')} className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"><span>{t('records.page', { page: history.length + 1 })}</span><div className="flex gap-2"><Button disabled={!history.length} onClick={previousPage} size="small"><ChevronLeft aria-hidden="true" size={14} />{t('records.previous')}</Button><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('records.next')}<ChevronRight aria-hidden="true" size={14} /></Button></div></nav>
       </>}
 
       <Sheet closeLabel={t('records.close')} open={isCreating || Boolean(selectedId)} onClose={closeSheet} size="wide" title={isCreating ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : isEditing ? t('records.editRecord') : t('records.record')}>
         {isCreating && <RecordEditor collection={collection} fields={fields} key={`new-${collection.id}`} onCancel={closeSheet} onDelete={onRecordDeleted} onSaved={onRecordSaved} />}
         {!isCreating && selectedId && recordState === 'loading' && <LoadingState label={t('records.loadingRecord')} />}
-        {!isCreating && selectedId && recordState === 'error' && (() => { const copy = errorCopy(recordError, t('records.openFailed'), t); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => openRecord(selectedId, isEditing)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
+        {!isCreating && selectedId && recordState === 'error' && (() => { const copy = errorCopy(recordError, t('records.openFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => openRecord(selectedId, isEditing)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
         {!isCreating && selectedId && recordState === 'ready' && activeRecord && <RecordEditor collection={collection} expandedFields={expandFields} fields={fields} key={`${activeRecord.id}-${isEditing ? 'edit' : 'view'}`} mode={isEditing ? 'edit' : 'view'} onCancel={closeSheet} onDelete={onRecordDeleted} onEdit={() => openRecord(activeRecord.id, true)} onSaved={onRecordSaved} record={activeRecord} />}
       </Sheet>
       <Dialog closeLabel={t('records.cancel')} open={Boolean(rowDeleteTarget)} onClose={() => { if (!rowDeleting) { setRowDeleteTarget(undefined); setRowDeleteError(undefined); } }} title={t('records.deleteTitle')}>
-        <p>{t('records.deleteBodyPrefix')}<code>{rowDeleteTarget?.id}</code>{t('records.deleteBodySuffix', { name: collection.name })}</p>
-        {rowDeleteError !== undefined && (() => { const copy = errorCopy(rowDeleteError, t('records.deleteFailed'), t); return <ErrorState description={copy.message} title={copy.title} />; })()}
-        <div className="record-editor-actions"><Button disabled={rowDeleting} onClick={() => { setRowDeleteTarget(undefined); setRowDeleteError(undefined); }} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={rowDeleting} onClick={() => void confirmRowDelete()} type="button" variant="danger">{rowDeleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div>
+        <p className="m-0 text-xs leading-relaxed text-ink-secondary [&_code]:font-mono [&_code]:text-foreground">{t('records.deleteBodyPrefix')}<code>{rowDeleteTarget?.id}</code>{t('records.deleteBodySuffix', { name: collection.name })}</p>
+        {rowDeleteError !== undefined && (() => { const copy = errorCopy(rowDeleteError, t('records.deleteFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title} />; })()}
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5"><Button disabled={rowDeleting} onClick={() => { setRowDeleteTarget(undefined); setRowDeleteError(undefined); }} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={rowDeleting} onClick={() => void confirmRowDelete()} type="button" variant="danger">{rowDeleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div>
       </Dialog>
     </div>
   );
@@ -426,7 +456,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
   onSaved: (record: CollectionRecord) => void;
   onDelete: () => void;
 }) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, errorMessage, validationMessage } = useI18n();
   const [values, setValues] = useState<Record<string, string>>(() => initialRecordValues(fields, record));
   const [uploaded, setUploaded] = useState<Record<string, UploadedCollectionFile>>({});
   const [fileLists, setFileLists] = useState<Record<string, string[]>>(() => initialFileLists(fields, record));
@@ -466,7 +496,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
         setValues((current) => ({ ...current, [field.name]: result.temporaryId }));
       }
     } catch (reason) {
-      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.uploadFailed'), t).title }));
+      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.uploadFailed'), t, errorMessage, validationMessage).title }));
     } finally { setUploading((current) => ({ ...current, [field.name]: false })); }
   }
 
@@ -486,7 +516,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (reason) {
-      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.downloadFailed'), t).title }));
+      setUploadErrors((current) => ({ ...current, [field.name]: errorCopy(reason, t('records.downloadFailed'), t, errorMessage, validationMessage).title }));
     }
   }
   function buildValues() {
@@ -556,7 +586,7 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
         : await updateRecord(collection.id, record!.id, allValues);
       onSaved(saved);
     } catch (reason) {
-      const copy = errorCopy(reason, t('records.saveFailed'), t);
+      const copy = errorCopy(reason, t('records.saveFailed'), t, errorMessage, validationMessage);
       setFormError(reason);
       setFieldErrors(Object.fromEntries(copy.violations.flatMap((violation) => {
         const match = violation.path?.match(/(?:^|\/)values\/([^/]+)|(?:^|\/)([^/]+)$/);
@@ -587,20 +617,20 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
     } catch (reason) { setFormError(reason); }
   }
 
-  const formCopy = formError ? errorCopy(formError, t('records.saveFailed'), t) : undefined;
+  const formCopy = formError ? errorCopy(formError, t('records.saveFailed'), t, errorMessage, validationMessage) : undefined;
   return (
-    <div className="record-editor">
+    <div className="grid gap-4" data-record-editor>
       {mode === 'view' && record ? <>
-        <div className="record-detail-identity"><span>{t('records.recordId')}</span><code>{record.id}</code><span><Clock3 aria-hidden="true" size={13} /> {t('records.updatedAt', { date: displayDate(record.updatedAt, formatDate) })}</span></div>
-        <dl className="record-detail-values">{fields.map((field) => <div key={field.name}><dt>{field.name}</dt><dd>
-          {field.type === 'file' && record[field.name] ? <><span>{t('records.fileAttached')}</span><Button onClick={() => void download(field)} size="small" variant="quiet"><Download aria-hidden="true" size={13} />{t('records.download')}</Button></> : <><span>{formatValue(record[field.name], t)}</span>{field.type === 'relation' && expandedRelationCopy(record, field.name, expandedFields, t) && <small className="record-relation-expand">{t('records.related', { value: expandedRelationCopy(record, field.name, expandedFields, t) })}</small>}</>}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1.5 border-b pb-2.5" data-record-identity><span className="text-[10px] font-semibold uppercase tracking-[0.7px] text-muted-foreground">{t('records.recordId')}</span><code className="break-words font-mono text-xs text-ink-secondary">{record.id}</code><span className="col-start-2 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Clock3 aria-hidden="true" size={13} /> {t('records.updatedAt', { date: displayDate(record.updatedAt, formatDate) })}</span></div>
+        <dl className="m-0 grid" data-record-values>{fields.map((field) => <div className="grid grid-cols-[minmax(95px,0.35fr)_minmax(0,1fr)] gap-2.5 border-b py-2.5" key={field.name}><dt className="text-xs font-semibold text-muted-foreground">{field.name}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-ink-secondary">
+          {field.type === 'file' && record[field.name] ? <><span>{t('records.fileAttached')}</span><Button onClick={() => void download(field)} size="small" variant="quiet"><Download aria-hidden="true" size={13} />{t('records.download')}</Button></> : <><span className="break-words">{formatValue(record[field.name], t)}</span>{field.type === 'relation' && expandedRelationCopy(record, field.name, expandedFields, t) && <small className="basis-full text-[11px] text-muted-foreground">{t('records.related', { value: expandedRelationCopy(record, field.name, expandedFields, t) })}</small>}</>}
         </dd></div>)}</dl>
         {recordErrorCopy(formCopy)}
-        {confirmDelete && <div className="record-delete-confirm" role="alert"><strong>{t('records.deleteTitle')}</strong><span>{t('records.confirmDeleteBody')}</span><div><Button disabled={deleting} onClick={() => setConfirmDelete(false)} size="small">{t('records.cancel')}</Button><Button disabled={deleting} onClick={() => void remove()} size="small" variant="danger">{deleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div></div>}
-        <div className="record-editor-actions"><Button onClick={onCancel} variant="quiet">{t('records.close')}</Button>{collection.type !== 'Auth' && <><Button onClick={onEdit} variant="primary">{t('records.edit')}</Button><Button onClick={() => setConfirmDelete(true)} size="small" variant="danger"><Trash2 aria-hidden="true" size={14} />{t('records.delete')}</Button></>}</div>
-      </> : <form onSubmit={(event) => void save(event)}>
+        {confirmDelete && <div className="grid gap-1.5 rounded-lg border border-danger/30 bg-danger-soft p-2.5" role="alert"><strong className="text-xs text-danger">{t('records.deleteTitle')}</strong><span className="text-[11px] text-ink-secondary">{t('records.confirmDeleteBody')}</span><div className="flex justify-end gap-2 pt-1"><Button disabled={deleting} onClick={() => setConfirmDelete(false)} size="small">{t('records.cancel')}</Button><Button disabled={deleting} onClick={() => void remove()} size="small" variant="danger">{deleting ? t('records.deleting') : t('records.deleteRecordAction')}</Button></div></div>}
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5" data-record-editor-actions><Button onClick={onCancel} variant="quiet">{t('records.close')}</Button>{collection.type !== 'Auth' && <><Button onClick={onEdit} variant="primary">{t('records.edit')}</Button><Button onClick={() => setConfirmDelete(true)} size="small" variant="danger"><Trash2 aria-hidden="true" size={14} />{t('records.delete')}</Button></>}</div>
+      </> : <form className="grid gap-3.5" onSubmit={(event) => void save(event)}>
         {formCopy && <ErrorState description={formCopy.message} title={formCopy.title} />}
-        {collection.type === 'Auth' && isNew && <section className="record-auth-fields"><h3>{t('records.profile')}</h3><p>{t('records.profileHint')}</p></section>}
+        {collection.type === 'Auth' && isNew && <section className="grid gap-2 border-b pb-2.5"><h3 className="m-0 text-xs font-semibold text-foreground">{t('records.profile')}</h3><p className="m-0 text-[11px] text-muted-foreground">{t('records.profileHint')}</p></section>}
         {fields.map((field) => <RecordField
           disabled={saving || readOnly}
           error={fieldErrors[field.name]}
@@ -618,12 +648,12 @@ function RecordEditor({ collection, fields, record, expandedFields = [], mode = 
           uploading={Boolean(uploading[field.name])}
           value={values[field.name] ?? ''}
         />)}
-        {collection.type === 'Auth' && isNew && <section className="record-auth-fields"><h3>{t('records.authentication')}</h3>
-          <FormField htmlFor="record-user-password" label={t('records.password')}><input autoComplete="new-password" disabled={saving} id="record-user-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField>
-          <FormField htmlFor="record-user-confirm-password" label={t('records.confirmPassword')}><input autoComplete="new-password" disabled={saving} id="record-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>
-          {fieldErrors.confirmPassword && <span className="record-field-error" role="alert">{fieldErrors.confirmPassword}</span>}
+        {collection.type === 'Auth' && isNew && <section className="grid gap-2 border-b pb-2.5"><h3 className="m-0 text-xs font-semibold text-foreground">{t('records.authentication')}</h3>
+          <FormField htmlFor="record-user-password" label={t('records.password')}><Input autoComplete="new-password" disabled={saving} id="record-user-password" onChange={(event) => setPassword(event.target.value)} type="password" value={password} /></FormField>
+          <FormField htmlFor="record-user-confirm-password" label={t('records.confirmPassword')}><Input autoComplete="new-password" disabled={saving} id="record-user-confirm-password" onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} /></FormField>
+          {fieldErrors.confirmPassword && <span className="text-[11px] font-semibold text-danger" role="alert">{fieldErrors.confirmPassword}</span>}
         </section>}
-        <div className="record-editor-actions"><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={saving || Object.values(uploading).some(Boolean)} type="submit" variant="primary">{saving ? t('records.saving') : isNew ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : t('records.saveChanges')}</Button></div>
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-3.5" data-record-editor-actions><Button disabled={saving} onClick={onCancel} type="button" variant="quiet">{t('records.cancel')}</Button><Button disabled={saving || Object.values(uploading).some(Boolean)} type="submit" variant="primary">{saving ? t('records.saving') : isNew ? (collection.type === 'Auth' ? t('records.createUser') : t('records.createRecord')) : t('records.saveChanges')}</Button></div>
       </form>}
     </div>
   );
@@ -655,48 +685,50 @@ function RecordField({ field, value, disabled, error, upload, uploadError, uploa
   const inputType = field.type === 'files' ? 'file' : fieldInputType(field);
   let control;
   switch (inputType) {
-    case 'boolean': control = <select disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} value={value}><option value="">{t('records.notSet')}</option><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>; break;
-    case 'json': control = <textarea disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} rows={5} value={value} />; break;
+    case 'boolean': control = <SelectField disabled={disabled} id={inputId} onValueChange={(selectedValue) => onValue(selectedValue)} value={value} options={[({ value: "", label: t('records.notSet') }), ({ value: "true", label: t('common.yes') }), ({ value: "false", label: t('common.no') })]} />; break;
+    case 'json': control = <Textarea disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} rows={5} value={value} />; break;
     case 'file': {
       const rules = fileRules(field);
       if (field.type === 'files') {
         const list = fileList ?? [];
-        control = <div className="record-file-control" data-testid={'record-files-' + field.name}>
-          <ul className="record-file-list">
+        control = <div className="grid gap-2" data-testid={'record-files-' + field.name}>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
             {list.map((entry, index) => {
               const meta = fileMeta?.find((item) => item.temporaryId === entry) ?? upload;
               const staged = entry.startsWith('tmp_');
-              return <li key={entry + '-' + index}>
-                <span>#{index}</span>
-                <code>{entry}</code>
-                {meta && <small>{t('records.fileMeta', { type: meta.contentType, size: formatNumber(meta.size) })}</small>}
-                {!staged && !disabled && onDownloadAt && <Button onClick={() => onDownloadAt(index)} size="small" type="button" variant="quiet">{t('records.download')}</Button>}
-                {!disabled && onRemoveFile && <Button onClick={() => onRemoveFile(index)} size="small" type="button" variant="quiet">{t('records.remove')}</Button>}
+              return <li className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-[11px] text-ink-secondary" key={entry + '-' + index}>
+                <span className="text-muted-foreground">#{index}</span>
+                <code className="break-all font-mono">{entry}</code>
+                {meta && <small className="text-[11px] text-muted-foreground">{t('records.fileMeta', { type: meta.contentType, size: formatNumber(meta.size) })}</small>}
+                <span className="ml-auto flex gap-1">
+                  {!staged && !disabled && onDownloadAt && <Button onClick={() => onDownloadAt(index)} size="small" type="button" variant="quiet">{t('records.download')}</Button>}
+                  {!disabled && onRemoveFile && <Button onClick={() => onRemoveFile(index)} size="small" type="button" variant="quiet">{t('records.remove')}</Button>}
+                </span>
               </li>;
             })}
           </ul>
-          <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFilesLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
-          <small>{t('records.filesHint', { max: rules.maxFiles, size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
-          {list.length >= rules.maxFiles && <span className="record-field-error" role="alert">{t('records.maxFilesReached')}</span>}
-          {uploading && <span role="status">{t('records.uploading')}</span>}
-          {uploadError && <span className="record-field-error" role="alert">{uploadError}</span>}
+          <Input accept={rules.allowed.join(',')} aria-label={t('records.fieldFilesLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void (async () => { for (const file of files) await onFile(file); })(); }} type="file" />
+          <small className="text-[11px] text-muted-foreground">{t('records.filesHint', { max: rules.maxFiles, size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
+          {list.length >= rules.maxFiles && <span className="text-[11px] font-semibold text-danger" role="alert">{t('records.maxFilesReached')}</span>}
+          {uploading && <span className="text-[11px] text-muted-foreground" role="status">{t('records.uploading')}</span>}
+          {uploadError && <span className="text-[11px] font-semibold text-danger" role="alert">{uploadError}</span>}
         </div>;
         break;
       }
-      control = <div className="record-file-control">
-        {Boolean(record?.[field.name]) && <span className="record-file-current">{t('records.fileAttachedToRecord')} <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">{t('records.replace')}</Button></span>}
-        <input accept={rules.allowed.join(',')} aria-label={t('records.fieldFileLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
-        <small>{t('records.fileHint', { size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
-        {uploading && <span role="status">{t('records.uploading')}</span>}
-        {upload && <span role="status">{t('records.fileReady', { type: upload.contentType, size: formatNumber(upload.size) })}</span>}
-        {uploadError && <span className="record-field-error" role="alert">{uploadError}</span>}
+      control = <div className="grid gap-2">
+        {Boolean(record?.[field.name]) && <span className="flex items-center justify-between gap-2 text-[11px] text-ink-secondary">{t('records.fileAttachedToRecord')} <Button disabled={disabled || uploading} onClick={() => fileInput.current?.click()} size="small" type="button" variant="quiet">{t('records.replace')}</Button></span>}
+        <Input accept={rules.allowed.join(',')} aria-label={t('records.fieldFileLabel', { name: field.name })} disabled={disabled || uploading} id={inputId} onChange={(event) => void onFile(event.target.files?.[0])} ref={fileInput} type="file" />
+        <small className="text-[11px] text-muted-foreground">{t('records.fileHint', { size: Math.ceil(rules.maxBytes / 1024 / 1024), types: rules.allowed.join(', ') })}</small>
+        {uploading && <span className="text-[11px] text-muted-foreground" role="status">{t('records.uploading')}</span>}
+        {upload && <span className="text-[11px] text-muted-foreground" role="status">{t('records.fileReady', { type: upload.contentType, size: formatNumber(upload.size) })}</span>}
+        {uploadError && <span className="text-[11px] font-semibold text-danger" role="alert">{uploadError}</span>}
       </div>;
       break;
     }
-    default: control = <input autoComplete="off" disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} step={inputType === 'number' ? 'any' : undefined} type={inputType === 'number' ? 'number' : inputType === 'dateTime' ? 'datetime-local' : 'text'} value={value} />;
+    default: control = <Input autoComplete="off" disabled={disabled} id={inputId} onChange={(event) => onValue(event.target.value)} step={inputType === 'number' ? 'any' : undefined} type={inputType === 'number' ? 'number' : inputType === 'dateTime' ? 'datetime-local' : 'text'} value={value} />;
   }
   return <FormField htmlFor={inputId} hint={hint} label={`${field.name}${field.required ? t('records.required') : ''}`}>
     {control}
-    {error && <span className="record-field-error" role="alert">{error}</span>}
+    {error && <span className="text-[11px] font-semibold text-danger" role="alert">{error}</span>}
   </FormField>;
 }

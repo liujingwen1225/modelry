@@ -98,7 +98,8 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 - `GET /admin/api/v1/bootstrap/status`：只读返回 `required` / `closed` 状态。
 - `POST /admin/api/v1/bootstrap/owner`：原子创建唯一 Owner；成功关闭 Bootstrap Capability 并建立管理 Session。不得要求本机用户复制 Setup Token。
 - `POST /admin/api/v1/auth/login`、`POST /auth/logout`、`GET /auth/session`：登录、撤销当前管理 Session、读取当前 Owner Session。
-- `GET /admin/api/v1/runtime/status`、`GET /admin/api/v1/storage/status`：无需凭证即可返回 ADR-0001 定义的有限派生健康快照；Unknown / Unavailable 不得显示为 Ready。匿名响应不返回 Project Root 绝对路径或秘密；Local Storage 路径仅对经授权的诊断请求返回。不提供 Runtime Settings mutation。
+- `GET /admin/api/v1/runtime/status`、`GET /admin/api/v1/storage/status`：无需凭证即可返回 ADR-0001 定义的有限派生健康快照；Unknown / Unavailable 不得显示为 Ready。匿名响应不返回 Project Root 绝对路径或秘密；Local Storage 路径仅对经授权的诊断请求返回。不提供 Runtime Settings mutation。Storage Status 额外返回可选的 `databaseSizeBytes`（SQLite 主数据库 page_count × page_size）；读不到时省略该字段，不得用 0 代替失败。
+- `GET /admin/api/v1/overview`：只读返回 Admin 总览需要的聚合事实（`collections`、`requests`、`events`、`changes`、`drift`）。它不拥有自己的表，每个 section 通过所属领域服务读取，因此与各业务端点使用同一套 durable 事实。section 为可选字段：字段缺失表示当前读不到（界面显示 Unavailable / Unknown），字段存在且为 0 才是真实零；全部 section 都失败时返回 503 `RUNTIME_NOT_READY`，不得把失败呈现为空项目。Control Plane 门限为 `runtime.read`（与 Home 导航项一致）；`collections.recordCount` 与 `recent[].recordCount` 需要 `records.read`，`pendingChangeStatus` 需要 `schema.read`，缺失时逐项省略。`requests` 提供 24 小时窗口内的请求量、4xx / 5xx 计数与 P95 耗时，并在请求日志留存窗口更短时用 `windowCoveredFrom` 说明实际覆盖起点。该端点不接受 query 参数。
 
 ### Collections、Records 与 Schema
 

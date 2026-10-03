@@ -131,10 +131,6 @@ func (service *Service) handleBootstrapOwner(w http.ResponseWriter, request *htt
 		writeAuthError(w, request, ErrUnauthenticated)
 		return
 	}
-	if err := service.validateOptionalOwnerCookie(request); err != nil {
-		writeAuthError(w, request, err)
-		return
-	}
 	var input authCredentialsRequest
 	if err := decodeJSONRequest(w, request, &input); err != nil {
 		writeAuthError(w, request, err)

@@ -199,6 +199,45 @@ func TestBootstrapOwnerLoginLogoutAndSessionSurviveRestart(t *testing.T) {
 	}
 }
 
+func TestBootstrapIgnoresOwnerCookieFromAnotherProjectRoot(t *testing.T) {
+	_, _, handlerA, _ := openTestService(t)
+	_, _, handlerB, _ := openTestService(t)
+
+	createdA := request(t, handlerA, http.MethodPost, "/admin/api/v1/bootstrap/owner", bootstrapBody(), nil, "http://localhost")
+	if createdA.Code != http.StatusCreated {
+		t.Fatalf("bootstrap service A = %d %s", createdA.Code, createdA.Body.String())
+	}
+	var ownerA ownerResponse
+	if err := json.Unmarshal(createdA.Body.Bytes(), &ownerA); err != nil {
+		t.Fatal(err)
+	}
+	cookieA := findOwnerCookie(t, createdA)
+
+	bodyB := `{"email":"other@modelry.dev","password":"` + testPassword + `"}`
+	createdB := request(t, handlerB, http.MethodPost, "/admin/api/v1/bootstrap/owner", bodyB, cookieA, "http://localhost")
+	if createdB.Code != http.StatusCreated {
+		t.Fatalf("bootstrap service B with service A cookie = %d %s", createdB.Code, createdB.Body.String())
+	}
+	var ownerB ownerResponse
+	if err := json.Unmarshal(createdB.Body.Bytes(), &ownerB); err != nil {
+		t.Fatal(err)
+	}
+	cookieB := findOwnerCookie(t, createdB)
+	if ownerA.Owner.ID == ownerB.Owner.ID || ownerA.Owner.Email == ownerB.Owner.Email || cookieA.Value == cookieB.Value {
+		t.Fatalf("Project Roots shared Owner or session identity: A=%#v B=%#v", ownerA, ownerB)
+	}
+
+	assertAPIError(t, request(t, handlerB, http.MethodGet, "/admin/api/v1/auth/session", "", cookieA, ""), http.StatusUnauthorized, "UNAUTHENTICATED")
+	assertAPIError(t, request(t, handlerA, http.MethodGet, "/admin/api/v1/auth/session", "", cookieB, ""), http.StatusUnauthorized, "UNAUTHENTICATED")
+	assertAPIError(t, request(t, handlerA, http.MethodPost, "/admin/api/v1/bootstrap/owner", bootstrapBody(), cookieB, "http://localhost"), http.StatusConflict, "BOOTSTRAP_CLOSED")
+	if sessionA := request(t, handlerA, http.MethodGet, "/admin/api/v1/auth/session", "", cookieA, ""); sessionA.Code != http.StatusOK || !strings.Contains(sessionA.Body.String(), ownerA.Owner.ID) {
+		t.Fatalf("service A own session = %d %s", sessionA.Code, sessionA.Body.String())
+	}
+	if sessionB := request(t, handlerB, http.MethodGet, "/admin/api/v1/auth/session", "", cookieB, ""); sessionB.Code != http.StatusOK || !strings.Contains(sessionB.Body.String(), ownerB.Owner.ID) {
+		t.Fatalf("service B own session = %d %s", sessionB.Code, sessionB.Body.String())
+	}
+}
+
 func TestBootstrapRequiresSameOriginAndLoopbackAndValidationIsActionable(t *testing.T) {
 	_, _, handler, _ := openTestService(t)
 	crossOrigin := request(t, handler, http.MethodPost, "/admin/api/v1/bootstrap/owner", bootstrapBody(), nil, "http://attacker.invalid")
@@ -219,6 +258,15 @@ func TestBootstrapRequiresSameOriginAndLoopbackAndValidationIsActionable(t *test
 	boundHostResponse := httptest.NewRecorder()
 	handler.ServeHTTP(boundHostResponse, boundHost)
 	assertAPIError(t, boundHostResponse, http.StatusForbidden, "FORBIDDEN")
+
+	authorized := httptest.NewRequest(http.MethodPost, "http://localhost/admin/api/v1/bootstrap/owner", strings.NewReader(bootstrapBody()))
+	authorized.RemoteAddr = "127.0.0.1:43210"
+	authorized.Header.Set("Content-Type", "application/json")
+	authorized.Header.Set("Origin", "http://localhost")
+	authorized.Header.Set("Authorization", "Bearer supplied-credential")
+	authorizedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(authorizedResponse, authorized)
+	assertAPIError(t, authorizedResponse, http.StatusUnauthorized, "UNAUTHENTICATED")
 
 	invalid := request(t, handler, http.MethodPost, "/admin/api/v1/bootstrap/owner", `{"email":"owner@modelry.dev","password":""}`, nil, "http://localhost")
 	assertAPIError(t, invalid, http.StatusUnprocessableEntity, "VALIDATION_FAILED")

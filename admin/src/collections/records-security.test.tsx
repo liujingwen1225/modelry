@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -57,6 +58,23 @@ function workspaceResponse(path: string) {
 
 describe('Collection Records and Security pages', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('进入集合时用转圈等待集合与待应用变更，避免提前显示工作区', async () => {
+    let resolvePending!: (value: Response) => void;
+    const pendingResponse = new Promise<Response>((resolve) => { resolvePending = resolve; });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith('/schema/pending-change')) return pendingResponse;
+      return Promise.resolve(workspaceResponse(path) ?? response([]));
+    }));
+    renderCollection('/collections/col_posts');
+    const loading = await screen.findByRole('status', { name: 'Loading Collection workspace' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelector('svg.animate-spin')).not.toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Collection workspace' })).not.toBeInTheDocument();
+    resolvePending(response(null));
+    expect(await screen.findByRole('navigation', { name: 'Collection workspace' })).toBeInTheDocument();
+  });
 
   it('creates a durable Record in the same sheet and shows the returned identity', async () => {
     const user = userEvent.setup();
@@ -172,7 +190,7 @@ describe('Collection Records and Security pages', () => {
     renderCollection('/collections/col_members/security?panel=authentication');
 
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
-    await user.selectOptions(screen.getByLabelText('Self registration'), 'enabled');
+    await selectOption(user, screen.getByLabelText('Self registration'), 'enabled');
     await user.click(screen.getByRole('button', { name: 'Save pending settings' }));
     expect(await screen.findByRole('region', { name: 'Pending authentication settings' })).toHaveTextContent('Pending authentication settings');
     expect(state.applied.selfRegistration).toBe(false);
@@ -207,13 +225,13 @@ describe('Collection Records and Security pages', () => {
 
     await user.click(await screen.findByRole('button', { name: 'View sessions' }));
     expect(await screen.findByText('alice@example.test')).toBeInTheDocument();
-    expect(await screen.findByText('active')).toBeInTheDocument();
+    expect(await screen.findByText('Active')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Revoke this session?');
     await user.click(screen.getByRole('button', { name: 'Confirm revoke' }));
 
     expect(await screen.findByText('Session revoked.')).toBeInTheDocument();
-    expect(await screen.findByText('revoked')).toBeInTheDocument();
+    expect(await screen.findByText('Revoked')).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/collections/col_members/sessions/ses_1/revoke', expect.objectContaining({ method: 'POST', credentials: 'include', mode: 'same-origin' })));
   });
 
@@ -231,10 +249,35 @@ describe('Collection Records and Security pages', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderCollection('/collections/col_members/security?panel=sessions&user=rec_user_1');
 
-    expect(await screen.findByText('active')).toBeInTheDocument();
+    expect(await screen.findByText('Active')).toBeInTheDocument();
     expect(await screen.findByText('alice@example.test')).toBeInTheDocument();
     expect(screen.queryByText('Sessions could not be loaded.')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/admin/api/v1/collections/col_members/records/rec_user_1', expect.objectContaining({ credentials: 'include', mode: 'same-origin' }));
+  });
+
+  it('localizes Application session statuses in Simplified Chinese while preserving session data', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      const workspace = workspaceResponse(path);
+      if (workspace) return Promise.resolve(workspace);
+      if (path === '/admin/api/v1/collections?limit=100') return Promise.resolve(response([authCollection]));
+      if (path.endsWith('/users?limit=50')) return Promise.resolve(response([{ recordId: 'rec_user_1', email: 'alice@example.test' }]));
+      if (path.endsWith('/users/rec_user_1/sessions')) return Promise.resolve(response([
+        { id: 'ses_active_1', createdAt: '2026-09-24T09:00:00Z', expiresAt: '2026-10-01T09:00:00Z', status: 'active' },
+        { id: 'ses_revoked_2', createdAt: '2026-09-24T09:00:00Z', expiresAt: '2026-10-01T09:00:00Z', status: 'revoked' },
+      ]));
+      if (path.endsWith('/records/rec_user_1')) return Promise.resolve(response({ id: 'rec_user_1', email: 'alice@example.test' }));
+      return Promise.resolve(response({ applied: [], pending: [], version: 1 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_members/security?panel=sessions&user=rec_user_1');
+
+    expect(await screen.findByText('有效')).toBeInTheDocument();
+    expect(screen.getByText('已撤销')).toBeInTheDocument();
+    expect(screen.getByText('alice@example.test')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('active');
+    expect(document.body.textContent).not.toContain('revoked');
   });
 
   it('paginates the Sessions user picker while keeping search and cursor in the URL', async () => {
@@ -267,7 +310,7 @@ describe('Collection Records and Security pages', () => {
     expect(screen.getByTestId('current-location').textContent).not.toContain('usersCursorStack=');
   });
 
-  it('shows local password validation in the active locale but renders a Runtime rejection verbatim', async () => {
+  it('localizes known password validation errors and preserves only their code and request ID', async () => {
     const user = userEvent.setup();
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -294,8 +337,10 @@ describe('Collection Records and Security pages', () => {
     await user.type(screen.getByLabelText('确认密码'), 'first-password');
     await user.click(screen.getByRole('button', { name: '修改密码' }));
 
-    // Runtime 返回的校验信息是服务端数据，必须原样展示，不能被当成翻译键查找。
-    expect(await screen.findByRole('alert')).toHaveTextContent('Password must contain a symbol.');
+    expect(await screen.findByText('请检查标记的内容并重试。')).toBeInTheDocument();
+    expect(document.body.textContent).toContain('VALIDATION_FAILED');
+    expect(document.body.textContent).toContain('req_pw');
+    expect(document.body.textContent).not.toContain('Password must contain a symbol.');
     expect(document.body.textContent).not.toContain('⟪');
   });
 
@@ -327,10 +372,59 @@ describe('Collection Records and Security pages', () => {
     expect(screen.getAllByText('无访问权限').length).toBeGreaterThan(0);
     expect(screen.queryByText('No access')).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '模拟一次请求' })).toBeInTheDocument();
+    const requestIdentity = screen.getByRole('combobox', { name: '请求身份' });
+    await user.click(requestIdentity);
+    expect(await screen.findByRole('option', { name: '所有者（预览）' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(document.body.textContent).not.toMatch(/主体|控制平面/i);
+    await selectOption(user, requestIdentity, 'applicationUser');
+    expect(screen.getByLabelText('用户或账号 ID')).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: '应用用户' }));
     expect(await screen.findByRole('heading', { name: '应用用户' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: '搜索用户' })).toBeInTheDocument();
     expect(await screen.findByText('alice@example.test')).toBeInTheDocument();
+  });
+
+  it('uses user-facing request identity wording in English', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    const user = userEvent.setup();
+    const initialRules: AccessRule[] = ['list', 'view', 'create', 'update', 'delete'].map((operation) => ({ operation, mode: 'noAccess' })) as AccessRule[];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      const workspace = path === '/admin/api/v1/collections/col_members' ? response(authCollection) : path.endsWith('/schema/pending-change') ? response(null) : undefined;
+      if (workspace) return Promise.resolve(workspace);
+      if (path === '/admin/api/v1/collections?limit=100') return Promise.resolve(response([authCollection]));
+      if (path.endsWith('/access-rules')) return Promise.resolve(response({ applied: initialRules, pending: initialRules, version: 1 }));
+      return Promise.resolve(response([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_members/security');
+
+    expect(await screen.findByRole('heading', { name: 'Simulate a request' })).toBeInTheDocument();
+    const requestIdentity = screen.getByRole('combobox', { name: 'Request identity' });
+    await user.click(requestIdentity);
+    expect(await screen.findByRole('option', { name: 'Owner (preview)' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await selectOption(user, requestIdentity, 'serviceAccount');
+    expect(screen.getByLabelText('User or account ID')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/principal|control plane/i);
+  });
+
+  it('keeps the empty Records recovery copy in Simplified Chinese', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      const workspace = workspaceResponse(path);
+      if (workspace) return Promise.resolve(workspace);
+      if (path.includes('/records?')) return Promise.resolve(response([]));
+      return Promise.resolve(response([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderCollection('/collections/col_posts');
+
+    expect(await screen.findByRole('heading', { name: '还没有记录' })).toBeInTheDocument();
+    expect(screen.getByText('创建一条记录，即可在此集合中查看已保存的数据。')).toBeInTheDocument();
+    expect(screen.queryByText(/Collection/)).not.toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import { selectOption } from '@/test-select';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -24,8 +25,8 @@ function CurrentLocation() { const location = useLocation(); return <output data
 function renderAccess(path = '/access') {
   return render(<LocaleProvider><MemoryRouter initialEntries={[path]}><CurrentLocation /><Routes>
     <Route element={<AccessPage />} path="/access" />
-    <Route element={<AuditPage />} path="/access/audit" />
-    <Route element={<AuditPage />} path="/access/audit/:auditRecordId" />
+    <Route element={<AuditPage />} path="/activity/audit" />
+    <Route element={<AuditPage />} path="/activity/audit/:auditRecordId" />
   </Routes></MemoryRouter></LocaleProvider>);
 }
 
@@ -51,8 +52,9 @@ describe('Access and Audit pages', () => {
 
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
     expect(await screen.findByText('No Service Accounts yet')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Control Plane');
     await user.click(screen.getAllByRole('button', { name: 'Create Service Account' })[0]!);
-    const createForm = document.querySelector<HTMLFormElement>('form.access-form')!;
+    const createForm = document.querySelector<HTMLFormElement>('[data-access-form]')!;
     await user.type(createForm.querySelector('#account-name')!, 'ci-readonly');
     await user.click(createForm.querySelector('button[type="submit"]')!);
 
@@ -69,7 +71,7 @@ describe('Access and Audit pages', () => {
     const revokeDialog = screen.getByRole('dialog', { name: 'Revoke this API Key?' });
     revoked = true;
     await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke API Key' }));
-    expect(await screen.findByText('revoked')).toBeInTheDocument();
+    expect(await screen.findByText('Revoked')).toBeInTheDocument();
     expect(mocks.revokeAPIKey).toHaveBeenCalledWith('key_1');
     expect(document.body.textContent).not.toContain('once-secret-value');
   });
@@ -79,18 +81,32 @@ describe('Access and Audit pages', () => {
     mocks.createServiceAccount.mockResolvedValue({ serviceAccount: { ...account, permission: 'custom', customPermissionVersion: 1, customOperations: ['collections.read'] } });
     renderAccess();
     await user.click(await screen.findByRole('button', { name: 'Create Service Account' }));
-    const form = document.querySelector<HTMLFormElement>('form.access-form')!;
+    const form = document.querySelector<HTMLFormElement>('[data-access-form]')!;
     await user.type(form.querySelector('#account-name')!, 'model-reader');
-    await user.selectOptions(form.querySelector('#account-permission')!, 'custom');
+    await selectOption(user, form.querySelector('#account-permission')!, 'custom');
     await user.click(form.querySelector('input[value="collections.read"]')!);
-    await user.click(form.querySelector('.access-checkbox input')!);
+    await user.click(form.querySelector('[data-access-create-key] input')!);
     await user.click(form.querySelector('button[type="submit"]')!);
     await waitFor(() => expect(mocks.createServiceAccount).toHaveBeenCalledWith(expect.objectContaining({ permission: 'custom', customPermissionVersion: 1, customOperations: ['collections.read'], createAPIKey: false })));
   });
 
+  it('默认精简审计筛选，折叠高级条件后仍提交并保留输入', async () => {
+    const user = userEvent.setup();
+    renderAccess('/activity/audit');
+    await screen.findByRole('link', { name: /2026/ });
+    expect(screen.queryByRole('textbox', { name: 'Actor ID' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'More filters' }));
+    await user.type(screen.getByRole('textbox', { name: 'Actor ID' }), 'own_2');
+    await user.click(screen.getByRole('button', { name: 'More filters' }));
+    expect(screen.queryByRole('textbox', { name: 'Actor ID' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Apply filters' }));
+    await waitFor(() => expect(mocks.listAuditRecords).toHaveBeenLastCalledWith(expect.objectContaining({ actorId: 'own_2' }), expect.any(AbortSignal)));
+    expect(await screen.findByRole('textbox', { name: 'Actor ID' })).toHaveValue('own_2');
+  });
+
   it('sends Audit filters to the server and retains them across cursor pages and detail links', async () => {
     const user = userEvent.setup();
-    const path = '/access/audit?search=schema&actorKind=owner&actorId=own_1&action=schema.change.applied&resourceKind=collection&resourceId=col_1&from=2026-09-24T00%3A00%3A00.000Z&to=2026-09-24T23%3A59%3A59.000Z';
+    const path = '/activity/audit?search=schema&actorKind=owner&actorId=own_1&action=schema.change.applied&resourceKind=collection&resourceId=col_1&from=2026-09-24T00%3A00%3A00.000Z&to=2026-09-24T23%3A59%3A59.000Z';
     renderAccess(path);
 
     expect(await screen.findByRole('link', { name: /2026/ })).toBeInTheDocument();
@@ -103,33 +119,40 @@ describe('Access and Audit pages', () => {
 
   it('opens an Audit detail through a durable deep link and redacts nested secret metadata', async () => {
     mocks.getAuditRecord.mockResolvedValue({ ...audit, resource: { kind: 'serviceAccount', id: 'sa_1', nested: { apiKeySecret: 'do-not-render' } } });
-    renderAccess('/access/audit/audit_1?from=%2Faccess%2Faudit%3Faction%3DserviceAccount.created');
+    renderAccess('/activity/audit/audit_1?from=%2Factivity%3Fsource%3Daudit%26action%3DserviceAccount.created');
 
     expect(await screen.findByRole('heading', { name: 'Audit details' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Audit' })).toHaveAttribute('href', '/access/audit?action=serviceAccount.created');
+    // 返回路径经 route-map 归一化到新的活动记录来源筛选。
+    expect(screen.getByRole('link', { name: 'Back to Audit' })).toHaveAttribute('href', '/activity?source=audit&action=serviceAccount.created');
     expect(document.body.textContent).toContain('[redacted]');
     expect(document.body.textContent).not.toContain('do-not-render');
   });
 
   it('renders Access and Audit in Simplified Chinese while keeping Actor, Action and Permission identifiers intact', async () => {
-    const user = userEvent.setup();
     window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
     mocks.listServiceAccounts.mockResolvedValue({ data: [account] });
-    renderAccess();
+    const mounted = renderAccess();
 
-    expect(await screen.findByRole('heading', { name: '访问' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '访问与认证' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '服务账号' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
     expect(screen.getByRole('button', { name: '创建服务账号' })).toBeInTheDocument();
     expect(screen.getByText('只读')).toBeInTheDocument();
     // 领域数据与标识不得翻译。
     expect(screen.getByRole('link', { name: 'ci-readonly' })).toBeInTheDocument();
-    expect(document.body.textContent).toContain('active');
+    expect(document.body.textContent).toContain('有效');
+    expect(document.body.textContent).not.toContain('active');
+    mounted.unmount();
 
-    await user.click(screen.getByRole('link', { name: '审计' }));
+    // 审计时间线现在是活动记录的一个来源，而不是 Access 页内的 Tab。
+    renderAccess('/activity/audit');
     expect(await screen.findByRole('heading', { name: '审计' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /2026/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '应用筛选' })).toBeInTheDocument();
     expect(document.body.textContent).toContain('serviceAccount.created');
+    expect(document.body.textContent).toContain('所有者');
+    expect(document.body.textContent).toContain('成功');
+    expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
     expect(screen.queryByText('Apply filters')).not.toBeInTheDocument();
   });
 });

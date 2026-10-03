@@ -1,3 +1,4 @@
+import { selectOption } from './select-option';
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHmac } from 'node:crypto';
@@ -6,7 +7,9 @@ import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from './evidence-fixtures';
+import { captureRuntimeLogs, persistRuntimeLogs, redactRuntimeText } from './runtime-logs';
 
 type ReadyRecord = { state: string; url: string; projectId: string };
 type RuntimeProcess = ChildProcessWithoutNullStreams;
@@ -153,11 +156,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
   const args = isWindows ? [runtimeBinary, 'start', '--project-root', root, '--listen', '127.0.0.1:0'] : ['start', '--project-root', root, '--listen', '127.0.0.1:0'];
   const runtimeEnv = { ...process.env, MODELRY_E2E_WEBHOOK_FIXTURE_ADDR: fixtureAddress, MODELRY_E2E_WEBHOOK_CA: fixtureCA, MODELRY_E2E_RETRY_DELAY_MS: process.env.MODELRY_E2E_RETRY_DELAY_MS ?? '1100' };
   const child = spawn(command, args, { cwd: repositoryRoot, env: runtimeEnv, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  captureRuntimeLogs(child, 'webhooks-jobs');
   runtimeProcess = child;
   let stdoutBuffer = '';
   let stderr = '';
   const record = await new Promise<ReadyRecord>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${stderr}`)), 60_000);
+    const timeout = setTimeout(() => reject(new Error(`Runtime did not emit READY. stderr: ${redactRuntimeText(stderr)}`)), 60_000);
     let ready: ReadyRecord | undefined;
     const finishWhenReady = () => {
       if (!ready || (isWindows && !runtimeProcessId)) return;
@@ -178,12 +182,12 @@ async function startRuntime(root: string): Promise<ReadyRecord> {
         finishWhenReady();
       }
     });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stderr.on('data', (chunk: string) => { stderr += String(chunk); });
     child.once('error', (error) => { clearTimeout(timeout); reject(error); });
     child.once('exit', (code, signal) => {
       if (code === 0 && signal === null) return;
       clearTimeout(timeout);
-      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${stderr}`));
+      reject(new Error(`Runtime exited before READY (code=${code}, signal=${signal}). stderr: ${redactRuntimeText(stderr)}`));
     });
   });
   if (record.state !== 'ready' || !record.url || !record.projectId) throw new Error(`Invalid READY record: ${JSON.stringify(record)}`);
@@ -274,12 +278,14 @@ async function waitForDeliveryStatus(page: Page, id: string, expected: string): 
 }
 
 async function createSecret(page: Page, name: string, value: string): Promise<string> {
+  // 旧 `/secrets` 深链归一为系统设置的 Secrets 分节。
   await page.goto(`${runtimeURL}/secrets`);
+  await expect(page).toHaveURL(`${runtimeURL}/settings/secrets`);
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   await page.locator('#secret-name').fill(name);
   await page.locator('#secret-value').fill(value);
   const responsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/admin/api/v1/secrets');
-  await page.locator('.extension-secret-create form button[type="submit"]').click();
+  await page.locator('[data-extension-secret-create] form button[type="submit"]').click();
   const response = await responsePromise;
   expect(response.status()).toBe(201);
   const responseBody = await response.text();
@@ -292,13 +298,16 @@ async function createSecret(page: Page, name: string, value: string): Promise<st
 }
 
 async function createWebhook(page: Page, name: string, pathname: string, secretId: string) {
-  await page.goto(`${runtimeURL}/automations?tab=webhooks`);
+  // 旧 `/automations/webhooks` 深链归一为 Hooks & Events 的 Webhooks 工作面。
+  await page.goto(`${runtimeURL}/automations/webhooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=webhooks`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Create Webhook' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await page.getByLabel('HTTPS destination').fill(`https://hooks.modelry.test${pathname}`);
-  await page.getByLabel('Signing Secret').selectOption(secretId);
+  await selectOption(page, page.getByLabel('Signing Secret'), secretId);
   await page.getByRole('button', { name: 'Save Webhook' }).click();
-  const card = page.locator('.automation-card').filter({ hasText: name });
+  const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
   const result = await requestJSON(page, 'GET', '/admin/api/v1/webhooks');
   expect(result.status).toBe(200);
@@ -314,14 +323,16 @@ async function createWebhook(page: Page, name: string, pathname: string, secretI
 }
 
 async function createEventHook(page: Page, name: string, collectionId: string, webhookId: string) {
-  await page.goto(`${runtimeURL}/automations?tab=eventHooks`);
-  await page.getByRole('button', { name: 'Create Event Hook' }).click();
+  // 旧 `/automations/triggers` 深链归一为 Hooks & Events 的 Event triggers 工作面。
+  await page.goto(`${runtimeURL}/automations/triggers`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=triggers`);
+  await page.getByRole('button', { name: 'Create event trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
-  await page.getByLabel('Collection').selectOption(collectionId);
-  await page.getByLabel('Record Event').selectOption('record.created');
-  await page.getByLabel('Webhook').selectOption(webhookId);
-  await page.getByRole('button', { name: 'Save Event Hook' }).click();
-  const card = page.locator('.automation-card').filter({ hasText: name });
+  await selectOption(page, page.getByLabel('Collection', { exact: true }), collectionId);
+  await selectOption(page, page.getByLabel('Record Event'), 'record.created');
+  await selectOption(page, page.getByLabel('Webhook', { exact: true }), webhookId);
+  await page.getByRole('button', { name: 'Save event trigger' }).click();
+  const card = page.locator('[data-automation-card]').filter({ hasText: name });
   await expect(card).toBeVisible();
   const response = await requestJSON(page, 'GET', '/admin/api/v1/event-hooks');
   expect(response.status).toBe(200);
@@ -341,9 +352,9 @@ async function createRecord(page: Page, collectionId: string, title: string) {
     await page.getByRole('button', { name: 'Create record', exact: true }).first().click();
   }
   await page.getByLabel('title · Required').fill(title);
-  await page.locator('.record-editor').getByRole('button', { name: 'Create record', exact: true }).click();
+  await page.locator('[data-record-editor]').getByRole('button', { name: 'Create record', exact: true }).click();
   await expect(page.getByText('Record saved. The durable result is shown here.')).toBeVisible();
-  const recordId = await page.locator('.record-detail-identity code').textContent();
+  const recordId = await page.locator('[data-record-identity] code').textContent();
   expect(recordId).toMatch(/^rec_/);
   return recordId!;
 }
@@ -354,8 +365,10 @@ async function deliveryForEvent(page: Page, hookId: string, eventId: string, sta
 }
 
 async function deliveryPage(page: Page, id: string) {
-  await page.goto(`${runtimeURL}/automations?tab=deliveries&deliveryId=${encodeURIComponent(id)}`);
-  await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
+  // 旧 `/automations/deliveries` 深链归一为 Hooks & Events 的 Delivery history 工作面。
+  await page.goto(`${runtimeURL}/automations/deliveries?deliveryId=${encodeURIComponent(id)}`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=deliveries&deliveryId=${encodeURIComponent(id)}`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await expect(page.getByText(id, { exact: true })).toBeVisible();
 }
 
@@ -426,6 +439,7 @@ test.afterAll(async () => {
       runtimeProcess = undefined;
     }
   }
+  await persistRuntimeLogs('webhooks-jobs');
   await fixture?.close();
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 });
@@ -466,17 +480,20 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   const primaryWebhook = await createWebhook(page, 'Primary receiver', '/record-hook', primarySecretId);
   const primaryHook = await createEventHook(page, 'Record event receiver', collectionId, primaryWebhook.id);
 
-  await page.goto(`${runtimeURL}/automations?tab=jobs`);
-  await page.getByRole('button', { name: 'Create Job' }).click();
+  // 定时任务是独立一级入口：旧 `/automations/schedules` 深链归一为 `/schedules?tab=jobs`。
+  await page.goto(`${runtimeURL}/automations/schedules`);
+  await expect(page).toHaveURL(`${runtimeURL}/schedules?tab=jobs`);
+  await expect(page.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Create scheduled trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('UTC maturity check');
-  await page.getByLabel('Webhook').selectOption(primaryWebhook.id);
+  await selectOption(page, page.getByLabel('Webhook', { exact: true }), primaryWebhook.id);
   const cronInput = page.getByRole('textbox', { name: /Cron schedule/ });
   await cronInput.fill('0 9 * * *');
   const preview = page.getByText(/Next run preview \(UTC\)/);
   await expect(preview).toBeVisible();
   await expect(preview).toContainText('UTC');
-  await page.getByRole('button', { name: 'Save Job' }).click();
-  const createdJobCard = page.locator('.automation-card').filter({ hasText: 'UTC maturity check' });
+  await page.getByRole('button', { name: 'Save scheduled trigger' }).click();
+  const createdJobCard = page.locator('[data-automation-card]').filter({ hasText: 'UTC maturity check' });
   await expect(createdJobCard).toBeVisible();
   await expect(createdJobCard).toContainText('UTC');
   await expect(createdJobCard).toContainText('Next run');
@@ -544,8 +561,9 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   const disableEventId = (JSON.parse(disableRequest.body) as { event?: { id?: string } }).event?.id;
   expect(disableEventId).toMatch(/^evt_/);
   const disableDelivery = await deliveryForEvent(page, cancelHook.id, disableEventId!, 'running');
-  await page.goto(`${runtimeURL}/automations?tab=webhooks`);
-  const cancelCard = page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' });
+  await page.goto(`${runtimeURL}/automations/webhooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=webhooks`);
+  const cancelCard = page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' });
   await cancelCard.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Disable Webhook?' })).toBeVisible();
   await page.getByRole('dialog', { name: 'Disable Webhook?' }).getByRole('button', { name: 'Disable Webhook' }).click();
@@ -556,9 +574,10 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect.poll(() => fixture!.count('/cancel-hook')).toBe(1);
   expect(disableRecord).toMatch(/^rec_/);
 
-  await page.goto(`${runtimeURL}/automations?tab=webhooks`);
-  await page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' }).getByRole('button', { name: 'Enable', exact: true }).click();
-  await expect(page.locator('.automation-card').filter({ hasText: 'Cancellable receiver' }).getByText('Enabled', { exact: true })).toBeVisible();
+  await page.goto(`${runtimeURL}/automations/webhooks`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=webhooks`);
+  await page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' }).getByRole('button', { name: 'Enable', exact: true }).click();
+  await expect(page.locator('[data-automation-card]').filter({ hasText: 'Cancellable receiver' }).getByText('Enabled', { exact: true })).toBeVisible();
   const revokeGate = fixture!.blockNext('/cancel-hook');
   await createRecord(page, collectionId, 'revoke while receiving');
   const revokeRequest = await revokeGate.received;
@@ -566,6 +585,7 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(revokeEventId).toMatch(/^evt_/);
   const revokeDelivery = await deliveryForEvent(page, cancelHook.id, revokeEventId!, 'running');
   await page.goto(`${runtimeURL}/secrets`);
+  await expect(page).toHaveURL(`${runtimeURL}/settings/secrets`);
   const secretRow = page.getByRole('listitem').filter({ hasText: 'Revocation test key' });
   await secretRow.getByRole('button', { name: 'Revoke', exact: true }).click();
   await page.getByRole('dialog', { name: 'Revoke “Revocation test key”?' }).getByRole('button', { name: 'Revoke Secret' }).click();
@@ -626,19 +646,50 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   expect(replay[0]!.idempotencyKey).toBe(interruptedDelivery.id);
   expect(replay[1]!.idempotencyKey).toBe(interruptedDelivery.id);
 
-  await page.goto(`${runtimeURL}/automations?tab=deliveries&deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
-  await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible();
+  await page.goto(`${runtimeURL}/automations/deliveries?deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
+  await expect(page).toHaveURL(`${runtimeURL}/events?tab=deliveries&deliveryId=${encodeURIComponent(interruptedDelivery.id)}`);
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await expect(page.getByText(interruptedDelivery.id, { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(privateRecordMarker);
-  await page.locator('.locale-switcher select').selectOption('zh-CN');
-  await expect(page.getByRole('heading', { name: '自动化', exact: true })).toBeVisible();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await expect(page.getByRole('heading', { name: 'Hooks & Events', exact: true })).toBeVisible();
   const themeBefore = await page.locator('html').getAttribute('data-theme');
-  await page.locator('.theme-button').click();
+  await page.locator('[data-theme-button]').click();
   await expect.poll(() => page.locator('html').getAttribute('data-theme')).not.toBe(themeBefore);
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // 手动运行（Run now）：服务器接受后，执行记录耐久进入执行历史，并标明触发方式。
+  // 目标 Webhook 已启用且签名 Secret 已配置，因此这里走的是成功路径。
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.goto(`${runtimeURL}/schedules?tab=jobs`);
+  await expect(page.getByRole('heading', { name: 'Scheduled jobs', level: 1 })).toBeVisible();
+  const runNowCard = page.locator('[data-automation-card]').filter({ hasText: 'UTC maturity check' });
+  await expect(runNowCard).toBeVisible();
+  await runNowCard.getByRole('button', { name: 'Run now', exact: true }).click();
+  const runResultPanel = page.getByRole('status').filter({ hasText: 'UTC maturity check' });
+  await expect(runResultPanel).toBeVisible();
+  await expect(runResultPanel).toContainText('Manual run requested. Execution');
+  const executionLink = runResultPanel.getByRole('link', { name: 'Open execution history' });
+  const executionHref = await executionLink.getAttribute('href');
+  expect(executionHref).toMatch(/^\/schedules\?tab=history&deliveryId=dlv_/);
+  const manualRunDeliveryId = decodeURIComponent(new URL(executionHref!, runtimeURL).searchParams.get('deliveryId') ?? '');
+  expect(manualRunDeliveryId).toMatch(/^dlv_/);
+  await executionLink.click();
+  await expect(page).toHaveURL(`${runtimeURL}/schedules?tab=history&deliveryId=${encodeURIComponent(manualRunDeliveryId)}`);
+  // 执行历史固定为 Job 投递，并额外显示「触发方式」。
+  const manualRunCard = page.locator('[data-automation-card]').filter({ hasText: 'Manual run' });
+  await expect(manualRunCard).toBeVisible();
+  await expect(manualRunCard).toContainText('Trigger');
+  await expect(page.getByText(manualRunDeliveryId, { exact: true })).toBeVisible();
+  const manualRunDelivery = await waitForDeliveryStatus(page, manualRunDeliveryId, 'succeeded');
+  expect(manualRunDelivery.sourceType).toBe('job');
+  expect(manualRunDelivery.eventType).toBe('job.manual');
+
   await expectNoSensitiveDiagnostics(page, [primarySecret, revokeSecret, privateRecordMarker, manualRetryMarker, responseBodyMarker, 'https://hooks.modelry.test/record-hook', 'https://hooks.modelry.test/cancel-hook', ...fixture!.requests.map((request) => request.signature)]);
   const durableJob = await requestJSON(page, 'GET', `/admin/api/v1/jobs/${encodeURIComponent(job!.id)}`);
   expect(durableJob.status).toBe(200);

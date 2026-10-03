@@ -81,6 +81,10 @@ func ControlPlaneOperation(method, path string) (Operation, bool) {
 		return OperationMailManage, true
 	case len(parts) == 5 && parts[3] == "runtime" && parts[4] == "status" && methodIs(http.MethodGet):
 		return OperationRuntimeRead, true
+	case len(parts) == 4 && parts[3] == "overview" && methodIs(http.MethodGet):
+		// 总览与 Home 导航项使用同一门限：它是只读聚合，各 section 内部
+		// 仍按调用方的 records.read / schema.read 逐项裁剪。
+		return OperationRuntimeRead, true
 	case len(parts) == 5 && parts[3] == "storage" && parts[4] == "status" && methodIs(http.MethodGet):
 		return OperationStorageRead, true
 	case len(parts) == 4 && parts[3] == "collections" && methodIs(http.MethodGet):

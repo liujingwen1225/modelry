@@ -47,6 +47,7 @@ func (module *Module) RegisterRoutes(mux *http.ServeMux) {
 	register("PUT /admin/api/v1/jobs/{jobId}", module.replaceJob)
 	register("POST /admin/api/v1/jobs/{jobId}/enable", module.enableJob)
 	register("POST /admin/api/v1/jobs/{jobId}/disable", module.disableJob)
+	register("POST /admin/api/v1/jobs/{jobId}/run", module.runJob)
 	register("GET /admin/api/v1/deliveries", module.listDeliveries)
 	register("GET /admin/api/v1/deliveries/{deliveryId}", module.getDelivery)
 	register("POST /admin/api/v1/deliveries/{deliveryId}/retry", module.retryDelivery)
@@ -314,6 +315,20 @@ func (module *Module) jobStatus(w http.ResponseWriter, request *http.Request, ch
 		return
 	}
 	httpapi.WriteAPIJSON(w, http.StatusOK, automationData[JobStatus]{Data: item})
+}
+
+// runJob 为一次显式的手动运行创建 Delivery 并返回 202。
+// 它不改变 Job 的计划状态（next_run_at / last_run_at）。
+func (module *Module) runJob(w http.ResponseWriter, request *http.Request) {
+	if !noQuery(w, request) || !noBody(w, request) {
+		return
+	}
+	item, err := module.service.RunJobOnce(request.Context(), request.PathValue("jobId"))
+	if err != nil {
+		module.writeError(w, request, err)
+		return
+	}
+	httpapi.WriteAPIJSON(w, http.StatusAccepted, automationData[Delivery]{Data: item})
 }
 
 func (module *Module) listDeliveries(w http.ResponseWriter, request *http.Request) {

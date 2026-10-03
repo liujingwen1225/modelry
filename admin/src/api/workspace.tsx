@@ -1,26 +1,55 @@
+import { Input, Textarea } from '@/components/ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Button as ControlButton } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { SearchInput } from '@/components/ui/search-input';
+import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, RefreshCw, Search } from 'lucide-react';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowRight, RefreshCw } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from './client';
 import { allApplicationEndpoints, endpointOpenApiSnippet, endpointsForCollection, type EndpointDefinition } from './endpoints';
-import { getRequestRecord, listRequestRecords, runApplicationRequest, type ApplicationRunResult, type RequestRecord } from './workspace-client';
+import { runApplicationRequest, type ApplicationRunResult } from './workspace-client';
 import { getAccessRules, listAllCollections, type AccessRuleMode, type AccessRulesState, type Collection } from '../collections/client';
 import { useCollectionWorkspace } from '../collections/workspace-context';
-import { Button, CopyButton, EmptyState, ErrorState, FormField, LoadingState, StatusChip, Surface } from '../components/ui';
+import { Button, ButtonLink } from '../components/button';
+import { CopyButton } from '../components/copy-button';
+import { FormField } from '../components/form-field';
+import { EmptyState, ErrorState, LoadingState, StatusChip } from '../components/states';
+import { Surface } from '../components/surface';
 import { useI18n, type TranslationKey } from '../i18n/i18n';
-import './api-workspace.css';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
-function errorCopy(error: unknown, fallback: string, t: Translate) {
+// HTTP 方法胶囊：仅表达方法语义的视觉，不携带行为；保持小号 monospace。
+const methodTones: Record<string, string> = {
+  get: 'bg-success-soft text-success',
+  post: 'bg-accent-cta-soft text-accent-cta-ink',
+  patch: 'bg-warning-soft text-warning',
+  put: 'bg-warning-soft text-warning',
+  delete: 'bg-danger-soft text-danger',
+};
+
+function MethodPill({ method }: { method: string }) {
+  return <span className={`inline-flex min-w-14 shrink-0 justify-center rounded px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none ${methodTones[method.toLowerCase()] ?? 'bg-muted text-ink-secondary'}`}>{method}</span>;
+}
+
+function errorCopy(error: unknown, fallback: string, t: Translate, errorMessage: ReturnType<typeof useI18n>['errorMessage']) {
   if (error instanceof ApiClientError) {
-    return { title: error.apiError.message, detail: [error.apiError.code, error.apiError.hint, `${t('common.requestId')}: ${error.apiError.requestId}`].filter(Boolean).join(' · ') };
+    return { title: errorMessage(error.apiError.code) ?? t('errors.requestFailed'), detail: [t('common.errorCode'), error.apiError.code, `${t('common.requestId')}: ${error.apiError.requestId}`, t('common.tryAgainWhenAvailable')].join(' · ') };
   }
-  return { title: fallback, detail: error instanceof Error ? error.message : t('common.tryAgainWhenAvailable') };
+  return { title: fallback, detail: t('common.tryAgainWhenAvailable') };
+}
+
+function endpointKey(endpoint: EndpointDefinition) {
+  return `${endpoint.collectionId}:${endpoint.operationId}`;
 }
 
 function selectedEndpoint(endpoints: EndpointDefinition[], selectedId: string | null) {
-  return endpoints.find((endpoint) => endpoint.operationId === selectedId) ?? endpoints[0];
+  // 兼容已有仅包含 operationId 的深链接；新选择包含集合身份。
+  return endpoints.find((endpoint) => endpointKey(endpoint) === selectedId)
+    ?? endpoints.find((endpoint) => endpoint.operationId === selectedId)
+    ?? endpoints[0];
 }
 
 function endpointTitle(endpoint: EndpointDefinition, t: Translate) {
@@ -35,15 +64,21 @@ function collectionTypeLabel(collection: Collection, t: Translate) {
   return t(collection.type === 'Auth' ? 'collections.typeAuth' : 'collections.typeNormal');
 }
 
-function EndpointWorkspace({ collections, fixedCollection }: { collections: Collection[]; fixedCollection?: Collection }) {
-  const { t, formatNumber } = useI18n();
+// 端点面在 API 工作区里有两种形态：
+// - 'inline'：集合级 API 页与端点 Tab 的内嵌 Runner（保持今天的行为）。
+// 端点浏览与请求调试共用同一工作面。
+export function EndpointWorkspace({ collections, fixedCollection }: { collections: Collection[]; fixedCollection?: Collection }) {
+  const { t, formatNumber, errorMessage } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('q') ?? '');
   const [pathValues, setPathValues] = useState<Record<string, string>>({});
-  const [limit, setLimit] = useState(searchParams.get('runLimit') ?? '25');
-  const [searchValue, setSearchValue] = useState(searchParams.get('runSearch') ?? '');
-  const [filter, setFilter] = useState(searchParams.get('runFilter') ?? '');
-  const [sort, setSort] = useState(searchParams.get('runSort') ?? 'createdAt desc');
+  // Runner 输入（limit / search / filter / sort）以 URL 为唯一事实来源：刷新、分享
+  // 与前进/后退都恢复同一组输入，切换 Tab 也不丢上下文（spec 0001 §7.1）。
+  // App Session token、路径参数与请求体属于敏感或临时输入，仍只留在页面内存里。
+  const limit = searchParams.get('runLimit') ?? '25';
+  const searchValue = searchParams.get('runSearch') ?? '';
+  const filter = searchParams.get('runFilter') ?? '';
+  const sort = searchParams.get('runSort') ?? 'createdAt desc';
   const [body, setBody] = useState('');
   const [appSession, setAppSession] = useState('');
   const [running, setRunning] = useState(false);
@@ -120,9 +155,9 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
     setSearchParams(next, { replace: true });
   }
 
-  function selectEndpoint(operationId: string) {
+  function selectEndpoint(selected: EndpointDefinition) {
     const next = new URLSearchParams(searchParams);
-    next.set('endpoint', operationId);
+    next.set('endpoint', endpointKey(selected));
     setSearchParams(next, { replace: true });
   }
 
@@ -175,36 +210,40 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
   if (!endpoints.length) return <EmptyState title={t('api.noEndpointsTitle')} description={t('api.noEndpointsDescription')} />;
 
   return (
-    <div className="api-workspace">
-      <Surface className="api-explorer" variant="standard">
-        {!fixedCollection && <div className="api-explorer__filters">
-          <label className="api-search"><Search aria-hidden="true" size={16} /><span className="sr-only">{t('api.searchEndpoints')}</span><input aria-label={t('api.searchEndpoints')} onChange={(event) => { setSearch(event.target.value); updateParam('q', event.target.value); }} placeholder={t('api.searchEndpointsPlaceholder')} type="search" value={search} /></label>
-          <label className="api-filter"><span>{t('api.collectionFilter')}</span><select aria-label={t('api.filterByCollection')} onChange={(event) => updateParam('collection', event.target.value)} value={collectionFilter}><option value="">{t('api.allCollections')}</option>{collections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    <div className="flex min-w-0 flex-col gap-6">
+      <Surface className="overflow-hidden p-0" variant="standard">
+        {!fixedCollection && <div className="flex flex-wrap items-end gap-4 border-b p-4">
+          <SearchInput aria-label={t('api.searchEndpoints')} onChange={(event) => { setSearch(event.target.value); updateParam('q', event.target.value); }} placeholder={t('api.searchEndpointsPlaceholder')} value={search} className="min-w-56 flex-1" />
+          <Label className="grid min-w-48 gap-1 text-[11px] text-muted-foreground">
+            <span>{t('api.collectionFilter')}</span>
+            <SelectField aria-label={t('api.filterByCollection')} onValueChange={(selectedValue) => updateParam('collection', selectedValue)} value={collectionFilter} options={[({ value: "", label: t('api.allCollections') }), collections.map((item) => ({ value: item.id, label: item.name }))]} />
+          </Label>
         </div>}
-        <div className="api-explorer__layout">
-          <nav aria-label={t('api.endpointsLabel')} className="api-endpoint-list">
-            <div className="api-section-label">{t('api.endpointsSection')} <span>{formatNumber(visibleEndpoints.length)}</span></div>
-            {visibleEndpoints.map((item) => <button aria-current={endpoint?.operationId === item.operationId ? 'page' : undefined} className="api-endpoint-option" key={`${item.collectionId}:${item.operationId}`} onClick={() => selectEndpoint(item.operationId)} type="button">
-              <span className={`api-method api-method--${item.method.toLowerCase()}`}>{item.method}</span><span className="api-endpoint-option__copy"><strong>{endpointTitle(item, t)}</strong><small>{item.path}</small>{!fixedCollection && <small>{item.collectionName}</small>}</span>
-            </button>)}
-            {!visibleEndpoints.length && <p className="api-muted api-endpoint-list__empty">{t('api.noEndpointsMatch')}</p>}
+        {/* 宽屏左右并排；窄屏上下堆叠，保留请求详情的可用宽度。 */}
+        <div className="grid min-h-[38rem] min-[1024px]:grid-cols-[minmax(15rem,19rem)_minmax(0,1fr)]">
+          <nav aria-label={t('api.endpointsLabel')} className="max-h-56 min-w-0 overflow-auto border-b p-3 min-[1024px]:max-h-none min-[1024px]:overflow-visible min-[1024px]:border-r min-[1024px]:border-b-0" data-api-endpoint-list>
+            <div className="flex items-center justify-between px-2 pt-1 pb-2 text-[10px] font-bold tracking-[0.08em] text-muted-foreground uppercase min-[681px]:col-span-2">{t('api.endpointsSection')} <span className="text-ink-secondary">{formatNumber(visibleEndpoints.length)}</span></div>
+            {visibleEndpoints.map((item) => <ControlButton variant="unstyled" aria-current={endpoint?.collectionId === item.collectionId && endpoint.operationId === item.operationId ? 'page' : undefined} className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:shadow-none ${endpoint?.collectionId === item.collectionId && endpoint.operationId === item.operationId ? 'border-primary bg-secondary' : 'border-transparent hover:bg-secondary'}`} data-api-endpoint-option key={`${item.collectionId}:${item.operationId}`} onClick={() => selectEndpoint(item)} type="button">
+              <MethodPill method={item.method} /><span className="grid min-w-0 gap-0.5"><strong className="text-xs font-semibold text-foreground">{endpointTitle(item, t)}</strong><small className="truncate font-mono text-[10px] text-muted-foreground">{item.path}</small>{!fixedCollection && <small className="truncate text-[10px] text-muted-foreground">{item.collectionName}</small>}</span>
+            </ControlButton>)}
+            {!visibleEndpoints.length && <p className="px-2 py-3 text-xs text-muted-foreground">{t('api.noEndpointsMatch')}</p>}
           </nav>
 
-          {activeEndpoint && selectedCollection ? <section aria-label={t('api.endpointDetailsLabel')} className="api-endpoint-detail">
-            <header className="api-endpoint-heading"><div><p className="eyebrow">{selectedCollection.name} · {collectionTypeLabel(selectedCollection, t)}</p><h2>{endpointTitle(activeEndpoint, t)}</h2><p className="api-route"><span className={`api-method api-method--${activeEndpoint.method.toLowerCase()}`}>{activeEndpoint.method}</span><code>{activeEndpoint.path}</code></p></div><div className="api-heading-actions"><CopyButton label={t('api.copyEndpointPath')} value={activeEndpoint.path} /><details className="api-openapi"><summary>{t('api.viewOpenApi')}</summary><pre><code>{JSON.stringify(endpointOpenApiSnippet(activeEndpoint, selectedCollection), null, 2)}</code></pre></details></div></header>
-            <div className="api-endpoint-meta"><span><strong>{t('api.operationLabel')}</strong>{activeEndpoint.operationId}</span><span><strong>{t('api.collectionModelLabel')}</strong>{t('api.collectionModelValue', { version: selectedCollection.schemaVersion ?? 1, count: selectedCollection.fields.length })}</span>{accessOperation && <span><strong>{t('api.appliedAccessLabel')}</strong>{ruleReady ? accessRuleLabel(appliedAccessMode, t) : t('api.loadingAccess')}</span>}</div>
-            <div className="api-fields"><strong>{t('api.appliedFields')}</strong><div>{selectedCollection.fields.map((field) => <span className="api-field-chip" key={field.id ?? field.name}><code>{field.name}</code><small>{field.type}{field.required ? t('api.fieldRequired') : ''}</small></span>)}</div></div>
-            <section className="api-runner">
-              <div className="api-runner__heading"><div><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="text-link" to={`/api?tab=requests&filter=${encodeURIComponent(`collectionId eq "${selectedCollection.id}"`)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
-              <form onSubmit={(event) => void run(event)}>
-                {activeEndpoint.template.includes('{recordId}') && <FormField htmlFor="api-record-id" label={t('api.recordIdLabel')}><input autoComplete="off" id="api-record-id" onChange={(event) => setPathValues((value) => ({ ...value, recordId: event.target.value }))} value={pathValues.recordId ?? ''} /></FormField>}
-                {activeEndpoint.template.includes('{sessionId}') && <FormField htmlFor="api-session-id" label={t('api.sessionIdLabel')}><input autoComplete="off" id="api-session-id" onChange={(event) => setPathValues((value) => ({ ...value, sessionId: event.target.value }))} value={pathValues.sessionId ?? ''} /></FormField>}
-                {activeEndpoint.template.includes('{fieldName}') && <FormField htmlFor="api-file-field" label={t('api.fileFieldLabel')}><select id="api-file-field" onChange={(event) => setPathValues((value) => ({ ...value, fieldName: event.target.value }))} value={pathValues.fieldName ?? ''}><option value="">{t('api.chooseFileField')}</option>{selectedCollection.fields.filter((field) => field.type === 'file').map((field) => <option key={field.id ?? field.name} value={field.name}>{field.name}</option>)}</select></FormField>}
-                {activeEndpoint.operationId === 'listApplicationRecords' && <div className="api-runner__query-fields"><FormField htmlFor="api-limit" label={t('api.limitLabel')}><input id="api-limit" max="100" min="1" onChange={(event) => { setLimit(event.target.value); updateParam('runLimit', event.target.value); }} type="number" value={limit} /></FormField><FormField htmlFor="api-search" label={t('api.searchLabel')}><input id="api-search" onChange={(event) => { setSearchValue(event.target.value); updateParam('runSearch', event.target.value); }} value={searchValue} /></FormField><FormField htmlFor="api-filter" hint={t('api.filterHint')} label={t('api.filterLabel')}><input id="api-filter" onChange={(event) => { setFilter(event.target.value); updateParam('runFilter', event.target.value); }} value={filter} /></FormField><FormField htmlFor="api-sort" label={t('api.sortLabel')} hint={t('api.sortHint')}><input id="api-sort" onChange={(event) => { setSort(event.target.value); updateParam('runSort', event.target.value); }} value={sort} /></FormField></div>}
-                {(!activeEndpoint.authOnly || activeEndpoint.requiresSession) && <FormField htmlFor="api-app-session" hint={t('api.appSessionHint')} label={t('api.appSessionLabel')}><input autoComplete="off" id="api-app-session" onChange={(event) => setAppSession(event.target.value)} type="password" value={appSession} /></FormField>}
-                {activeEndpoint.bodySchema && <FormField htmlFor="api-request-body" hint={t('api.jsonBodyHint', { schema: activeEndpoint.bodySchema })} label={t('api.jsonBodyLabel')}><textarea autoComplete="off" id="api-request-body" onChange={(event) => setBody(event.target.value)} rows={8} spellCheck={false} value={body} />{runError instanceof SyntaxError && <span className="api-validation" role="alert">{t('api.invalidJson')}</span>}</FormField>}
-                {runError !== undefined && !(runError instanceof SyntaxError) && (() => { const copy = errorCopy(runError, t('api.requestFailed'), t); return <ErrorState description={copy.detail} title={copy.title} />; })()}
-                <div className="api-runner__actions"><Button disabled={running} type="submit" variant="primary">{running ? <><RefreshCw aria-hidden="true" className="spin" size={15} /> {t('api.sending')}</> : t('api.sendRequest', { method: activeEndpoint.method })}</Button><CopyButton label={t('api.copyCommand')} value={`curl -X ${activeEndpoint.method} '${activeEndpoint.path}'`} /></div>
+          {activeEndpoint && selectedCollection ? <section aria-label={t('api.endpointDetailsLabel')} className="min-w-0 p-4 min-[681px]:p-5">
+            <header className="flex min-w-0 flex-col items-start justify-between gap-4 min-[681px]:flex-row" data-api-endpoint-heading><div className="min-w-0 flex-1"><p className="eyebrow [overflow-wrap:anywhere]">{selectedCollection.name} · {collectionTypeLabel(selectedCollection, t)}</p><h2 className="mt-1 mb-3">{endpointTitle(activeEndpoint, t)}</h2><p className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 break-words"><MethodPill method={activeEndpoint.method} /><code className="min-w-0 font-mono text-xs break-all text-foreground">{activeEndpoint.path}</code></p></div><div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" data-api-heading-actions><CopyButton label={t('api.copyEndpointPath')} value={activeEndpoint.path} /><div className="relative max-w-full" data-api-openapi><Popover><PopoverTrigger className="w-fit max-w-full cursor-pointer list-none rounded-md border border-input bg-card px-2.5 py-1.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('api.viewOpenApi')}</PopoverTrigger><PopoverContent><pre className="max-h-96 w-[42rem] max-w-[70vw] overflow-auto text-[11px]"><code className="block font-mono break-all whitespace-pre-wrap">{JSON.stringify(endpointOpenApiSnippet(activeEndpoint, selectedCollection), null, 2)}</code></pre></PopoverContent></Popover></div></div></header>
+            <div className="mt-5 flex flex-wrap gap-x-7 gap-y-3 border-y py-3" data-api-endpoint-meta><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.operationLabel')}</strong>{activeEndpoint.operationId}</span><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.collectionModelLabel')}</strong>{t('api.collectionModelValue', { version: selectedCollection.schemaVersion ?? 1, count: selectedCollection.fields.length })}</span>{accessOperation && <span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedAccessLabel')}</strong>{ruleReady ? accessRuleLabel(appliedAccessMode, t) : t('api.loadingAccess')}</span>}</div>
+            <div className="my-4 flex flex-col gap-2"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedFields')}</strong><div className="flex flex-wrap gap-2">{selectedCollection.fields.map((field) => <span className="inline-flex items-center gap-2 rounded-full border bg-muted px-2 py-1" key={field.id ?? field.name}><code className="font-mono text-[11px] text-foreground">{field.name}</code><small className="text-[10px] text-muted-foreground">{field.type}{field.required ? t('api.fieldRequired') : ''}</small></span>)}</div></div>
+            <section className="rounded-lg border bg-muted p-4">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={`/api?tab=logs&collection=${encodeURIComponent(selectedCollection.id)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
+              <form className="flex flex-col gap-3.5" onSubmit={(event) => void run(event)}>
+                {activeEndpoint.template.includes('{recordId}') && <FormField htmlFor="api-record-id" label={t('api.recordIdLabel')}><Input autoComplete="off" id="api-record-id" onChange={(event) => setPathValues((value) => ({ ...value, recordId: event.target.value }))} value={pathValues.recordId ?? ''} /></FormField>}
+                {activeEndpoint.template.includes('{sessionId}') && <FormField htmlFor="api-session-id" label={t('api.sessionIdLabel')}><Input autoComplete="off" id="api-session-id" onChange={(event) => setPathValues((value) => ({ ...value, sessionId: event.target.value }))} value={pathValues.sessionId ?? ''} /></FormField>}
+                {activeEndpoint.template.includes('{fieldName}') && <FormField htmlFor="api-file-field" label={t('api.fileFieldLabel')}><SelectField id="api-file-field" onValueChange={(selectedValue) => setPathValues((value) => ({ ...value, fieldName: selectedValue }))} value={pathValues.fieldName ?? ''} options={[({ value: "", label: t('api.chooseFileField') }), selectedCollection.fields.filter((field) => field.type === 'file').map((field) => ({ value: field.name, label: field.name }))]} /></FormField>}
+                {activeEndpoint.operationId === 'listApplicationRecords' && <div className="grid gap-3.5 min-[681px]:grid-cols-2"><FormField htmlFor="api-limit" label={t('api.limitLabel')}><Input id="api-limit" max="100" min="1" onChange={(event) => updateParam('runLimit', event.target.value)} type="number" value={limit} /></FormField><FormField htmlFor="api-search" label={t('api.searchLabel')}><SearchInput id="api-search" onChange={(event) => updateParam('runSearch', event.target.value)} value={searchValue} /></FormField><FormField htmlFor="api-filter" hint={t('api.filterHint')} label={t('api.filterLabel')}><Input id="api-filter" onChange={(event) => updateParam('runFilter', event.target.value)} value={filter} /></FormField><FormField htmlFor="api-sort" label={t('api.sortLabel')} hint={t('api.sortHint')}><Input id="api-sort" onChange={(event) => updateParam('runSort', event.target.value)} value={sort} /></FormField></div>}
+                {(!activeEndpoint.authOnly || activeEndpoint.requiresSession) && <FormField htmlFor="api-app-session" hint={t('api.appSessionHint')} label={t('api.appSessionLabel')}><Input autoComplete="off" id="api-app-session" onChange={(event) => setAppSession(event.target.value)} type="password" value={appSession} /></FormField>}
+                {activeEndpoint.bodySchema && <FormField htmlFor="api-request-body" hint={t('api.jsonBodyHint', { schema: activeEndpoint.bodySchema })} label={t('api.jsonBodyLabel')}><Textarea autoComplete="off" className="min-h-40 font-mono" id="api-request-body" onChange={(event) => setBody(event.target.value)} rows={8} spellCheck={false} value={body} />{runError instanceof SyntaxError && <span className="text-[11px] font-semibold text-danger" role="alert">{t('api.invalidJson')}</span>}</FormField>}
+                {runError !== undefined && !(runError instanceof SyntaxError) && (() => { const copy = errorCopy(runError, t('api.requestFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title} />; })()}
+                <div className="flex flex-wrap items-center gap-2"><Button disabled={running} type="submit" variant="primary">{running ? <><RefreshCw aria-hidden="true" className="animate-spin" size={15} /> {t('api.sending')}</> : t('api.sendRequest', { method: activeEndpoint.method })}</Button><CopyButton label={t('api.copyCommand')} value={`curl -X ${activeEndpoint.method} '${activeEndpoint.path}'`} /></div>
               </form>
               {running && <LoadingState label={t('api.sendingLabel')} />}
               {result && <ApplicationResponse result={result} location={location} endpoint={activeEndpoint} />}
@@ -217,118 +256,28 @@ function EndpointWorkspace({ collections, fixedCollection }: { collections: Coll
 }
 
 function ApplicationResponse({ result, location, endpoint }: { result: ApplicationRunResult; location: ReturnType<typeof useLocation>; endpoint: EndpointDefinition }) {
-  const { t, formatNumber } = useI18n();
+  const { t, formatNumber, errorMessage } = useI18n();
   const from = `${location.pathname}${location.search}`;
-  return <section aria-label={t('api.responseLabel')} className="api-response" role="region">
-    <header><div><p className="eyebrow">{t('api.responseEyebrow')}</p><h3>{t('api.responseTitle')}</h3></div><StatusChip state={result.status < 400 ? 'success' : 'error'}>{result.status}</StatusChip></header>
-    <dl className="api-response__metadata">
-      {result.requestId && <><dt>{t('common.requestId')}</dt><dd><code>{result.requestId}</code><CopyButton label={t('api.copyRequestId')} value={result.requestId} /></dd></>}
-      <dt>{t('api.durationLabel')}</dt><dd>{formatNumber(result.durationMs)} ms</dd><dt>{t('api.endpointLabel')}</dt><dd><code>{endpoint.method} {endpoint.path}</code></dd>
-      {result.structuredError && <><dt>{t('api.errorLabel')}</dt><dd><strong>{result.structuredError.code}</strong> · {result.structuredError.message}</dd></>}
+  return <section aria-label={t('api.responseLabel')} className="mt-4 flex flex-col gap-3 border-t pt-3.5" role="region">
+    <header className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.responseEyebrow')}</p><h3>{t('api.responseTitle')}</h3></div><StatusChip state={result.status < 400 ? 'success' : 'error'}>{result.status}</StatusChip></header>
+    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-xs" data-api-response-metadata>
+      {result.requestId && <><dt className="text-muted-foreground">{t('common.requestId')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2 break-words"><code className="font-mono text-[11px] text-foreground">{result.requestId}</code><CopyButton label={t('api.copyRequestId')} value={result.requestId} /></dd></>}
+      <dt className="text-muted-foreground">{t('api.durationLabel')}</dt><dd className="m-0">{formatNumber(result.durationMs)} ms</dd><dt className="text-muted-foreground">{t('api.endpointLabel')}</dt><dd className="m-0 min-w-0 break-words"><code className="font-mono text-[11px] text-foreground">{endpoint.method} {endpoint.path}</code></dd>
+      {result.structuredError && <><dt className="text-muted-foreground">{t('api.errorLabel')}</dt><dd className="m-0 break-words"><strong>{result.structuredError.code}</strong> · {errorMessage(result.structuredError.code) ?? t('errors.requestFailed')}</dd></>}
     </dl>
-    {result.textResponseHidden && <p className="api-muted">{t('api.hiddenContent')}</p>}
-    {result.body !== undefined && <pre className="api-response__body"><code>{JSON.stringify(result.body, null, 2)}</code></pre>}
-    <div className="api-response__actions">
-      {result.requestId && result.requestRecordPersisted && <Link className="button button--secondary button--small" to={`/requests/${encodeURIComponent(result.requestId)}?from=${encodeURIComponent(from)}`}>{t('api.viewRequestDetails')} <ArrowRight aria-hidden="true" size={14} /></Link>}
-      {result.requestId && !result.requestRecordPersisted && <span className="api-muted">{t('api.requestUnavailable')}</span>}
+    {result.textResponseHidden && <p className="m-0 text-xs text-muted-foreground">{t('api.hiddenContent')}</p>}
+    {result.body !== undefined && <pre className="m-0 max-h-96 overflow-auto rounded-lg border bg-card p-3.5 text-[11px]" data-api-response-body><code className="block font-mono break-all whitespace-pre-wrap">{JSON.stringify(result.body, null, 2)}</code></pre>}
+    <div className="flex flex-wrap items-center gap-2.5">
+      {result.requestId && result.requestRecordPersisted && <ButtonLink size="small" to={`/api/requests/${encodeURIComponent(result.requestId)}?from=${encodeURIComponent(from)}`}>{t('api.viewRequestDetails')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>}
+      {result.requestId && !result.requestRecordPersisted && <span className="text-xs text-muted-foreground">{t('api.requestUnavailable')}</span>}
     </div>
   </section>;
 }
 
-function paginationParams(current: URLSearchParams, cursor?: string) {
-  const next = new URLSearchParams(current);
-  next.delete('cursor');
-  next.delete('back');
-  if (cursor) next.set('cursor', cursor);
-  return next;
-}
-
-function RequestHistory({ collections }: { collections: Collection[] }) {
-  const { t, formatDate, formatNumber } = useI18n();
-  const [params, setParams] = useSearchParams();
-  const location = useLocation();
-  const [searchDraft, setSearchDraft] = useState(params.get('search') ?? '');
-  const [filterDraft, setFilterDraft] = useState(params.get('filter') ?? '');
-  const [sortDraft, setSortDraft] = useState(params.get('sort') ?? 'time desc');
-  const [page, setPage] = useState<{ data: RequestRecord[]; nextCursor?: string }>();
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<unknown>();
-  const [reload, setReload] = useState(0);
-  const search = params.get('search') ?? '';
-  const filter = params.get('filter') ?? '';
-  const sort = params.get('sort') ?? 'time desc';
-  const cursor = params.get('cursor') ?? undefined;
-  const collectionNames = useMemo(() => new Map(collections.map((item) => [item.id, item.name])), [collections]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setState('loading');
-    void listRequestRecords({ limit: 25, cursor, search, filter, sort }, controller.signal).then((value) => {
-      if (controller.signal.aborted) return;
-      setPage(value); setState('ready'); setError(undefined);
-    }).catch((reason: unknown) => {
-      if (controller.signal.aborted) return;
-      setError(reason); setState('error');
-    });
-    return () => controller.abort();
-  }, [cursor, filter, reload, search, sort]);
-
-  useEffect(() => {
-    setSearchDraft(search);
-    setFilterDraft(filter);
-    setSortDraft(sort);
-  }, [search, filter, sort]);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = paginationParams(params);
-    if (searchDraft.trim()) next.set('search', searchDraft.trim()); else next.delete('search');
-    if (filterDraft.trim()) next.set('filter', filterDraft.trim()); else next.delete('filter');
-    if (sortDraft.trim()) next.set('sort', sortDraft.trim()); else next.delete('sort');
-    setParams(next, { replace: true });
-  }
-
-  function nextPage() {
-    if (!page?.nextCursor) return;
-    const next = new URLSearchParams(params);
-    next.append('back', cursor ?? '');
-    next.set('cursor', page.nextCursor);
-    setParams(next, { replace: true });
-  }
-
-  function previousPage() {
-    const back = params.getAll('back');
-    if (!back.length) return;
-    const previous = back[back.length - 1];
-    const next = new URLSearchParams(params);
-    next.delete('back');
-    back.slice(0, -1).forEach((entry) => next.append('back', entry));
-    if (previous) next.set('cursor', previous); else next.delete('cursor');
-    setParams(next, { replace: true });
-  }
-
-  return <section aria-label={t('api.requestsLabel')} className="api-requests">
-    <form className="api-request-filters" onSubmit={submit}>
-      <FormField htmlFor="request-search" label={t('api.searchLabel')}><input id="request-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('api.requestSearchPlaceholder')} value={searchDraft} /></FormField>
-      <FormField htmlFor="request-filter" hint={t('api.requestFilterHint')} label={t('api.filterLabel')}><input id="request-filter" onChange={(event) => setFilterDraft(event.target.value)} placeholder={t('api.requestFilterPlaceholder')} value={filterDraft} /></FormField>
-      <FormField htmlFor="request-sort" hint={t('api.requestSortHint')} label={t('api.sortLabel')}><input id="request-sort" onChange={(event) => setSortDraft(event.target.value)} value={sortDraft} /></FormField>
-      <Button type="submit" variant="primary">{t('api.applyFilters')}</Button>
-    </form>
-    {state === 'loading' && <LoadingState label={t('api.loadingRequests')} />}
-    {state === 'error' && (() => { const copy = errorCopy(error, t('api.requestsLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })()}
-    {state === 'ready' && (!page?.data.length ? <EmptyState title={t('api.noRequestsTitle')} description={t('api.noRequestsDescription')} /> : <div className="table-scroll"><table className="data-table api-request-table"><caption>{t('api.requestsCaption')}</caption><thead><tr><th scope="col">{t('api.columnRequest')}</th><th scope="col">{t('api.columnTime')}</th><th scope="col">{t('api.columnEndpoint')}</th><th scope="col">{t('api.columnResult')}</th><th scope="col">{t('api.columnAccess')}</th></tr></thead><tbody>{page.data.map((record) => <tr key={record.requestId}>
-      <td><Link className="text-link" to={`/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}>{record.requestId}</Link></td>
-      <td><time dateTime={record.time}>{formatDate(record.time)}</time><small>{formatNumber(record.durationMs)} ms</small></td>
-      <td><span className={`api-method api-method--${record.method.toLowerCase()}`}>{record.method}</span> <code>{record.endpoint}</code>{record.collectionId && <small>{collectionNames.get(record.collectionId) ?? t('api.collectionFallback')}</small>}</td>
-      <td><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip>{record.errorCode && <small>{record.errorCode}</small>}</td>
-      <td>{record.authenticationOutcome ?? '—'}<small>{record.authorizationOutcome ?? '—'}</small></td>
-    </tr>)}</tbody></table></div>)}
-    {state === 'ready' && page?.data.length ? <nav aria-label={t('api.requestPagesLabel')} className="api-pagination"><Button disabled={!params.getAll('back').length} onClick={previousPage} size="small"><ArrowLeft aria-hidden="true" size={14} /> {t('api.previous')}</Button><span>{t('api.cursorResults')}</span><Button disabled={!page.nextCursor} onClick={nextPage} size="small">{t('api.next')} <ArrowRight aria-hidden="true" size={14} /></Button></nav> : null}
-  </section>;
-}
-
 function APIPageHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return <header className="page-heading api-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-description">{description}</p></div></header>;
+  // 标题里含 Collection 名称（可能是不含断点的长标识符），因此必须允许任意位置换行，
+  // 否则窄屏会把整个文档撑宽（spec 0001 §16.1）。
+  return <header className="sr-only"><div className="min-w-0"><p className="eyebrow [overflow-wrap:anywhere]">{eyebrow}</p><h1 className="[overflow-wrap:anywhere]">{title}</h1><p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p></div></header>;
 }
 
 export function CollectionAPIPage() {
@@ -345,11 +294,11 @@ export function CollectionAPIPage() {
     setParams(next, { replace: true });
   }
 
-  return <div className="page-stack api-page">
+  return <div className="flex min-w-0 flex-col gap-6">
     <APIPageHeader description={t('api.collectionDescription')} eyebrow="API" title={t('api.collectionTitle', { name: collection.name })} />
-    <nav aria-label={t('api.collectionSections')} className="api-tabs">
-      <button aria-current={activeTab === 'endpoints' ? 'page' : undefined} onClick={() => selectTab('endpoints')} type="button">{t('api.endpointsTab')}</button>
-      <button aria-current={activeTab === 'realtime' ? 'page' : undefined} onClick={() => selectTab('realtime')} type="button">{t('api.realtimeTab')}</button>
+    <nav aria-label={t('api.collectionSections')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden border-b">
+      <ControlButton variant="unstyled" aria-current={activeTab === 'endpoints' ? 'page' : undefined} className={`border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === 'endpoints' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('endpoints')} type="button">{t('api.endpointsTab')}</ControlButton>
+      <ControlButton variant="unstyled" aria-current={activeTab === 'realtime' ? 'page' : undefined} className={`border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === 'realtime' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('realtime')} type="button">{t('api.realtimeTab')}</ControlButton>
     </nav>
     {activeTab === 'realtime' ? <RealtimeWorkspace collection={collection} example={sample} /> : <EndpointWorkspace collections={[collection]} fixedCollection={collection} />}
   </div>;
@@ -482,33 +431,33 @@ function RealtimeWorkspace({ collection, example }: { collection: Collection; ex
   const listMode = ruleState?.applied.find((rule) => rule.operation === 'list')?.mode;
   const endpoint = `/api/v1/${encodeURIComponent(collection.name)}/events`;
 
-  return <Surface className="api-realtime" variant="standard">
-    <header className="api-realtime__heading">
-      <div><p className="eyebrow">{t('api.realtimeProtocol')}</p><h2>{t('api.realtimeHeading')}</h2><p>{t('api.realtimeDescription')}</p></div>
+  return <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0"><p className="eyebrow">{t('api.realtimeProtocol')}</p><h2 className="mt-1 mb-2">{t('api.realtimeHeading')}</h2><p className="m-0 max-w-[52rem] text-[13px] text-ink-secondary">{t('api.realtimeDescription')}</p></div>
       <CopyButton label={t('api.copyRealtimeExample')} value={example} />
     </header>
-    <dl className="api-realtime__metadata">
-      <div><dt>{t('api.realtimeEndpoint')}</dt><dd><span className="api-method api-method--get">GET</span><code>{endpoint}</code></dd></div>
-      <div><dt>{t('api.realtimeAccess')}</dt><dd>{state === 'loading' ? <LoadingState label={t('runtime.connecting')} /> : state === 'error' ? t('api.realtimeUnavailable') : listMode ? accessRuleLabel(listMode, t) : t('api.realtimeUnavailable')}</dd></div>
+    <dl className="m-0 grid gap-4 border-y py-3.5 min-[681px]:grid-cols-2" data-api-realtime-metadata>
+      <div className="grid min-w-0 gap-1.5"><dt className="text-[10px] font-bold tracking-[0.04em] text-muted-foreground uppercase">{t('api.realtimeEndpoint')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 break-words"><MethodPill method="GET" /><code className="font-mono text-[11px] break-all text-foreground">{endpoint}</code></dd></div>
+      <div className="grid min-w-0 gap-1.5"><dt className="text-[10px] font-bold tracking-[0.04em] text-muted-foreground uppercase">{t('api.realtimeAccess')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 text-xs break-words">{state === 'loading' ? <LoadingState label={t('runtime.connecting')} /> : state === 'error' ? t('api.realtimeUnavailable') : listMode ? accessRuleLabel(listMode, t) : t('api.realtimeUnavailable')}</dd></div>
     </dl>
-    <p className="api-muted">{t('api.realtimeAccessHint')}</p>
+    <p className="m-0 text-xs text-muted-foreground">{t('api.realtimeAccessHint')}</p>
     {state === 'error' && <ErrorState description={t('api.realtimeUnavailableHint')} title={t('api.realtimeUnavailable')} />}
-    <section className="api-realtime__example">
-      <header><div><h3>{t('api.realtimeExampleHeading')}</h3><p>{t('api.realtimeExampleDescription')}</p></div></header>
-      <pre><code>{example}</code></pre>
-      <p className="api-muted">{t('api.realtimeExampleCallbackHint')}</p>
+    <section className="grid gap-3 rounded-lg border bg-muted p-4" data-api-realtime-example>
+      <header className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><h3>{t('api.realtimeExampleHeading')}</h3><p className="mt-1 mb-0 text-[13px] text-ink-secondary">{t('api.realtimeExampleDescription')}</p></div></header>
+      <pre className="m-0 max-h-[36rem] overflow-auto rounded-md border bg-card p-3.5 text-[11px] leading-relaxed"><code className="font-mono break-all whitespace-pre-wrap">{example}</code></pre>
+      <p className="m-0 text-xs text-muted-foreground">{t('api.realtimeExampleCallbackHint')}</p>
     </section>
   </Surface>;
 }
 
-export function GlobalAPIPage() {
-  const { t } = useI18n();
-  const [params, setParams] = useSearchParams();
+// 端点面（含 Collections 读取状态）：API 工作区的端点 Tab 与
+// 集合级 API 页共用这一套 loading / empty / error + 重试（spec 0001 §13.5）。
+export function ApiEndpointBrowser() {
+  const { t, errorMessage } = useI18n();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<unknown>();
   const [reload, setReload] = useState(0);
-  const tab = params.get('tab') === 'requests' ? 'requests' : 'endpoints';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -517,87 +466,10 @@ export function GlobalAPIPage() {
     return () => controller.abort();
   }, [reload]);
 
-  return <div className="page-stack api-page"><APIPageHeader description={t('api.workspaceDescription')} eyebrow="API" title={t('api.workspaceTitle')} />
-    <nav aria-label={t('api.workspaceLabel')} className="api-tabs"><button aria-current={tab === 'endpoints' ? 'page' : undefined} onClick={() => { const next = new URLSearchParams(params); next.set('tab', 'endpoints'); setParams(next, { replace: true }); }} type="button">{t('api.endpointsTab')}</button><button aria-current={tab === 'requests' ? 'page' : undefined} onClick={() => { const next = new URLSearchParams(params); next.set('tab', 'requests'); setParams(next, { replace: true }); }} type="button">{t('api.requestsTab')}</button></nav>
-    {tab === 'requests' ? <RequestHistory collections={collections} /> : state === 'loading' ? <LoadingState label={t('api.loadingWorkspace')} /> : state === 'error' ? (() => { const copy = errorCopy(error, t('api.collectionsLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></ErrorState>; })() : <EndpointWorkspace collections={collections} />}
-  </div>;
-}
-function internalReturnPath(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return undefined;
-  if (!value.startsWith('/api') && !value.startsWith('/collections/') && !value.startsWith('/access/audit')) return undefined;
-  return value;
-}
-
-function matchingEndpoint(collections: Collection[], record: RequestRecord) {
-  const collection = collections.find((item) => item.id === record.collectionId);
-  if (!collection) return undefined;
-  const candidate = record.endpoint.split('/');
-  // Durable telemetry stores route templates while callers may hold concrete paths; both must resolve.
-  return endpointsForCollection(collection).find((item) => {
-    if (item.method !== record.method) return false;
-    const pattern = item.template.split('/');
-    if (pattern.length !== candidate.length) return false;
-    return pattern.every((segment, index) => {
-      const value = candidate[index] ?? '';
-      if (segment === '{collectionName}') {
-        return value === collection.name || value === encodeURIComponent(collection.name) || value === '{collectionName}';
-      }
-      if (segment.startsWith('{') && segment.endsWith('}')) return value.length > 0;
-      return segment === value;
-    });
-  });
-}
-
-export function RequestDetailPage() {
-  const { t, formatDate, formatNumber } = useI18n();
-  const { requestId = '' } = useParams();
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
-  const [record, setRecord] = useState<RequestRecord>();
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<unknown>();
-  const [reload, setReload] = useState(0);
-  const from = internalReturnPath(params.get('from'));
-  const endpoint = useMemo(() => record ? matchingEndpoint(collections, record) : undefined, [collections, record]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setState('loading');
-    void getRequestRecord(requestId, controller.signal).then((value) => {
-      if (!controller.signal.aborted) { setRecord(value); setState('ready'); setError(undefined); }
-    }).catch((reason: unknown) => {
-      if (!controller.signal.aborted) { setError(reason); setState('error'); }
-    });
-    void listAllCollections(controller.signal).then((items) => { if (!controller.signal.aborted) setCollections(items); }).catch(() => { if (!controller.signal.aborted) setCollections([]); });
-    return () => controller.abort();
-  }, [requestId, reload]);
-
-  if (state === 'loading') return <div className="page-stack api-page"><LoadingState label={t('api.requestDetailLoading')} /></div>;
-  if (state === 'error' || !record) {
-    const copy = errorCopy(error, t('api.requestDetailLoadFailed'), t);
-    return <div className="page-stack api-page"><ErrorState description={copy.detail} title={copy.title}><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="text-link" to="/api?tab=requests">{t('api.backToRequests')}</Link></ErrorState></div>;
+  if (state === 'loading') return <LoadingState label={t('api.loadingWorkspace')} />;
+  if (state === 'error') {
+    const copy = errorCopy(error, t('api.collectionsLoadFailed'), t, errorMessage);
+    return <ErrorState description={copy.detail} title={copy.title}><div className="mt-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></div></ErrorState>;
   }
-  const collection = collections.find((item) => item.id === record.collectionId);
-  const endpointLink = endpoint ? `/api?tab=endpoints&collection=${encodeURIComponent(endpoint.collectionId)}&endpoint=${encodeURIComponent(endpoint.operationId)}` : '/api?tab=endpoints';
-  const collectionLink = collection && endpoint ? `/collections/${encodeURIComponent(collection.id)}/api?endpoint=${encodeURIComponent(endpoint.operationId)}` : undefined;
-
-  return <div className="page-stack api-page api-request-detail">
-    <p className="api-breadcrumb"><Link to={from ?? '/api?tab=requests'}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link></p>
-    <APIPageHeader description={t('api.requestDetailDescription')} eyebrow={t('api.requestDetailEyebrow')} title={t('api.requestDetailTitle')} />
-    <Surface className="api-detail-card" variant="standard">
-      <header><div><p className="eyebrow">{t('api.canonicalRequestId')}</p><h2><code>{record.requestId}</code></h2></div><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip><CopyButton label={t('api.copyRequestId')} value={record.requestId} /></header>
-      <dl className="api-detail-grid">
-        <div><dt>{t('api.columnTime')}</dt><dd><time dateTime={record.time}>{formatDate(record.time)}</time></dd></div>
-        <div><dt>{t('api.durationLabel')}</dt><dd>{formatNumber(record.durationMs)} ms</dd></div>
-        <div><dt>{t('api.responseSize')}</dt><dd>{record.responseSizeBytes === undefined ? t('api.notRecorded') : t('api.bytes', { count: formatNumber(record.responseSizeBytes) })}</dd></div>
-        <div><dt>{t('api.methodAndRoute')}</dt><dd><span className={`api-method api-method--${record.method.toLowerCase()}`}>{record.method}</span> <code>{record.endpoint}</code></dd></div>
-        <div><dt>{t('api.collectionLabel')}</dt><dd>{collection?.name ?? record.collectionId ?? '—'}</dd></div>
-        <div><dt>{t('api.authentication')}</dt><dd>{record.authenticationOutcome ?? t('api.notRecorded')}</dd></div>
-        <div><dt>{t('api.authorization')}</dt><dd>{record.authorizationOutcome ?? t('api.notRecorded')}</dd></div>
-        <div><dt>{t('api.errorCode')}</dt><dd>{record.errorCode ?? '—'}</dd></div>
-      </dl>
-      <div className="api-detail-actions"><Link className="button button--secondary button--small" to={endpointLink}>{t('api.openEndpoint')}</Link>{collectionLink && <Link className="button button--secondary button--small" to={collectionLink}>{t('api.openCollectionApi')}</Link>}<Button onClick={() => navigate('/api?tab=requests&search=' + encodeURIComponent(record.requestId))} size="small">{t('api.findInRequests')}</Button></div>
-    </Surface>
-  </div>;
+  return <EndpointWorkspace collections={collections} />;
 }

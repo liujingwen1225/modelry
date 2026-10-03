@@ -13,7 +13,7 @@ func storageProjection(collection Collection) storage.RecordCollectionProjection
 		Fields:  make([]storage.RecordProjectionField, 0, len(collection.Fields)),
 		Indexes: make([]storage.RecordProjectionIndex, 0, len(collection.Indexes)),
 	}
-	for _, field := range collection.Fields {
+	for _, field := range fieldsWithRecordMetadata(collection) {
 		projection.Fields = append(projection.Fields, storageFieldProjection(field))
 	}
 	for _, index := range collection.Indexes {
@@ -34,4 +34,15 @@ func storageFieldProjection(field Field) storage.RecordProjectionField {
 		Unique: field.Unique, System: field.System, Default: cloneJSON(field.Default),
 		RelationCardinality: cardinality,
 	}
+}
+
+// 字段列表可省略时间字段；记录存储仍保留排序、事件和审计需要的时间元数据。
+func fieldsWithRecordMetadata(collection Collection) []Field {
+	fields := append([]Field(nil), collection.Fields...)
+	for _, system := range systemFields() {
+		if _, found := fieldByName(fields, system.Name); !found {
+			fields = append(fields, system)
+		}
+	}
+	return fields
 }

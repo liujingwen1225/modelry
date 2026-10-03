@@ -26,7 +26,7 @@ function setupFetch(extensionError?: { status: number; error: unknown }) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     const method = init?.method ?? 'GET';
-    if (path.endsWith('/auth/session')) return response({ owner: { id: 'own_test', email: 'owner@example.test' }, expiresAt: '2026-09-25T12:00:00Z', role: 'owner', permission: { preset: 'fullAccess' } });
+    if (path.endsWith('/auth/session')) return response({ owner: { id: 'own_test', email: 'owner@example.test' }, expiresAt: new Date(Date.now() + 3_600_000).toISOString(), role: 'owner', permission: { preset: 'fullAccess' } });
     if (path.endsWith('/runtime/status')) return response({ state: 'ready', observedAt: '2026-09-25T09:00:00Z', database: { state: 'ready' }, localStorage: { state: 'ready' } });
     if (path.endsWith('/storage/status')) return response({ database: { state: 'ready' }, localStorage: { state: 'ready', provider: 'Local' } });
     if (path.startsWith('/admin/api/v1/collections?')) return response({ data: [{ id: 'col_profile', name: 'Profiles', type: 'Normal' }] });
@@ -47,18 +47,76 @@ function setupFetch(extensionError?: { status: number; error: unknown }) {
 }
 
 describe('Extension and write-only Secret Admin surfaces', () => {
-  it('opens the Extensions surface from the shared command palette', async () => {
+  it('opens the Hooks surface from the shared command palette', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     setupFetch();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Project navigation' });
+    const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     await userEvent.click(screen.getByRole('button', { name: /Search commands/ }));
     const palette = await screen.findByRole('dialog', { name: 'Command palette' });
     const input = within(palette).getByRole('combobox', { name: 'Search commands' });
-    await userEvent.type(input, 'Extensions');
+    await userEvent.type(input, 'Hooks');
     await userEvent.keyboard('{Enter}');
-    expect(await screen.findByRole('heading', { name: 'Extensions' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeInTheDocument();
+    // 新 IA：Hooks 属于 BUILD 组的 Hooks & Events 一级入口。
+    const eventsLink = within(navigation).getByRole('link', { name: 'Hooks & Events' });
+    // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
+    expect(eventsLink).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'Manage Secrets' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create Hook' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /Normalize Profile/ })).toBeInTheDocument();
+
+    await userEvent.click(within(navigation).getByRole('link', { name: 'System settings' }));
+    expect(eventsLink).not.toHaveAttribute('aria-current', 'page');
+    expect(eventsLink).not.toHaveClass(/nav-link--active/);
+
+    await userEvent.click(eventsLink);
+    expect(await screen.findByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeInTheDocument();
+    // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
+    expect(eventsLink).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('opens Hook creation on a separate page and restores the list filter on cancel', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    setupFetch();
+    window.history.replaceState({}, '', '/events?tab=hooks&q=Normalize');
+    render(<App />);
+    const create = await screen.findByRole('link', { name: 'Create Hook' });
+    expect(screen.queryByLabelText('Source code')).not.toBeInTheDocument();
+    await userEvent.click(create);
+    expect(await screen.findByRole('heading', { name: 'Create a Hook', level: 1 })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/events/hooks/new');
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'Cancel' }));
+    expect(await screen.findByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeInTheDocument();
+    expect(window.location.search).toContain('q=Normalize');
+  });
+
+  it('keeps Hook creation inputs after a rejected request and opens durable detail after retry', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    const fetchMock = setupFetch();
+    const original = fetchMock.getMockImplementation()!;
+    let failCreate = true;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input) === '/admin/api/v1/extensions' && init?.method === 'POST' && failCreate) {
+        return response({ error: { code: 'VALIDATION_FAILED', message: 'Invalid source', details: {}, requestId: 'req_create' } }, 422);
+      }
+      return original(input, init);
+    });
+    window.history.replaceState({}, '', '/events/hooks/new');
+    render(<App />);
+    const name = await screen.findByLabelText('Name');
+    await userEvent.type(name, 'Normalize Profile');
+    await userEvent.click(screen.getByRole('button', { name: 'Create Hook' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('req_create');
+    expect(name).toHaveValue('Normalize Profile');
+    expect((screen.getByLabelText('Source code') as HTMLTextAreaElement).value).toContain('beforeCreate');
+    failCreate = false;
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create Hook' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: 'Create Hook' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/events/hooks/ext_demo'));
+    expect(await screen.findByRole('heading', { name: 'Normalize Profile' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save configuration' })).toBeInTheDocument();
   });
 
   it('loads, edits, and saves the complete Extension configuration', async () => {
@@ -115,7 +173,7 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     expect(document.body.textContent).not.toContain(cleartext);
     const createCall = fetchMock.mock.calls.find(([path, init]) => path === '/admin/api/v1/secrets' && init?.method === 'POST');
     expect(createCall?.[1]?.body).toBe(JSON.stringify({ name: 'New provider', value: cleartext }));
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/secrets?q=provider#saved');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/settings/secrets?q=provider#saved');
   });
 
   it('shows only allowlisted Hook Run metadata and keeps the cursor in the deep link', async () => {
@@ -140,9 +198,9 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     window.history.replaceState({}, '', '/secrets?q=mail#selected');
     render(<App />);
     await screen.findByRole('heading', { name: 'Secrets' });
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Language' }), 'zh-CN');
-    expect(await screen.findByRole('heading', { name: '密钥' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch language to Simplified Chinese' }));
+    expect(await screen.findByRole('heading', { name: 'Secrets' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '创建密钥' })).toBeInTheDocument();
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/secrets?q=mail#selected');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe('/settings/secrets?q=mail#selected');
   });
 });
