@@ -48,11 +48,11 @@ describe('共享选择控件', () => {
     }
     render(<MultiField />);
     await user.click(screen.getByRole('combobox', { name: '索引字段' }));
-    await user.click(screen.getByRole('option', { name: '标题' }));
-    await user.click(screen.getByRole('option', { name: '正文' }));
+    await user.click(await screen.findByRole('option', { name: '标题' }));
+    await user.click(await screen.findByRole('option', { name: '正文' }));
     expect(screen.getByRole('option', { name: '标题' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('option', { name: '正文' })).toHaveAttribute('aria-selected', 'true');
-    await user.click(screen.getByRole('option', { name: '标题' }));
+    await user.click(await screen.findByRole('option', { name: '标题' }));
     await user.keyboard('{Escape}');
     expect(screen.getByRole('combobox', { name: '索引字段' })).toHaveAttribute('data-value', 'body');
   });

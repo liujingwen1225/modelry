@@ -33,19 +33,15 @@ export function SettingsLayout() {
   );
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <header className="sr-only">
-        <p className="eyebrow">{t('settings.eyebrow')}</p>
-        <h1>{t('settings.title')}</h1>
-        <p className="mt-2 max-w-[700px] text-[13px] leading-relaxed text-muted-foreground">{t('settings.description')}</p>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+      <h1 className="sr-only">{t('settings.title')}</h1>
       <div className="grid min-w-0 gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
-        <nav aria-label={t('settings.navigationLabel')} className="flex min-w-0 flex-col gap-0.5 overflow-x-auto lg:overflow-visible" data-settings-navigation>
+        <nav aria-label={t('settings.navigationLabel')} className="flex min-w-0 gap-1 overflow-x-auto lg:flex-col lg:overflow-visible" data-settings-navigation>
           {visibleSections.map((section) => (
             <NavLink
               aria-current={pathname === section.to ? 'page' : undefined}
               className={({ isActive }) => [
-                'min-h-9 shrink-0 rounded-md px-2.5 py-2 text-xs font-medium no-underline transition-colors',
+                'inline-flex min-h-11 shrink-0 items-center rounded-md px-3 py-2 text-[13px] font-medium no-underline transition-colors',
                 isActive ? 'bg-accent-cta-soft font-semibold text-accent-cta-ink' : 'text-ink-secondary hover:bg-accent hover:text-foreground',
               ].join(' ')}
               end
@@ -56,7 +52,7 @@ export function SettingsLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-[960px]">
           <TabContent activeKey={pathname}><Outlet /></TabContent>
         </div>
       </div>

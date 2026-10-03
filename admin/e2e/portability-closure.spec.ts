@@ -221,7 +221,7 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
   // 旧 `/settings/portability` 深链归一为系统设置的「备份与恢复」分节。
   await page.goto(runtimeURL + '/settings/portability');
   await expect(page).toHaveURL(runtimeURL + '/settings/backups');
-  await expect(page.getByRole('heading', { name: 'Backup and restore', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Backup and restore', level: 2 })).toBeVisible();
 
   // Backup：Runtime 产生一个带 manifest 的 tar 归档。
   const downloadPromise = page.waitForEvent('download');
@@ -251,7 +251,7 @@ test('WP28 backup, restore preflight, export/import, and the typed contract stay
 
   // Export / Import：导出写入 NDJSON，导入通过 Record 语义创建记录。
   await page.goto(runtimeURL + '/settings/data');
-  await expect(page.getByRole('heading', { name: 'Data import / export', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Data import / export', level: 2 })).toBeVisible();
   await page.getByRole('button', { name: 'Export NDJSON' }).click();
   await expect(page.getByLabel('NDJSON stream')).toHaveValue(/portable/, { timeout: 15_000 });
   await page.getByLabel('NDJSON stream').fill(

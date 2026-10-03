@@ -50,9 +50,9 @@ export function ApplicationAuthPanel() {
     : { title: t('access.authLoadFailed'), detail: t('common.tryAgainWhenAvailable') };
 
   return <section aria-label={t('access.authTitle')} className="flex min-w-0 flex-col gap-4">
-    <div className="sr-only">
-      <h2>{t('access.authTitle')}</h2>
-      <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('access.authDescription')}</p>
+    <div className="min-w-0">
+      <h2 className="text-base font-semibold">{t('access.authTitle')}</h2>
+      <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('access.authDescription')}</p>
     </div>
 
     {state === 'loading' && <LoadingState label={t('access.authLoading')} />}
@@ -62,19 +62,19 @@ export function ApplicationAuthPanel() {
       <ButtonLink className="mt-2" size="small" to="/collections/new" variant="primary"><Plus aria-hidden="true" size={15} /> {t('access.authCreateCollection')}</ButtonLink>
     </EmptyState>}
 
-    {state === 'ready' && collections.length > 0 && <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+    {state === 'ready' && collections.length > 0 && <Surface className="flex min-w-0 flex-col gap-3" variant="section">
       <div className="flex flex-wrap items-center gap-3">
         <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={16} /></span>
-        <p className="m-0 min-w-0 flex-1 text-xs text-muted-foreground">{t('access.authCollectionCount', { count: formatNumber(collections.length) })}</p>
+        <p className="m-0 min-w-0 flex-1 text-sm text-muted-foreground">{t('access.authCollectionCount', { count: formatNumber(collections.length) })}</p>
         <ButtonLink size="small" to="/collections/new" variant="secondary"><Plus aria-hidden="true" size={14} /> {t('access.authCreateCollection')}</ButtonLink>
       </div>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {collections.map((collection) => <li className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border bg-card p-3.5" key={collection.id}>
+        {collections.map((collection) => <li className="flex min-w-0 flex-wrap items-center gap-3 border-b py-3" key={collection.id}>
           <div className="min-w-0 flex-1">
-            <strong className="block truncate text-xs font-semibold text-foreground">{collection.name}</strong>
-            <span className="text-[11px] text-muted-foreground">{recordCountLabel(collection.recordCount, t, formatNumber)}</span>
+            <strong className="block break-words text-sm font-semibold text-foreground">{collection.name}</strong>
+            <span className="text-xs text-muted-foreground">{recordCountLabel(collection.recordCount, t, formatNumber)}</span>
           </div>
-          <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(collection.id)}/access?panel=authentication`}>{t('access.authOpenCollection')} <ArrowRight aria-hidden="true" size={14} /></Link>
+          <Link className="inline-flex min-h-11 items-center gap-1 text-[13px] font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(collection.id)}/access?panel=authentication`}>{t('access.authOpenCollection')} <ArrowRight aria-hidden="true" size={14} /></Link>
         </li>)}
       </ul>
     </Surface>}

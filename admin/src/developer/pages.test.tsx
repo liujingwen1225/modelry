@@ -14,7 +14,7 @@ function setupMCP({ accounts, audit }: { accounts: unknown[]; audit?: unknown[] 
     if (path.endsWith('/auth/session')) {
       return Promise.resolve(json({
         owner: { id: 'own_test', email: 'owner@example.test' },
-        expiresAt: '2026-09-25T09:00:00Z',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
         role: 'owner',
         permission: { preset: 'fullAccess' },
       }));

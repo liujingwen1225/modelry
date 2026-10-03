@@ -186,6 +186,9 @@ test.beforeAll(async () => {
   }
 }, 300_000);
 
+// 每个场景独占 Runtime；同一场景内的重启仍复用其真实项目。
+test.afterEach(async () => { await stopRuntime(); });
+
 test.afterAll(async () => {
   if (runtimeProcess && runtimeProcess.exitCode === null && runtimeProcess.signalCode === null) {
     try { await stopRuntime(); }
@@ -226,6 +229,7 @@ test('WP23 Extension lifecycle and write-only Secrets recover on a same-root res
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(page).toHaveURL(/\/collections\/new$/);
   await page.getByLabel('Collection name').fill('lifecycle-items');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByLabel('Field name 1').fill('title');
   await page.getByRole('checkbox', { name: 'Required', exact: true }).check();
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
@@ -379,6 +383,8 @@ export function afterCommitCreate() { while (true) {} }`;
 });
 
 test('Hooks & Events 创建工作面、侧栏和耐久结果保持一致', async ({ page }) => {
+  projectRoot = path.join(runtimeDirectory, 'workflow-project');
+  await mkdir(projectRoot);
   const first = await startRuntime(projectRoot);
   await page.goto(runtimeURL);
   await page.getByLabel('Email').fill(ownerEmail);

@@ -137,7 +137,7 @@ test.afterAll(async () => {
   if (runtimeDirectory) await rm(runtimeDirectory, { recursive: true, force: true });
 }, 20_000);
 
-test('768px Tablet Sidebar can collapse, expand, and preserve primary navigation', async ({ page }) => {
+test('768px 导航抽屉与桌面收起导航保留资源上下文', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 768, height: 976 });
   await page.addInitScript(() => localStorage.setItem('modelry-admin-locale', 'en'));
@@ -150,27 +150,30 @@ test('768px Tablet Sidebar can collapse, expand, and preserve primary navigation
   await page.goto(runtimeURL + '/api', { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'API workspace' })).toBeVisible();
 
-  const sidebar = page.getByRole('complementary', { name: 'Project navigation' });
-  const workspace = page.locator('[data-shell-workspace]');
-  const collapse = page.getByRole('button', { name: 'Collapse project navigation' });
-  await expect(collapse).toBeVisible();
-  await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(210);
-  await collapse.click();
-  await expect(page.getByRole('button', { name: 'Expand project navigation' })).toBeVisible();
-  await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(72);
-  await expect.poll(async () => workspace.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('72px');
-  await expect(page.getByRole('heading', { name: 'API workspace' })).toBeVisible();
+  const openNavigation = page.getByRole('button', { name: 'Expand project navigation' });
+  await expect(openNavigation).toBeVisible();
+  await expect(page.locator('[data-shell-sidebar]')).not.toBeVisible();
+  await openNavigation.click();
+  const drawer = page.getByRole('dialog', { name: 'Project navigation' });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('link', { name: 'Collections', exact: true }).click();
+  await expect(page).toHaveURL(/\/collections$/);
+  await expect(drawer).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Collections', level: 1 })).toBeVisible();
+  await openNavigation.click();
+  await page.keyboard.press('Escape');
+  await expect(drawer).not.toBeVisible();
+  await expect(openNavigation).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(768);
 
-  await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('link', { name: 'Collections' }).click();
-  await expect(page).toHaveURL(/\/collections$/);
-  await expect(page.getByRole('heading', { name: 'Collections', level: 1 })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Expand project navigation' })).toBeVisible();
+  await page.setViewportSize({ width: 1024, height: 976 });
+  const sidebar = page.getByRole('complementary', { name: 'Project navigation' });
+  await expect(sidebar).toBeVisible();
+  await page.getByRole('button', { name: 'Collapse project navigation' }).click();
+  await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(72);
   await page.getByRole('button', { name: 'Expand project navigation' }).click();
-  await expect(page.getByRole('button', { name: 'Collapse project navigation' })).toBeVisible();
-  await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(210);
-  await expect(page.getByRole('navigation', { name: 'Project navigation' }).getByRole('link', { name: 'Collections' })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(768);
+  await expect.poll(async () => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(248);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
 
   const created = await page.evaluate(async (name) => {
     const response = await fetch('/admin/api/v1/collections', {
@@ -187,6 +190,6 @@ test('768px Tablet Sidebar can collapse, expand, and preserve primary navigation
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(runtimeURL + '/collections/' + encodeURIComponent(collectionId!), { timeout: 15_000 });
-  await expect(page.getByRole('heading', { name: 'Records', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Records', level: 2 })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

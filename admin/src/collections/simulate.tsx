@@ -62,10 +62,10 @@ export function AccessRuleSimulation({ collectionId }: { collectionId: string })
   }
 
   return (
-    <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+    <Surface className="flex min-w-0 flex-col gap-4" variant="section">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
         <div className="min-w-0">
-          <h2>{t('security.simulationTitle')}</h2>
+          <h2 className="text-base font-semibold">{t('security.simulationTitle')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{t('security.simulationDescription')}</p>
         </div>
         <StatusChip state="info">{t('security.simulationPreview')}</StatusChip>
@@ -96,8 +96,8 @@ export function AccessRuleSimulation({ collectionId }: { collectionId: string })
         <div className="flex flex-col gap-2 rounded-lg border bg-secondary px-3.5 py-3 text-xs" data-simulation-decision={result.allowed ? 'allow' : 'deny'} role="status">
           <StatusChip state={result.allowed ? 'ready' : 'unavailable'}>{result.allowed ? t('security.simulationAllowed') : t('security.simulationDenied')}</StatusChip>
           <span className="text-ink-secondary">{result.decidingMode ? t('security.simulationRule', { mode: decidingModeLabel ?? '' }) : ''}</span>
-          {result.code && <code className="w-fit rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">{result.code}</code>}
-          <p className="m-0 text-[11px] text-muted-foreground">{t('security.simulationNotice')}</p>
+          {result.code && <code className="w-fit rounded bg-muted px-1.5 py-0.5 font-mono text-[13px] text-ink-secondary">{result.code}</code>}
+          <p className="m-0 text-xs text-muted-foreground">{t('security.simulationNotice')}</p>
         </div>
       )}
       {error !== undefined && (

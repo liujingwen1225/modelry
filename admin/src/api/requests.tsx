@@ -222,30 +222,30 @@ export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {embedded ? (
-        <header className="sr-only">
-          <h2>{t('api.workspaceTabs.logs')}</h2>
-          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.logsDescription')}</p>
+        <header className="min-w-0">
+          <h2 className="text-base font-semibold">{t('api.workspaceTabs.logs')}</h2>
+          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('api.logsDescription')}</p>
         </header>
       ) : (
-        <header className="sr-only">
+        <header className="min-w-0">
           <p className="eyebrow">{t('requests.eyebrow')}</p>
-          <h1>{t('requests.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('requests.description')}</p>
+          <h1 className="text-2xl font-semibold">{t('requests.title')}</h1>
+          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('requests.description')}</p>
         </header>
       )}
 
-      <Surface className="flex min-w-0 flex-col gap-3 p-3" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-3" variant="section">
         <form className="flex flex-wrap items-end gap-3" onSubmit={applyFilters}>
           <SearchInput id="requests-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('api.requestSearchPlaceholder')} value={searchDraft} aria-label={t('api.searchLabel')} className="min-w-[200px] flex-1 md:max-w-xs" />
-          <Label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+          <Label className="grid gap-1.5 text-xs font-semibold text-ink-secondary">
             {t('requests.filterField')}
             <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, field: selectedValue as FilterField, value: '' }))} value={filterDraft.field} options={[filterFields.map((field) => ({ value: field, label: field }))]} />
           </Label>
-          <Label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+          <Label className="grid gap-1.5 text-xs font-semibold text-ink-secondary">
             {t('requests.filterOperator')}
             <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, operator: selectedValue as Operator }))} value={filterDraft.operator} options={[operators.map((operator) => ({ value: operator, label: operator }))]} />
           </Label>
-          <Label className="grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+          <Label className="grid gap-1.5 text-xs font-semibold text-ink-secondary">
             {t('requests.filterValue')}
             {filterDraft.field === 'collectionId' ? (
               <SelectField onValueChange={(selectedValue) => setFilterDraft((current) => ({ ...current, value: selectedValue }))} value={filterDraft.value} options={[({ value: "", label: t('api.allCollections') }), collections.map((item) => ({ value: item.id, label: item.name }))]} />
@@ -266,12 +266,12 @@ export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) 
           </Label>
           <Button type="submit" variant="primary"><Filter aria-hidden="true" size={14} />{t('requests.applyFilters')}</Button>
           {(filter || collectionParam) && <Button onClick={clearFilter} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} />{t('requests.clearFilter')}</Button>}
-          <Label className="ml-auto grid gap-1.5 text-[11px] font-semibold text-ink-secondary">
+          <Label className="ml-auto grid gap-1.5 text-xs font-semibold text-ink-secondary">
             {t('api.sortLabel')}
             <SelectField onValueChange={(selectedValue) => changeSort(selectedValue)} value={sort} options={[({ value: "time desc", label: t('requests.sortNewest') }), ({ value: "time asc", label: t('requests.sortOldest') }), ({ value: "durationMs desc", label: t('requests.sortSlowest') })]} />
           </Label>
         </form>
-        <p className="m-0 text-[10px] text-muted-foreground">{t('requests.filterHint')}</p>
+        <p className="m-0 text-xs text-muted-foreground">{t('requests.filterHint')}</p>
       </Surface>
 
       {state === 'loading' && <LoadingState label={t('requests.loading')} />}
@@ -307,13 +307,13 @@ export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) 
             {page.data.map((record) => (
               <TableRow key={record.requestId}>
                 <TableCell className="align-top whitespace-nowrap"><time dateTime={record.time}>{formatDate(record.time)}</time></TableCell>
-                <TableCell className="align-top"><Link className="font-mono text-[11px] font-semibold text-primary hover:underline" to={`/api/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(from)}`}>{record.requestId}</Link></TableCell>
-                <TableCell className="align-top"><strong className="mr-1.5 font-mono text-[11px] text-foreground">{record.method}</strong><code className="break-all font-mono text-[11px] text-ink-secondary">{record.endpoint}</code></TableCell>
-                <TableCell className="align-top"><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip>{record.errorCode && <small className="mt-1 block font-mono text-[10px] text-muted-foreground">{record.errorCode}</small>}</TableCell>
+                <TableCell className="align-top"><Link className="font-mono text-[13px] font-semibold text-primary hover:underline" to={`/api/requests/${encodeURIComponent(record.requestId)}?from=${encodeURIComponent(from)}`}>{record.requestId}</Link></TableCell>
+                <TableCell className="align-top"><strong className="mr-1.5 font-mono text-[13px] text-foreground">{record.method}</strong><code className="break-all font-mono text-[13px] text-ink-secondary">{record.endpoint}</code></TableCell>
+                <TableCell className="align-top"><StatusChip state={record.status < 400 ? 'success' : 'error'}>{record.status}</StatusChip>{record.errorCode && <small className="mt-1 block font-mono text-[13px] text-muted-foreground">{record.errorCode}</small>}</TableCell>
                 <TableCell className="align-top whitespace-nowrap">{formatNumber(record.durationMs)} ms</TableCell>
                 <TableCell className="align-top">{record.collectionId ? collectionNames.get(record.collectionId) ?? record.collectionId : '—'}</TableCell>
                 <TableCell className="align-top">
-                  <span className="grid gap-0.5 text-[11px]">
+                  <span className="grid gap-0.5 text-xs">
                     <span>{outcomeLabel('authenticationOutcomes', record.authenticationOutcome, t)}</span>
                     <span className="text-muted-foreground">{outcomeLabel('authorizationOutcomes', record.authorizationOutcome, t)}</span>
                   </span>
@@ -362,15 +362,24 @@ export function RequestDetailPage() {
     return () => controller.abort();
   }, [reload, requestId]);
 
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('api.requestDetailLoading')} /></div>;
+  const requestContext = <>
+    <Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={returnTo}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link>
+    <header className="min-w-0">
+      <p className="eyebrow">{t('api.requestDetailEyebrow')}</p>
+      <h1 className="text-2xl font-semibold">{t('api.requestDetailTitle')}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{t('api.requestDetailDescription')}</p>
+      <code className="mt-2 block break-all font-mono text-[13px]">{requestId}</code>
+    </header>
+  </>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6">{requestContext}<LoadingState label={t('api.requestDetailLoading')} /></div>;
   if (state === 'error' || !record) {
     const copy = errorCopy(error, t('api.requestDetailLoadFailed'), errorMessage, t('common.requestId'));
     return (
       <div className="flex min-w-0 flex-col gap-6">
+        {requestContext}
         <ErrorState description={copy.description} title={copy.title}>
           <div className="mt-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></div>
         </ErrorState>
-        <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to="/api?tab=logs"><ArrowLeft aria-hidden="true" size={14} /> {t('api.allRequests')}</Link>
       </div>
     );
   }
@@ -383,14 +392,14 @@ export function RequestDetailPage() {
   const collectionLink = collection && endpoint ? `/collections/${encodeURIComponent(collection.id)}/api?endpoint=${encodeURIComponent(endpoint.operationId)}` : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={returnTo}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link>
-      <header className="sr-only">
+      <Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={returnTo}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link>
+      <header className="min-w-0">
         <p className="eyebrow">{t('api.requestDetailEyebrow')}</p>
-        <h1>{t('api.requestDetailTitle')}</h1>
-        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.requestDetailDescription')}</p>
+        <h1 className="text-2xl font-semibold">{t('api.requestDetailTitle')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('api.requestDetailDescription')}</p>
       </header>
 
-      <section aria-label={t('requests.detailRegion')} role="region" className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-5">
+      <section aria-label={t('requests.detailRegion')} role="region" className="flex min-w-0 flex-col gap-4 border-t pt-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="eyebrow">{t('api.canonicalRequestId')}</p>
@@ -403,41 +412,41 @@ export function RequestDetailPage() {
         </div>
 
         <dl className="m-0 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('api.columnTime')}</dt>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('api.columnTime')}</dt>
             <dd className="m-0 text-xs text-ink-secondary"><time dateTime={record.time}>{formatDate(record.time)}</time></dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('requests.columnDuration')}</dt>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('requests.columnDuration')}</dt>
             <dd className="m-0 text-xs text-ink-secondary">{formatNumber(record.durationMs)} ms</dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('api.methodAndRoute')}</dt>
-            <dd className="m-0 flex min-w-0 flex-wrap items-center gap-1.5"><strong className="font-mono text-xs text-foreground">{record.method}</strong><code className="break-all font-mono text-[11px] text-ink-secondary">{record.endpoint}</code></dd>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('api.methodAndRoute')}</dt>
+            <dd className="m-0 flex min-w-0 flex-wrap items-center gap-1.5"><strong className="font-mono text-[13px] text-foreground">{record.method}</strong><code className="break-all font-mono text-[13px] text-ink-secondary">{record.endpoint}</code></dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('api.collectionLabel')}</dt>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('api.collectionLabel')}</dt>
             <dd className="m-0 text-xs text-ink-secondary">{collection?.name ?? record.collectionId ?? '—'}</dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('api.authentication')}</dt>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('api.authentication')}</dt>
             <dd className="m-0"><Badge variant={record.authenticationOutcome === 'authenticated' ? 'success' : record.authenticationOutcome === 'rejected' ? 'danger' : 'outline'}>{outcomeLabel('authenticationOutcomes', record.authenticationOutcome, t)}</Badge></dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('api.authorization')}</dt>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('api.authorization')}</dt>
             <dd className="m-0"><Badge variant={record.authorizationOutcome === 'allowed' ? 'success' : record.authorizationOutcome === 'denied' ? 'danger' : 'outline'}>{outcomeLabel('authorizationOutcomes', record.authorizationOutcome, t)}</Badge></dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('api.errorCode')}</dt>
-            <dd className="m-0 font-mono text-xs text-ink-secondary">{record.errorCode ?? '—'}</dd>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('api.errorCode')}</dt>
+            <dd className="m-0 font-mono text-[13px] text-ink-secondary">{record.errorCode ?? '—'}</dd>
           </div>
-          <div className="grid gap-0.5 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('requests.userAgent')}</dt>
+          <div className="grid min-w-0 gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('requests.userAgent')}</dt>
             <dd className="m-0 text-xs text-ink-secondary">{t('api.notRecorded')}</dd>
           </div>
         </dl>
 
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('requests.allowlistNote')}</p>
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('requests.allowlistNote')}</p>
 
         <div className="flex flex-wrap gap-2">
           <ButtonLink size="small" to={endpointLink}>{t('api.openEndpoint')}</ButtonLink>

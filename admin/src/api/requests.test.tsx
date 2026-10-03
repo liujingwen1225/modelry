@@ -138,7 +138,8 @@ describe('Requests surface', () => {
     mocks.getRequestRecord.mockResolvedValue(requestRecord);
     renderRequestDetail('/api/requests/req_12345678?from=%2Fconnect%2Fapi%3Ftab%3Dendpoints');
 
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Request details', level: 1 })).toBeVisible();
     const region = screen.getByRole('region', { name: 'Request details' });
     for (const field of ['req_12345678', 'FORBIDDEN', 'Denied', 'Anonymous', 'posts']) {
       expect(region).toHaveTextContent(field);
@@ -155,7 +156,8 @@ describe('Requests surface', () => {
     mocks.getRequestRecord.mockResolvedValue(requestRecord);
     renderRequestDetail('/api/requests/req_12345678');
 
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Request details', level: 1 })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', '/collections/col_posts/access');
     expect(screen.getByRole('link', { name: 'All requests' })).toHaveAttribute('href', '/api?tab=logs');
   });
@@ -165,7 +167,8 @@ describe('Requests surface', () => {
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
     renderRequestDetail('/api/requests/req_file_123456');
 
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Request details', level: 1 })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
   });
 
@@ -174,7 +177,8 @@ describe('Requests surface', () => {
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
     renderRequestDetail('/api/requests/req_file_ordered');
 
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Request details', level: 1 })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFileByIndex');
   });
 
@@ -183,7 +187,8 @@ describe('Requests surface', () => {
     mocks.listAllCollections.mockResolvedValue([fileCollection]);
     renderRequestDetail('/api/requests/req_file_123456');
 
-    expect(await screen.findByRole('heading', { name: 'Request details' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Request details' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Request details', level: 1 })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open endpoint' })).toHaveAttribute('href', '/api?tab=endpoints&collection=col_posts&endpoint=readApplicationRecordFile');
     expect(screen.getByRole('link', { name: 'Open Collection API' })).toHaveAttribute('href', '/collections/col_posts/api?endpoint=readApplicationRecordFile');
   });

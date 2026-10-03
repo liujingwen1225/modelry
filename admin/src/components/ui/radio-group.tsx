@@ -11,10 +11,10 @@ function RadioGroupItem<Value>({ className, 'aria-label': ariaLabel, 'aria-label
       aria-label={ariaLabel}
       // 显式名称优先，外层选项卡片的说明仍作为独立文案保留。
       aria-labelledby={ariaLabelledBy ?? (ariaLabel ? '' : undefined)}
-      className={cn('inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-full border border-input bg-card outline-none data-[checked]:border-primary focus-visible:outline-none focus-visible:shadow-none data-[disabled]:pointer-events-none data-[disabled]:opacity-55', className)}
+      className={cn('group inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-md outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] data-[disabled]:pointer-events-none data-[disabled]:opacity-55', className)}
       {...props}
     >
-      <RadioPrimitive.Indicator className="size-2 rounded-full bg-primary" />
+      <span aria-hidden="true" className="flex size-4 items-center justify-center rounded-full border border-input bg-card group-data-[checked]:border-primary"><RadioPrimitive.Indicator className="size-2 rounded-full bg-primary" /></span>
     </RadioPrimitive.Root>
   );
 }

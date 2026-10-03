@@ -33,32 +33,31 @@ export function SettingsGeneralPage() {
       <section aria-labelledby="settings-general-status" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h2 id="settings-general-status">{t('settings.generalStatusTitle')}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">{t('settings.diagnosticsDescription')}</p>
+            <h2 className="text-base font-semibold" id="settings-general-status">{t('settings.generalStatusTitle')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t('settings.diagnosticsDescription')}</p>
           </div>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={15} /> {t('settings.refresh')}</Button>
         </div>
         <DiagnosticsCards />
       </section>
 
-      <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-3" variant="section">
         <div className="min-w-0">
-          <h2 className="m-0">{t('settings.generalPreferencesTitle')}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{t('settings.generalPreferencesDescription')}</p>
+          <h2 className="m-0 text-base font-semibold">{t('settings.generalPreferencesTitle')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('settings.generalPreferencesDescription')}</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalLanguageLabel')}</span>
+            <span className="text-xs font-semibold text-ink-secondary">{t('settings.generalLanguageLabel')}</span>
             <LanguageSwitcher />
           </div>
           <div className="grid gap-1.5">
-            <span className="text-[11px] font-semibold text-ink-secondary">{t('settings.generalThemeLabel')}</span>
+            <span className="text-xs font-semibold text-ink-secondary">{t('settings.generalThemeLabel')}</span>
             <Button onClick={toggleTheme} size="small" type="button" variant="secondary">
               {theme === 'dark' ? t('shell.themeSwitchToLight') : t('shell.themeSwitchToDark')}
             </Button>
           </div>
         </div>
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('settings.generalReadOnly')}</p>
       </Surface>
     </div>
   );
@@ -138,49 +137,49 @@ export function RuntimeSettingsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="sr-only">
+      <header className="min-w-0">
         <p className="eyebrow">{t('runtimeSettings.eyebrow')}</p>
-        <h1>{t('runtimeSettings.title')}</h1>
-        <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('runtimeSettings.description')}</p>
+        <h2 className="text-lg font-semibold">{t('runtimeSettings.title')}</h2>
+        <p className="mt-2.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('runtimeSettings.description')}</p>
       </header>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-center gap-3">
           <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><Settings2 size={17} /></span>
           <div className="min-w-0">
             <p className="eyebrow">{t('runtimeSettings.current.eyebrow')}</p>
-            <h2>{t('runtimeSettings.current.title')}</h2>
+            <h2 className="text-base font-semibold">{t('runtimeSettings.current.title')}</h2>
           </div>
         </div>
         <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('runtimeSettings.listenAddress.label')}</dt>
+          <div className="flex min-w-0 flex-col gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('runtimeSettings.listenAddress.label')}</dt>
             <dd className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
               <code className="break-words font-mono">{settings.listenAddress.value}</code>
               <StatusChip state="info">{t(sourceKey(settings.listenAddress.source))}</StatusChip>
               {settings.listenAddress.restartRequired && <StatusChip state="degraded">{t('runtimeSettings.restartRequired')}</StatusChip>}
             </dd>
           </div>
-          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('runtimeSettings.requestRetention.label')}</dt>
+          <div className="flex min-w-0 flex-col gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('runtimeSettings.requestRetention.label')}</dt>
             <dd className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
               <code className="break-words font-mono">{settings.requestRetentionDays.value}</code>
               <StatusChip state="info">{t(sourceKey(settings.requestRetentionDays.source))}</StatusChip>
               {settings.requestRetentionDays.restartRequired && <StatusChip state="degraded">{t('runtimeSettings.restartRequired')}</StatusChip>}
             </dd>
           </div>
-          <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('runtimeSettings.current.revision')}</dt>
+          <div className="flex min-w-0 flex-col gap-1 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('runtimeSettings.current.revision')}</dt>
             <dd className="m-0 break-words text-xs text-ink-secondary">{settings.revision}</dd>
           </div>
         </dl>
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('runtimeSettings.current.flagHint')}</p>
+        <p className="m-0 text-sm leading-relaxed text-muted-foreground">{t('runtimeSettings.current.flagHint')}</p>
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="min-w-0">
-          <h2>{t('runtimeSettings.edit.title')}</h2>
-          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('runtimeSettings.edit.description')}</p>
+          <h2 className="text-base font-semibold">{t('runtimeSettings.edit.title')}</h2>
+          <p className="mt-1.5 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('runtimeSettings.edit.description')}</p>
         </div>
         <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <FormField hint={t('runtimeSettings.listenAddress.hint')} htmlFor="runtime-listen-address" label={t('runtimeSettings.listenAddress.label')}>
@@ -193,7 +192,7 @@ export function RuntimeSettingsPage() {
             <Button disabled={busy || invalid} type="submit" variant="primary">{busy ? t('runtimeSettings.saving') : t('runtimeSettings.save')}</Button>
           </div>
         </form>
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('runtimeSettings.edit.restartHint')}</p>
+        <p className="m-0 text-sm leading-relaxed text-muted-foreground">{t('runtimeSettings.edit.restartHint')}</p>
       </Surface>
 
       {error !== undefined && (
@@ -202,7 +201,7 @@ export function RuntimeSettingsPage() {
           title={t('runtimeSettings.saveFailed')}
         />
       )}
-      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-sm text-success" role="status">{notice}</p>}
     </div>
   );
 }
