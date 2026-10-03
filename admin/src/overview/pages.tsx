@@ -23,12 +23,8 @@ type SummaryState = 'loading' | 'ready' | 'unavailable';
 function PageHeading({ actions }: { actions: React.ReactNode }) {
   const { t } = useI18n();
   return (
-    <header className="flex min-h-12 min-w-0 flex-wrap items-start justify-between gap-3 border-b pb-4" data-workspace-toolbar>
-      <div className="min-w-0">
-        <p className="eyebrow">{t('overview.eyebrow')}</p>
-        <h1 className="text-2xl font-semibold">{t('overview.title')}</h1>
-        <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-muted-foreground">{t('overview.description')}</p>
-      </div>
+    <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
+      <h1 className="sr-only">{t('overview.title')}</h1>
       <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
     </header>
   );
@@ -171,7 +167,6 @@ function QuickStart() {
     <Surface className="flex min-w-0 flex-col gap-3" data-overview-quick-start variant="section">
       <div className="min-w-0">
         <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.quickTitle')}</h2>
-        <p className="m-0 mt-0.5 text-xs text-muted-foreground">{t('overview.quickSub')}</p>
       </div>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {actions.map((action) => (
@@ -245,7 +240,6 @@ function RecentActivity() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.recentActivityTitle')}</h2>
-          <p className="m-0 mt-0.5 text-xs text-muted-foreground">{t('overview.recentActivitySub')}</p>
         </div>
         <ButtonLink size="small" to="/activity" variant="quiet">{t('overview.recentActivityAll')}</ButtonLink>
       </div>
@@ -319,7 +313,6 @@ function RuntimeStatusPanel() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.runtimeTitle')}</h2>
-          <p className="m-0 mt-0.5 text-xs text-muted-foreground">{t('overview.runtimeSub')}</p>
         </div>
         <StatusChip state={runtimeState === 'ready' && databaseState === 'ready' && fileState === 'ready' ? 'ready' : 'degraded'}>
           {runtimeState === 'ready' && databaseState === 'ready' && fileState === 'ready' ? t('overview.runtimeAllNormal') : t('overview.unavailable')}

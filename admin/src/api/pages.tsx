@@ -63,15 +63,8 @@ export function ApiWorkspacePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <p className="eyebrow">API</p>
-        <h1 className="text-2xl font-semibold">{t('api.workspaceTitle')}</h1>
-        <p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('api.workspaceDescription')}</p>
-      </header>
-
-
-
       {/* 真实 <nav> + <Link> 语义：键盘可达，当前 Tab 用 aria-current="page" 表达。 */}
+    <h1 className="sr-only">{t('api.workspaceTitle')}</h1>
     <WorkspaceToolbar navigation={<nav aria-label={t('api.workspaceTabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden">
         {workspaceTabs.map((tab) => (
           <Link

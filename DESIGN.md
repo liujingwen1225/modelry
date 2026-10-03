@@ -369,20 +369,20 @@ Card
 
 ### 6.3 Page Header
 
-所有一级页面都必须有可见 Page Header：
+一级页面由主导航标识当前位置，直接从页签、操作栏或内容开始，不重复显示导航名称和固定介绍。具体资源工作面保留资源名称与必要状态：
 
 ~~~text
-Page title                         Primary action
-Short context / state
+Resource name                      Primary action
+Resource state（需要时）
 ~~~
 
 约束：
 
-- 页面标题不能只放在 `sr-only`；
+- 一级页面保留 `sr-only` 标题语义，不为其预留可见区域；具体资源名称必须可见；
 - 一个页面只允许一个主要 CTA；
 - 第二动作使用 outline / ghost；
 - 标题区域不做 Hero，不使用大字号 Marketing 文案；
-- 页面说明保持 1–2 行。
+- 仅显示帮助当前操作的说明，不显示设计意图或实现备注。
 
 ### 6.4 Section Rhythm
 
@@ -839,7 +839,7 @@ Modelry 优先使用与 Quiet Workbench 一致的低装饰焦点反馈：
 - 默认使用 neutral；
 - 让异常比正常状态更显眼；
 - 使用 shadcn/Base UI 作为通用原语；
-- 保证页面标题可见；
+- 保证具体资源名称可见，一级页面不重复导航标题；
 - 保证 Focus 可见，但优先使用背景、现有边框或 inset 状态，不默认增加外圈；
 - 保证 44px hit target；
 - 使用 URL 保存可共享工作状态；
@@ -853,7 +853,7 @@ Modelry 优先使用与 Quiet Workbench 一致的低装饰焦点反馈：
 - 不要 Gradient、Glow、Glass、Scanline；
 - 不要为 Modelry 新增品牌彩色 CTA；
 - 不要用 Emoji 做交互图标；
-- 不要隐藏页面标题只留下工具栏；
+- 不要用重复标题和固定介绍把主要内容推离首屏；
 - 不要为了“密度”缩小点击目标；
 - 不要在没有替代状态的情况下全局关闭 focus-visible；
 - 不要给普通页面 Surface 使用大阴影；

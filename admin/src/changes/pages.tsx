@@ -32,12 +32,8 @@ export function ChangesWorkspacePage() {
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="min-w-0">
-      <p className="eyebrow">{t('changes.eyebrow')}</p>
-      <h1 className="text-2xl font-semibold">{t('changes.title')}</h1>
-      <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('changes.description')}</p>
-    </header>
 
+    <h1 className="sr-only">{t('changes.title')}</h1>
     <WorkspaceToolbar navigation={<nav aria-label={t('changes.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden" data-changes-tabs>
       {changesTabOrder.map((tab) => <Link
         aria-current={activeTab === tab ? 'page' : undefined}

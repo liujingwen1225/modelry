@@ -125,16 +125,8 @@ export function CollectionsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0 border-b pb-4">
-        <div className="min-w-0">
-          <p className="eyebrow">{t('collections.eyebrow')}</p>
-          <h1 className="text-2xl font-semibold">{t('collections.title')}</h1>
-          <p className="mt-2.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('collections.description')}</p>
-        </div>
-
-      </header>
-
       <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-3 border-b pb-2" data-workspace-toolbar>
+        <h1 className="sr-only">{t('collections.title')}</h1>
         <SearchInput aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} value={search} className="min-w-[180px] flex-1 md:max-w-sm" />
         <Select items={typeItems} onValueChange={(value) => updateQuery('type', String(value) === 'all' ? '' : String(value))} value={type}>
           <SelectTrigger aria-label={t('collections.type')} className="w-28"><SelectValue /></SelectTrigger>

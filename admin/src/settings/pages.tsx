@@ -58,7 +58,6 @@ export function SettingsGeneralPage() {
             </Button>
           </div>
         </div>
-        <p className="m-0 text-sm leading-relaxed text-muted-foreground">{t('settings.generalReadOnly')}</p>
       </Surface>
     </div>
   );

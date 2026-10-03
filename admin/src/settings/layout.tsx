@@ -33,12 +33,8 @@ export function SettingsLayout() {
   );
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <p className="eyebrow">{t('settings.eyebrow')}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('settings.title')}</h1>
-        <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-muted-foreground">{t('settings.description')}</p>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+      <h1 className="sr-only">{t('settings.title')}</h1>
       <div className="grid min-w-0 gap-5 lg:grid-cols-[210px_minmax(0,1fr)]">
         <nav aria-label={t('settings.navigationLabel')} className="flex min-w-0 gap-1 overflow-x-auto lg:flex-col lg:overflow-visible" data-settings-navigation>
           {visibleSections.map((section) => (

@@ -74,12 +74,8 @@ export function ActivityWorkspacePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-4" data-workspace-toolbar>
-        <div className="min-w-0 flex-1">
-          <p className="eyebrow">{t('activity.eyebrow')}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('activity.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{source === 'facts' ? t('activity.description') : t('access.auditDescription')}</p>
-        </div>
+      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-2" data-workspace-toolbar>
+        <h1 className="sr-only">{t('activity.title')}</h1>
         <nav aria-label={t('activity.sourcesLabel')} className="flex flex-wrap items-center gap-1.5" data-activity-source>
           {activitySourceOrder.map((candidate) => <ButtonLink
             aria-current={source === candidate ? 'page' : undefined}
@@ -185,9 +181,7 @@ export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
     <div className="flex min-w-0 flex-col gap-6">
       {!embedded && <header className="min-w-0">
         <div className="min-w-0">
-          <p className="eyebrow">{t('activity.eyebrow')}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('activity.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('activity.description')}</p>
+          <h1 className="sr-only">{t('activity.title')}</h1>
         </div>
         <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ActivityIcon size={19} /></span>
       </header>}

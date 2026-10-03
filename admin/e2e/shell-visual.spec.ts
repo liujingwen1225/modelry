@@ -215,7 +215,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
   await page.reload({ timeout: 20_000 });
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
-  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toHaveClass('sr-only');
   await expect(page.getByRole('navigation', { name: 'Change sections' })).toBeVisible();
   await page.goto(`${runtimeURL}/activity/audit`, { timeout: 20_000 });
   await page.goBack({ timeout: 20_000 });
@@ -223,12 +223,12 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
 
   // locale + theme 选择在刷新后保持，且不改变当前深链接。
   await page.getByRole('button', { name: 'Switch language to Simplified Chinese' }).click();
-  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toHaveClass('sr-only');
   await page.getByRole('button', { name: '切换为深色主题' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload({ timeout: 20_000 });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toHaveClass('sr-only');
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
   await page.getByRole('button', { name: '切换语言为 English' }).click();
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
@@ -236,6 +236,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
 
   // 纯键盘：跳过链接 → 命令面板 → Escape 后焦点回到触发控件。
   await page.goto(`${runtimeURL}/collections`, { timeout: 20_000 });
+  await expect(page.locator('[data-workspace-toolbar]')).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
   const paletteTrigger = page.locator('[data-command-palette-trigger]');
@@ -274,7 +275,13 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
             await page.goto(runtimeURL + destination);
             await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
             await expect(page.locator('main h1')).toHaveCount(1);
-            await expect(page.locator('main h1')).toBeVisible();
+            // 一级页面由导航标识位置；资源工作面保留可见资源名。
+            if (destination.startsWith(`/collections/${collectionId}`)) {
+              await expect(page.locator('main h1')).toBeVisible();
+            } else {
+              await expect(page.locator('main h1')).toHaveClass('sr-only');
+              expect(await page.locator('main h1').evaluate((heading) => heading.getBoundingClientRect().height)).toBeLessThanOrEqual(1);
+            }
             await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
             expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
             const smallText = await page.locator('main').evaluate((main) => Array.from(main.querySelectorAll<HTMLElement>('*'))
