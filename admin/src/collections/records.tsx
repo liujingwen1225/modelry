@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '../components/button';
 import { FormField } from '../components/form-field';
 import { Dialog, Sheet } from '../components/overlays';
-import { EmptyState, ErrorState, LoadingState } from '../components/states';
+import { EmptyState, ErrorState, LoadingState, SpinnerLoadingState } from '../components/states';
 import { Surface } from '../components/surface';
 import {
   createRecord,
@@ -141,6 +141,7 @@ export function CollectionRecordsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState<Page<CollectionRecord>>({ data: [] });
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const initiallyLoaded = useRef(false);
   const [error, setError] = useState<unknown>();
   const [reloadKey, setReloadKey] = useState(0);
   const [message, setMessage] = useState<TranslationKey | ''>('');
@@ -183,10 +184,12 @@ export function CollectionRecordsPage() {
     setError(undefined);
     void listRecords(collection.id, options, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
+      initiallyLoaded.current = true;
       setPage(result);
       setState('ready');
     }).catch((reason: unknown) => {
       if (controller.signal.aborted) return;
+      initiallyLoaded.current = true;
       setError(reason);
       setState('error');
     });
@@ -309,6 +312,7 @@ export function CollectionRecordsPage() {
       setRowDeleting(false);
     }
   }
+  if (state === 'loading' && !initiallyLoaded.current) return <SpinnerLoadingState label={t('records.loading')} />;
   return (
     <div className="flex min-w-0 flex-col gap-6" data-record-page>
       <RecordPageTitle collection={collection} onCreate={openCreate} />
@@ -351,7 +355,7 @@ export function CollectionRecordsPage() {
         <div className="relative ml-auto"><Popover><PopoverTrigger className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</PopoverTrigger><PopoverContent><div className="grid min-w-[160px] gap-2 text-xs">{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <Label className="flex items-center gap-2 text-ink-secondary" key={name}><Checkbox checked={visibleColumns.includes(name)} onCheckedChange={(checked) => toggleColumn(name, checked)} />{name}</Label>)}</div></PopoverContent></Popover></div>
       </Surface>
 
-      {state === 'loading' && <LoadingState label={t('records.loading')} />}
+      {state === 'loading' && <SpinnerLoadingState label={t('records.loading')} />}
       {state === 'error' && (() => { const copy = errorCopy(error, t('records.loadFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}
       {state === 'ready' && page.data.length === 0 && !search && !filter && history.length === 0 && <EmptyState description={t('records.emptyDescription')} title={t('records.emptyTitle')}><Button onClick={openCreate} variant="primary"><Plus aria-hidden="true" size={14} />{t('records.createFirst')}</Button></EmptyState>}
       {state === 'ready' && page.data.length === 0 && (search || filter || history.length > 0) && <EmptyState description={t('records.noMatchDescription')} title={t('records.noMatchTitle')}><Button onClick={() => updateParams({ search: undefined, filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small">{t('records.clearSearchAndFilter')}</Button></EmptyState>}

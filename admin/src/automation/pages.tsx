@@ -1,3 +1,4 @@
+import { WorkspaceActions } from '../components/workspace-toolbar';
 import { Label } from '@/components/ui/label';
 import { SearchInput } from '@/components/ui/search-input';
 import { SelectField } from '@/components/ui/select-field';
@@ -44,12 +45,12 @@ export function PanelTabNav<T extends string>({ active, idPrefix, label, tabs }:
     const serialized = next.toString();
     return `${pathname}${serialized ? `?${serialized}` : ''}`;
   };
-  return <nav aria-label={label} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-panel-tabs={idPrefix}>
+  return <nav aria-label={label} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden" data-panel-tabs={idPrefix}>
     {tabs.map(({ id, label: tabLabel, icon: Icon }) => {
       const selected = active === id;
       return <Link
         aria-current={selected ? 'page' : undefined}
-        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${selected ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${selected ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         id={`${idPrefix}-tab-${id}`}
         key={id}
         replace
@@ -156,10 +157,10 @@ export function WebhooksPanel({ params, setParams }: PanelProps) {
   }
 
   return <section aria-labelledby="automation-webhooks-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-center justify-end gap-3">
+    <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-3">
       <div className="sr-only"><h2 id="automation-webhooks-heading">{t('automation.tabs.webhooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.webhooks.description')}</p></div>
       <Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.webhooks.create')}</Button>
-    </div>
+    </div></WorkspaceActions>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3">
       <SearchInput aria-label={t('automation.common.search')} onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
       <span className="text-xs text-muted-foreground">{t('automation.webhooks.list')} · {visible.length}</span>
@@ -291,7 +292,7 @@ export function EventHooksPanel({ params, setParams }: PanelProps) {
     finally { setBusyId(undefined); }
   }
   return <section aria-labelledby="automation-event-hooks-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id="automation-event-hooks-heading">{t('automation.tabs.eventHooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.eventHooks.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.eventHooks.create')}</Button></div>
+    <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id="automation-event-hooks-heading">{t('automation.tabs.eventHooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.eventHooks.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.eventHooks.create')}</Button></div></WorkspaceActions>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><SearchInput aria-label={t('automation.common.search')} onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" /><span className="text-xs text-muted-foreground">{t('automation.eventHooks.list')} · {visible.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}
     {failedAction && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
@@ -428,7 +429,7 @@ export function JobsPanel({ onRunRecorded, params, setParams }: PanelProps & {
   }
 
   return <section aria-labelledby="automation-jobs-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id="automation-jobs-heading">{t('automation.tabs.jobs')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.jobs.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.jobs.create')}</Button></div>
+    <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id="automation-jobs-heading">{t('automation.tabs.jobs')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('automation.jobs.description')}</p></div><Button onClick={() => { const next = new URLSearchParams(params); next.delete('edit'); next.set('create', '1'); setParams(next); }} type="button" variant="primary">{t('automation.jobs.create')}</Button></div></WorkspaceActions>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3"><SearchInput aria-label={t('automation.common.search')} onChange={(event) => updateSearch(event.target.value)} placeholder={t('automation.common.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" /><span className="text-xs text-muted-foreground">{t('automation.jobs.list')} · {visible.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}{failedAction && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{t('automation.common.requestFailed')}</p>}
     {webhooksUnavailable && <PartialState>{t('automation.webhooks.list')} · {t('automation.common.loadFailed')}</PartialState>}
@@ -530,7 +531,7 @@ export function DeliveriesPanel({ copy, fixedSourceType, params, reloadKey = 0, 
   const title = copy?.title ?? t('automation.deliveries.list');
   const description = copy?.description ?? t('automation.deliveries.description');
   return <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id={headingId}>{title}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{description}</p></div><Button disabled={state === 'loading'} onClick={() => setReload((value) => value + 1)} type="button"><RefreshCw aria-hidden="true" size={15} />{t('automation.common.refresh')}</Button></div>
+    <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-3"><div className="sr-only"><h2 id={headingId}>{title}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{description}</p></div><Button disabled={state === 'loading'} onClick={() => setReload((value) => value + 1)} type="button"><RefreshCw aria-hidden="true" size={15} />{t('automation.common.refresh')}</Button></div></WorkspaceActions>
     <Surface className="flex flex-wrap items-end justify-between gap-3 p-3"><div aria-label={t('automation.deliveries.filters')} className="flex flex-wrap items-end gap-3">{!fixedSourceType && <Label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.source')}<SelectField aria-label={t('automation.deliveries.source')} onValueChange={(selectedValue) => changeFilter('source', selectedValue)} value={requestedSource ?? ''} options={[({ value: "", label: t('automation.deliveries.allSources') }), ({ value: "eventHook", label: t('automation.sources.eventHook') }), ({ value: "job", label: t('automation.sources.job') }), ({ value: "test", label: t('automation.sources.test') })]} /></Label>}<Label className="grid gap-1 text-[11px] font-semibold text-ink-secondary">{t('automation.deliveries.status')}<SelectField aria-label={t('automation.deliveries.status')} onValueChange={(selectedValue) => changeFilter('status', selectedValue)} value={status ?? ''} options={[({ value: "", label: t('automation.deliveries.allStatuses') }), (['pending', 'running', 'succeeded', 'failed', 'cancelled'] as DeliveryStatus[]).map((value) => ({ value: value, label: t(`automation.statuses.${value}` as TranslationKey) }))]} /></Label></div><span className="text-xs text-muted-foreground">{items.length}</span></Surface>
     {notice && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><Check aria-hidden="true" className="shrink-0" size={15} />{notice}</div>}{error && <p className="m-0 rounded-md border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-xs text-danger" role="alert">{error}</p>}
     {partial && <PartialState>{t('automation.deliveries.detail')} · {t('automation.common.loadFailed')}</PartialState>}

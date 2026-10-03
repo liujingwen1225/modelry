@@ -185,9 +185,17 @@ func (service *Service) CreateCollectionWithInitializer(ctx context.Context, inp
 		Fields:  make([]Field, 0, len(input.Fields)+3),
 		Indexes: make([]Index, 0),
 	}
-	collection.Fields = append(collection.Fields, systemFields()...)
+	omitted := make(map[string]bool, len(input.OmitSystemFields))
+	for _, name := range input.OmitSystemFields {
+		omitted[name] = true
+	}
+	for _, system := range systemFields() {
+		if !omitted[system.Name] {
+			collection.Fields = append(collection.Fields, system)
+		}
+	}
 	seen := make(map[string]struct{}, len(input.Fields)+3)
-	for _, system := range collection.Fields {
+	for _, system := range systemFields() {
 		seen[strings.ToLower(system.Name)] = struct{}{}
 	}
 	for _, candidate := range input.Fields {
@@ -362,7 +370,7 @@ func (service *Service) GetRecordProjection(ctx context.Context, collectionID st
 		TableName:     storage.RecordTableName(collection.ID),
 		Fields:        make([]ProjectedField, 0, len(collection.Fields)),
 	}
-	for _, field := range collection.Fields {
+	for _, field := range fieldsWithRecordMetadata(collection) {
 		column := storage.RecordFieldColumnName(field.ID, field.Name, field.System)
 		projection.Fields = append(projection.Fields, ProjectedField{
 			ID: field.ID, Name: field.Name, Type: field.Type, ColumnName: column,

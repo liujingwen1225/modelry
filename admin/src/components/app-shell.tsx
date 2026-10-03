@@ -1,3 +1,4 @@
+import { TabContent } from './tab-content';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button as ControlButton } from '@/components/ui/button';
 import { LanguageSwitcher } from './language-switcher';
@@ -16,8 +17,8 @@ import {
   LogOut,
   Moon,
   Network,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
   ScrollText,
   Settings2,
   ShieldCheck,
@@ -178,12 +179,12 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed }: {
         <span className={['text-[17px] font-extrabold tracking-[-0.8px] min-[681px]:text-[19px]', collapsed ? 'min-[681px]:hidden' : ''].filter(Boolean).join(' ')}>modelry</span>
         <ControlButton variant="unstyled"
           aria-label={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
-          className="hidden size-8 shrink-0 cursor-pointer place-items-center rounded-lg border border-input bg-card text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:grid"
+          className="hidden size-8 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:grid"
           onClick={onToggleCollapsed}
           title={t(collapsed ? 'shell.expandProjectNavigation' : 'shell.collapseProjectNavigation')}
           type="button"
         >
-          {collapsed ? <PanelLeftOpen aria-hidden="true" size={17} /> : <PanelLeftClose aria-hidden="true" size={17} />}
+          {collapsed ? <ChevronRight aria-hidden="true" size={18} strokeWidth={1.75} /> : <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.75} />}
         </ControlButton>
       </div>
       <nav
@@ -529,7 +530,7 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
           id="main-content"
           tabIndex={-1}
         >
-          <NormalizedOutlet />
+          <TabContent activeKey={location.pathname}><NormalizedOutlet /></TabContent>
         </main>
       </div>
     </div>

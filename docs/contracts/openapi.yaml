@@ -4998,6 +4998,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FieldDefinition'
+        omitSystemFields:
+          type: array
+          uniqueItems: true
+          maxItems: 2
+          description: 创建时省略可选时间字段；记录时间元数据仍由运行时管理。id 不可省略。
+          items:
+            type: string
+            enum: [createdAt, updatedAt]
         authentication:
           $ref: '#/components/schemas/AuthenticationConfiguration'
         accessRules:

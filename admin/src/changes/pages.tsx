@@ -1,3 +1,4 @@
+import { WorkspaceToolbar } from '../components/workspace-toolbar';
 import { TabContent } from '../components/tab-content';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChangesPage } from '../collections/changes';
@@ -37,19 +38,20 @@ export function ChangesWorkspacePage() {
       <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('changes.description')}</p>
     </header>
 
-    <nav aria-label={t('changes.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-changes-tabs>
+    <WorkspaceToolbar navigation={<nav aria-label={t('changes.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden" data-changes-tabs>
       {changesTabOrder.map((tab) => <Link
         aria-current={activeTab === tab ? 'page' : undefined}
-        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={tab}
         to={tabTarget(tab)}
       >{t(changesTabLabels[tab])}</Link>)}
-    </nav>
+    </nav>}>
 
     <TabContent activeKey={activeTab}>
     {activeTab === 'drift' && <p className="sr-only">{t('changes.driftDescription')}</p>}
 
     {activeTab === 'drift' ? <DriftPage embedded /> : <ChangesPage embedded />}
     </TabContent>
+    </WorkspaceToolbar>
   </div>;
 }

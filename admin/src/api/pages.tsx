@@ -1,3 +1,4 @@
+import { WorkspaceToolbar } from '../components/workspace-toolbar';
 import { TabContent } from '../components/tab-content';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Download, RefreshCw } from 'lucide-react';
@@ -68,6 +69,23 @@ export function ApiWorkspacePage() {
         <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('api.workspaceDescription')}</p>
       </header>
 
+
+
+      {/* 真实 <nav> + <Link> 语义：键盘可达，当前 Tab 用 aria-current="page" 表达。 */}
+    <WorkspaceToolbar navigation={<nav aria-label={t('api.workspaceTabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden">
+        {workspaceTabs.map((tab) => (
+          <Link
+            aria-current={activeTab === tab ? 'page' : undefined}
+            className={`border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            key={tab}
+            replace
+            to={tabTarget(tab)}
+          >
+            {t(workspaceTabLabels[tab])}
+          </Link>
+        ))}
+      </nav>}>
+
       <Surface className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-3.5 py-3" variant="standard">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
           <span className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.baseUrlLabel')}</span>
@@ -76,26 +94,12 @@ export function ApiWorkspacePage() {
         {origin && <CopyButton label={t('api.copyBaseUrl')} value={origin} />}
       </Surface>
 
-      {/* 真实 <nav> + <Link> 语义：键盘可达，当前 Tab 用 aria-current="page" 表达。 */}
-      <nav aria-label={t('api.workspaceTabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b">
-        {workspaceTabs.map((tab) => (
-          <Link
-            aria-current={activeTab === tab ? 'page' : undefined}
-            className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            key={tab}
-            replace
-            to={tabTarget(tab)}
-          >
-            {t(workspaceTabLabels[tab])}
-          </Link>
-        ))}
-      </nav>
-
     <TabContent activeKey={activeTab}>
       {activeTab === 'endpoints' && <ApiEndpointBrowser />}
       {activeTab === 'openapi' && <OpenApiTab />}
       {activeTab === 'logs' && <RequestLogPage />}
     </TabContent>
+    </WorkspaceToolbar>
     </div>
   );
 }

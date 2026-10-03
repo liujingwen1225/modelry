@@ -323,11 +323,11 @@ export function CollectionSchemaPage() {
         <Badge variant="outline">{t('schema.modelVersion', { version: collection.schemaVersion ?? 1 })}</Badge>
       </header>
 
-      <nav aria-label={t('schema.viewsLabel')} className="flex gap-1 overflow-x-auto border-b">
+      <nav aria-label={t('schema.viewsLabel')} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b">
         {(['fields', 'relations', 'indexes', 'history'] as const).map((tab) => (
           <ControlButton variant="unstyled"
             aria-current={view === tab ? 'page' : undefined}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${view === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${view === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             key={tab}
             onClick={() => selectView(tab)}
             type="button"

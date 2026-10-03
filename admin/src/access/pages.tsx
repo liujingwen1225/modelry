@@ -1,3 +1,5 @@
+import { WorkspaceActions } from '../components/workspace-toolbar';
+import { WorkspaceToolbar } from '../components/workspace-toolbar';
 import { TabContent } from '../components/tab-content';
 import { SearchInput } from '@/components/ui/search-input';
 import { Input, Textarea } from '@/components/ui/input';
@@ -201,20 +203,21 @@ export function AccessWorkspacePage() {
       <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('access.description')}</p>
     </header>
 
-    <nav aria-label={t('access.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" data-access-workspace-tabs>
+    <WorkspaceToolbar navigation={<nav aria-label={t('access.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden" data-access-workspace-tabs>
       {accessTabOrder.map((tab) => <Link
         aria-current={activeTab === tab ? 'page' : undefined}
-        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={tab}
         to={tabTarget(tab)}
       >{t(accessTabLabels[tab])}</Link>)}
-    </nav>
+    </nav>}>
 
     <TabContent activeKey={activeTab}>
     {activeTab === 'administrators' && <AdministratorsPage embedded />}
     {activeTab === 'auth' && <ApplicationAuthPanel />}
     {activeTab === 'tokens' && <AccessPage embedded />}
     </TabContent>
+    </WorkspaceToolbar>
   </div>;
 }
 
@@ -360,13 +363,13 @@ export function AccessPage({ embedded = false }: { embedded?: boolean }) {
 
   return <div className="flex min-w-0 flex-col gap-6">
     {embedded
-      ? <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+      ? <WorkspaceActions><div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
         <div className="sr-only">
           <h2>{t('access.tokensTitle')}</h2>
           <p className="mt-1.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('access.tokensDescription')}</p>
         </div>
         {!accountId && <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button>}
-      </div>
+      </div></WorkspaceActions>
       : <PageTitle action={!accountId ? <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button> : undefined} description={t('access.description')} eyebrow={t('access.eyebrow')} title={t('access.title')} />}
     {ownerEmail && <Surface className="flex flex-wrap items-center gap-3 p-4" variant="standard"><span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={18} /></span><div className="grid min-w-0 flex-1 gap-0.5"><strong className="text-xs font-semibold text-foreground">{t('access.owner')}</strong><span className="truncate text-[11px] text-muted-foreground">{ownerEmail}</span></div><StatusChip state="full-access">{t('access.fullAccess')}</StatusChip></Surface>}
     {successMessage && <div className="flex items-center gap-2 rounded-lg border bg-secondary px-3.5 py-2.5 text-xs text-ink-secondary" role="status"><Check aria-hidden="true" className="shrink-0 text-success" size={15} />{t(successMessage)}</div>}

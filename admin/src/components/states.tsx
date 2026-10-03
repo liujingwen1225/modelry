@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -36,13 +37,14 @@ export function StatusChip({ state, children }: { state: string; children: React
   return <Badge data-status-chip data-status-tone={variant} data-status-state={tone} variant={variant}>{children}</Badge>;
 }
 
+export function SpinnerLoadingState({ label }: { label: string }) {
+  return <div aria-busy="true" aria-label={label} className="flex min-h-48 min-w-0 items-center justify-center text-muted-foreground" role="status">
+    <LoaderCircle aria-hidden="true" className="animate-spin motion-reduce:animate-none" size={22} strokeWidth={1.75} />
+  </div>;
+}
+
 export function LoadingState({ label }: { label: string }) {
-  return (
-    <div aria-label={label} className="flex items-center gap-2 rounded-md bg-info-soft px-3 py-3 text-[11px] text-info" role="status">
-      <span aria-hidden="true" className="inline-block size-1.5 animate-pulse rounded-full bg-current" />
-      {label}
-    </div>
-  );
+  return <SpinnerLoadingState label={label} />;
 }
 
 export function EmptyState({

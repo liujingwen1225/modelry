@@ -62,11 +62,11 @@ describe('Extension and write-only Secret Admin surfaces', () => {
     const eventsLink = within(navigation).getByRole('link', { name: 'Hooks & Events' });
     // 新版 Shell 用 aria-current 表达当前项，不再依赖 BEM class。
     expect(eventsLink).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
+    expect(screen.queryByRole('link', { name: 'Manage Secrets' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create Hook' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /Normalize Profile/ })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('link', { name: 'Manage Secrets' }));
-    expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeInTheDocument();
+    await userEvent.click(within(navigation).getByRole('link', { name: 'System settings' }));
     expect(eventsLink).not.toHaveAttribute('aria-current', 'page');
     expect(eventsLink).not.toHaveClass(/nav-link--active/);
 

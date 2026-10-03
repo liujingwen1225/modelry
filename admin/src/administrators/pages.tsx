@@ -1,3 +1,4 @@
+import { WorkspaceActions } from '../components/workspace-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -202,7 +203,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {embedded
-        ? <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        ? <WorkspaceActions><div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
           <div className="sr-only">
             {/* 工作面标题只保留屏幕阅读器语义，可见上下文由导航提供。 */}
             <h2 className="m-0">{t('administrators.title')}</h2>
@@ -216,8 +217,8 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
               <RefreshCw aria-hidden="true" size={14} /> {t('administrators.refresh')}
             </Button>
           </div>
-        </div>
-        : <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        </div></WorkspaceActions>
+        : <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
           <div className="sr-only">
             <p className="eyebrow">{t('administrators.eyebrow')}</p>
             <h1>{t('administrators.title')}</h1>

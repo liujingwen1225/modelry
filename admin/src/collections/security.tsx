@@ -242,11 +242,11 @@ export function CollectionSecurityPage() {
         </div>
         <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><Shield size={19} /></span>
       </header>
-      <nav aria-label={t('security.sectionsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto border-b" role="tablist">
+      <nav aria-label={t('security.sectionsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden border-b" role="tablist">
         <ControlButton variant="unstyled"
           aria-controls="security-panel-rules"
           aria-selected={activePanel === 'rules'}
-          className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'rules' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'rules' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           id="security-tab-rules"
           onClick={() => selectPanel('rules')}
           role="tab"
@@ -256,7 +256,7 @@ export function CollectionSecurityPage() {
           <ControlButton variant="unstyled"
             aria-controls="security-panel-authentication"
             aria-selected={activePanel === 'authentication'}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'authentication' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'authentication' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             id="security-tab-authentication"
             onClick={() => selectPanel('authentication')}
             role="tab"
@@ -265,7 +265,7 @@ export function CollectionSecurityPage() {
           <ControlButton variant="unstyled"
             aria-controls="security-panel-users"
             aria-selected={activePanel === 'users'}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'users' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'users' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             id="security-tab-users"
             onClick={() => selectPanel('users')}
             role="tab"
@@ -274,7 +274,7 @@ export function CollectionSecurityPage() {
           <ControlButton variant="unstyled"
             aria-controls="security-panel-sessions"
             aria-selected={activePanel === 'sessions'}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'sessions' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activePanel === 'sessions' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             id="security-tab-sessions"
             onClick={() => selectPanel('sessions')}
             role="tab"

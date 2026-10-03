@@ -58,7 +58,12 @@ describe('Collections pages', () => {
     expect(screen.getAllByText('1 field')).toHaveLength(2);
     expect(screen.getByText('Failed change')).toBeInTheDocument();
     expect(screen.queryByText('No pending changes')).not.toBeInTheDocument();
-    // §6.1 默认紧凑列表：行内包含名称、类型、记录数、字段数与待应用状态。
+    // 默认卡片，切换列表后仍保留同一组事实。
+    expect(screen.getByRole('button', { name: 'Cards' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('posts').closest('a')).toHaveTextContent('12 records');
+    expect(screen.getByText('posts').closest('tr')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
     const postsRow = screen.getByText('posts').closest('tr');
     expect(postsRow).toHaveTextContent('12 records · 2 fields');
     expect(postsRow).toHaveTextContent('Pending change');
@@ -107,8 +112,9 @@ describe('Collections pages', () => {
     expect(screen.getByText('id')).toBeInTheDocument();
     expect(screen.getByText('createdAt')).toBeInTheDocument();
     expect(screen.getByText('updatedAt')).toBeInTheDocument();
-    expect(screen.getAllByText('System · Locked')).toHaveLength(3);
+    expect(screen.getAllByText('System · Locked')).toHaveLength(1);
     await user.type(screen.getByRole('textbox', { name: 'Collection name' }), 'posts');
+    await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 1' }), 'title');
     await user.click(screen.getByRole('checkbox', { name: 'Required' }));
     await user.click(screen.getByRole('button', { name: 'Create Collection' }));
@@ -159,6 +165,35 @@ describe('Collections pages', () => {
     }));
   });
 
+  it('adds fields beneath id and submits removed timestamps and advanced settings', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(response(
+      init?.method === 'POST' ? { id: 'col_minimal', name: 'minimal', type: 'Normal', fields: [] } : [],
+    )));
+    vi.stubGlobal('fetch', fetchMock);
+    await render(<MemoryRouter><CreateCollectionPage /></MemoryRouter>);
+    expect(screen.queryByRole('textbox', { name: 'Field name 1' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.type(screen.getByRole('textbox', { name: 'Field name 1' }), 'title');
+    const rows = document.querySelector('[data-field-list]')!.querySelectorAll('[data-locked-field-row], [data-initial-field-row]');
+    expect(rows[0]).toHaveTextContent('id');
+    expect(rows[1]).toContainElement(screen.getByRole('textbox', { name: 'Field name 1' }));
+    expect(screen.queryByRole('textbox', { name: 'Default value (JSON)' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Field settings: title' }));
+    await user.type(screen.getByRole('textbox', { name: 'Default value (JSON)' }), '"untitled"');
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove createdAt' }));
+    await user.click(screen.getByRole('button', { name: 'Remove updatedAt' }));
+    expect(screen.queryByText('createdAt')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove id' })).not.toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Collection name' }), 'minimal');
+    await user.click(screen.getByRole('button', { name: 'Create Collection' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({name: 'minimal', type: 'Normal', fields: [{name: 'title', type: 'text', required: false, unique: false, default: 'untitled'}], omitSystemFields: ['createdAt', 'updatedAt']});
+  });
+
   it('marks duplicate initial field names inline and does not issue a create request', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(Response.json({ data: [] })));
@@ -166,8 +201,9 @@ describe('Collections pages', () => {
     render(<MemoryRouter initialEntries={['/collections/new']}><CreateCollectionPage /></MemoryRouter>);
 
     await user.type(await screen.findByRole('textbox', { name: 'Collection name' }), 'posts');
+    await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 1' }), 'title');
-    await user.click(screen.getByRole('button', { name: 'Add initial field' }));
+    await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 2' }), 'TITLE');
     await user.click(screen.getByRole('button', { name: 'Create Collection' }));
 

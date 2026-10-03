@@ -372,8 +372,8 @@ Schema drift      1 项
 
 - 标题下说明 Collection 定义数据字段并提供记录、规则和 API 工作区。
 - 主操作为 `Create Collection`。
-- 支持搜索、Normal / Auth 类型筛选、排序和列表/表格密度切换；不默认展示重复的大图卡片墙。
-- 每行显示名称、类型、记录数、字段数和最近更新。Pending / Failed 只在需要关注时强调。
+- 支持搜索、Normal / Auth 类型筛选、排序和卡片/列表切换；默认使用卡片，显式选择列表后将视图保存在 URL 中。
+- 每项显示名称、类型、记录数、字段数和最近更新。Pending / Failed 只在需要关注时强调。
 - 打开某项后默认进入 Records；返回时恢复搜索、筛选、排序、分页和滚动位置。
 
 空状态直接说明 Collection 能解决的问题，主按钮仍为 `Create Collection`。
@@ -394,10 +394,12 @@ Name            Type          Required       Unique       More
 title           Text          Yes            No
 slug            Text          Yes            Yes
 
-[ Field name ] [ Type ▼ ] [ Add field ]
-
-System fields
-id · createdAt · updatedAt       Managed by Modelry
+Fields
+id            Text          System · Locked
+[ Field name ] [ Type ▼ ] [ Required ] [ Unique ] [ Settings ] [ Remove ]
+createdAt     Date / Time    System                           [ Remove ]
+updatedAt     Date / Time    System                           [ Remove ]
+                         [ + New ]
 
                               [ Create Collection ]
 ~~~
@@ -405,11 +407,11 @@ id · createdAt · updatedAt       Managed by Modelry
 规则：
 
 - Name 可读、必填、唯一性错误就地呈现。
-- 系统字段 `id`、`createdAt`、`updatedAt` 始终显示并锁定。
+- 创建页默认展示 `id`、`createdAt`、`updatedAt`，与自定义字段共用一个列表。底部 `New` 添加字段，新增行位于 `id` 下方；仅 `id` 必须保留并锁定，两个时间字段在创建时可移除并耐久保存。认证集合的 `email` 保持必填唯一。运行时时间元数据仍由系统管理。
 - 字段录入后焦点返回新字段行；Enter 只在输入完整且动作明确时添加字段。
 - 重复名称在当前行提示，不清空其它字段或滚回页面顶部。
-- 建立 Relation 时在当前行展开目标 Collection 和 cardinality；更复杂的删除行为进入完整字段编辑器。
-- 常见 Text / Number / Boolean / Date / JSON / Relation / File 配置就地完成；少见高级选项折叠在字段详情。
+- 建立 Relation 时通过行尾字段设置按钮配置目标 Collection 和 cardinality。
+- 名称、类型、必填、唯一和行尾操作保持单行；高级设置通过行尾按钮打开对话框，不占用第二行；校验错误自动打开对应设置。
 - 用户可返回或取消，不会进入无返回路径。
 
 选择 Auth Collection 后原地出现真实可用的认证选项：email + password、是否允许自助注册、会话有效期和 Profile 字段。`email` 是必填唯一标识，`password` 是凭证，不作为普通 Field 展示。V0.2 之前不得出现未交付的 OAuth Provider 选项。
@@ -504,6 +506,7 @@ POST /api/collections/... Headers / Params / Body
 
 Hooks & Events 只汇总事件驱动能力，二级 Tab 固定为 `Hooks`、`Webhooks`、`事件触发`、`投递历史`。定时任务不再属于该页面，而是独立一级入口 `定时任务`，其二级 Tab 为 `任务`、`执行历史`。
 
+- 顶部工作栏统一最小高度 48px、底部分隔线与内容间距；有页签时左侧放导航、右侧放当前工作面的操作，无页签时沿用相同工作栏。窄屏允许自然换行，不固定整个区域高度。
 - 所有工作面页签统一使用短暂的加载过渡。导航立即响应，连续切换只挂载最后选择的内容；首次进入和同页签筛选不增加等待，接口加载和错误状态仍由各工作面显示。
 - 各 Tab 使用相同的右侧主动作、搜索或筛选工具栏、数量、列表及加载 / 空 / 错误状态。列表使用紧凑行布局，左侧显示名称与摘要，右侧显示状态与操作；窄屏允许操作换行并继续右对齐。编辑入口使用明确按钮和图标。各 Tab 分别恢复本页签筛选，不把其它页签的搜索与筛选带过来。
 - Hooks 列表通过「创建 Hook」进入 `/events/hooks/new` 独立工作面，不常驻创建表单。创建失败保留输入；成功进入 Hook 详情，继续配置绑定。取消返回原列表搜索上下文。

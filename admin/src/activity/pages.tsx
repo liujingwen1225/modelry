@@ -74,7 +74,7 @@ export function ActivityWorkspacePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
         <div className="sr-only">
           <p className="eyebrow">{t('activity.eyebrow')}</p>
           <h1>{t('activity.title')}</h1>

@@ -40,6 +40,7 @@ export type CollectionCreateRequest = {
   type: CollectionType;
   description?: string;
   fields: FieldDefinition[];
+  omitSystemFields?: Array<'createdAt' | 'updatedAt'>;
   authentication?: AuthenticationConfiguration;
   accessRules?: Array<Record<string, unknown>>;
 };

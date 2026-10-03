@@ -59,6 +59,23 @@ function workspaceResponse(path: string) {
 describe('Collection Records and Security pages', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('进入集合时用转圈等待集合与待应用变更，避免提前显示工作区', async () => {
+    let resolvePending!: (value: Response) => void;
+    const pendingResponse = new Promise<Response>((resolve) => { resolvePending = resolve; });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith('/schema/pending-change')) return pendingResponse;
+      return Promise.resolve(workspaceResponse(path) ?? response([]));
+    }));
+    renderCollection('/collections/col_posts');
+    const loading = await screen.findByRole('status', { name: 'Loading Collection workspace' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelector('svg.animate-spin')).not.toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Collection workspace' })).not.toBeInTheDocument();
+    resolvePending(response(null));
+    expect(await screen.findByRole('navigation', { name: 'Collection workspace' })).toBeInTheDocument();
+  });
+
   it('creates a durable Record in the same sheet and shows the returned identity', async () => {
     const user = userEvent.setup();
     let created = false;

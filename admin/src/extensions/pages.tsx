@@ -1,3 +1,4 @@
+import { WorkspaceActions } from '../components/workspace-toolbar';
 import { TabContent } from '../components/tab-content';
 import { Input, Textarea } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
@@ -165,10 +166,10 @@ export function HooksPanel() {
   }
 
   return <section aria-labelledby="events-hooks-heading" className="flex min-w-0 flex-col gap-4">
-    <div className="flex flex-wrap items-center justify-end gap-3">
+    <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-3">
       <div className="sr-only"><h2 id="events-hooks-heading">{t('events.tabs.hooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('extensions.description')}</p></div>
-      <div className="flex flex-wrap items-center gap-3"><Link className={LINK_CLASS} to="/settings/secrets">{t('extensions.manageSecrets')}</Link><ButtonLink to={`/events/hooks/new${search ? `?q=${encodeURIComponent(search)}` : ''}`} variant="primary"><Plus aria-hidden="true" size={15} />{t('extensions.createAction')}</ButtonLink></div>
-    </div>
+      <div className="flex flex-wrap items-center gap-3"><ButtonLink to={`/events/hooks/new${search ? `?q=${encodeURIComponent(search)}` : ''}`} variant="primary"><Plus aria-hidden="true" size={15} />{t('extensions.createAction')}</ButtonLink></div>
+    </div></WorkspaceActions>
     <Surface className="flex flex-wrap items-center justify-between gap-3 p-3" variant="standard">
       <SearchInput aria-label={t('extensions.search')} onChange={(event) => updateQuery(event.target.value)} placeholder={t('extensions.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
       <span className="whitespace-nowrap text-xs font-medium tabular-nums text-muted-foreground">{t('extensions.count', { count: visible.length })}</span>
@@ -346,10 +347,10 @@ export function ExtensionEditor({ extensionId }: { extensionId: string }) {
     <Link className={LINK_CLASS} to="/events?tab=hooks"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
     <PageHeading eyebrow={t('extensions.eyebrow')} title={detail.name} description={t('extensions.detailDescription', { revision: detail.activeRevision })} action={<div className="grid justify-items-end gap-1.5"><Button disabled={busy || hasUnsavedChanges} onClick={() => void toggleEnabled()} variant={detail.enabled ? 'danger' : 'primary'}>{detail.enabled ? t('extensions.disable') : t('extensions.enable')}</Button>{hasUnsavedChanges && <span className="max-w-[240px] text-right text-[10px] leading-relaxed text-muted-foreground" role="status">{t('extensions.saveBeforeStateChange')}</span>}</div>} />
     {actionError !== undefined ? <ErrorState description={errorDetails(actionError, t)} title={t('extensions.actionFailed')} /> : null}
-    <nav aria-label={t('extensions.tabs')} className="flex gap-1 overflow-x-auto border-b">
+    <nav aria-label={t('extensions.tabs')} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b">
       {(['settings', 'runs'] as const).map((nextTab) => <Link
         aria-current={tab === nextTab ? 'page' : undefined}
-        className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${tab === nextTab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${tab === nextTab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={nextTab}
         replace
         to={tabTarget(nextTab)}

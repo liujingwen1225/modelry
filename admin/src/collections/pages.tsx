@@ -1,13 +1,12 @@
 import { TabContent } from '../components/tab-content';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button as ControlButton } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { SelectField } from '@/components/ui/select-field';
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { ArrowLeft, ArrowRight, Check, Settings2, Trash2, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button, ButtonLink } from '../components/button';
 import { FormField } from '../components/form-field';
-import { EmptyState, ErrorState, LoadingState } from '../components/states';
+import { Dialog } from '../components/overlays';
+import { EmptyState, ErrorState, LoadingState, SpinnerLoadingState } from '../components/states';
 import { Surface } from '../components/surface';
 import { useI18n } from '../i18n/i18n';
 import { useCommandRegistry, useRegisterCommands, type AdminCommand } from '../components/command-registry';
@@ -77,8 +77,8 @@ export function CollectionsPage() {
   const search = searchParams.get('q') ?? '';
   const type = searchParams.get('type') ?? 'all';
   const sort = searchParams.get('sort') ?? 'recent';
-  // Spec 0001 §6.1：默认进入紧凑列表，不默认展示大图卡片墙。
-  const view = searchParams.get('view') === 'card' ? 'card' : 'list';
+  // 默认使用卡片；显式选择列表时将视图保存在 URL 中。
+  const view = searchParams.get('view') === 'list' ? 'list' : 'card';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -124,20 +124,20 @@ export function CollectionsPage() {
   ];
 
   return (
-    <div className="flex min-w-0 flex-col gap-8">
-      <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="sr-only">
         <div className="sr-only">
           <p className="eyebrow">{t('collections.eyebrow')}</p>
           <h1>{t('collections.title')}</h1>
           <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.description')}</p>
         </div>
-        <ButtonLink to="/collections/new" variant="primary"><Plus aria-hidden="true" size={16} />{t('collections.create')}</ButtonLink>
+
       </header>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchInput aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} value={search} className="min-w-[220px] flex-1 md:max-w-sm" />
+      <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-3 border-b pb-2" data-workspace-toolbar>
+        <SearchInput aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} value={search} className="min-w-[180px] flex-1 md:max-w-sm" />
         <Select items={typeItems} onValueChange={(value) => updateQuery('type', String(value) === 'all' ? '' : String(value))} value={type}>
-          <SelectTrigger aria-label={t('collections.type')} className="w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t('collections.type')} className="w-28"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t('collections.allTypes')}</SelectItem>
             <SelectItem value="Normal">{t('collections.normal')}</SelectItem>
@@ -145,7 +145,7 @@ export function CollectionsPage() {
           </SelectContent>
         </Select>
         <Select items={sortItems} onValueChange={(value) => updateQuery('sort', String(value))} value={sort}>
-          <SelectTrigger aria-label={t('collections.sortLabel')} className="w-44"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t('collections.sortLabel')} className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="recent">{t('collections.recentlyCreated')}</SelectItem>
             <SelectItem value="name">{t('collections.name')}</SelectItem>
@@ -157,7 +157,7 @@ export function CollectionsPage() {
               aria-pressed={view === option}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:shadow-none ${view === option ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
               key={option}
-              onClick={() => updateQuery('view', option === 'list' ? '' : 'card')}
+              onClick={() => updateQuery('view', option === 'card' ? '' : 'list')}
               type="button"
             >
               {option === 'list' ? <List aria-hidden="true" size={14} /> : <LayoutGrid aria-hidden="true" size={14} />}
@@ -165,6 +165,7 @@ export function CollectionsPage() {
             </ControlButton>
           ))}
         </div>
+        <ButtonLink className="ml-auto" to="/collections/new" variant="primary"><Plus aria-hidden="true" size={16} />{t('collections.create')}</ButtonLink>
       </div>
 
       {state === 'loading' && <LoadingState label={t('collections.loading')} />}
@@ -322,7 +323,7 @@ export function CreateCollectionPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<CollectionType>('Normal');
-  const [fields, setFields] = useState<FieldDraft[]>([newFieldDraft('field-1')]);
+  const [fields, setFields] = useState<FieldDraft[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, FieldErrors>>({});
   const [nameError, setNameError] = useState('');
   const [authentication, setAuthentication] = useState<AuthenticationConfiguration>(authDefaults);
@@ -331,7 +332,8 @@ export function CreateCollectionPage() {
   const [targetsLoading, setTargetsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [requestError, setRequestError] = useState<unknown>();
-  const nextFieldNumber = useRef(2);
+  const nextFieldNumber = useRef(1);
+  const [omittedSystemFields, setOmittedSystemFields] = useState<Array<'createdAt' | 'updatedAt'>>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -367,6 +369,7 @@ export function CreateCollectionPage() {
   function handleFieldEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== 'Enter') return;
     event.preventDefault();
+    if (!event.currentTarget.value.trim() || event.nativeEvent.isComposing) return;
     addField();
   }
 
@@ -390,6 +393,7 @@ export function CreateCollectionPage() {
         name: trimmedName,
         type,
         fields: parsed.fields,
+        ...(omittedSystemFields.length ? { omitSystemFields: omittedSystemFields } : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(type === 'Auth' ? { authentication } : {}),
       };
@@ -475,33 +479,44 @@ export function CreateCollectionPage() {
           </div>
         </Surface>
 
-        <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
-          <div><p className="eyebrow">{t('collections.systemEyebrow')}</p><h2>{t('collections.systemTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.systemDescription')}</p></div>
-          <Table aria-label={t('collections.systemTitle')}>
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">{t('collections.systemName')}</TableHead>
-                <TableHead scope="col">{t('collections.systemType')}</TableHead>
-                <TableHead scope="col">{t('collections.systemAccess')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {SYSTEM_FIELDS.map((field) => (
-                <TableRow key={field.name}>
-                  <TableHead className="bg-transparent" scope="row"><strong className="font-mono font-semibold text-foreground">{field.name}</strong></TableHead>
-                  <TableCell>{t(field.name === 'id' ? 'collections.systemId' : field.name === 'createdAt' ? 'collections.systemCreatedTime' : 'collections.systemUpdatedTime')}</TableCell>
-                  <TableCell><Badge variant="outline"><Shield aria-hidden="true" size={13} />{t('collections.systemLocked')}</Badge></TableCell>
-                </TableRow>
-              ))}
-              {type === 'Auth' && (
-                <TableRow>
-                  <TableHead className="bg-transparent" scope="row"><strong className="font-mono font-semibold text-foreground">email</strong></TableHead>
-                  <TableCell>{t('collections.emailIdentifier')}</TableCell>
-                  <TableCell><Badge variant="outline"><Shield aria-hidden="true" size={13} />{t('collections.requiredUnique')}</Badge></TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+
+
+        <Surface className="flex min-w-0 flex-col gap-4 p-5" data-collection-field-editor variant="standard">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2>{t('collections.fieldsEditorTitle')}</h2>
+            <Badge variant="outline">{collectionCount(SYSTEM_FIELDS.length - omittedSystemFields.length + fields.length + (type === 'Auth' ? 1 : 0), 'field', t)}</Badge>
+          </div>
+          {targetsError && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning" role="status">
+              <CircleAlert aria-hidden="true" size={15} />
+              <span className="min-w-0 flex-1">{t('collections.targetsUnavailable')}</span>
+              <Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button>
+            </div>
+          )}
+          <div className="min-w-0 overflow-hidden rounded-lg border bg-card" data-field-list>
+            <h3 className="sr-only">{t('collections.systemTitle')}</h3>
+            <div className="hidden gap-3 bg-muted/40 px-3.5 py-2.5 text-[11px] font-semibold text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px]" aria-hidden="true">
+              <span>{t('collections.fieldName')}</span><span>{t('collections.fieldType')}</span><span>{t('collections.systemAccess')}</span><span />
+            </div>
+            <div className="divide-y">
+              <LockedFieldRow name="id" type="text" />
+              {fields.map((field, index) => <FieldEditorRow
+                errors={fieldErrors[field.key] ?? {}}
+                field={field}
+                index={index}
+                key={field.key}
+                onEnter={handleFieldEnter}
+                onRemove={() => setFields((current) => current.filter((item) => item.key !== field.key))}
+                onUpdate={(patch) => updateField(field.key, patch)}
+                removable
+                targets={targets}
+                targetsLoading={targetsLoading}
+              />)}
+              {type === 'Auth' && <LockedFieldRow name="email" type="text" authIdentifier />}
+              {(['createdAt', 'updatedAt'] as const).filter((name) => !omittedSystemFields.includes(name)).map((name) => <LockedFieldRow key={name} name={name} type="dateTime" onRemove={() => { setOmittedSystemFields((current) => [...current, name]); setRequestError(undefined); }} />)}
+              <div className="p-2"><Button className="w-full justify-center" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.newField')}</Button></div>
+            </div>
+          </div>
         </Surface>
 
         {type === 'Auth' && (
@@ -532,42 +547,22 @@ export function CreateCollectionPage() {
           </Surface>
         )}
 
-        <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div><p className="eyebrow">{t('collections.initialEyebrow')}</p><h2>{t('collections.initialTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.initialDescription')}</p></div>
-            <Badge variant="outline">{collectionCount(fields.length, 'field', t)}</Badge>
-          </div>
-          {targetsError && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning" role="status">
-              <CircleAlert aria-hidden="true" size={15} />
-              <span className="min-w-0 flex-1">{t('collections.targetsUnavailable')}</span>
-              <Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button>
-            </div>
-          )}
-          <div className="flex min-w-0 flex-col gap-3">
-            {fields.map((field, index) => <FieldEditorRow
-              errors={fieldErrors[field.key] ?? {}}
-              field={field}
-              index={index}
-              key={field.key}
-              onEnter={handleFieldEnter}
-              onRemove={() => { if (fields.length > 1) setFields((current) => current.filter((item) => item.key !== field.key)); }}
-              onUpdate={(patch) => updateField(field.key, patch)}
-              removable={fields.length > 1}
-              targets={targets}
-              targetsLoading={targetsLoading}
-            />)}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.addField')}</Button>
-            <p className="m-0 text-[10px] text-muted-foreground"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px]">Enter</kbd> {t('collections.enterHint')}</p>
-          </div>
-        </Surface>
+
 
         <footer className="flex flex-wrap justify-end gap-2"><ButtonLink to="/collections">{t('collections.cancel')}</ButtonLink><Button disabled={submitting} type="submit" variant="primary">{submitting ? t('collections.creating') : t('collections.create')}<ArrowRight aria-hidden="true" size={15} /></Button></footer>
       </form>
     </main>
   );
+}
+
+function LockedFieldRow({ name, type, authIdentifier = false, onRemove }: { name: string; type: 'text' | 'dateTime'; authIdentifier?: boolean; onRemove?: () => void }) {
+  const { t } = useI18n();
+  return <div className="grid min-w-0 gap-3 px-3.5 py-3 text-xs lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px] lg:items-center" data-locked-field-row>
+    <strong className="font-mono font-semibold text-foreground">{name}</strong>
+    <span className="text-muted-foreground">{t(type === 'text' ? 'schema.fieldTypes.text' : 'schema.fieldTypes.dateTime')}</span>
+    <Badge className="w-fit" variant="outline"><Shield aria-hidden="true" size={13} />{t(authIdentifier ? 'collections.requiredUnique' : onRemove ? 'collections.systemManaged' : 'collections.systemLocked')}</Badge>
+    <div className="flex justify-end">{onRemove && <Button aria-label={t('collections.removeSystemField', { name })} onClick={onRemove} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>}</div>
+  </div>;
 }
 
 type FieldEditorProps = {
@@ -584,50 +579,58 @@ type FieldEditorProps = {
 
 function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, removable, targets, targetsLoading }: FieldEditorProps) {
   const { t } = useI18n();
-  const detailsId = useId();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  useEffect(() => {
+    if (errors.defaultValue || errors.validation || errors.target) setAdvancedOpen(true);
+  }, [errors.defaultValue, errors.validation, errors.target]);
   return (
-    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" data-initial-field-row>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_auto] lg:items-end">
+    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 p-3.5" data-initial-field-row>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px] lg:items-center lg:[&_[data-slot=form-field]>label]:sr-only">
         <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
           <Input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
           {errors.name && <span className="text-[11px] font-semibold text-danger" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
         </FormField>
         <FormField htmlFor={`field-type-${field.key}`} label={t('collections.fieldType')}>
-          <SelectField id={`field-type-${field.key}`} onValueChange={(selectedValue) => onUpdate({ type: selectedValue as FieldType, ...(selectedValue === 'relation' ? {} : { targetCollectionId: '' }) })} value={field.type} options={[({ value: "text", label: t('schema.fieldTypes.text') }), ({ value: "number", label: t('schema.fieldTypes.number') }), ({ value: "boolean", label: t('schema.fieldTypes.boolean') }), ({ value: "dateTime", label: t('schema.fieldTypes.dateTime') }), ({ value: "json", label: t('schema.fieldTypes.json') }), ({ value: "relation", label: t('schema.fieldTypes.relation') }), ({ value: "file", label: t('schema.fieldTypes.file') }), ({ value: "files", label: t('schema.fieldTypes.files') })]} />
+          <SelectField id={`field-type-${field.key}`} onValueChange={(selectedValue) => { onUpdate({ type: selectedValue as FieldType, ...(selectedValue === 'relation' ? {} : { targetCollectionId: '' }) }); if (selectedValue === 'relation') setAdvancedOpen(true); }} value={field.type} options={[({ value: "text", label: t('schema.fieldTypes.text') }), ({ value: "number", label: t('schema.fieldTypes.number') }), ({ value: "boolean", label: t('schema.fieldTypes.boolean') }), ({ value: "dateTime", label: t('schema.fieldTypes.dateTime') }), ({ value: "json", label: t('schema.fieldTypes.json') }), ({ value: "relation", label: t('schema.fieldTypes.relation') }), ({ value: "file", label: t('schema.fieldTypes.file') }), ({ value: "files", label: t('schema.fieldTypes.files') })]} />
         </FormField>
-        <div className="flex flex-wrap items-center gap-4 pb-1 text-xs text-ink-secondary">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
           <Label className="inline-flex items-center gap-2"><Checkbox checked={field.required} onCheckedChange={(checked) => onUpdate({ required: checked })} />{t('collections.fieldRequired')}</Label>
           <Label className="inline-flex items-center gap-2"><Checkbox checked={field.unique} onCheckedChange={(checked) => onUpdate({ unique: checked })} />{t('collections.fieldUnique')}</Label>
-          {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet">{t('collections.remove')}</Button>}
+        </div>
+        <div className="flex items-center justify-end gap-1">
+          <Button aria-label={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} aria-haspopup="dialog" title={t('collections.advancedFieldSettings')} onClick={() => setAdvancedOpen(true)} size="small" type="button" variant="quiet"><Settings2 aria-hidden="true" size={15} /></Button>
+          {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>}
         </div>
       </div>
-      {field.type === 'relation' && (
-        <div className="grid gap-3 rounded-md border bg-secondary p-3 sm:grid-cols-2">
-          <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
-            <SelectField id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onValueChange={(selectedValue) => onUpdate({ targetCollectionId: selectedValue })} value={field.targetCollectionId} options={[({ value: "", label: targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection') }), targets.map((target) => ({ value: target.id, label: target.name }))]} />
-            {errors.target && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.target}</span>}
-          </FormField>
-          <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
-            <SelectField id={`field-cardinality-${field.key}`} onValueChange={(selectedValue) => onUpdate({ cardinality: selectedValue })} value={field.cardinality} options={[({ value: "many-to-one", label: t('collections.manyToOne') }), ({ value: "one-to-one", label: t('collections.oneToOne') }), ({ value: "one-to-many", label: t('collections.oneToMany') }), ({ value: "many-to-many", label: t('collections.manyToMany') })]} />
-          </FormField>
+      <Dialog open={advancedOpen} title={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} closeLabel={t('common.closeDialog')} onClose={() => setAdvancedOpen(false)}>
+        <div className="flex flex-col gap-4">
+          {field.type === 'relation' && (
+            <div className="grid gap-3 rounded-md border bg-secondary p-3 sm:grid-cols-2">
+              <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
+                <SelectField id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onValueChange={(selectedValue) => onUpdate({ targetCollectionId: selectedValue })} value={field.targetCollectionId} options={[({ value: "", label: targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection') }), targets.map((target) => ({ value: target.id, label: target.name }))]} />
+                {errors.target && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.target}</span>}
+              </FormField>
+              <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
+                <SelectField id={`field-cardinality-${field.key}`} onValueChange={(selectedValue) => onUpdate({ cardinality: selectedValue })} value={field.cardinality} options={[({ value: "many-to-one", label: t('collections.manyToOne') }), ({ value: "one-to-one", label: t('collections.oneToOne') }), ({ value: "one-to-many", label: t('collections.oneToMany') }), ({ value: "many-to-many", label: t('collections.manyToMany') })]} />
+              </FormField>
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField htmlFor={`field-description-${field.key}`} label={t('collections.fieldDescription')}>
+              <Input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder={t('collections.optional')} value={field.description} />
+            </FormField>
+            <FormField htmlFor={`field-default-${field.key}`} label={t('collections.defaultValue') + ' (JSON)'} hint={t('collections.defaultValueHint')}>
+              <Input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
+              {errors.defaultValue && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.defaultValue}</span>}
+            </FormField>
+            <FormField htmlFor={`field-validation-${field.key}`} label={t('collections.validationLabel') + ' (JSON)'} hint={t('collections.validationHint')}>
+              <Textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
+              {errors.validation && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.validation}</span>}
+            </FormField>
+          </div>
+        <div className="flex justify-end"><Button onClick={() => setAdvancedOpen(false)} type="button">{t('collections.doneFieldSettings')}</Button></div>
         </div>
-      )}
-      <Collapsible data-slot="collapsible" className="rounded-md border bg-secondary px-3 py-2 text-xs [&[data-open]>[data-slot=collapsible-trigger]]:mb-3" id={detailsId}>
-        <CollapsibleTrigger className="flex cursor-pointer items-center gap-1.5 font-semibold text-ink-secondary"><ChevronDown aria-hidden="true" size={14} />{t('collections.advancedFieldSettings')}</CollapsibleTrigger><CollapsibleContent>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField htmlFor={`field-description-${field.key}`} label={t('collections.fieldDescription')}>
-            <Input id={`field-description-${field.key}`} onChange={(event) => onUpdate({ description: event.target.value })} placeholder={t('collections.optional')} value={field.description} />
-          </FormField>
-          <FormField htmlFor={`field-default-${field.key}`} label={t('collections.defaultValue') + ' (JSON)'} hint={t('collections.defaultValueHint')}>
-            <Input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
-            {errors.defaultValue && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.defaultValue}</span>}
-          </FormField>
-          <FormField htmlFor={`field-validation-${field.key}`} label={t('collections.validationLabel') + ' (JSON)'} hint={t('collections.validationHint')}>
-            <Textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
-            {errors.validation && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.validation}</span>}
-          </FormField>
-        </div>
-      </CollapsibleContent></Collapsible>
+      </Dialog>
     </section>
   );
 }
@@ -645,6 +648,7 @@ export function CollectionWorkspacePage() {
   const [collectionError, setCollectionError] = useState<unknown>();
   const [pendingError, setPendingError] = useState<unknown>();
   const [loadingCollection, setLoadingCollection] = useState(true);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState('');
   const [loadingPending, setLoadingPending] = useState(true);
   const [newlyCreated, setNewlyCreated] = useState(Boolean((location.state as { newlyCreated?: boolean } | null)?.newlyCreated));
 
@@ -693,12 +697,16 @@ export function CollectionWorkspacePage() {
     const controller = new AbortController();
     setLoadingCollection(true);
     setLoadingPending(true);
-    void getCollection(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setCollection(value); setCollectionError(undefined); } }).catch((error: unknown) => { if (!controller.signal.aborted) setCollectionError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingCollection(false); });
-    void getPendingChange(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setPending(value); setPendingError(undefined); reportPendingChange(value); } }).catch((error: unknown) => { if (!controller.signal.aborted) setPendingError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingPending(false); });
+    const collectionRequest = getCollection(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setCollection(value); setCollectionError(undefined); } }).catch((error: unknown) => { if (!controller.signal.aborted) setCollectionError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingCollection(false); });
+    const pendingRequest = getPendingChange(collectionId, controller.signal).then((value) => { if (!controller.signal.aborted) { setPending(value); setPendingError(undefined); reportPendingChange(value); } }).catch((error: unknown) => { if (!controller.signal.aborted) setPendingError(error); }).finally(() => { if (!controller.signal.aborted) setLoadingPending(false); });
+    // 集合与待应用变更一起就绪，避免元信息先显示、状态随后跳动。
+    void Promise.all([collectionRequest, pendingRequest]).then(() => {
+      if (!controller.signal.aborted) setLoadedWorkspaceId(collectionId);
+    });
     return () => controller.abort();
   }, [collectionId, reportPendingChange]);
 
-  if (loadingCollection) return <div className="flex min-w-0 flex-col gap-6" data-collection-workspace><LoadingState label={t('collections.loadingWorkspace')} /></div>;
+  if (loadingCollection || loadedWorkspaceId !== collectionId) return <div className="flex min-w-0 flex-col gap-6" data-collection-workspace><SpinnerLoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, t('collections.workspaceLoadFailed'), t, errorMessage);
     return (
@@ -777,10 +785,10 @@ export function CollectionWorkspacePage() {
         </div>
       )}
 
-      <nav aria-label={t('navigation.collectionWorkspace')} className="flex gap-1 overflow-x-auto border-b" data-collection-tabs>
+      <nav aria-label={t('navigation.collectionWorkspace')} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b" data-collection-tabs>
         {tabs.map((tab) => (
           <NavLink
-            className={({ isActive }) => `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={({ isActive }) => `whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             end={tab.end}
             key={tab.to}
             to={tab.to}

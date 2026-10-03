@@ -129,10 +129,11 @@ type Index struct {
 }
 
 type CreateCollectionInput struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Type        CollectionType `json:"type"`
-	Fields      []Field        `json:"fields"`
+	Name             string         `json:"name"`
+	Description      string         `json:"description,omitempty"`
+	Type             CollectionType `json:"type"`
+	Fields           []Field        `json:"fields"`
+	OmitSystemFields []string       `json:"omitSystemFields,omitempty"`
 }
 
 type PendingOperation struct {
@@ -300,6 +301,14 @@ func validOpaqueID(value, prefix string) bool {
 }
 
 func validateCollectionInput(input CreateCollectionInput) error {
+	omitted := make(map[string]bool)
+	for _, name := range input.OmitSystemFields {
+		if (name != "createdAt" && name != "updatedAt") || omitted[name] {
+			return fmt.Errorf("%w: only createdAt and updatedAt may be omitted, without duplicates", ErrInvalidArgument)
+		}
+		omitted[name] = true
+	}
+
 	if strings.TrimSpace(input.Name) == "" || len([]rune(input.Name)) > 80 || strings.TrimSpace(input.Name) != input.Name {
 		return fmt.Errorf("%w: collection name must contain 1 to 80 characters with no surrounding whitespace", ErrInvalidArgument)
 	}
@@ -318,6 +327,12 @@ func validateCollectionInput(input CreateCollectionInput) error {
 }
 
 func validateField(field Field) error {
+	for _, system := range systemFields() {
+		if strings.EqualFold(field.Name, system.Name) {
+			return fmt.Errorf("%w: field name %q is reserved for record metadata", ErrInvalidArgument, field.Name)
+		}
+	}
+
 	if !fieldNamePattern.MatchString(field.Name) {
 		return fmt.Errorf("%w: field name %q must start with a letter and contain only letters, numbers, or underscores", ErrInvalidArgument, field.Name)
 	}

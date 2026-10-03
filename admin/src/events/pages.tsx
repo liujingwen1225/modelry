@@ -1,3 +1,4 @@
+import { WorkspaceToolbar } from '../components/workspace-toolbar';
 import { TabContent } from '../components/tab-content';
 import { useMemo } from 'react';
 import { Activity, Radio, Webhook as WebhookIcon, Workflow } from 'lucide-react';
@@ -70,13 +71,14 @@ export function EventsPage() {
       <h1>{t('events.title')}</h1>
       <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('events.description')}</p>
     </header>
-    <PanelTabNav active={activeTab} idPrefix="events" label={t('events.tabsLabel')} tabs={eventsTabs} />
+    <WorkspaceToolbar navigation={<PanelTabNav active={activeTab} idPrefix="events" label={t('events.tabsLabel')} tabs={eventsTabs} />}>
     <TabContent activeKey={activeTab}>
     {activeTab === 'hooks' && <HooksPanel />}
     {activeTab === 'webhooks' && <WebhooksPanel params={params} setParams={setParams} />}
     {activeTab === 'triggers' && <EventHooksPanel params={params} setParams={setParams} />}
     {activeTab === 'deliveries' && <DeliveriesPanel params={params} setParams={setParams} />}
     </TabContent>
+    </WorkspaceToolbar>
   </div>;
 }
 

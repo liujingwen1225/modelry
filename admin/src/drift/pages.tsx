@@ -1,3 +1,4 @@
+import { WorkspaceActions } from '../components/workspace-toolbar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, CircleAlert, RefreshCw, ShieldCheck, Wrench } from 'lucide-react';
@@ -123,12 +124,12 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="flex min-w-0 flex-col gap-6">
       {embedded
-        ? <div className="flex flex-wrap items-center justify-end gap-2">
+        ? <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-2">
           <Button disabled={busy !== null} onClick={() => void load()} size="small" type="button" variant="secondary">
             <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
           </Button>
-        </div>
-        : <header className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        </div></WorkspaceActions>
+        : <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
           <div className="sr-only">
             <p className="eyebrow">{t('drift.eyebrow')}</p>
             <h1>{t('drift.title')}</h1>
