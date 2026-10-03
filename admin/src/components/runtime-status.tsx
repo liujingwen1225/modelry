@@ -1,10 +1,9 @@
-import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useDiagnostics } from './diagnostics-context';
 import { Button } from './button';
 import { CopyButton } from './copy-button';
 import { JsonViewer } from './json-viewer';
 import { ErrorState, StatusChip } from './states';
-import { Surface } from './surface';
 import type { HealthSnapshot } from '../api/status';
 import type { ApiClientError } from '../api/client';
 import { useI18n, type TranslationKey, type TranslationValues } from '../i18n/i18n';
@@ -24,14 +23,14 @@ function ErrorDetails({ error }: { error: ApiClientError }) {
   const { t, errorMessage } = useI18n();
   return (
     <div className="grid gap-2.25">
-      <div className="flex flex-wrap items-baseline gap-[7px] text-[11px] text-ink-secondary">
-        <code className="text-[10px] font-bold text-danger">{error.apiError.code}</code>
+      <div className="flex flex-wrap items-baseline gap-[7px] text-sm text-ink-secondary">
+        <code className="text-xs font-bold text-danger">{error.apiError.code}</code>
         <span>{errorMessage(error.apiError.code) ?? t('errors.requestFailed')}</span>
       </div>
-      <p className="text-[10px] text-muted-foreground">{t('common.tryAgainWhenAvailable')}</p>
-      <div className="flex items-center gap-[7px] text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">{t('common.tryAgainWhenAvailable')}</p>
+      <div className="flex items-center gap-[7px] text-xs text-muted-foreground">
         <span>{t('diagnostics.requestId')}</span>
-        <code className="text-[10px] text-ink-secondary [overflow-wrap:anywhere]">{error.apiError.requestId}</code>
+        <code className="text-xs text-ink-secondary [overflow-wrap:anywhere]">{error.apiError.requestId}</code>
         <CopyButton label={t('diagnostics.copyRequestId')} value={error.apiError.requestId} />
       </div>
       <JsonViewer label={t('diagnostics.errorDetails')} value={error.apiError.details} />
@@ -52,24 +51,20 @@ function HealthValue({
   return <StatusChip state={resource.value.state}>{stateLabel(resource.value.state, t)}</StatusChip>;
 }
 
-// RuntimeBadge 的每个分支都包在同一个 data-runtime-badge 容器里；
-// 状态胶囊本身由共享 StatusChip 渲染（它自带 data-status-chip）。
-export function RuntimeBadge() {
+// 顶栏用安静的状态点与文字显示事实；只有具备设置读取权限时才提供诊断入口。
+export function RuntimeBadge({ canOpenSettings = true }: { canOpenSettings?: boolean }) {
   const { runtime } = useDiagnostics();
   const { t } = useI18n();
-  const badge = (chip: ReactNode) => <span className="inline-flex items-center" data-runtime-badge>{chip}</span>;
-  // 窄屏只保留状态点：文字用 sr-only 隐藏，既让出顶栏空间，又保留无障碍名称。
-  const label = (text: string) => <span className="max-[1023px]:sr-only">{text}</span>;
-
-  if (runtime.state === 'loading' && !runtime.value) {
-    return badge(<StatusChip state="loading"><span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" /> {label(t('runtime.connecting'))}</StatusChip>);
-  }
-  if (runtime.state === 'error') return badge(<StatusChip state="unavailable">{label(t('runtime.unavailable'))}</StatusChip>);
-  if (!runtime.value) return badge(<StatusChip state="unknown">{label(t('runtime.unknown'))}</StatusChip>);
-
-  const state = runtime.value.state;
-  const stateText = state === 'ready' ? t('runtime.ready') : t('runtime.state', { state: stateLabel(state, t) });
-  return badge(<StatusChip state={state}>{state === 'ready' && <span className="inline-block size-1.5 rounded-full bg-current animate-pulse" aria-hidden="true" />}{label(stateText)}</StatusChip>);
+  const state = runtime.state === 'error' ? 'unavailable' : runtime.value?.state ?? (runtime.state === 'loading' ? 'loading' : 'unknown');
+  const text = state === 'ready' ? t('runtime.ready') : state === 'loading' ? t('runtime.connecting') : state === 'unavailable' ? t('runtime.unavailable') : state === 'unknown' ? t('runtime.unknown') : t('runtime.state', { state: stateLabel(state, t) });
+  const content = <span className={`inline-flex items-center gap-2 ${state === 'ready' ? 'text-muted-foreground' : state === 'loading' || state === 'unknown' ? 'text-info' : state === 'degraded' ? 'text-warning' : 'text-danger'}`}>
+      <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
+      <span className="max-[1023px]:sr-only">{text}</span>
+    </span>;
+  const className = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-xs";
+  return canOpenSettings
+    ? <Link to="/settings/runtime" className={className + " hover:bg-accent focus-visible:bg-accent"} data-runtime-badge aria-label={text} title={text}>{content}</Link>
+    : <span className={className} data-runtime-badge aria-label={text} title={text}>{content}</span>;
 }
 
 export function DiagnosticsCards() {
@@ -79,12 +74,12 @@ export function DiagnosticsCards() {
   const storageError = storage.state === 'error' && storage.error instanceof Error ? storage.error : null;
 
   return (
-    <div className="grid gap-3.5 sm:grid-cols-2" aria-live="polite">
-      <Surface className="min-h-[154px] p-4 md:min-h-[169px]" variant="raised">
+    <div className="grid gap-6 sm:grid-cols-2 sm:gap-0 sm:[&>section+section]:border-l sm:[&>section+section]:pl-6 sm:[&>section:first-child]:pr-6" aria-live="polite">
+      <section className="min-w-0 border-t pt-4">
         <div className="flex items-start justify-between gap-3.75">
           <div>
             <p className="eyebrow mb-[3px]">{t('diagnostics.runtime.eyebrow')}</p>
-            <h3 className="text-[13px] font-semibold tracking-[-0.1px]">{t('diagnostics.runtime.title')}</h3>
+            <h3 className="text-base font-semibold">{t('diagnostics.runtime.title')}</h3>
           </div>
           {runtime.state === 'ready'
             ? <StatusChip state={runtime.value.state}>{stateLabel(runtime.value.state, t)}</StatusChip>
@@ -96,18 +91,18 @@ export function DiagnosticsCards() {
           <ErrorDetailsPanel error={runtimeError} onRetry={refresh} />
         ) : (
           <div className="mt-4.25 grid gap-2.25">
-            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.database } : runtime} /></div>
-            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.localStorage } : runtime} /></div>
-            {runtime.state === 'ready' && <p className="mt-px mb-0 text-[10px] text-subtle-foreground">{t('diagnostics.observed', { date: new Date(runtime.value.observedAt).toLocaleTimeString() })}</p>}
+            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.database } : runtime} /></div>
+            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={runtime.state === 'ready' ? { state: 'ready', value: runtime.value.localStorage } : runtime} /></div>
+            {runtime.state === 'ready' && <p className="mt-px mb-0 text-xs text-subtle-foreground">{t('diagnostics.observed', { date: new Date(runtime.value.observedAt).toLocaleTimeString() })}</p>}
           </div>
         )}
-      </Surface>
+      </section>
 
-      <Surface className="min-h-[154px] p-4 md:min-h-[169px]" variant="raised">
+      <section className="min-w-0 border-t pt-4">
         <div className="flex items-start justify-between gap-3.75">
           <div>
             <p className="eyebrow mb-[3px]">{t('diagnostics.storage.eyebrow')}</p>
-            <h3 className="text-[13px] font-semibold tracking-[-0.1px]">{t('diagnostics.storage.title')}</h3>
+            <h3 className="text-base font-semibold">{t('diagnostics.storage.title')}</h3>
           </div>
           {storage.state === 'ready'
             ? <StatusChip state={storage.value.localStorage.state}>{stateLabel(storage.value.localStorage.state, t)}</StatusChip>
@@ -119,20 +114,20 @@ export function DiagnosticsCards() {
           <ErrorDetailsPanel error={storageError} onRetry={refresh} />
         ) : (
           <div className="mt-4.25 grid gap-2.25">
-            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.provider')}</span><strong className="text-[11px] font-semibold text-ink-secondary">{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
-            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
-            <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
+            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span>{t('diagnostics.provider')}</span><strong className="text-sm font-semibold text-ink-secondary">{storage.state === 'ready' ? storage.value.localStorage.provider : '—'}</strong></div>
+            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span>{t('diagnostics.localStorage')}</span><HealthValue label={t('diagnostics.localStorage')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.localStorage } : storage} /></div>
+            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span>{t('diagnostics.database')}</span><HealthValue label={t('diagnostics.database')} resource={storage.state === 'ready' ? { state: 'ready', value: storage.value.database } : storage} /></div>
             {storage.state === 'ready' && storage.value.localStorage.path && (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 text-[11px] text-muted-foreground">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 text-sm text-muted-foreground">
                 <span>{t('diagnostics.localPath')}</span>
                 <code className="text-right break-all text-ink-secondary">{storage.value.localStorage.path}</code>
                 <CopyButton label={t('diagnostics.copyLocalPath')} value={storage.value.localStorage.path} />
               </div>
             )}
-            {storage.state === 'ready' && storage.value.localStorage.message && <p className="mt-px mb-0 text-[10px] text-subtle-foreground">{t('diagnostics.resourceReady')}</p>}
+            {storage.state === 'ready' && storage.value.localStorage.message && <p className="mt-px mb-0 text-xs text-subtle-foreground">{t('diagnostics.resourceReady')}</p>}
           </div>
         )}
-      </Surface>
+      </section>
     </div>
   );
 }

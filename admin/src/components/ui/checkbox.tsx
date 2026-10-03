@@ -9,10 +9,10 @@ function Checkbox({ className, 'aria-label': ariaLabel, 'aria-labelledby': ariaL
       aria-label={ariaLabel}
       // 显式名称优先，避免框架把整个外层标签的说明也拼入控件名称。
       aria-labelledby={ariaLabelledBy ?? (ariaLabel ? '' : undefined)}
-      className={cn('inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded border border-input bg-card text-primary-foreground outline-none data-[checked]:border-primary data-[checked]:bg-primary focus-visible:outline-none focus-visible:shadow-none data-[disabled]:pointer-events-none data-[disabled]:opacity-55', className)}
+      className={cn('group inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-primary-foreground outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] data-[disabled]:pointer-events-none data-[disabled]:opacity-55', className)}
       {...props}
     >
-      <CheckboxPrimitive.Indicator><Check aria-hidden="true" size={12} strokeWidth={3} /></CheckboxPrimitive.Indicator>
+      <span aria-hidden="true" className="flex size-4 items-center justify-center rounded border border-input bg-card group-data-[checked]:border-primary group-data-[checked]:bg-primary"><CheckboxPrimitive.Indicator><Check size={12} strokeWidth={3} /></CheckboxPrimitive.Indicator></span>
     </CheckboxPrimitive.Root>
   );
 }

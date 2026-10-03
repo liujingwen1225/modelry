@@ -63,10 +63,10 @@ export function ApiWorkspacePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="sr-only">
+      <header className="min-w-0">
         <p className="eyebrow">API</p>
-        <h1>{t('api.workspaceTitle')}</h1>
-        <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('api.workspaceDescription')}</p>
+        <h1 className="text-2xl font-semibold">{t('api.workspaceTitle')}</h1>
+        <p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('api.workspaceDescription')}</p>
       </header>
 
 
@@ -76,7 +76,7 @@ export function ApiWorkspacePage() {
         {workspaceTabs.map((tab) => (
           <Link
             aria-current={activeTab === tab ? 'page' : undefined}
-            className={`border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={`inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap no-underline transition-colors  ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             key={tab}
             replace
             to={tabTarget(tab)}
@@ -86,10 +86,10 @@ export function ApiWorkspacePage() {
         ))}
       </nav>}>
 
-      <Surface className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-3.5 py-3" variant="standard">
+      <Surface className="flex min-w-0 flex-wrap items-center justify-between gap-3 pb-3" variant="section">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-          <span className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.baseUrlLabel')}</span>
-          <code className="min-w-0 break-all font-mono text-xs text-foreground" data-api-base-url>{origin || '—'}</code>
+          <span className="text-xs font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.baseUrlLabel')}</span>
+          <code className="min-w-0 break-all font-mono text-[13px] text-foreground" data-api-base-url>{origin || '—'}</code>
         </div>
         {origin && <CopyButton label={t('api.copyBaseUrl')} value={origin} />}
       </Surface>
@@ -164,9 +164,9 @@ function OpenApiTab() {
   }
 
   return <div className="flex min-w-0 flex-col gap-4">
-    <header className="sr-only">
-      <h2>{t('api.openApiTabTitle')}</h2>
-      <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('api.openApiTabDescription')}</p>
+    <header className="min-w-0">
+      <h2 className="text-base font-semibold">{t('api.openApiTabTitle')}</h2>
+      <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('api.openApiTabDescription')}</p>
     </header>
 
     {state === 'loading' && <LoadingState label={t('api.loadingWorkspace')} />}
@@ -177,44 +177,44 @@ function OpenApiTab() {
     )}
 
     {state === 'ready' && contract && <>
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="min-w-0">
           <h3>{t('portability.contract.title')}</h3>
-          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('portability.contract.description')}</p>
+          <p className="mt-1.5 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('portability.contract.description')}</p>
         </div>
         {contract.collections.length === 0
           ? <EmptyState description={t('api.noEndpointsDescription')} title={t('api.noEndpointsTitle')} />
           : <>
             <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.runtimeVersion')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{contract.version}</dd></div>
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.contract.hash')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary"><code className="font-mono" data-testid="contract-hash">{contract.contentHash}</code></dd></div>
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.collections')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{contract.collections.length}</dd></div>
+              <div className="min-w-0 border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.runtimeVersion')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{contract.version}</dd></div>
+              <div className="min-w-0 border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.contract.hash')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary"><code className="font-mono" data-testid="contract-hash">{contract.contentHash}</code></dd></div>
+              <div className="min-w-0 border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.collections')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{contract.collections.length}</dd></div>
             </dl>
             <ul className="m-0 flex list-none flex-col p-0 text-xs">
               {contract.collections.slice(0, 5).map((collection) => (
                 <li className="flex flex-wrap items-center gap-2.5 border-b py-2 last:border-b-0" key={collection.id}>
-                  <strong className="text-xs font-semibold text-foreground">{collection.name}</strong>
-                  <span className="text-[11px] text-muted-foreground">{collection.type}</span>
-                  <code className="ml-auto font-mono text-[11px] text-ink-secondary">{collection.endpoints.length} {t('portability.contract.endpoints')}</code>
+                  <strong className="text-sm font-semibold text-foreground">{collection.name}</strong>
+                  <span className="text-xs text-muted-foreground">{collection.type}</span>
+                  <code className="ml-auto font-mono text-[13px] text-ink-secondary">{collection.endpoints.length} {t('portability.contract.endpoints')}</code>
                 </li>
               ))}
             </ul>
           </>}
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="min-w-0">
           <h3>{t('api.integrationTitle')}</h3>
-          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('api.integrationDescription')}</p>
+          <p className="mt-1.5 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('api.integrationDescription')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={downloadContract} size="small" type="button" variant="primary"><Download aria-hidden="true" size={14} /> {t('api.downloadOpenApi')}</Button>
           {curlExample && <CopyButton label={t('api.copyCurl')} value={curlExample} />}
           <ButtonLink size="small" to="/mcp">{t('api.mcpLink')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>
         </div>
-        {curlExample && <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-muted px-3 py-2.5"><code className="min-w-0 break-all font-mono text-xs text-ink-secondary">{curlExample}</code></div>}
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('api.sdkGuidance')}</p>
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('portability.contract.generateHint')}</p>
+        {curlExample && <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-muted px-3 py-2.5"><code className="min-w-0 break-all font-mono text-[13px] text-ink-secondary">{curlExample}</code></div>}
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('api.sdkGuidance')}</p>
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('portability.contract.generateHint')}</p>
       </Surface>
     </>}
   </div>;

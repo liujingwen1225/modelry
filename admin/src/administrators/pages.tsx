@@ -204,10 +204,10 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
     <div className="flex min-w-0 flex-col gap-6">
       {embedded
         ? <WorkspaceActions><div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
-          <div className="sr-only">
-            {/* 工作面标题只保留屏幕阅读器语义，可见上下文由导航提供。 */}
-            <h2 className="m-0">{t('administrators.title')}</h2>
-            <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
+          <div className="min-w-0 flex-1">
+            {/* 工作面标题与创建动作共享当前身份上下文。 */}
+            <h2 className="m-0 text-base font-semibold">{t('administrators.title')}</h2>
+            <p className="mt-1 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
@@ -218,11 +218,11 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
             </Button>
           </div>
         </div></WorkspaceActions>
-        : <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
-          <div className="sr-only">
+        : <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-4" data-workspace-toolbar>
+          <div className="min-w-0 flex-1">
             <p className="eyebrow">{t('administrators.eyebrow')}</p>
-            <h1>{t('administrators.title')}</h1>
-            <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('administrators.title')}</h1>
+            <p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
@@ -234,15 +234,15 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
           </div>
         </header>}
 
-      <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-3" variant="section">
         <div className="flex flex-wrap items-center gap-3">
           <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={17} /></span>
           <div className="min-w-0">
             <p className="eyebrow">{t('administrators.list.eyebrow')}</p>
-            <h2>{t('administrators.list.title')}</h2>
+            <h2 className="text-base font-semibold">{t('administrators.list.title')}</h2>
           </div>
         </div>
-        <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.list.description')}</p>
+        <p className="m-0 text-sm leading-relaxed text-ink-secondary">{t('administrators.list.description')}</p>
         {administrators.length === 0
           ? <EmptyState description={t('administrators.empty.description')} title={t('administrators.empty.title')} />
           : (
@@ -266,7 +266,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
                         {t(permissionLabelKey(item.permission.preset))}
                       </StatusChip>
                       {item.permission.preset === 'custom' && (
-                        <span className="mt-1 block text-[11px] text-muted-foreground">
+                        <span className="mt-1 block text-xs text-muted-foreground">
                           {t('administrators.permission.operationCount', { count: item.permission.customOperations?.length ?? 0 })}
                         </span>
                       )}
@@ -347,9 +347,9 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
             <SelectField id="administrator-preset" onValueChange={(selectedValue) => setCreatePermission((current) => ({ ...current, preset: selectedValue as PermissionPreset }))} value={createPermission.preset} options={[({ value: "fullAccess", label: t('administrators.create.presets.fullAccess') }), ({ value: "readOnly", label: t('administrators.create.presets.readOnly') }), ({ value: "custom", label: t('administrators.create.presets.custom') })]} />
           </FormField>
           {createPermission.preset === 'custom' && (
-            <fieldset className="m-0 grid max-h-60 gap-1.5 overflow-y-auto rounded-lg border bg-secondary px-3 py-2.5">
+            <fieldset className="m-0 grid max-h-60 gap-1.5 overflow-y-auto border-b py-3">
               <legend className="px-1 text-xs font-semibold text-ink-secondary">{t('administrators.create.operations')}</legend>
-              <p className="m-0 text-[10px] text-muted-foreground">{t('administrators.create.operationsHint')}</p>
+              <p className="m-0 text-sm text-muted-foreground">{t('administrators.create.operationsHint')}</p>
               {administratorOperations.map((operation) => (
                 <Label className="flex items-center gap-2 text-xs text-ink-secondary" key={operation}>
                   <Checkbox
@@ -362,7 +362,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
                     })}
 
                   />
-                  <span className="break-words font-mono text-[11px]">{operation}</span>
+                  <span className="break-words font-mono text-[13px]">{operation}</span>
                 </Label>
               ))}
             </fieldset>
@@ -378,7 +378,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setPasswordTarget(null)} open={passwordTarget !== null} title={t('administrators.password.title')}>
         <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void savePassword(); }}>
-          <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.password.description', { email: passwordTarget?.email ?? '' })}</p>
+          <p className="m-0 text-sm leading-relaxed text-ink-secondary">{t('administrators.password.description', { email: passwordTarget?.email ?? '' })}</p>
           <FormField hint={t('administrators.create.passwordHint')} htmlFor="administrator-new-password" label={t('administrators.password.label')}>
             <Input autoComplete="new-password" id="administrator-new-password" onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
           </FormField>
@@ -392,11 +392,11 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
       </Dialog>
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setSessionsTarget(null)} open={sessionsTarget !== null} title={t('administrators.sessions.title')}>
-        <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.sessions.description', { email: sessionsTarget?.email ?? '' })}</p>
+        <p className="m-0 text-sm leading-relaxed text-ink-secondary">{t('administrators.sessions.description', { email: sessionsTarget?.email ?? '' })}</p>
         {sessions.length === 0
-          ? <p className="mt-3 mb-0 text-[11px] text-muted-foreground" role="status">{t('administrators.sessions.empty')}</p>
+          ? <p className="mt-3 mb-0 text-sm text-muted-foreground" role="status">{t('administrators.sessions.empty')}</p>
           : (
-            <ul className="m-0 mt-3 grid list-none gap-1.5 p-0 text-[11px]">
+            <ul className="m-0 mt-3 grid list-none gap-1.5 p-0 text-xs">
               {sessions.map((session) => (
                 <li className="flex flex-wrap items-center gap-2.5 border-b py-1.5 last:border-b-0" key={session.id}>
                   <span>{t('administrators.sessions.created', { date: new Date(session.createdAt).toLocaleString() })}</span>
@@ -419,7 +419,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
       </Dialog>
 
       <Dialog closeLabel={t('administrators.dialogs.close')} onClose={() => setDeleteTarget(null)} open={deleteTarget !== null} title={t('administrators.remove.title')}>
-        <p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('administrators.remove.description', { email: deleteTarget?.email ?? '' })}</p>
+        <p className="m-0 text-sm leading-relaxed text-ink-secondary">{t('administrators.remove.description', { email: deleteTarget?.email ?? '' })}</p>
         <div className="mt-3 flex flex-wrap justify-end gap-1.5 border-t pt-3">
           <Button onClick={() => setDeleteTarget(null)} type="button" variant="quiet">{t('administrators.cancel')}</Button>
           <Button disabled={busy !== null} onClick={() => void remove()} type="button" variant="danger">

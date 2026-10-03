@@ -129,45 +129,45 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
             <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
           </Button>
         </div></WorkspaceActions>
-        : <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
-          <div className="sr-only">
+        : <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-4" data-workspace-toolbar>
+          <div className="min-w-0">
             <p className="eyebrow">{t('drift.eyebrow')}</p>
-            <h1>{t('drift.title')}</h1>
-            <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('drift.description')}</p>
+            <h1 className="text-2xl font-semibold">{t('drift.title')}</h1>
+            <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('drift.description')}</p>
           </div>
           <Button disabled={busy !== null} onClick={() => void load()} size="small" type="button" variant="secondary">
             <RefreshCw aria-hidden="true" size={14} /> {t('drift.refresh')}
           </Button>
         </header>}
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-center gap-3">
           <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={16} /></span>
           <div className="min-w-0 flex-1">
             <p className="eyebrow">{t('drift.state.eyebrow')}</p>
-            <h2>{t('drift.state.title')}</h2>
+            <h2 className="text-base font-semibold">{t('drift.state.title')}</h2>
           </div>
           <StatusChip state={stateTone(report.state)}>{t(('drift.states.' + report.state) as TranslationKey)}</StatusChip>
         </div>
         <dl className="m-0 grid gap-2.5 sm:grid-cols-3">
-          <div className="rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] text-muted-foreground">{t('drift.state.findings')}</dt>
+          <div className="min-w-0 border-b py-3">
+            <dt className="text-xs text-muted-foreground">{t('drift.state.findings')}</dt>
             <dd className="m-0 mt-1 text-sm font-semibold text-foreground">{actionable.length}</dd>
           </div>
-          <div className="rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] text-muted-foreground">{t('drift.state.expected')}</dt>
+          <div className="min-w-0 border-b py-3">
+            <dt className="text-xs text-muted-foreground">{t('drift.state.expected')}</dt>
             <dd className="m-0 mt-1 text-sm font-semibold text-foreground">{expected.length}</dd>
           </div>
-          <div className="rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] text-muted-foreground">{t('drift.state.detected')}</dt>
+          <div className="min-w-0 border-b py-3">
+            <dt className="text-xs text-muted-foreground">{t('drift.state.detected')}</dt>
             <dd className="m-0 mt-1 text-sm font-semibold text-foreground">{new Date(report.detectedAt).toLocaleString()}</dd>
           </div>
         </dl>
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="min-w-0">
-          <h2>{t('drift.findings.title')}</h2>
+          <h2 className="text-base font-semibold">{t('drift.findings.title')}</h2>
           <p className="m-0 mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('drift.findings.description')}</p>
         </div>
         {actionable.length === 0
@@ -176,7 +176,7 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
             <ul className="m-0 flex list-none flex-col gap-3 p-0">
               {actionable.map((finding) => (
                 <li
-                  className={`flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5${finding.severity === 'error' ? ' border-danger/30' : ''}`}
+                  className={`flex min-w-0 flex-col gap-3 border-b py-4 last:border-b-0${finding.severity === 'error' ? ' border-danger/30' : ''}`}
                   data-drift-code={finding.code}
                   key={finding.id}
                 >
@@ -184,19 +184,19 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
                     <div className="min-w-0">
                       <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
                         {finding.severity === 'error' && <CircleAlert aria-hidden="true" className="shrink-0 text-danger" size={15} />}
-                        <span className="truncate">{t(('drift.codes.' + finding.code) as TranslationKey, { code: finding.code })}</span>
+                        <span className="truncate text-base font-semibold">{t(('drift.codes.' + finding.code) as TranslationKey, { code: finding.code })}</span>
                       </h3>
                       {finding.collectionName && <p className="m-0 mt-0.5 break-words text-xs text-muted-foreground">{finding.collectionName}</p>}
                     </div>
                     <StatusChip state={severityTone(finding.severity)}>{t(('drift.severities.' + finding.severity) as TranslationKey)}</StatusChip>
                   </div>
                   <dl className="m-0 grid gap-2 sm:grid-cols-2">
-                    <div className="grid gap-0.5 rounded-md border bg-secondary px-3 py-2">
-                      <dt className="text-[11px] font-semibold text-muted-foreground">{t('drift.findings.expected')}</dt>
+                    <div className="grid min-w-0 gap-1 border-b py-3">
+                      <dt className="text-xs font-semibold text-muted-foreground">{t('drift.findings.expected')}</dt>
                       <dd className="m-0 text-xs text-ink-secondary [overflow-wrap:anywhere]">{findingFact(finding, 'expected', t)}</dd>
                     </div>
-                    <div className="grid gap-0.5 rounded-md border bg-secondary px-3 py-2">
-                      <dt className="text-[11px] font-semibold text-muted-foreground">{t('drift.findings.actual')}</dt>
+                    <div className="grid min-w-0 gap-1 border-b py-3">
+                      <dt className="text-xs font-semibold text-muted-foreground">{t('drift.findings.actual')}</dt>
                       <dd className="m-0 text-xs text-ink-secondary [overflow-wrap:anywhere]">{findingFact(finding, 'actual', t)}</dd>
                     </div>
                   </dl>
@@ -207,7 +207,7 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
                       </Button>
                     )}
                     {finding.remedy === 'manual' && <span className="text-xs text-muted-foreground">{t('drift.manualRemedy')}</span>}
-                    <Link className="text-xs font-semibold text-primary hover:underline" to={correctiveSurfaceLink(finding.deepLink)}>{t('drift.openCorrectiveSurface')}</Link>
+                    <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={correctiveSurfaceLink(finding.deepLink)}>{t('drift.openCorrectiveSurface')}</Link>
                   </div>
                 </li>
               ))}
@@ -216,14 +216,14 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
       </Surface>
 
       {expected.length > 0 && (
-        <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+        <Surface className="flex min-w-0 flex-col gap-4" variant="section">
           <div className="min-w-0">
-            <h2>{t('drift.expected.title')}</h2>
+            <h2 className="text-base font-semibold">{t('drift.expected.title')}</h2>
             <p className="m-0 mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('drift.expected.description')}</p>
           </div>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {expected.map((finding) => (
-              <li className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-3.5" key={finding.id}>
+              <li className="flex min-w-0 flex-col gap-3 border-b py-4 last:border-b-0" key={finding.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-foreground">{finding.expectedPendingChange ? t('drift.expected.pendingChange') : finding.code}</h3>
@@ -232,7 +232,7 @@ export function DriftPage({ embedded = false }: { embedded?: boolean }) {
                   <StatusChip state="info">{t('drift.expected.badge')}</StatusChip>
                 </div>
                 <div>
-                  <Link className="text-xs font-semibold text-primary hover:underline" to={correctiveSurfaceLink(finding.deepLink)}>{t('drift.openCorrectiveSurface')}</Link>
+                  <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={correctiveSurfaceLink(finding.deepLink)}>{t('drift.openCorrectiveSurface')}</Link>
                 </div>
               </li>
             ))}

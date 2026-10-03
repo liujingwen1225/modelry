@@ -6,7 +6,7 @@ import { useOwnerSession } from '../auth/owner-session';
 import { useI18n } from '../i18n/i18n';
 import { fuzzyMatch, isCommandVisible, useCommandRegistry, type AdminCommand, type CommandContext } from './command-registry';
 import { collectionIdFromPathname } from './route-context';
-import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from './button';
 import { Input } from '@/components/ui/input';
 
@@ -39,11 +39,6 @@ function CommandPaletteDialog({
     .filter((command) => isCommandVisible(command, context))
     .map((command) => ({ command, label: command.label(context), keywords: command.keywords?.(context) ?? [] }))
     .filter(({ label, keywords }) => fuzzyMatch(query, label, keywords)), [commands, context, query]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    setSelectedIndex(0);
-  }, []);
 
   useEffect(() => {
     if (selectedIndex >= filtered.length) setSelectedIndex(Math.max(0, filtered.length - 1));
@@ -98,18 +93,15 @@ function CommandPaletteDialog({
   }
 
   return (
-    <DialogPrimitive.Root open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 z-30 bg-[rgb(12_19_23_/_48%)] backdrop-blur-[2px]" />
-        <DialogPrimitive.Viewport className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <DialogPrimitive.Popup
-            aria-labelledby={titleId}
-            className="flex max-h-[min(72vh,640px)] w-[min(100%,620px)] flex-col overflow-hidden rounded-lg border bg-card text-foreground shadow-floating outline-none"
-            data-command-palette="true"
-            initialFocus={inputRef}
-            onKeyDown={handleKeyDown}
-          >
-        <DialogPrimitive.Title className="sr-only" id={titleId}>{t('commands.paletteTitle')}</DialogPrimitive.Title>
+    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent
+        aria-labelledby={titleId}
+        className="max-h-[min(80dvh,640px)] w-[min(calc(100vw-32px),620px)] overflow-hidden"
+        data-command-palette="true"
+        initialFocus={inputRef}
+        onKeyDown={handleKeyDown}
+      >
+        <DialogTitle className="sr-only" id={titleId}>{t('commands.paletteTitle')}</DialogTitle>
         <div className="flex min-h-[60px] items-center gap-3 border-b px-4 text-muted-foreground">
           <Search aria-hidden="true" size={18} />
           <Input
@@ -118,7 +110,7 @@ function CommandPaletteDialog({
             aria-expanded="true"
             aria-label={t('commands.searchLabel')}
             autoComplete="off"
-            className="min-h-0 rounded-none border-0 bg-transparent px-0 py-0 text-sm focus-visible:border-0 focus-visible:outline-0 focus-visible:ring-0"
+            className="min-h-11 rounded-md border-0 bg-transparent px-2 text-sm"
             onChange={(event) => { setQuery(event.target.value); setSelectedIndex(0); }}
             placeholder={t('commands.searchLabel')}
             ref={inputRef}
@@ -126,7 +118,7 @@ function CommandPaletteDialog({
             type="search"
             value={query}
           />
-          <Button aria-label={t('shell.paletteClose')} className="size-8 min-h-8 shrink-0 px-0" onClick={onClose} type="button" variant="quiet">
+          <Button aria-label={t('shell.paletteClose')} className="size-11 min-h-11 shrink-0 px-0" onClick={onClose} type="button" variant="quiet">
             <X aria-hidden="true" size={16} />
           </Button>
         </div>
@@ -136,7 +128,7 @@ function CommandPaletteDialog({
               aria-label={label}
               aria-disabled={command.isEnabled ? !command.isEnabled(context) : undefined}
               aria-selected={index === selectedIndex}
-              className={`flex min-h-10 items-center justify-between gap-3 rounded-md px-2.5 text-xs text-ink-secondary outline-none transition-colors hover:bg-accent-cta-soft hover:text-accent-cta-ink${index === selectedIndex ? ' bg-accent-cta-soft text-accent-cta-ink' : ''}`}
+              className={`flex min-h-11 items-center justify-between gap-3 rounded-md px-2.5 text-xs text-ink-secondary outline-none transition-colors hover:bg-accent-cta-soft hover:text-accent-cta-ink${index === selectedIndex ? ' bg-accent-cta-soft text-accent-cta-ink' : ''}`}
               id={`command-option-${command.id}`}
               key={command.id}
               onClick={() => execute(index)}
@@ -145,19 +137,17 @@ function CommandPaletteDialog({
               role="option"
             >
               <span>{label}</span>
-              <span className="whitespace-nowrap text-[10px] text-subtle-foreground">{t(command.category)}</span>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">{t(command.category)}</span>
             </div>
           ))}
         </div>
         {filtered.length === 0 && <p className="m-0 px-4 py-5 text-xs text-muted-foreground" role="status">{t('shell.paletteEmpty')}</p>}
-        <footer className="flex min-h-10 items-center justify-between gap-3 border-t px-3.5 text-[10px] text-subtle-foreground">
+        <footer className="flex min-h-11 items-center justify-between gap-3 border-t px-3.5 text-xs text-muted-foreground">
           <span>{t('shell.paletteHint')}</span>
-          <span><kbd className="rounded border bg-muted px-1.5 py-0.5 text-subtle-foreground">{shortcut}</kbd></span>
+          <span><kbd className="rounded border bg-muted px-1.5 py-0.5 text-muted-foreground">{shortcut}</kbd></span>
         </footer>
-          </DialogPrimitive.Popup>
-        </DialogPrimitive.Viewport>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -214,9 +204,9 @@ export function CommandPaletteControl() {
   const shortcutName = /⌘/.test(shortcut) ? 'Meta+K' : 'Control+K';
   return (
     <>
-      <ControlButton variant="unstyled"
+      <ControlButton variant="outline"
         aria-keyshortcuts={shortcutName}
-        className="flex min-h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-card px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none min-[681px]:min-h-[34px] min-[681px]:gap-[7px] min-[681px]:px-2"
+        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md border border-input px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:bg-accent"
         data-command-palette-trigger
         onClick={showPalette}
         ref={triggerRef}
@@ -225,7 +215,7 @@ export function CommandPaletteControl() {
       >
         <Command aria-hidden="true" size={15} />
         <span className="hidden min-[901px]:inline">{t('shell.paletteTrigger')}</span>
-        <kbd className="hidden rounded border border-border bg-secondary px-[5px] py-[3px] font-[inherit] text-[10px] leading-[1.2] whitespace-nowrap text-muted-foreground min-[901px]:inline-block">{shortcut}</kbd>
+        <kbd className="hidden rounded border border-border bg-secondary px-[5px] py-[3px] font-[inherit] text-xs leading-[1.2] whitespace-nowrap text-muted-foreground min-[901px]:inline-block">{shortcut}</kbd>
       </ControlButton>
       {open && <CommandPaletteDialog commands={commands} context={context} onClose={closePalette} shortcut={shortcut} />}
     </>

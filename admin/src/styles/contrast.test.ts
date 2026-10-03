@@ -79,10 +79,10 @@ function parseColor(value: string, theme: 'light' | 'dark'): [number, number, nu
     const red = parseInt(hex.slice(0, 2), 16) / 255;
     const green = parseInt(hex.slice(2, 4), 16) / 255;
     const blue = parseInt(hex.slice(4, 6), 16) / 255;
-    if (alphaHex === null) return [red, green, blue];
+    if (alphaHex === null) return [red, green, blue].map(linearChannel) as [number, number, number];
     const alpha = parseInt(alphaHex, 16) / 255;
     const backdrop = theme === 'dark' ? [0.09, 0.09, 0.09] : [1, 1, 1];
-    return [red * alpha + backdrop[0]! * (1 - alpha), green * alpha + backdrop[1]! * (1 - alpha), blue * alpha + backdrop[2]! * (1 - alpha)];
+    return [red * alpha + backdrop[0]! * (1 - alpha), green * alpha + backdrop[1]! * (1 - alpha), blue * alpha + backdrop[2]! * (1 - alpha)].map(linearChannel) as [number, number, number];
   }
   const match = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.%]+))?\s*\)/.exec(value);
   if (!match || !match[1] || !match[2] || !match[3]) throw new Error('unsupported colour value: ' + value);
@@ -103,7 +103,7 @@ function parseColor(value: string, theme: 'light' | 'dark'): [number, number, nu
 }
 
 function luminance(color: [number, number, number]): number {
-  return 0.2126 * linearChannel(color[0]) + 0.7152 * linearChannel(color[1]) + 0.0722 * linearChannel(color[2]);
+  return 0.2126 * Math.min(1, Math.max(0, color[0])) + 0.7152 * Math.min(1, Math.max(0, color[1])) + 0.0722 * Math.min(1, Math.max(0, color[2]));
 }
 
 function contrast(foreground: string | undefined, background: string | undefined, theme: 'light' | 'dark'): number {
@@ -131,14 +131,21 @@ describe('theme contrast (WCAG 2.2 AA)', () => {
     }
   });
 
-  // WCAG AA：正文文本与主要表面至少 4.5:1；次要/静音文本至少 3:1。
+  it('使用已知中性色验证线性亮度计算', () => {
+    expect(contrast('oklch(0 0 0)', 'oklch(1 0 0)', 'light')).toBeCloseTo(21);
+    expect(contrast('oklch(0.5 0 0)', 'oklch(1 0 0)', 'light')).toBeCloseTo(6, 2);
+    expect(contrast('#000000', '#ffffff', 'light')).toBeCloseTo(21);
+  });
+
+  // WCAG AA：正文文本与主要表面至少 4.5:1；次要/静音文本同样至少 4.5:1。
   it.each(['light', 'dark'] as const)('keeps %s text readable on its surfaces', (theme) => {
     const palette = themes[theme];
     const surfaces = ['--card', '--secondary', '--background', '--sidebar', '--sidebar-accent'];
     for (const surface of surfaces) {
       expect(contrast(palette['--foreground'], palette[surface], theme), 'foreground on ' + surface + ' (' + theme + ')').toBeGreaterThanOrEqual(4.5);
       expect(contrast(palette['--ink-secondary'], palette[surface], theme), 'secondary ink on ' + surface + ' (' + theme + ')').toBeGreaterThanOrEqual(4.5);
-      expect(contrast(palette['--muted-foreground'], palette[surface], theme), 'muted ink on ' + surface + ' (' + theme + ')').toBeGreaterThanOrEqual(3);
+      expect(contrast(palette['--subtle-foreground'], palette[surface], theme), 'subtle ink on ' + surface + ' (' + theme + ')').toBeGreaterThanOrEqual(4.5);
+      expect(contrast(palette['--muted-foreground'], palette[surface], theme), 'muted ink on ' + surface + ' (' + theme + ')').toBeGreaterThanOrEqual(4.5);
     }
   });
 

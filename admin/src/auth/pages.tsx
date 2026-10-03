@@ -18,8 +18,8 @@ import {
 
 type AuthViolation = { path: string; code: string; message: string };
 
-const titleClass = 'm-0 text-2xl font-bold leading-tight tracking-tight text-foreground';
-const copyClass = 'mt-2 text-xs leading-relaxed text-muted-foreground';
+const titleClass = 'm-0 text-2xl font-semibold leading-tight tracking-tight text-foreground';
+const copyClass = 'mt-2 text-sm leading-relaxed text-muted-foreground';
 const submitClass = 'min-h-10 w-full [&_svg]:ml-auto';
 
 const authViolationKeys: Record<string, TranslationKey> = {
@@ -60,19 +60,19 @@ function AuthError({ error, fallback, title }: { error: unknown; fallback: strin
     >
       <span aria-hidden="true" className="grid shrink-0 place-items-center pt-px"><CircleAlert size={17} /></span>
       <div className="min-w-0">
-        <h2 className="m-0 mb-1 text-[11px] font-bold text-danger">{title}</h2>
-        <p className="m-0 break-words text-[10px] leading-relaxed text-ink-secondary">{apiError ? errorMessage(apiError.code) ?? fallback : fallback}</p>
-        {apiError && <p className="mt-1.5 text-[10px] text-muted-foreground">{t('ownerAuth.errorCode')} <code className="text-[10px] font-bold text-danger">{apiError.code}</code></p>}
+        <h2 className="m-0 mb-1 text-base font-semibold text-danger">{title}</h2>
+        <p className="m-0 break-words text-sm leading-relaxed text-ink-secondary">{apiError ? errorMessage(apiError.code) ?? fallback : fallback}</p>
+        {apiError && <p className="mt-1.5 text-sm text-muted-foreground">{t('ownerAuth.errorCode')} <code className="font-mono text-[13px] font-medium text-danger">{apiError.code}</code></p>}
         {violations.length > 0 && (
-          <ul className="mt-2 grid list-disc gap-1 break-words pl-4 text-[10px] text-ink-secondary">
+          <ul className="mt-2 grid list-disc gap-1 break-words pl-4 text-xs text-ink-secondary">
             {violations.map((violation, index) => (
               <li className="min-w-0" key={`${violation.path}-${violation.code}-${index}`}>
-                <code className="text-[10px] font-bold text-danger">{violation.path}</code> <code className="text-[10px] font-bold text-danger">{violation.code}</code> {authViolationMessage(violation, t)}
+                <code className="font-mono text-[13px] font-medium text-danger">{violation.path}</code> <code className="font-mono text-[13px] font-medium text-danger">{violation.code}</code> {authViolationMessage(violation, t)}
               </li>
             ))}
           </ul>
         )}
-        {apiError && <p className="mt-2 text-[10px] text-muted-foreground">{t('ownerAuth.requestId')} <code className="text-[10px] font-bold text-danger">{apiError.requestId}</code></p>}
+        {apiError && <p className="mt-2 text-sm text-muted-foreground">{t('ownerAuth.requestId')} <code className="font-mono text-[13px] font-medium text-danger">{apiError.requestId}</code></p>}
       </div>
     </section>
   );
@@ -88,7 +88,7 @@ function AuthFrame({ children, eyebrow, mode }: { children: ReactNode; eyebrow: 
           <span className="text-xl font-bold tracking-[-1.1px]">modelry</span>
           <StatusChip state="ready">{t('shell.localContext')}</StatusChip>
         </a>
-        <Surface className="p-6 shadow-soft" variant="raised">
+        <Surface className="p-6" variant="standard">
           <div className="mb-2 flex items-center gap-2.5">
             <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-muted text-ink-secondary">
               {mode === 'setup' ? <ShieldCheck size={20} /> : <LockKeyhole size={20} />}
@@ -132,7 +132,7 @@ function AuthInput({
         type={type}
         value={value}
       />
-      {error && <span className="text-[10px] text-danger" id={errorId}>{error}</span>}
+      {error && <span className="text-xs text-danger" id={errorId}>{error}</span>}
     </FormField>
   );
 }
@@ -156,10 +156,10 @@ function AuthSuccess({
       <span aria-hidden="true" className="mb-3 grid size-9 place-items-center rounded-xl border border-success/20 bg-success-soft text-success"><Check size={19} /></span>
       <h1 className={titleClass}>{title}</h1>
       <p className={copyClass}>{description}</p>
-      <dl className="my-5 grid w-full gap-0 rounded-lg border bg-secondary px-3 py-0.5">
-        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-[10px] text-muted-foreground">{t('ownerAuth.ownerAccount')}</dt><dd className="m-0 min-w-0 break-words text-[10px] font-semibold text-ink-secondary">{result.owner.email}</dd></div>
-        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-[10px] text-muted-foreground">{t('ownerAuth.session')}</dt><dd className="m-0 min-w-0"><StatusChip state="ready">{t('ownerAuth.active')}</StatusChip></dd></div>
-        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-[10px] text-muted-foreground">{t('ownerAuth.sessionExpires')}</dt><dd className="m-0 min-w-0 break-words text-[10px] font-semibold text-ink-secondary"><time dateTime={result.session.expiresAt}>{result.session.expiresAt}</time></dd></div>
+      <dl className="my-5 grid w-full gap-0 border-y py-0.5">
+        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-xs text-muted-foreground">{t('ownerAuth.ownerAccount')}</dt><dd className="m-0 min-w-0 break-words text-xs font-semibold text-ink-secondary">{result.owner.email}</dd></div>
+        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-xs text-muted-foreground">{t('ownerAuth.session')}</dt><dd className="m-0 min-w-0"><StatusChip state="ready">{t('ownerAuth.active')}</StatusChip></dd></div>
+        <div className="grid grid-cols-[minmax(96px,0.55fr)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0 max-[420px]:grid-cols-1 max-[420px]:gap-1"><dt className="text-xs text-muted-foreground">{t('ownerAuth.sessionExpires')}</dt><dd className="m-0 min-w-0 break-words text-xs font-semibold text-ink-secondary"><time dateTime={result.session.expiresAt}>{result.session.expiresAt}</time></dd></div>
       </dl>
       {onContinue && (
         <Button className={submitClass} onClick={onContinue} type="button" variant="primary">
@@ -298,7 +298,7 @@ export function BootstrapPage({ onAuthenticated, loginHref = '/login' }: Bootstr
           {!submitting && <ArrowRight aria-hidden="true" size={16} />}
         </Button>
       </form>
-      <p className="mt-4 flex items-center gap-2 text-[10px] text-subtle-foreground"><KeyRound aria-hidden="true" className="shrink-0 text-ink-secondary" size={14} /> {t('ownerAuth.bootstrapNotice')}</p>
+      <p className="mt-4 flex items-center gap-2 text-sm text-subtle-foreground"><KeyRound aria-hidden="true" className="shrink-0 text-ink-secondary" size={14} /> {t('ownerAuth.bootstrapNotice')}</p>
     </AuthFrame>
   );
 }
@@ -375,7 +375,7 @@ export function LoginPage({ onAuthenticated, returnTo, sessionExpired = false }:
   return (
     <AuthFrame eyebrow={t('ownerAuth.signInEyebrow')} mode="login">
       <div className="mb-5"><h1 className={titleClass}>{t('ownerAuth.signInTitle')}</h1><p className={copyClass}>{t('ownerAuth.signInDescription')}</p></div>
-      {sessionExpired && <p className="mb-3.5 rounded-lg border border-info/30 bg-info-soft px-3 py-2.5 text-[11px] text-info" role="status">{t('ownerAuth.sessionExpired')}</p>}
+      {sessionExpired && <p className="mb-3.5 rounded-lg border border-info/30 bg-info-soft px-3 py-2.5 text-sm text-info" role="status">{t('ownerAuth.sessionExpired')}</p>}
       {error !== undefined && <AuthError error={error} fallback={t('ownerAuth.signInFailedDescription')} title={t('ownerAuth.signInFailed')} />}
       <form className="grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
         <AuthInput

@@ -11,13 +11,15 @@ const chipVariants: Record<string, 'default' | 'primary' | 'success' | 'warning'
   ready: 'success',
   active: 'success',
   ok: 'success',
+  success: 'success',
   succeeded: 'success',
   applied: 'success',
   degraded: 'warning',
   stopping: 'warning',
   partial: 'warning',
   pending: 'warning',
-  needsReview: 'warning',
+  needsreview: 'warning',
+  'needs-review': 'warning',
   review: 'warning',
   unavailable: 'danger',
   failed: 'danger',
@@ -34,12 +36,13 @@ const chipVariants: Record<string, 'default' | 'primary' | 'success' | 'warning'
 export function StatusChip({ state, children }: { state: string; children: ReactNode }) {
   const tone = state.toLowerCase().replace(/[^a-z]+/g, '-');
   const variant = chipVariants[tone] ?? 'default';
-  return <Badge data-status-chip data-status-tone={variant} data-status-state={tone} variant={variant}>{children}</Badge>;
+  return <Badge data-status-chip data-status-tone={variant} data-status-state={tone} className={variant === 'success' ? 'bg-transparent px-0' : undefined} variant={variant}><span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current" />{children}</Badge>;
 }
 
 export function SpinnerLoadingState({ label }: { label: string }) {
-  return <div aria-busy="true" aria-label={label} className="flex min-h-48 min-w-0 items-center justify-center text-muted-foreground" role="status">
+  return <div aria-busy="true" aria-label={label} className="flex min-h-48 min-w-0 items-center justify-center gap-3 text-sm text-muted-foreground" role="status">
     <LoaderCircle aria-hidden="true" className="animate-spin motion-reduce:animate-none" size={22} strokeWidth={1.75} />
+    <span>{label}</span>
   </div>;
 }
 
@@ -57,9 +60,9 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-dashed border-input bg-secondary px-3 py-3 text-[11px] text-ink-secondary" role="status">
-      <h3 className="mb-1 text-xs font-semibold">{title}</h3>
-      <p className="m-0 text-[10px] text-muted-foreground">{description}</p>
+    <div className="rounded-xl border border-dashed border-input bg-muted/40 px-6 py-8 text-sm text-ink-secondary" role="status">
+      <h3 className="mb-2 text-base font-semibold">{title}</h3>
+      <p className="m-0 text-sm text-muted-foreground">{description}</p>
       {children}
     </div>
   );
@@ -78,9 +81,9 @@ export function ErrorState({
   className?: string;
 } & Omit<React.ComponentProps<'div'>, 'children' | 'className'>) {
   return (
-    <div role="alert" className={cn('rounded-md border border-danger/30 bg-danger-soft px-3 py-3 text-[11px] text-danger', className)} {...props}>
-      <strong className="mb-1 block text-[11px]">{title}</strong>
-      <p className="m-0 text-[10px] text-muted-foreground">{description}</p>
+    <div role="alert" className={cn('rounded-md border border-danger/30 bg-danger-soft px-3 py-3 text-sm text-danger', className)} {...props}>
+      <strong className="mb-1 block text-sm">{title}</strong>
+      <p className="m-0 text-sm text-muted-foreground">{description}</p>
       {children}
     </div>
   );
@@ -88,7 +91,7 @@ export function ErrorState({
 
 export function PartialState({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div role="status" className={cn('rounded-md border border-warning/30 bg-warning-soft px-3 py-3 text-[11px] text-warning', className)}>
+    <div role="status" className={cn('rounded-md border border-warning/30 bg-warning-soft px-3 py-3 text-sm text-warning', className)}>
       {children}
     </div>
   );

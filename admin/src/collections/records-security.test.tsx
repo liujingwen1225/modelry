@@ -74,6 +74,10 @@ describe('Collection Records and Security pages', () => {
     expect(screen.queryByRole('navigation', { name: 'Collection workspace' })).not.toBeInTheDocument();
     resolvePending(response(null));
     expect(await screen.findByRole('navigation', { name: 'Collection workspace' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'posts', level: 1 })).toBeVisible();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Records', level: 2 })).toBeVisible();
+
   });
 
   it('creates a durable Record in the same sheet and shows the returned identity', async () => {

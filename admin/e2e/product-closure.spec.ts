@@ -391,10 +391,11 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('button', { name: 'Complete setup' }).click();
     await expect(activePage).toHaveURL(/\/collections\/new$/);
     await activePage.getByLabel('Collection name').fill('authors');
+    await activePage.getByRole('button', { name: 'New', exact: true }).click();
     await activePage.getByLabel('Field name 1').fill('name');
-    await activePage.getByLabel('Required', { exact: true }).check();
+    await activePage.getByRole('checkbox', { name: 'Required', exact: true }).check();
     await activePage.getByRole('button', { name: 'Create Collection', exact: true }).click();
-    await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'authors', level: 1 })).toBeVisible();
     authorsId = collectionId(activePage);
     await activePage.getByRole('button', { name: 'Create first record', exact: true }).click();
     await activePage.getByLabel('name · Required').fill('Ada Lovelace');
@@ -412,7 +413,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     expect(JSON.stringify(collections.body)).toContain('authors');
 
     await activePage.goto(`${runtimeURL}/`);
-    await expect(activePage.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
     const productNavigation = activePage.getByRole('navigation', { name: 'Project navigation' });
     await expect(productNavigation.getByRole('link')).toHaveCount(9);
     // 每个入口的可见名称就是它的 accessible name（计数徽标是 aria-hidden 的装饰）。
@@ -461,11 +462,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await eventsNavigation.getByRole('link', { name: 'Event triggers' }).click();
     await expect(activePage).toHaveURL(`${runtimeURL}/events?tab=triggers`);
     await expect(eventsNavigation.getByRole('link', { name: 'Event triggers' })).toHaveAttribute('aria-current', 'page');
-    // Hooks 工作面的 Secrets 入口仍然存在，且不再把一级导航标记为当前目的地。
+    // 密钥配置属于系统设置；通过现有本地导航进入后，Hooks 不再是当前一级目的地。
     await activePage.goto(`${runtimeURL}/events`);
-    await activePage.getByRole('link', { name: 'Manage Secrets' }).click();
+    await productNavigation.getByRole('link', { name: 'System settings' }).click();
+    await activePage.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Secrets', exact: true }).click();
     await expect(activePage).toHaveURL(`${runtimeURL}/settings/secrets`);
-    await expect(activePage.getByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'Secrets', level: 2 })).toBeVisible();
     await expect(productNavigation.getByRole('link', { name: 'Hooks & Events' })).not.toHaveAttribute('aria-current', 'page');
 
     // 定时任务已从 Automations 拆成独立一级入口：旧 `?tab=jobs` 深链归一为 `/schedules?tab=jobs`。
@@ -500,10 +502,10 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
     await activePage.goto(`${runtimeURL}/settings/portability`);
     await expect(activePage).toHaveURL(`${runtimeURL}/settings/backups`);
-    await expect(activePage.getByRole('heading', { name: 'Backup and restore', level: 1 })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'Backup and restore', level: 2 })).toBeVisible();
     await expect(settingsNavigation.getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('aria-current', 'page');
     await activePage.goto(`${runtimeURL}/settings/data`);
-    await expect(activePage.getByRole('heading', { name: 'Data import / export', level: 1 })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'Data import / export', level: 2 })).toBeVisible();
     await expect(activePage.getByRole('button', { name: 'Create and download backup' })).toHaveCount(0);
     // 旧 `/settings/developer` 的契约工作面现在是 API 工作区的 OpenAPI Tab。
     await activePage.goto(`${runtimeURL}/settings/developer`);
@@ -572,7 +574,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
       const shellDeepLink = `${runtimeURL}/collections/${encodeURIComponent(authorsId)}?tab=records#selected`;
       await activePage.goto(shellDeepLink);
-      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+      await expect(activePage.getByRole('heading', { name: 'authors', level: 1 })).toBeVisible();
 
       const ownerMenu = activePage.locator('[data-owner-menu]');
       await ownerMenu.locator('button').click();
@@ -595,12 +597,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await expect(chineseNavigation).toBeVisible();
       await expect(chineseNavigation.getByRole('link', { name: '集合' })).toBeVisible();
       await expect(activePage).toHaveURL(shellDeepLink);
-      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+      await expect(activePage.getByRole('heading', { name: 'authors', level: 1 })).toBeVisible();
       await activePage.reload();
       await expect(activePage).toHaveURL(shellDeepLink);
       await expect(activePage.getByRole('navigation', { name: '项目导航' })).toBeVisible();
       await expect(activePage.getByRole('button', { name: '切换语言为 English' })).toHaveText('EN');
-      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+      await expect(activePage.getByRole('heading', { name: 'authors', level: 1 })).toBeVisible();
 
       await activePage.getByRole('button', { name: '搜索命令' }).focus();
       await activePage.keyboard.press('Control+k');
@@ -637,7 +639,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
       await activePage.keyboard.press('Enter');
       await expect(activePage).toHaveURL(`${runtimeURL}/collections`);
       await activePage.goto(shellDeepLink);
-      await expect(activePage.getByRole('heading', { name: 'authors' })).toBeVisible();
+      await expect(activePage.getByRole('heading', { name: 'authors', level: 1 })).toBeVisible();
 
       await activePage.getByRole('button', { name: '切换语言为 English' }).click();
       await expect(activePage.getByRole('navigation', { name: 'Project navigation' })).toBeVisible();
@@ -652,16 +654,17 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('link', { name: 'Collections', exact: true }).first().click();
     await activePage.getByRole('link', { name: 'Create Collection', exact: true }).click();
     await activePage.getByLabel('Collection name').fill('posts');
+    await activePage.getByRole('button', { name: 'New', exact: true }).click();
     await activePage.getByLabel('Field name 1').fill('title');
-    await activePage.getByLabel('Required', { exact: true }).check();
-    await activePage.getByRole('button', { name: 'Add initial field' }).click();
+    await activePage.getByRole('checkbox', { name: 'Required', exact: true }).check();
+    await activePage.getByRole('button', { name: 'New', exact: true }).click();
     await activePage.getByLabel('Field name 2').fill('category');
-    await activePage.getByRole('button', { name: 'Add initial field' }).click();
+    await activePage.getByRole('button', { name: 'New', exact: true }).click();
     const fileField = activePage.locator('[data-initial-field-row]').nth(2);
     await fileField.getByLabel('Field name 3').fill('attachment');
     await selectOption(activePage, fileField.getByLabel('Type', { exact: true }), 'file');
     await activePage.getByRole('button', { name: 'Create Collection', exact: true }).click();
-    await expect(activePage.getByRole('heading', { name: 'posts' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'posts', level: 1 })).toBeVisible();
     postsId = collectionId(activePage);
     const detail = await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}`);
     expect(JSON.stringify(detail.body)).toContain('attachment');
@@ -670,15 +673,16 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
     await activePage.getByRole('link', { name: 'Collections', exact: true }).first().click();
     await activePage.getByRole('link', { name: 'Create Collection', exact: true }).click();
-    await activePage.getByLabel('Auth Collection').check();
+    await activePage.getByRole('radio', { name: /Auth Collection/ }).check();
     await activePage.getByLabel('Collection name').fill('users');
-    await expect(activePage.getByLabel('Allow users to sign up')).not.toBeChecked();
+    await expect(activePage.getByRole('checkbox', { name: /Allow users to sign up/ })).not.toBeChecked();
+    await activePage.getByRole('button', { name: 'New', exact: true }).click();
     await activePage.getByLabel('Field name 1').fill('displayName');
     await activePage.getByRole('button', { name: 'Create Collection', exact: true }).click();
-    await expect(activePage.getByRole('heading', { name: 'users' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'users', level: 1 })).toBeVisible();
     usersId = collectionId(activePage);
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}`);
-    await expect(activePage.getByRole('heading', { name: 'posts' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'posts', level: 1 })).toBeVisible();
   });
 
   await test.step('FLOW-003 — Record CRUD, relation values and Local Single-file Field', async () => {
@@ -864,7 +868,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
   await test.step('FLOW-005 — Create an App User and revoke a real Session', async () => {
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(usersId)}`);
-    await expect(activePage.getByRole('heading', { name: 'users' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'users', level: 1 })).toBeVisible();
     await activePage.getByRole('button', { name: /Create user/ }).first().click();
     await activePage.locator('#record-field-email').fill(appEmail);
     await activePage.locator('#record-field-displayName').fill('Ada');
@@ -946,12 +950,12 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
   await test.step('FLOW-006 — Apply independent Access Rules and verify fail-closed HTTP behavior', async () => {
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/security`);
-    await expect(activePage.getByRole('heading', { name: 'Security' })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'Security', level: 2 })).toBeVisible();
     await activePage.getByRole('button', { name: 'Edit List access' }).click();
-    await activePage.getByLabel('Signed-in users').check();
+    await activePage.getByRole('radio', { name: /Signed-in users/ }).check();
     await activePage.getByRole('button', { name: 'Save pending rule' }).click();
     await activePage.getByRole('button', { name: 'Edit View access' }).click();
-    await activePage.getByLabel('Signed-in users').check();
+    await activePage.getByRole('radio', { name: /Signed-in users/ }).check();
     await activePage.getByRole('button', { name: 'Save pending rule' }).click();
     await activePage.getByRole('button', { name: 'Apply 2 changes' }).click();
     await activePage.getByRole('button', { name: 'Confirm & apply' }).click();
@@ -969,7 +973,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const applyCollectionViewRule = async (collectionID: string, mode: string) => {
       await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionID)}/security`);
       await activePage.getByRole('button', { name: 'Edit View access' }).click();
-      await activePage.getByLabel(mode).check();
+      await activePage.getByRole('radio', { name: mode }).check();
       await activePage.getByRole('button', { name: 'Save pending rule' }).click();
       await activePage.getByRole('button', { name: /Apply 1 change/ }).click();
       await activePage.getByRole('button', { name: 'Confirm & apply' }).click();
@@ -1001,7 +1005,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
 
     const applyViewRule = async (mode: string, configure?: () => Promise<void>) => {
       await activePage.getByRole('button', { name: 'Edit View access' }).click();
-      await activePage.getByLabel(mode).check();
+      await activePage.getByRole('radio', { name: mode }).check();
       if (configure) await configure();
       await activePage.getByRole('button', { name: 'Save pending rule' }).click();
       await activePage.getByRole('button', { name: /Apply 1 change/ }).click();
@@ -1071,7 +1075,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     await activePage.getByRole('link', { name: 'View durable request details' }).click();
     await expect(activePage).toHaveURL(new RegExp(`/api/requests/${deniedRequestId}`));
     await expect(activePage.getByText(deniedRequestId, { exact: true }).first()).toBeVisible();
-    await expect(activePage.getByRole('heading', { name: /Request/ })).toBeVisible();
+    await expect(activePage.getByRole('heading', { name: 'Request details', level: 1 })).toBeVisible();
     await expect(activePage.getByRole('link', { name: 'Review access rules' })).toHaveAttribute('href', `/collections/${encodeURIComponent(postsId)}/access`);
     expect(await activePage.locator('body').innerText()).not.toContain(appSession);
 
@@ -1126,7 +1130,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
     const accountDialog = activePage.getByRole('dialog', { name: 'Create Service Account' });
     await accountDialog.getByLabel('Name').fill('ci-readonly');
     await expect(accountDialog.getByLabel('Permission preset')).toHaveAttribute('data-value', 'readOnly');
-    await expect(accountDialog.getByLabel('Create API Key now')).toBeChecked();
+    await expect(accountDialog.getByRole('checkbox', { name: /Create API Key now/ })).toBeChecked();
     await accountDialog.getByRole('button', { name: 'Create Service Account', exact: true }).click();
     await expect(activePage.getByRole('heading', { name: 'Copy your API Key now' })).toBeVisible();
     revokedAPIKey = (await activePage.locator('[data-access-reveal-secret] code').textContent()) ?? '';
@@ -1200,7 +1204,7 @@ test('V0.1 Product Closure: FLOW-001 through FLOW-010 on a real Runtime and empt
   await test.step('FLOW-009 — Durable unique-conflict failure and successful retry', async () => {
     await activePage.goto(`${runtimeURL}/collections/${encodeURIComponent(postsId)}/model`);
     await activePage.getByRole('row').filter({ hasText: 'category' }).getByRole('button', { name: 'Edit', exact: true }).click();
-    await activePage.getByLabel('Unique', { exact: true }).check();
+    await activePage.getByRole('checkbox', { name: 'Unique', exact: true }).check();
     await activePage.getByRole('button', { name: 'Save to Pending Changes' }).click();
     await expect(activePage.getByRole('status').filter({ hasText: /^Saved to Pending Changes\.$/ })).toBeVisible();
     const pending = unwrap((await requestJSON(activePage, 'GET', `/admin/api/v1/collections/${postsId}/schema/pending-change`)).body);

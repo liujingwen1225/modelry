@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs font-semibold leading-tight transition-[background-color,border-color,color,transform] duration-200 focus-visible:outline-none focus-visible:shadow-none disabled:pointer-events-none disabled:opacity-55 active:not-disabled:translate-y-px [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex min-h-11! min-w-11! cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-[13px] font-medium leading-tight transition-colors duration-200 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] disabled:pointer-events-none disabled:opacity-55 [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -15,10 +15,10 @@ const buttonVariants = cva(
         unstyled: '',
       },
       size: {
-        default: 'min-h-9 px-3.5',
-        sm: 'min-h-8 px-2.5 text-[11px]',
-        icon: 'size-9',
-        'icon-sm': 'size-8',
+        default: 'min-h-11 px-4',
+        sm: 'min-h-11 px-3 text-[13px]',
+        icon: 'size-11',
+        'icon-sm': 'size-11',
       },
     },
     defaultVariants: {
@@ -37,7 +37,7 @@ function Button({
   VariantProps<typeof buttonVariants>) {
   // 列表选项、导航和紧凑图标按钮保留各自布局，交互统一由框架管理。
   return <ButtonPrimitive data-slot="button" className={variant === 'unstyled'
-    ? cn('cursor-pointer outline-none focus-visible:outline-none focus-visible:shadow-none disabled:pointer-events-none disabled:opacity-55', className)
+    ? cn('relative min-h-11! min-w-11! cursor-pointer outline-none focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] disabled:pointer-events-none disabled:opacity-55', className)
     : cn(buttonVariants({ variant, size, className }))} {...props} />;
 }
 

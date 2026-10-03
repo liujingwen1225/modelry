@@ -32,16 +32,16 @@ export function ChangesWorkspacePage() {
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="sr-only">
+    <header className="min-w-0">
       <p className="eyebrow">{t('changes.eyebrow')}</p>
-      <h1>{t('changes.title')}</h1>
-      <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('changes.description')}</p>
+      <h1 className="text-2xl font-semibold">{t('changes.title')}</h1>
+      <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('changes.description')}</p>
     </header>
 
     <WorkspaceToolbar navigation={<nav aria-label={t('changes.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden" data-changes-tabs>
       {changesTabOrder.map((tab) => <Link
         aria-current={activeTab === tab ? 'page' : undefined}
-        className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`inline-flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors  ${activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={tab}
         to={tabTarget(tab)}
       >{t(changesTabLabels[tab])}</Link>)}

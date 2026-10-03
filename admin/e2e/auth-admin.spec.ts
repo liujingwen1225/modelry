@@ -324,7 +324,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
 
   // Mail stays fail closed while the Provider is unconfigured.
   await page.goto(runtimeURL + '/settings/mail');
-  await expect(page.getByRole('heading', { name: 'Mail', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mail', level: 2 })).toBeVisible();
   const unconfiguredTest = await requestJSON(page, 'POST', '/admin/api/v1/mail/test', { recipient: ownerEmail }, [409]);
   expect(unconfiguredTest.status).toBe(409);
   expect((unconfiguredTest.body as { error: { code: string } }).error.code).toBe('MAIL_NOT_CONFIGURED');
@@ -337,7 +337,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   const passwordSecretId = (passwordSecret.body as { data: { id: string } }).data.id;
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Mail', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mail', level: 2 })).toBeVisible();
   await selectOption(page, page.getByLabel('Enabled'), 'enabled');
   await page.getByLabel('Host').fill('127.0.0.1');
   await page.getByLabel('Port', { exact: true }).fill(String(fakeSMTP!.port));
@@ -374,7 +374,7 @@ test('WP26 Administrators, mail delivery, and account recovery stay product-comp
   await createDialog.getByLabel('Email').fill(administratorEmail);
   await createDialog.getByLabel('Initial password').fill(administratorPassword);
   await selectOption(page, createDialog.getByLabel('Permission preset'), 'custom');
-  await createDialog.getByLabel('collections.read').check();
+  await createDialog.getByRole('checkbox', { name: 'collections.read', exact: true }).check();
   await createDialog.getByRole('button', { name: 'Create Administrator' }).click();
   await expect(page.getByRole('cell', { name: administratorEmail, exact: true })).toBeVisible();
   await expect(page.getByText('1 custom Permissions')).toBeVisible();

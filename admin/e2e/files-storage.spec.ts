@@ -288,9 +288,10 @@ test('WP25 multiple File values, Provider migration, and same-root restart stay 
 
   // Collection with a required text field and an ordered files field.
   await page.getByLabel('Collection name').fill('documents');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   const titleFieldRow = page.locator('[data-initial-field-row]').nth(0);
   await titleFieldRow.getByLabel('Field name 1').fill('title');
-  await titleFieldRow.getByLabel('Required', { exact: true }).check();
+  await titleFieldRow.getByRole('checkbox', { name: 'Required', exact: true }).check();
   await titleFieldRow.getByLabel('Field name 1').press('Enter');
   const filesFieldRow = page.locator('[data-initial-field-row]').nth(1);
   await filesFieldRow.getByLabel('Field name 2').fill('attachments');

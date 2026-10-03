@@ -108,63 +108,63 @@ export function MCPGuidePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="sr-only">
+      <header className="min-w-0">
         <p className="eyebrow">{t('mcp.eyebrow')}</p>
-        <h1>{t('mcp.title')}</h1>
-        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('mcp.description')}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('mcp.title')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('mcp.description')}</p>
       </header>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div>
-          <h2>{t('mcp.connectionTitle')}</h2>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('mcp.connectionDescription')}</p>
+          <h2 className="text-base font-semibold">{t('mcp.connectionTitle')}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{t('mcp.connectionDescription')}</p>
         </div>
         <dl className="m-0 grid gap-3 sm:grid-cols-2">
-          <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('mcp.apiOrigin')}</dt>
+          <div className="flex min-w-0 items-center justify-between gap-3 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('mcp.apiOrigin')}</dt>
             <dd className="m-0 flex min-w-0 items-center gap-1.5">
-              <code className="truncate font-mono text-xs text-ink-secondary">{origin || '—'}</code>
+              <code className="truncate font-mono text-[13px] text-ink-secondary">{origin || '—'}</code>
               {origin && <CopyButton label={t('mcp.copyOrigin')} value={origin} />}
             </dd>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('mcp.transport')}</dt>
+          <div className="flex items-center justify-between gap-3 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('mcp.transport')}</dt>
             <dd className="m-0 text-xs text-ink-secondary">{t('mcp.transportValue')}</dd>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-lg border bg-secondary px-3 py-2.5">
-            <dt className="text-[11px] font-semibold text-muted-foreground">{t('mcp.runtime')}</dt>
+          <div className="flex items-center justify-between gap-3 border-b py-3">
+            <dt className="text-xs font-semibold text-muted-foreground">{t('mcp.runtime')}</dt>
             <dd className="m-0"><StatusChip state={runtimeReady ? 'ready' : 'unavailable'}>{t(runtimeReady ? 'mcp.runtimeReady' : 'mcp.runtimeUnavailable')}</StatusChip></dd>
           </div>
           {selected && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border bg-secondary px-3 py-2.5">
-              <dt className="text-[11px] font-semibold text-muted-foreground">{t('mcp.accountLastUsed')}</dt>
+            <div className="flex items-center justify-between gap-3 border-b py-3">
+              <dt className="text-xs font-semibold text-muted-foreground">{t('mcp.accountLastUsed')}</dt>
               <dd className="m-0 text-xs text-ink-secondary">{selected.lastUsedAt ? formatDate(selected.lastUsedAt) : t('mcp.accountNeverUsed')}</dd>
             </div>
           )}
         </dl>
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-3 p-5" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-3" variant="section">
         <div className="flex items-start gap-2.5">
           <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><Terminal size={16} /></span>
           <div className="min-w-0">
-            <h2>{t('mcp.commandTitle')}</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('mcp.commandHint')}</p>
+            <h2 className="text-base font-semibold">{t('mcp.commandTitle')}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{t('mcp.commandHint')}</p>
           </div>
         </div>
         <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-muted px-3 py-2.5">
-          <code className="min-w-0 break-words font-mono text-xs text-ink-secondary">{command}</code>
+          <code className="min-w-0 break-words font-mono text-[13px] text-ink-secondary">{command}</code>
           <CopyButton label={t('common.copy')} value={command} />
         </div>
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">
             <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={16} /></span>
             <div className="min-w-0">
-              <h2>{t('mcp.accountsTitle')}</h2>
-              <p className="mt-1 max-w-[640px] text-xs leading-relaxed text-muted-foreground">{t('mcp.accountsDescription')}</p>
+              <h2 className="text-base font-semibold">{t('mcp.accountsTitle')}</h2>
+              <p className="mt-1 max-w-[640px] text-sm leading-relaxed text-muted-foreground">{t('mcp.accountsDescription')}</p>
             </div>
           </div>
           {/* 服务账号与 API Key 现在属于 Access & auth / API Tokens（spec 0001 §3）。 */}
@@ -190,7 +190,7 @@ export function MCPGuidePage() {
                 <li key={account.id}>
                   <ControlButton variant="unstyled"
                     aria-pressed={isSelected}
-                    className={`flex w-full flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:shadow-none ${isSelected ? 'border-primary bg-accent' : 'border-input bg-card '}`}
+                    className={`flex w-full flex-wrap items-center gap-3 border-b px-2 py-3 text-left transition-colors focus-visible:bg-accent focus-visible:text-foreground ${isSelected ? 'border-primary bg-accent' : 'border-border bg-transparent '}`}
                     data-mcp-account-row
                     onClick={() => setSelectedId(account.id)}
                     type="button"
@@ -198,9 +198,9 @@ export function MCPGuidePage() {
                     <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-ink-secondary"><Bot size={15} /></span>
                     <span className="grid min-w-0 flex-1 gap-0.5">
                       <strong className="truncate text-xs font-semibold text-foreground">{account.name}</strong>
-                      {account.description && <small className="truncate text-[11px] text-muted-foreground">{account.description}</small>}
+                      {account.description && <small className="truncate text-xs text-muted-foreground">{account.description}</small>}
                     </span>
-                    <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="font-semibold">{t('mcp.accountPermission')}</span>
                       <Badge variant={permissionTone(account.permission)}>{t(`access.permissions.${account.permission}`)}</Badge>
                     </span>
@@ -213,12 +213,12 @@ export function MCPGuidePage() {
         )}
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex items-start gap-2.5">
           <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ActivityIcon size={16} /></span>
           <div className="min-w-0">
-            <h2>{t('mcp.activityTitle')}</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{selected ? t('mcp.activityDescriptionFor', { name: selected.name }) : t('mcp.activityDescription')}</p>
+            <h2 className="text-base font-semibold">{t('mcp.activityTitle')}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{selected ? t('mcp.activityDescriptionFor', { name: selected.name }) : t('mcp.activityDescription')}</p>
           </div>
         </div>
 
@@ -234,15 +234,15 @@ export function MCPGuidePage() {
         {recordsState === 'ready' && records.length > 0 && (
           <ul className="m-0 flex list-none flex-col gap-2 p-0" data-mcp-agent-operations>
             {records.map((record) => (
-              <li className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5" key={record.id}>
+              <li className="flex flex-wrap items-center gap-3 border-b py-3" key={record.id}>
                 <span className="min-w-0 flex-1">
-                  <strong className="block truncate font-mono text-xs font-semibold text-foreground">{record.action}</strong>
-                  <small className="block truncate text-[11px] text-muted-foreground">
+                  <strong className="block truncate font-mono text-[13px] font-semibold text-foreground">{record.action}</strong>
+                  <small className="block truncate text-xs text-muted-foreground">
                     {String(record.resource.kind ?? '')}{typeof record.resource.id === 'string' ? ` · ${record.resource.id}` : ''} · {formatDate(record.time)}
                   </small>
                 </span>
                 <StatusChip state={resultTone(record.result)}>{record.result}</StatusChip>
-                <Link className="text-xs font-semibold text-primary hover:underline" to={`/activity/audit/${encodeURIComponent(record.id)}`}>{t('activity.open')}</Link>
+                <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={`/activity/audit/${encodeURIComponent(record.id)}`}>{t('activity.open')}</Link>
               </li>
             ))}
           </ul>
@@ -250,9 +250,9 @@ export function MCPGuidePage() {
       </Surface>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/api">{t('navigation.apiWorkspace')}</Link>
+        <Link className="inline-flex min-h-11 items-center gap-1 text-[13px] font-semibold text-primary hover:underline" to="/api">{t('navigation.apiWorkspace')}</Link>
         <span aria-hidden="true" className="text-subtle-foreground">·</span>
-        <Link className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" to="/api?tab=openapi">{t('api.workspaceTabs.openapi')}</Link>
+        <Link className="inline-flex min-h-11 items-center gap-1 text-[13px] font-semibold text-primary hover:underline" to="/api?tab=openapi">{t('api.workspaceTabs.openapi')}</Link>
       </div>
     </div>
   );

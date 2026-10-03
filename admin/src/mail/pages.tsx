@@ -190,11 +190,11 @@ export function MailPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
-        <div className="sr-only">
+      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-4" data-workspace-toolbar>
+        <div className="min-w-0 flex-1">
           <p className="eyebrow">{t('mail.eyebrow')}</p>
-          <h1>{t('mail.title')}</h1>
-          <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.description')}</p>
+          <h2 className="text-lg font-semibold">{t('mail.title')}</h2>
+          <p className="mt-2.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('mail.description')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary">
@@ -203,20 +203,20 @@ export function MailPage() {
         </div>
       </header>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-center gap-3">
           <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><Mail size={17} /></span>
           <div className="min-w-0">
             <p className="eyebrow">{t('mail.provider.title')}</p>
-            <h2>{t('mail.title')}</h2>
+            <h3 className="text-base font-semibold">{t('mail.provider.title')}</h3>
           </div>
           <div className="ml-auto">
-            <StatusChip state={provider.enabled ? 'ready' : 'unavailable'}>
+            <StatusChip state={provider.enabled ? 'ready' : 'disabled'}>
               {t(provider.enabled ? 'mail.provider.on' : 'mail.provider.off')}
             </StatusChip>
           </div>
         </div>
-        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.provider.description')}</p>
+        <p className="m-0 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('mail.provider.description')}</p>
         <form className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <FormField htmlFor="mail-enabled" label={t('mail.provider.enabled')}>
             <SelectField id="mail-enabled" onValueChange={(selectedValue) => setInput({ ...input, enabled: selectedValue === 'enabled' })} value={input.enabled ? 'enabled' : 'disabled'} options={[({ value: "disabled", label: t('mail.provider.off') }), ({ value: "enabled", label: t('mail.provider.on') })]} />
@@ -244,8 +244,8 @@ export function MailPage() {
           </FormField>
           <div className="min-w-0 sm:col-span-2 xl:col-span-3">
             {secrets.length === 0
-              ? <p className="m-0 text-[11px] text-muted-foreground">{t('mail.provider.noSecrets')} <Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('mail.provider.createSecret')}</Link></p>
-              : <p className="m-0 text-[11px] text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('mail.provider.manageSecrets')}</Link></p>}
+              ? <p className="m-0 text-sm text-muted-foreground">{t('mail.provider.noSecrets')} <Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('mail.provider.createSecret')}</Link></p>
+              : <p className="m-0 text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/settings/secrets">{t('mail.provider.manageSecrets')}</Link></p>}
           </div>
           <div className="flex flex-wrap items-end gap-2 sm:col-span-2 xl:col-span-3">
             <Button disabled={busy !== null} type="submit" size="small" variant="primary">
@@ -263,15 +263,15 @@ export function MailPage() {
             <Send aria-hidden="true" size={14} /> {busy === 'test' ? t('mail.provider.testing') : t('mail.provider.test')}
           </Button>
         </div>
-        {testResult !== null && <p className="m-0 text-xs text-ink-secondary" role="status">{testResult}</p>}
+        {testResult !== null && <p className="m-0 text-sm text-ink-secondary" role="status">{testResult}</p>}
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="min-w-0">
           <p className="eyebrow">{t('mail.deliveries.title')}</p>
-          <h2>{t('mail.deliveries.title')}</h2>
+          <h2 className="text-base font-semibold">{t('mail.deliveries.title')}</h2>
         </div>
-        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('mail.deliveries.description')}</p>
+        <p className="m-0 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('mail.deliveries.description')}</p>
         {deliveries.length === 0
           ? <EmptyState description={t('mail.deliveries.description')} title={t('mail.deliveries.empty')} />
           : (
@@ -296,7 +296,7 @@ export function MailPage() {
                       <StatusChip state={delivery.status === 'succeeded' ? 'ready' : delivery.status === 'failed' || delivery.status === 'interrupted' ? 'unavailable' : 'degraded'}>
                         {t(deliveryStateKey(delivery.status))}
                       </StatusChip>
-                      {delivery.errorCode !== '' && <span className="mt-1 block text-[11px] text-muted-foreground">{delivery.errorCode}</span>}
+                      {delivery.errorCode !== '' && <span className="mt-1 block text-xs text-muted-foreground">{delivery.errorCode}</span>}
                     </TableCell>
                     <TableCell>{delivery.attempts}</TableCell>
                     <TableCell>{new Date(delivery.createdAt).toLocaleString()}</TableCell>
@@ -320,7 +320,7 @@ export function MailPage() {
       </Surface>
 
       {actionError !== undefined && <ErrorState description={actionMessage(actionError, t)} title={t('mail.actionFailed')} />}
-      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-sm text-success" role="status">{notice}</p>}
     </div>
   );
 }

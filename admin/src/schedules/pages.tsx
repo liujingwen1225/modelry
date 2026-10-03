@@ -43,10 +43,10 @@ export function SchedulesPage() {
   useRegisterCommands(commands);
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="sr-only">
+    <header className="min-w-0">
       <p className="eyebrow">{t('schedules.eyebrow')}</p>
-      <h1>{t('schedules.title')}</h1>
-      <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('schedules.description')}</p>
+      <h1 className="text-2xl font-semibold">{t('schedules.title')}</h1>
+      <p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('schedules.description')}</p>
     </header>
     <WorkspaceToolbar navigation={<PanelTabNav active={activeTab} idPrefix="schedules" label={t('schedules.tabsLabel')} tabs={schedulesTabs} />}>
     <TabContent activeKey={activeTab}>

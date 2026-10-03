@@ -37,7 +37,7 @@ function setupFetch(options: { saveError?: { status: number; code: string } } = 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     const method = init?.method ?? 'GET';
-    if (path.endsWith('/auth/session')) return response({ owner: { id: 'own_test', email: 'owner@example.test' }, expiresAt: '2026-09-25T12:00:00Z', role: 'owner', permission: { preset: 'fullAccess' } });
+    if (path.endsWith('/auth/session')) return response({ owner: { id: 'own_test', email: 'owner@example.test' }, expiresAt: new Date(Date.now() + 3_600_000).toISOString(), role: 'owner', permission: { preset: 'fullAccess' } });
     if (path.endsWith('/runtime/status')) return response({ state: 'ready', observedAt: '2026-09-25T09:00:00Z', database: { state: 'ready' }, localStorage: { state: 'ready', message: 'ok' } });
     if (path.endsWith('/storage/status')) return response({ database: { state: 'ready' }, localStorage: { state: 'ready', provider: 'Local' } });
     if (path.startsWith('/admin/api/v1/collections?')) return response({ data: [] });
@@ -63,7 +63,7 @@ describe('Mail settings Admin surface', () => {
     setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Mail', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Mail', level: 2 })).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: /Recent Mail deliveries/ });
     expect(within(table).getByText('member@example.test')).toBeInTheDocument();
     expect(within(table).getByText('MAIL_UNAVAILABLE')).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('Mail settings Admin surface', () => {
     window.history.pushState({}, '', '/settings/mail');
     const fetchMock = setupFetch();
     render(<App />);
-    await screen.findByRole('heading', { name: 'Mail', level: 1 });
+    await screen.findByRole('heading', { name: 'Mail', level: 2 });
     expect(screen.getByRole('link', { name: 'Manage Secrets' })).toHaveAttribute('href', '/settings/secrets');
 
     await selectOption(userEvent, screen.getByLabelText('Enabled'), 'enabled');
@@ -95,7 +95,7 @@ describe('Mail settings Admin surface', () => {
     window.history.pushState({}, '', '/settings/mail');
     setupFetch({ saveError: { status: 409, code: 'MAIL_NOT_CONFIGURED' } });
     render(<App />);
-    await screen.findByRole('heading', { name: 'Mail', level: 1 });
+    await screen.findByRole('heading', { name: 'Mail', level: 2 });
 
     await userEvent.click(screen.getByRole('button', { name: 'Save Mail provider' }));
     expect(await screen.findByText(/Enable the Mail provider with host, port, sender address, and credential Secrets first./)).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('Mail settings Admin surface', () => {
     window.history.pushState({}, '', '/settings/mail');
     const fetchMock = setupFetch();
     render(<App />);
-    await screen.findByRole('heading', { name: 'Mail', level: 1 });
+    await screen.findByRole('heading', { name: 'Mail', level: 2 });
 
     await userEvent.click(screen.getByRole('button', { name: 'Retry member@example.test' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input) === '/admin/api/v1/mail/deliveries/dly_1/retry' && (init as RequestInit | undefined)?.method === 'POST')).toBe(true));

@@ -7,7 +7,7 @@ import { App } from '../app';
 
 const session = {
   owner: { id: 'own_test', email: 'owner@example.test' },
-  expiresAt: '2026-10-25T12:00:00Z',
+  expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   role: 'owner',
   permission: { preset: 'fullAccess' },
 };
@@ -80,12 +80,13 @@ describe('Overview', () => {
     setupFetch(fullSnapshot);
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
 
     await waitFor(() => expect(within(card('collections')).getByText('2')).toBeInTheDocument());
     expect(within(card('collections')).getByText('1,214')).toBeInTheDocument();
     expect(within(card('collections')).getByText('Pending')).toBeInTheDocument();
     expect(within(card('api')).getByText('18,400')).toBeInTheDocument();
+    expect(within(card('api')).getByText('Last 24 hours')).toBeVisible();
     expect(within(card('api')).getByText('42 / 3')).toBeInTheDocument();
     expect(within(card('api')).getByText('34 ms')).toBeInTheDocument();
     expect(within(card('events')).getByText('7')).toBeInTheDocument();
@@ -142,6 +143,7 @@ describe('Overview', () => {
       requests: { windowSeconds: 86400, requestCount: 0, clientErrorCount: 0, serverErrorCount: 0 },
       events: { enabledHooks: 0, enabledWebhooks: 0, enabledEventHooks: 0, enabledJobs: 0, runCount: 0, deliveryCount: 0, failedDeliveryCount: 0, pendingDeliveryCount: 0 },
       changes: { pendingCount: 0, needsReviewCount: 0, failedCount: 0 },
+      drift: { state: 'ready', differenceCount: 0, checkedAt: '2026-10-01T12:00:00Z' },
     });
     render(<App />);
 
@@ -149,6 +151,24 @@ describe('Overview', () => {
     const continueCard = document.querySelector('[data-overview-continue]') as HTMLElement;
     expect(within(continueCard).getByText(/No Collection yet/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Review 0 changes/ })).toBeNull();
+    expect(document.querySelector('[data-overview-cards]')).toBeNull();
+  });
+
+  it.each([
+    ['真实请求', { windowSeconds: 86400, requestCount: 1, clientErrorCount: 1, serverErrorCount: 0 }],
+    ['不可用请求摘要', undefined],
+  ])('空集合保留%s', async (_label, requests) => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.pushState({}, '', '/');
+    setupFetch({
+      ...fullSnapshot,
+      collections: { count: 0, recordCount: 0, withPendingChanges: 0, withFailedChanges: 0, recent: [] },
+      requests,
+    });
+    render(<App />);
+    await waitFor(() => expect(within(card('collections')).getAllByText('0').length).toBeGreaterThan(0));
+    expect(document.querySelector('[data-overview-cards]')).not.toBeNull();
+    expect(within(card('api')).getByText(requests ? '1' : 'Unavailable')).toBeVisible();
   });
 
   it('shows a recoverable error when the aggregate itself is unavailable', async () => {
@@ -157,7 +177,7 @@ describe('Overview', () => {
     setupFetch(fullSnapshot, { overviewStatus: 503 });
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
     await waitFor(() => expect(within(card('collections')).getByText('Unavailable')).toBeInTheDocument());
     // 侧栏计数在没有快照时不渲染任何数字（不把失败显示成 0）。
     expect(document.querySelector('[data-nav-count="collections"]')).toBeNull();

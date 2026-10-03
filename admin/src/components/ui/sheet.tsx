@@ -11,7 +11,7 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Dialo
   return (
     <DialogPrimitive.Backdrop
       data-slot="sheet-overlay"
-      className={cn('fixed inset-0 z-10 bg-[rgb(12_19_23_/_48%)] backdrop-blur-[2px]', className)}
+      className={cn('fixed inset-0 z-10 bg-overlay', className)}
       {...props}
     />
   );
@@ -30,7 +30,7 @@ function SheetContent({
       <DialogPrimitive.Popup
         data-slot="sheet-content"
         className={cn(
-          'relative z-20 flex h-full w-[min(560px,calc(100vw-18px))] flex-col overflow-auto rounded-l-lg border bg-card text-foreground shadow-floating outline-none',
+          'relative z-20 flex max-[768px]:w-full max-[768px]:rounded-none h-full w-[min(560px,calc(100vw-18px))] flex-col overflow-auto rounded-l-lg border bg-card text-foreground shadow-floating outline-none',
           size === 'wide' && 'w-[min(820px,calc(100vw-18px))]',
           className,
         )}
@@ -48,7 +48,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function SheetTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title data-slot="sheet-title" className={cn('m-0 font-mono text-[15px] font-semibold tracking-tight', className)} {...props} />;
+  return <DialogPrimitive.Title data-slot="sheet-title" className={cn('m-0 text-base font-semibold tracking-tight', className)} {...props} />;
 }
 
 function SheetBody({ className, ...props }: React.ComponentProps<'div'>) {
@@ -60,7 +60,7 @@ function SheetCloseButton({ className, ...props }: React.ComponentProps<typeof D
     <DialogPrimitive.Close
       data-slot="sheet-close"
       className={cn(
-        'grid size-8 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-none',
+        'grid size-11 shrink-0 cursor-pointer place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]',
         className,
       )}
       {...props}

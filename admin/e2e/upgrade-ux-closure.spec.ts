@@ -356,10 +356,10 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
 
   // 5) 语言切换保留当前路由与深链上下文。
   await page.goto(runtimeURL + '/settings/runtime?filter=keep#selected');
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect(page).toHaveURL(/\/settings\/runtime\?filter=keep#selected$/);
-  await expect(page.getByRole('heading', { name: '运行时设置', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '运行时设置', level: 2 })).toBeVisible();
   await expect(page.getByRole('navigation', { name: '设置分节' }).getByRole('link', { name: '文件存储' })).toBeVisible();
   // 迁移到共享 i18n 的 V0.1 时代页面同样必须以中文渲染。
   await page.goto(runtimeURL + '/');
@@ -369,17 +369,17 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.locator('[data-overview-quick-start] code').first()).toHaveText('modelry mcp --api-url "<API 源站地址>" --api-key "<服务账号 API Key>"');
   await page.goto(runtimeURL + '/settings');
   await expect(page.getByRole('heading', { name: '系统设置', level: 1 })).toBeVisible();
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { name: 'System settings', level: 1 })).toBeVisible();
   await page.goto(runtimeURL + '/');
   await expect(page.locator('[data-overview-quick-start] code').first()).toHaveText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>');
   await page.goto(runtimeURL + '/settings/runtime');
-  await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Runtime settings', level: 2 })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Files & Storage' })).toBeVisible();
 
   // 5a) 新 IA 的九个一级目的地与页面标题在中文下同样使用新名称。
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   expect(await page.getByRole('navigation', { name: '项目导航' }).getByRole('link').evaluateAll((links) => links.map((link) => (link.getAttribute('aria-label') ?? '').split(' · ')[0]))).toEqual([
     '总览', '集合', 'API 工作区', 'Hooks & Events', '定时任务', '变更', '访问与认证', '活动记录', '系统设置',
@@ -399,10 +399,10 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
     await page.goto(runtimeURL + surface.path);
     await expect(page.getByRole('heading', { name: surface.title, level: 1 }), `${surface.path} 中文标题`).toBeVisible();
   }
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.goto(runtimeURL + '/settings/runtime');
-  await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Runtime settings', level: 2 })).toBeVisible();
 
   // 5b) V0.1 时代的四个产品面（Collection Schema / Collection Security / Access · Audit /
   //     Application API Workspace）必须在两种语言下都完整可用，且不得残留另一语言的界面文案。
@@ -414,10 +414,10 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   expect(longCollection.status).toBe(201);
   expect((JSON.parse(longCollection.text) as { data: { name: string } }).data.name).toBe(longCollectionName);
   const longCollectionId = (JSON.parse(longCollection.text) as { data: { id: string } }).data.id;
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-  await expect(page.locator('[data-locale-switcher]')).toHaveText('EN');
-  await expect(page.getByRole('heading', { name: '运行时设置', level: 1 })).toBeVisible();
+  await expect(page.locator('[data-shell-topbar] [data-locale-switcher]')).toHaveText('EN');
+  await expect(page.getByRole('heading', { name: '运行时设置', level: 2 })).toBeVisible();
 
   await page.goto(collectionBase + '/schema?view=indexes');
   await expect(page.getByRole('heading', { name: '结构', level: 2 })).toBeVisible();
@@ -426,7 +426,7 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('heading', { name: '暂无额外索引' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Schema', level: 2 })).toHaveCount(0);
   // 语言切换必须保留 Schema 深链上下文（view=indexes 不能被重置）。
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page).toHaveURL(/\/collections\/[^/]+\/model\?view=indexes$/);
   await expect(page.getByRole('heading', { name: 'Schema', level: 2 })).toBeVisible();
@@ -434,25 +434,25 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   // 深链上下文在两种语言下都保持：Indexes 仍是当前视图。
   await expect(page.getByRole('button', { name: 'Indexes', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('button', { name: '索引', exact: true })).toHaveCount(0);
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect(page.getByRole('button', { name: '添加索引' })).toBeVisible();
 
   await page.goto(collectionBase + '/security');
   await expect(page).toHaveURL(collectionBase + '/access');
-  await expect(page.getByRole('heading', { name: '安全设置', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '安全设置', level: 2 })).toBeVisible();
   await expect(page.getByRole('tab', { name: '访问规则' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '模拟一次请求' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '已应用的访问规则' })).toBeVisible();
   await expect(page.getByRole('button', { name: '编辑列表访问规则' })).toBeVisible();
   // Collection 名与 Access 模式之外的领域词汇（列 / view / create …）保持英文原文。
   await expect(page.getByText('Applied access')).toHaveCount(0);
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(page.getByRole('heading', { name: 'Security', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Security', level: 2 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit List access' })).toBeVisible();
 
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await page.goto(runtimeURL + '/access');
   await expect(page.getByRole('heading', { name: '访问与认证', level: 1 })).toBeVisible();
@@ -466,21 +466,21 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '主体' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply filters' })).toHaveCount(0);
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply filters' })).toBeVisible();
   // 服务账号入口仍在「访问与认证」的 API Tokens 工作面内。
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await page.goto(runtimeURL + '/access?tab=tokens');
   await expect(page.getByRole('heading', { name: 'API Tokens', level: 2 })).toBeVisible();
   await expect(page.getByRole('button', { name: '创建服务账号' }).first()).toBeVisible();
 
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await page.goto(collectionBase + '/api');
-  await expect(page.getByRole('heading', { name: 'posts API', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'posts API', level: 2 })).toBeVisible();
   await expect(page.getByRole('button', { name: /列出记录/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '发送 GET 请求' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '试一试该端点' })).toBeVisible();
@@ -497,19 +497,19 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   await expect(page.getByRole('heading', { name: '请求日志', level: 2 })).toBeVisible();
   await expect(page.getByRole('table', { name: '应用请求记录' })).toBeVisible();
   await expect(page.getByRole('button', { name: '应用筛选' })).toBeVisible();
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { name: 'API workspace', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Request log', level: 2 })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Application Request Records' })).toBeVisible();
 
   // 5c) 真实 Collection 的长名称、语言 / 深链上下文和主题在桌面及窄屏视口下保持可读。
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.goto(runtimeURL + '/collections?q=orders&type=Normal&sort=name#selected');
   await expect(page.getByRole('heading', { name: 'Collections', level: 1 })).toBeVisible();
   await expect(page.getByText(longCollectionName, { exact: true })).toBeVisible();
-  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect(page.getByRole('heading', { name: '集合', level: 1 })).toBeVisible();
   await expect(page.getByText(longCollectionName, { exact: true })).toBeVisible();
@@ -543,14 +543,14 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
 
   // 5d) 核心产品面在桌面、Tablet 和 Mobile 都能读到页面标题，且文档不横向溢出。
   // 其中 API 工作区与 Hooks & Events 仍通过旧深链接进入，以同时覆盖 route mapper。
-  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-locale-switcher]').click();
+  if (await page.locator('html').getAttribute('lang') !== 'en') await page.locator('[data-shell-topbar] [data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   const responsiveSurfaces = [
     { label: 'Overview', path: '/', title: 'Overview' },
     { label: 'Collections', path: '/collections?q=orders&type=Normal', title: 'Collections' },
     { label: 'Collection Workspace', path: `/collections/${encodeURIComponent(longCollectionId)}`, title: longCollectionName },
     { label: 'Collection Model', path: `/collections/${encodeURIComponent(longCollectionId)}/schema?view=indexes`, title: longCollectionName, section: 'Schema' },
-    { label: 'Collection API', path: `/collections/${encodeURIComponent(longCollectionId)}/api`, title: `${longCollectionName} API` },
+    { label: 'Collection API', path: `/collections/${encodeURIComponent(longCollectionId)}/api`, title: longCollectionName, section: `${longCollectionName} API` },
     { label: 'API workspace', path: '/connect/api', title: 'API workspace' },
     { label: 'Hooks & Events', path: '/automations/webhooks', title: 'Hooks & Events' },
     { label: 'Access & auth', path: '/access', title: 'Access & auth' },
@@ -569,7 +569,7 @@ test('WP29 V0.1 to V0.1.x upgrade, UX closure, restart and recovery hold togethe
   // 长记录 ID 经真实 Application API 请求进入响应区；长 Request ID 错误路径验证恢复提示在 Mobile 可读。
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(collectionBase + '/api?endpoint=getApplicationRecord');
-  await expect(page.getByRole('heading', { name: 'posts API', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'posts API', level: 2 })).toBeVisible();
   const longRecordId = 'rec_' + 'x'.repeat(160);
   const longRecordPath = '/api/v1/posts/' + encodeURIComponent(longRecordId);
   const longRecordURL = new URL(longRecordPath, runtimeURL).toString();

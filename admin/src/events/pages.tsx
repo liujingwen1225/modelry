@@ -66,10 +66,10 @@ export function EventsPage() {
   useRegisterCommands(commands);
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <header className="sr-only">
+    <header className="min-w-0">
       <p className="eyebrow">{t('events.eyebrow')}</p>
-      <h1>{t('events.title')}</h1>
-      <p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('events.description')}</p>
+      <h1 className="text-2xl font-semibold">{t('events.title')}</h1>
+      <p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('events.description')}</p>
     </header>
     <WorkspaceToolbar navigation={<PanelTabNav active={activeTab} idPrefix="events" label={t('events.tabsLabel')} tabs={eventsTabs} />}>
     <TabContent activeKey={activeTab}>
