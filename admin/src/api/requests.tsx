@@ -220,21 +220,10 @@ export function RequestsPage({ embedded = false }: { embedded?: boolean } = {}) 
   const from = `${location.pathname}${location.search}`;
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      {embedded ? (
-        <header className="min-w-0">
-          <h2 className="text-base font-semibold">{t('api.workspaceTabs.logs')}</h2>
-          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('api.logsDescription')}</p>
-        </header>
-      ) : (
-        <header className="min-w-0">
-          <p className="eyebrow">{t('requests.eyebrow')}</p>
-          <h1 className="text-2xl font-semibold">{t('requests.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('requests.description')}</p>
-        </header>
-      )}
+    <div className="flex min-w-0 flex-col gap-4">
+      {embedded ? <h2 className="sr-only">{t('api.workspaceTabs.logs')}</h2> : <h1 className="sr-only">{t('requests.title')}</h1>}
 
-      <Surface className="flex min-w-0 flex-col gap-3" variant="section">
+      <Surface className="flex min-w-0 flex-col gap-3 border-t-0 pt-0" variant="section">
         <form className="flex flex-wrap items-end gap-3" onSubmit={applyFilters}>
           <SearchInput id="requests-search" onChange={(event) => setSearchDraft(event.target.value)} placeholder={t('api.requestSearchPlaceholder')} value={searchDraft} aria-label={t('api.searchLabel')} className="min-w-[200px] flex-1 md:max-w-xs" />
           <Label className="grid gap-1.5 text-xs font-semibold text-ink-secondary">
@@ -371,11 +360,11 @@ export function RequestDetailPage() {
       <code className="mt-2 block break-all font-mono text-[13px]">{requestId}</code>
     </header>
   </>;
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6">{requestContext}<LoadingState label={t('api.requestDetailLoading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-4">{requestContext}<LoadingState label={t('api.requestDetailLoading')} /></div>;
   if (state === 'error' || !record) {
     const copy = errorCopy(error, t('api.requestDetailLoadFailed'), errorMessage, t('common.requestId'));
     return (
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-4">
         {requestContext}
         <ErrorState description={copy.description} title={copy.title}>
           <div className="mt-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></div>
@@ -391,7 +380,7 @@ export function RequestDetailPage() {
     : `/api?tab=endpoints${record.collectionId ? `&collection=${encodeURIComponent(record.collectionId)}` : ''}`;
   const collectionLink = collection && endpoint ? `/collections/${encodeURIComponent(collection.id)}/api?endpoint=${encodeURIComponent(endpoint.operationId)}` : undefined;
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-4">
       <Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={returnTo}><ArrowLeft aria-hidden="true" size={14} /> {from ? t('api.backToRequestContext') : t('api.allRequests')}</Link>
       <header className="min-w-0">
         <p className="eyebrow">{t('api.requestDetailEyebrow')}</p>

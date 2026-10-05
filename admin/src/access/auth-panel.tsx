@@ -50,10 +50,7 @@ export function ApplicationAuthPanel() {
     : { title: t('access.authLoadFailed'), detail: t('common.tryAgainWhenAvailable') };
 
   return <section aria-label={t('access.authTitle')} className="flex min-w-0 flex-col gap-4">
-    <div className="min-w-0">
-      <h2 className="text-base font-semibold">{t('access.authTitle')}</h2>
-      <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('access.authDescription')}</p>
-    </div>
+    <h2 className="sr-only">{t('access.authTitle')}</h2>
 
     {state === 'loading' && <LoadingState label={t('access.authLoading')} />}
     {state === 'error' && <ErrorState description={copy.detail} title={copy.title}><div className="mt-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button></div></ErrorState>}
@@ -62,7 +59,7 @@ export function ApplicationAuthPanel() {
       <ButtonLink className="mt-2" size="small" to="/collections/new" variant="primary"><Plus aria-hidden="true" size={15} /> {t('access.authCreateCollection')}</ButtonLink>
     </EmptyState>}
 
-    {state === 'ready' && collections.length > 0 && <Surface className="flex min-w-0 flex-col gap-3" variant="section">
+    {state === 'ready' && collections.length > 0 && <Surface className="flex min-w-0 flex-col gap-3 border-t-0 pt-0" variant="section">
       <div className="flex flex-wrap items-center gap-3">
         <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ShieldCheck size={16} /></span>
         <p className="m-0 min-w-0 flex-1 text-sm text-muted-foreground">{t('access.authCollectionCount', { count: formatNumber(collections.length) })}</p>

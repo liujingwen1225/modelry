@@ -23,6 +23,10 @@ func SelfServiceRoute(method, path string) bool {
 
 // 未映射的路由返回 false，调用方必须 fail closed。
 func ControlPlaneOperation(method, path string) (Operation, bool) {
+	if operation, ok := agentControlPlaneOperation(method, path); ok {
+		return operation, true
+	}
+
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) < 4 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "v1" {
 		return "", false
@@ -256,6 +260,40 @@ func collectionSubpathOperation(method string, parts []string) (Operation, bool)
 	}
 	if len(parts) == 5 && parts[1] == "records" && parts[3] == "files" && method == http.MethodGet {
 		return OperationFilesRead, true
+	}
+	return "", false
+}
+
+// Agent 管理端点不在服务账号许可中；工具执行后逐项检查业务权限。
+func agentControlPlaneOperation(method, path string) (Operation, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 4 || parts[0] != "admin" || parts[1] != "api" || parts[2] != "v1" {
+		return "", false
+	}
+	if parts[3] == "agent" {
+		if (len(parts) == 5 && parts[4] == "tools" && method == http.MethodGet) || (len(parts) == 5 && parts[4] == "sessions" && (method == http.MethodGet || method == http.MethodPost)) || (len(parts) == 6 && (parts[4] == "sessions" || parts[4] == "operations") && method == http.MethodGet) || (len(parts) == 7 && parts[4] == "sessions" && ((parts[6] == "tools" || parts[6] == "cancel") && method == http.MethodPost || parts[6] == "events" && method == http.MethodGet)) {
+			return Operation("agent.use"), true
+		}
+		return "", false
+	}
+	permission := map[string]string{"extensions": "hooks", "webhooks": "webhooks", "event-hooks": "eventHooks", "jobs": "jobs", "deliveries": "webhooks"}[parts[3]]
+	if permission == "" {
+		return "", false
+	}
+	if method == http.MethodGet && (len(parts) == 4 || len(parts) == 5 || parts[3] == "extensions" && len(parts) == 6 && parts[5] == "runs") {
+		return Operation(permission + ".read"), true
+	}
+	if parts[3] == "deliveries" {
+		if len(parts) == 6 && parts[5] == "retry" && method == http.MethodPost {
+			return Operation("webhooks.execute"), true
+		}
+		return "", false
+	}
+	if len(parts) == 6 && (parts[5] == "run" || parts[5] == "test") && method == http.MethodPost {
+		return Operation(permission + ".execute"), true
+	}
+	if method == http.MethodPost && len(parts) == 4 || method == http.MethodPut && len(parts) == 5 || method == http.MethodPost && len(parts) == 6 && (parts[5] == "enable" || parts[5] == "disable") {
+		return Operation(permission + ".write"), true
 	}
 	return "", false
 }

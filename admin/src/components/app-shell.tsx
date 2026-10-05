@@ -1,4 +1,5 @@
 import { TabContent } from './tab-content';
+import { AgentPanelControl } from '../agent/pages';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetCloseButton } from '@/components/ui/sheet';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button as ControlButton } from '@/components/ui/button';
@@ -6,9 +7,10 @@ import { LanguageSwitcher } from './language-switcher';
 import {
   useEffect, useMemo, useState } from 'react';
 import {
-  Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
+  Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Bot,
   ChevronDown,
   Clock3,
   Command,
@@ -65,6 +67,7 @@ const groups: Array<{
     items: [
       { label: 'navigation.collections', to: '/collections', icon: FileStack, operation: 'collections.read', count: 'collections' },
       { label: 'navigation.apiWorkspace', to: '/api', icon: Network, operation: 'collections.read' },
+      { label: 'agent.title', to: '/agent', icon: Bot },
       { label: 'navigation.hooksEvents', to: '/events', icon: Webhook, count: 'events' },
       { label: 'navigation.scheduledJobs', to: '/schedules', icon: Clock3, count: 'schedules' },
     ],
@@ -94,7 +97,7 @@ function destinationKey(pathname: string): TranslationKey {
   if (pathname.startsWith('/access')) return 'navigation.accessAuth';
   if (pathname.startsWith('/activity')) return 'navigation.activity';
   if (pathname.startsWith('/settings')) return 'navigation.settings';
-  if (pathname.startsWith('/mcp')) return 'mcp.title';
+  if (pathname.startsWith('/agent')) return 'agent.title';
   return 'navigation.overview';
 }
 
@@ -129,7 +132,6 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed, mobile = fals
     other: t('shell.pendingChangeMany'),
   });
   const { overview } = useOverview();
-  const { runtime } = useDiagnostics();
 
   const visibleGroups = useMemo(
     () => groups
@@ -149,21 +151,12 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed, mobile = fals
     } as Record<string, number | undefined>;
   }, [overview.value]);
 
-  const runtimeState = runtime.state === 'ready' ? runtime.value.state : runtime.state === 'error' ? 'unavailable' : 'loading';
   const collapsedBlock = collapsed ? 'hidden' : 'block';
   const navLinkClassName = (isActive: boolean) => [
     'flex min-h-11 shrink-0 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground',
     collapsed ? 'justify-center px-0' : '',
     isActive ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : '',
   ].filter(Boolean).join(' ');
-
-  const runtimeContext = <>
-          <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${runtimeState === 'ready' ? 'bg-muted-foreground' : runtimeState === 'loading' ? 'bg-info' : runtimeState === 'degraded' ? 'bg-warning' : 'bg-danger'}`} />
-          <span className="min-w-0">
-            <span className="block font-medium text-foreground">{t('navigation.localProject')}</span>
-            <span className="block truncate font-mono text-xs">{window.location.host} · {t(`diagnostics.states.${runtimeState}` as TranslationKey)}</span>
-          </span>
-  </>;
 
   return (
     <aside
@@ -231,11 +224,6 @@ function Sidebar({ role, permission, collapsed, onToggleCollapsed, mobile = fals
           </div>
         ))}
       </nav>
-      {!collapsed && <div className="border-t border-sidebar-border pt-4 text-xs text-muted-foreground">
-        {allowsOperation(role, permission, 'settings.read')
-          ? <Link className="flex min-h-11 min-w-0 items-center gap-2 rounded-md px-2 hover:bg-sidebar-accent focus-visible:bg-sidebar-accent" data-shell-runtime-context onClick={onNavigate} to="/settings/runtime">{runtimeContext}</Link>
-          : <div className="flex min-h-11 min-w-0 items-center gap-2 px-2" data-shell-runtime-context>{runtimeContext}</div>}
-      </div>}
     </aside>
   );
 }
@@ -367,9 +355,10 @@ function ShellCommands({ role, permission }: { role?: AppShellProps['role']; per
       ...(role === undefined || role === 'owner' ? [
         go('navigate.backupRestore', 'commands.backupRestore', '/settings/backups', ['backup', 'restore']),
         go('navigate.dataTransfer', 'commands.dataTransfer', '/settings/data', ['import', 'export', 'ndjson']),
-        // 契约与 MCP 不占一级菜单，但属于 Owner 的开发者接入入口（developer.read 不在 readOnly preset 中）。
+        // 契约与 MCP 属于 Owner 的开发者接入入口（developer.read 不在 readOnly preset 中）。
         go('navigate.apiContract', 'commands.apiContract', '/api?tab=openapi', ['sdk', 'openapi', 'contract']),
-        go('navigate.mcp', 'commands.mcp', '/mcp', ['agent', 'model context protocol']),
+        go('navigate.agent', 'agent.title', '/agent', ['agent', '智能体']),
+        go('navigate.mcp', 'agent.mcpConfiguration', '/agent?tab=mcp', ['mcp', 'model context protocol']),
       ] : []),
       ...(role === undefined || role === 'owner' ? [
         {
@@ -533,6 +522,7 @@ function AppShellLayout({ ownerEmail, sessionExpiresAt, onLogout, role, permissi
             data-shell-topbar-actions
           >
             <CommandPaletteControl />
+{role === 'owner' && <AgentPanelControl />}
 
             <RuntimeBadge canOpenSettings={allowsOperation(role, permission, 'settings.read')} />
             <LanguageSwitcher />

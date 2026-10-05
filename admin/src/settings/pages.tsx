@@ -123,10 +123,10 @@ export function RuntimeSettingsPage() {
 
   const invalid = retentionDays.trim() === '' || Number(retentionDays) < 1 || Number(retentionDays) > 3650;
 
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('runtimeSettings.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-4"><LoadingState label={t('runtimeSettings.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-4">
         <ErrorState description={t('runtimeSettings.loadFailedDescription')} title={t('runtimeSettings.loadFailed')}>
           <Button onClick={() => window.location.reload()} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('runtimeSettings.retry')}</Button>
         </ErrorState>
@@ -136,12 +136,8 @@ export function RuntimeSettingsPage() {
   if (!settings) return null;
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <p className="eyebrow">{t('runtimeSettings.eyebrow')}</p>
-        <h2 className="text-lg font-semibold">{t('runtimeSettings.title')}</h2>
-        <p className="mt-2.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('runtimeSettings.description')}</p>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+    <h2 className="sr-only">{t('runtimeSettings.title')}</h2>
 
       <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-center gap-3">

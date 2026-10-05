@@ -1,4 +1,5 @@
 import { TabContent } from '../components/tab-content';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -6,7 +7,7 @@ import { Button as ControlButton } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, Settings2, Trash2, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
+import { Type, Hash, ToggleLeft, Calendar, Braces, GitBranch, File, Files, ArrowLeft, ArrowRight, Check, Settings2, Trash2, CircleAlert, Database, Info, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Badge } from '@/components/ui/badge';
@@ -45,9 +46,12 @@ type FieldDraft = {
 
 type FieldErrors = Record<string, string>;
 
-function newFieldDraft(key: string): FieldDraft {
+const INITIAL_FIELD_TYPES: FieldType[] = ['text', 'number', 'boolean', 'dateTime', 'json', 'relation', 'file', 'files'];
+const FIELD_TYPE_ICONS = { text: Type, number: Hash, boolean: ToggleLeft, dateTime: Calendar, json: Braces, relation: GitBranch, file: File, files: Files };
+
+function newFieldDraft(key: string, name: string, type: FieldType): FieldDraft {
   return {
-    key, name: '', type: 'text', required: false, unique: false,
+    key, name, type, required: false, unique: false,
     description: '', defaultValue: '', validation: '', targetCollectionId: '', cardinality: 'many-to-one',
   };
 }
@@ -316,6 +320,7 @@ export function CreateCollectionPage() {
   const [description, setDescription] = useState('');
   const [type, setType] = useState<CollectionType>('Normal');
   const [fields, setFields] = useState<FieldDraft[]>([]);
+  const [fieldTypeMenuOpen, setFieldTypeMenuOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, FieldErrors>>({});
   const [nameError, setNameError] = useState('');
   const [authentication, setAuthentication] = useState<AuthenticationConfiguration>(authDefaults);
@@ -352,17 +357,26 @@ export function CreateCollectionPage() {
     setRequestError(undefined);
   }
 
-  function addField() {
+  function addField(fieldType: FieldType) {
     const key = `field-${nextFieldNumber.current++}`;
-    setFields((current) => [...current, newFieldDraft(key)]);
-    setTimeout(() => document.getElementById(`field-name-${key}`)?.focus(), 0);
+    const reservedNames = new Set([...SYSTEM_FIELDS.map((field) => field.name), ...(type === 'Auth' ? ['email'] : []), ...fields.map((field) => field.name.trim().toLowerCase())].map((name) => name.toLowerCase()));
+    let suffix = 1;
+    let suggestedName = `${fieldType}_${suffix}`;
+    while (reservedNames.has(suggestedName.toLowerCase())) suggestedName = `${fieldType}_${++suffix}`;
+    setFields((current) => [...current, newFieldDraft(key, suggestedName, fieldType)]);
+    setFieldTypeMenuOpen(false);
+    setTimeout(() => {
+      const input = document.getElementById(`field-name-${key}`) as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
+    }, 0);
   }
 
   function handleFieldEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (!event.currentTarget.value.trim() || event.nativeEvent.isComposing) return;
-    addField();
+    setFieldTypeMenuOpen(true);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -485,10 +499,10 @@ export function CreateCollectionPage() {
               <Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button>
             </div>
           )}
-          <div className="min-w-0 overflow-hidden rounded-lg border bg-card" data-field-list>
+          <div className="@container min-w-0 overflow-hidden rounded-lg border bg-card" data-field-list>
             <h3 className="sr-only">{t('collections.systemTitle')}</h3>
-            <div className="hidden gap-3 bg-muted/40 px-3.5 py-2.5 text-xs font-semibold text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px]" aria-hidden="true">
-              <span>{t('collections.fieldName')}</span><span>{t('collections.fieldType')}</span><span>{t('collections.systemAccess')}</span><span />
+            <div className="hidden gap-2 bg-muted/40 px-3.5 py-2.5 text-xs font-semibold text-muted-foreground @[640px]:grid @[640px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_200px_88px]" aria-hidden="true">
+              <span>{t('collections.fieldName')}</span><span>{t('collections.fieldType')}</span><span>{t('collections.fieldConstraints')}</span><span />
             </div>
             <div className="divide-y">
               <LockedFieldRow name="id" type="text" />
@@ -506,7 +520,19 @@ export function CreateCollectionPage() {
               />)}
               {type === 'Auth' && <LockedFieldRow name="email" type="text" authIdentifier />}
               {(['createdAt', 'updatedAt'] as const).filter((name) => !omittedSystemFields.includes(name)).map((name) => <LockedFieldRow key={name} name={name} type="dateTime" onRemove={() => { setOmittedSystemFields((current) => [...current, name]); setRequestError(undefined); }} />)}
-              <div className="p-2"><Button className="w-full justify-center" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.newField')}</Button></div>
+              <div className="p-2">
+                <Popover open={fieldTypeMenuOpen} onOpenChange={setFieldTypeMenuOpen}>
+                  <PopoverTrigger render={<Button className="w-full justify-center" size="small" type="button" />}><Plus aria-hidden="true" size={14} />{t('collections.newField')}</PopoverTrigger>
+                  <PopoverContent aria-label={t('collections.fieldType')} className="@container w-(--anchor-width) p-2" data-field-type-picker>
+                    <div className="grid grid-cols-2 gap-1 @[600px]:grid-cols-4">
+                      {INITIAL_FIELD_TYPES.map((fieldType) => {
+                        const Icon = FIELD_TYPE_ICONS[fieldType];
+                        return <Button className="justify-start gap-3 px-3" key={fieldType} onClick={() => addField(fieldType)} type="button" variant="quiet"><Icon aria-hidden="true" size={18} />{t(`schema.fieldTypes.${fieldType}`)}</Button>;
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
           </div>
         </Surface>
@@ -549,7 +575,7 @@ export function CreateCollectionPage() {
 
 function LockedFieldRow({ name, type, authIdentifier = false, onRemove }: { name: string; type: 'text' | 'dateTime'; authIdentifier?: boolean; onRemove?: () => void }) {
   const { t } = useI18n();
-  return <div className="grid min-w-0 gap-3 px-3.5 py-3 text-xs lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px] lg:items-center" data-locked-field-row>
+  return <div className="grid min-w-0 grid-cols-2 items-center gap-2 px-3.5 py-2 text-xs @[640px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_200px_88px]" data-locked-field-row>
     <strong className="font-mono font-semibold text-foreground">{name}</strong>
     <span className="text-muted-foreground">{t(type === 'text' ? 'schema.fieldTypes.text' : 'schema.fieldTypes.dateTime')}</span>
     <Badge className="w-fit" variant="outline"><Shield aria-hidden="true" size={13} />{t(authIdentifier ? 'collections.requiredUnique' : onRemove ? 'collections.systemManaged' : 'collections.systemLocked')}</Badge>
@@ -576,8 +602,8 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
     if (errors.defaultValue || errors.validation || errors.target) setAdvancedOpen(true);
   }, [errors.defaultValue, errors.validation, errors.target]);
   return (
-    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 p-3.5" data-initial-field-row>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px] lg:items-center lg:[&_[data-slot=form-field]>label]:sr-only">
+    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-2 px-3.5 py-2" data-initial-field-row>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)] items-center gap-2 @[640px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_200px_88px] @[640px]:[&_[data-slot=form-field]>label]:sr-only">
         <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
           <Input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
           {errors.name && <span className="text-xs font-semibold text-danger" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
@@ -585,13 +611,15 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
         <FormField htmlFor={`field-type-${field.key}`} label={t('collections.fieldType')}>
           <SelectField id={`field-type-${field.key}`} onValueChange={(selectedValue) => { onUpdate({ type: selectedValue as FieldType, ...(selectedValue === 'relation' ? {} : { targetCollectionId: '' }) }); if (selectedValue === 'relation') setAdvancedOpen(true); }} value={field.type} options={[({ value: "text", label: t('schema.fieldTypes.text') }), ({ value: "number", label: t('schema.fieldTypes.number') }), ({ value: "boolean", label: t('schema.fieldTypes.boolean') }), ({ value: "dateTime", label: t('schema.fieldTypes.dateTime') }), ({ value: "json", label: t('schema.fieldTypes.json') }), ({ value: "relation", label: t('schema.fieldTypes.relation') }), ({ value: "file", label: t('schema.fieldTypes.file') }), ({ value: "files", label: t('schema.fieldTypes.files') })]} />
         </FormField>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
-          <Label className="inline-flex items-center gap-2"><Checkbox checked={field.required} onCheckedChange={(checked) => onUpdate({ required: checked })} />{t('collections.fieldRequired')}</Label>
-          <Label className="inline-flex items-center gap-2"><Checkbox checked={field.unique} onCheckedChange={(checked) => onUpdate({ unique: checked })} />{t('collections.fieldUnique')}</Label>
-        </div>
-        <div className="flex items-center justify-end gap-1">
-          <Button aria-label={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} aria-haspopup="dialog" title={t('collections.advancedFieldSettings')} onClick={() => setAdvancedOpen(true)} size="small" type="button" variant="quiet"><Settings2 aria-hidden="true" size={15} /></Button>
-          {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>}
+        <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 @[640px]:contents" data-field-options>
+          <div className="inline-flex shrink-0 flex-nowrap items-center gap-1 whitespace-nowrap text-xs text-ink-secondary">
+            <Label className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"><Checkbox checked={field.required} onCheckedChange={(checked) => onUpdate({ required: checked })} />{t('collections.fieldRequired')}</Label>
+            <Label className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"><Checkbox checked={field.unique} onCheckedChange={(checked) => onUpdate({ unique: checked })} />{t('collections.fieldUnique')}</Label>
+          </div>
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            <Button aria-label={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} aria-haspopup="dialog" title={t('collections.advancedFieldSettings')} onClick={() => setAdvancedOpen(true)} size="small" type="button" variant="quiet"><Settings2 aria-hidden="true" size={15} /></Button>
+            {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>}
+          </div>
         </div>
       </div>
       <Dialog open={advancedOpen} title={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} closeLabel={t('common.closeDialog')} onClose={() => setAdvancedOpen(false)}>
@@ -698,7 +726,7 @@ export function CollectionWorkspacePage() {
     return () => controller.abort();
   }, [collectionId, reportPendingChange]);
 
-  if (loadingCollection || loadedWorkspaceId !== collectionId) return <div className="flex min-w-0 flex-col gap-6" data-collection-workspace><SpinnerLoadingState label={t('collections.loadingWorkspace')} /></div>;
+  if (loadingCollection || loadedWorkspaceId !== collectionId) return <div className="flex min-w-0 flex-col gap-3" data-collection-workspace><SpinnerLoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, t('collections.workspaceLoadFailed'), t, errorMessage);
     return (
@@ -723,30 +751,27 @@ export function CollectionWorkspacePage() {
     { label: t('navigation.api'), to: `/collections/${collectionId}/api`, end: false },
   ];
   return (
-    <div className="flex min-w-0 flex-col gap-6" data-collection-workspace>
-      {/* Spec 0001 §6.3：标题区持续提供 Collection 名称、类型、状态与返回路径。 */}
-      <nav aria-label={t('collections.breadcrumbLabel')} className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground" to="/collections">{t('navigation.collections')}</Link>
-        <span aria-hidden="true" className="text-subtle-foreground">/</span>
-        {/* 集合名可能是不含断点的长标识符：允许任意位置换行，避免窄屏横向溢出（spec 0001 §16.1）。 */}
-        <span className="min-w-0 font-semibold text-foreground [overflow-wrap:anywhere]">{collection.name}</span>
-      </nav>
-
-      <header className="flex flex-wrap items-start justify-between gap-4" data-collection-header>
-        <div className="flex min-w-0 items-start gap-3" data-collection-identity>
-          <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg border bg-card text-ink-secondary"><Database size={20} /></span>
-          <div className="min-w-0" data-collection-title>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold [overflow-wrap:anywhere]">{collection.name}</h1>
-              <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
-              {pendingOperationCount > 0 && (
-                <Badge variant={pendingTone}>{formatPlural(pendingOperationCount, { one: t('shell.pendingChangeOne'), other: t('shell.pendingChangeMany') })}</Badge>
-              )}
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">{collection.description || t('collections.workspaceDescription')}</p>
-          </div>
+    <div className="flex min-w-0 flex-col gap-3" data-collection-workspace>
+      {/* 集合身份只显示一次，详情按需展开，待处理状态直接可见。 */}
+      <header className="flex min-w-0 flex-wrap items-center gap-2" data-collection-header>
+        <nav aria-label={t('collections.breadcrumbLabel')} className="shrink-0">
+          <Link className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground" to="/collections"><ArrowLeft aria-hidden="true" size={16} />{t('navigation.collections')}</Link>
+        </nav>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2" data-collection-identity>
+          <h1 className="min-w-0 text-xl font-semibold [overflow-wrap:anywhere]" data-collection-title>{collection.name}</h1>
+          <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
+          {pendingOperationCount > 0 && <Badge variant={pendingTone}>{formatPlural(pendingOperationCount, { one: t('shell.pendingChangeOne'), other: t('shell.pendingChangeMany') })}</Badge>}
         </div>
-        <span className="text-xs text-muted-foreground">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</span>
+        <Popover>
+          <PopoverTrigger render={<ControlButton variant="ghost" size="icon" aria-label={t('collections.workspaceDetails')} />}><Info aria-hidden="true" size={17} /></PopoverTrigger>
+          <PopoverContent className="max-w-[calc(100vw-2rem)]">
+            <div className="grid gap-2 text-sm">
+              <strong>{t('collections.workspaceDetails')}</strong>
+              {collection.description && <p className="text-muted-foreground [overflow-wrap:anywhere]">{collection.description}</p>}
+              <p className="text-xs text-muted-foreground">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</p>
+            </div>
+          </PopoverContent>
+        </Popover>
       </header>
 
       {newlyCreated && (

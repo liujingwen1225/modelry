@@ -176,10 +176,10 @@ export function MailPage() {
     }
   }
 
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('mail.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-4"><LoadingState label={t('mail.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-4">
         <ErrorState description={t('mail.loadFailedDescription')} title={t('mail.loadFailed')}>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('mail.retry')}</Button>
         </ErrorState>
@@ -189,13 +189,9 @@ export function MailPage() {
   if (!provider || !input) return null;
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-4" data-workspace-toolbar>
-        <div className="min-w-0 flex-1">
-          <p className="eyebrow">{t('mail.eyebrow')}</p>
-          <h2 className="text-lg font-semibold">{t('mail.title')}</h2>
-          <p className="mt-2.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('mail.description')}</p>
-        </div>
+    <div className="flex min-w-0 flex-col gap-4">
+      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
+        <h2 className="sr-only">{t('mail.title')}</h2>
         <div className="flex flex-wrap items-center gap-2">
           <Button disabled={busy !== null} onClick={refresh} size="small" type="button" variant="secondary">
             <RefreshCw aria-hidden="true" size={14} /> {t('mail.refresh')}

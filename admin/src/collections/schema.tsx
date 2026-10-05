@@ -1,3 +1,4 @@
+import { ChangeDiff } from './change-diff';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input, Textarea } from '@/components/ui/input';
@@ -35,7 +36,7 @@ import {
   type PendingOperationRequest,
   type SchemaPreview,
 } from './client';
-import { diffLabel, preconditionMessage, preconditionStatus } from './preview-copy';
+import { preconditionMessage, preconditionStatus } from './preview-copy';
 import { useCollectionWorkspace } from './workspace-context';
 
 type SchemaView = 'fields' | 'relations' | 'indexes' | 'history';
@@ -313,15 +314,8 @@ export function CollectionSchemaPage() {
   const pendingTone: BadgeVariant = localPending?.status === 'failed' ? 'danger' : localPending?.status === 'needsReview' ? 'warning' : 'default';
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="eyebrow">{t('schema.eyebrow')}</p>
-          <h2 className="text-base font-semibold">{t('schema.title')}</h2>
-          <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('schema.description')}</p>
-        </div>
-        <Badge variant="outline">{t('schema.modelVersion', { version: collection.schemaVersion ?? 1 })}</Badge>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+      <h2 className="sr-only">{t('schema.title')}</h2>
 
       <nav aria-label={t('schema.viewsLabel')} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b">
         {(['fields', 'relations', 'indexes', 'history'] as const).map((tab) => (
@@ -742,15 +736,7 @@ function PreviewPanel({ preview, working, onCancel, onConfirm, onAttempt }: { pr
       {preview.diff.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <h4 className="m-0 text-xs font-semibold text-foreground">{t('schema.whatWillChange')}</h4>
-          <ul className="m-0 flex list-none flex-col gap-1 p-0">
-            {preview.diff.map((change, index) => (
-              <li className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs" key={index}>
-                <span aria-hidden="true" className="font-mono font-bold text-ink-secondary">{change.action === 'remove' ? '−' : change.action === 'update' ? '~' : '+'}</span>
-                <span className="min-w-0 truncate text-ink-secondary">{diffLabel(change, t)}</span>
-                <code className="ml-auto text-xs text-muted-foreground">{String(change.kind ?? '')}</code>
-              </li>
-            ))}
-          </ul>
+          <ChangeDiff changes={preview.diff} />
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs">

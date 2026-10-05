@@ -215,3 +215,35 @@ func TestAuditSchemaMigratesLegacyActorKindConstraint(t *testing.T) {
 		t.Fatal("append-only update protection was lost during the migration")
 	}
 }
+
+// 拒绝事实的资源是权限操作，而非普通实体 ID；写入和筛选必须支持相同语义。
+func TestControlPlaneOperationAuditResourceAcceptedAndFilterable(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(filepath.Join(t.TempDir(), "audit.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	service, err := NewService(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := AppendInput{Actor: Actor{Kind: ActorServiceAccount, ID: "sa_test"}, Action: "controlPlane.denied", Resource: Resource{Kind: "controlPlaneOperation", ID: "schema.write"}, Result: "denied"}
+	if err := service.Append(ctx, input); err != nil {
+		t.Fatalf("拒绝事实无法写入：%v", err)
+	}
+	for _, kind := range []string{"", "controlPlaneOperation"} {
+		page, err := service.List(ctx, ListOptions{ResourceKind: kind, ResourceID: "schema.write"})
+		if err != nil || len(page.Data) != 1 {
+			t.Fatalf("拒绝事实无法筛选：%+v %v", page, err)
+		}
+	}
+	input.Resource.ID = "unknown.operation"
+	if err := service.Append(ctx, input); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("接受了未知操作：%v", err)
+	}
+	input.Resource = Resource{Kind: "collection", ID: "schema.write"}
+	if err := service.Append(ctx, input); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("实体 ID 校验被放宽：%v", err)
+	}
+}

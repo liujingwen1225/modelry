@@ -1,3 +1,4 @@
+import { AgentPolicyEditor } from '../agent/settings';
 import { WorkspaceActions } from '../components/workspace-toolbar';
 import { WorkspaceToolbar } from '../components/workspace-toolbar';
 import { TabContent } from '../components/tab-content';
@@ -52,6 +53,7 @@ function auditResultLabel(result: string, t: Translate): string {
 }
 
 const operationGroups: Array<{ labelKey: TranslationKey; operations: CustomPermissionOperation[] }> = [
+  { labelKey: 'agent.title', operations: ['agent.use', 'hooks.read', 'hooks.write', 'webhooks.read', 'webhooks.write', 'webhooks.execute', 'eventHooks.read', 'eventHooks.write', 'jobs.read', 'jobs.write', 'jobs.execute'] },
   { labelKey: 'access.permissionGroups.runtime', operations: ['runtime.read', 'storage.read'] },
   { labelKey: 'access.permissionGroups.collections', operations: ['collections.read', 'collections.create', 'records.read', 'records.create', 'records.update', 'records.delete', 'files.read', 'files.write'] },
   { labelKey: 'access.permissionGroups.model', operations: ['schema.read', 'schema.write', 'schema.apply', 'accessRules.read', 'accessRules.write', 'accessRules.apply', 'authentication.read', 'authentication.write', 'authentication.apply'] },
@@ -196,7 +198,7 @@ export function AccessWorkspacePage() {
     return `/access?${next.toString()}`;
   }
 
-  return <div className="flex min-w-0 flex-col gap-6">
+  return <div className="flex min-w-0 flex-col gap-4">
 
     <h1 className="sr-only">{t('access.title')}</h1>
     <WorkspaceToolbar navigation={<nav aria-label={t('access.tabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden" data-access-workspace-tabs>
@@ -357,13 +359,10 @@ export function AccessPage({ embedded = false }: { embedded?: boolean }) {
     const previous = pageCursors.at(-1); if (previous) next.set('cursor', previous); else next.delete('cursor'); setParams(next);
   }
 
-  return <div className="flex min-w-0 flex-col gap-6">
+  return <div className="flex min-w-0 flex-col gap-4">
     {embedded
       ? <WorkspaceActions><div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">{t('access.tokensTitle')}</h2>
-          <p className="mt-1.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('access.tokensDescription')}</p>
-        </div>
+        <h2 className="sr-only">{t('access.tokensTitle')}</h2>
         {!accountId && <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button>}
       </div></WorkspaceActions>
       : <PageTitle action={!accountId ? <Button onClick={() => { setCreateOpen(true); setCreateError(undefined); }} variant="primary"><Plus aria-hidden="true" size={16} /> {t('access.create')}</Button> : undefined} description={t('access.description')} title={t('access.title')} />}
@@ -410,6 +409,7 @@ function ServiceAccountDetail({
   if (state === 'loading') return <LoadingState label={t('access.detailLoading')} />;
   if (state === 'error' || !account) { const copy = errorCopy(error, t('access.detailLoadFailed'), t); return <ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={onRetry} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/access?tab=tokens">{t('access.backToAccess')}</Link></div></ErrorState>; }
   return <section aria-label={t('access.detailLabel')} className="flex min-w-0 flex-col gap-4">
+<AgentPolicyEditor identity={account.id} />
     <p className="m-0"><Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground" to="/access?tab=tokens"><ArrowLeft aria-hidden="true" size={14} /> {t('access.backToAccess')}</Link></p>
     <Surface className="flex min-w-0 flex-col gap-4" variant="section">
       <header className="flex flex-wrap items-center gap-3 border-b pb-3"><div className="min-w-0 flex-1"><p className="eyebrow">{t('access.detailEyebrow')}</p><h2 className="mt-0.5 break-words text-base font-semibold">{account.name}</h2><p className="mt-1 text-sm text-muted-foreground">{account.description || t('access.noDescription')}</p></div><StatusChip state={account.status}>{accessStatusLabel(account.status, t)}</StatusChip><Button onClick={onEdit} size="small">{t('access.edit')}</Button>{account.status === 'active' ? <Button disabled={busy} onClick={onDisable} size="small" variant="danger">{t('access.disable')}</Button> : <Button disabled={busy} onClick={onEnable} size="small" variant="primary">{t('access.enable')}</Button>}</header>
@@ -526,9 +526,9 @@ export function AuditPage({ embedded = false }: { embedded?: boolean }) {
   }
 
   if (auditRecordId) {
-    if (detailState === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('access.auditDetailLoading')} /></div>;
-    if (detailState === 'error' || !detail) { const copy = errorCopy(detailError, t('access.auditDetailLoadFailed'), t); return <div className="flex min-w-0 flex-col gap-6"><ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={returnPath}>{t('access.auditBack')}</Link></div></ErrorState></div>; }
-    return <div className="flex min-w-0 flex-col gap-6"><p className="m-0"><Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground" to={returnPath}><ArrowLeft aria-hidden="true" size={14} /> {t('access.auditBack')}</Link></p>{!embedded && <PageTitle description={t('access.auditDetailDescription')} title={t('access.auditDetailTitle')} />}<Surface className="flex min-w-0 flex-col gap-4" variant="section">
+    if (detailState === 'loading') return <div className="flex min-w-0 flex-col gap-4"><LoadingState label={t('access.auditDetailLoading')} /></div>;
+    if (detailState === 'error' || !detail) { const copy = errorCopy(detailError, t('access.auditDetailLoadFailed'), t); return <div className="flex min-w-0 flex-col gap-4"><ErrorState description={copy.detail} title={copy.title}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} /> {t('common.retry')}</Button><Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={returnPath}>{t('access.auditBack')}</Link></div></ErrorState></div>; }
+    return <div className="flex min-w-0 flex-col gap-4"><p className="m-0"><Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground" to={returnPath}><ArrowLeft aria-hidden="true" size={14} /> {t('access.auditBack')}</Link></p>{!embedded && <PageTitle description={t('access.auditDetailDescription')} title={t('access.auditDetailTitle')} />}<Surface className="flex min-w-0 flex-col gap-4" variant="section">
       <header className="flex flex-wrap items-center gap-3 border-b pb-3"><div className="min-w-0 flex-1"><p className="eyebrow">{t('access.auditRecordEyebrow')}</p><h2 className="mt-0.5 break-words text-base font-semibold"><code className="font-mono text-sm">{detail.id}</code></h2></div><StatusChip state={detail.result}>{auditResultLabel(detail.result, t)}</StatusChip></header>
       <dl className="m-0 grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 min-[701px]:grid-cols-2" data-audit-detail-grid><div className="grid min-w-0 gap-0.5"><dt className="text-xs font-semibold text-muted-foreground">{t('access.auditTime')}</dt><dd className="m-0 break-words text-xs text-ink-secondary"><time dateTime={detail.time}>{formatDate(detail.time)}</time></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-xs font-semibold text-muted-foreground">{t('access.auditActor')}</dt><dd className="m-0 break-words text-xs text-ink-secondary">{auditActorLabel(detail.actor.kind, t)} · <code className="font-mono text-[13px]">{detail.actor.id}</code></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-xs font-semibold text-muted-foreground">{t('access.auditAction')}</dt><dd className="m-0 break-words text-xs text-ink-secondary"><code className="font-mono text-[13px]">{detail.action}</code></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-xs font-semibold text-muted-foreground">{t('access.auditResult')}</dt><dd className="m-0 break-words text-xs text-ink-secondary">{auditResultLabel(detail.result, t)}</dd></div>{detail.requestId && <div className="grid min-w-0 gap-0.5"><dt className="text-xs font-semibold text-muted-foreground">{t('access.auditRequest')}</dt><dd className="m-0 break-words text-xs text-ink-secondary"><Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={`/requests/${encodeURIComponent(detail.requestId)}?from=${encodeURIComponent(`/activity/audit/${detail.id}`)}`}>{detail.requestId}</Link></dd></div>}</dl>
       <section className="border-t pt-3" data-audit-resource><h3 className="m-0 mb-1.5">{t('access.auditResource')}</h3><pre className="m-0 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-muted p-3 font-mono text-[13px] leading-relaxed text-ink-secondary"><code>{JSON.stringify(safeAuditValue(detail.resource), null, 2)}</code></pre></section>
@@ -539,7 +539,7 @@ export function AuditPage({ embedded = false }: { embedded?: boolean }) {
   function nextPage() { if (!nextCursor) return; const next = new URLSearchParams(params); next.append('back', cursor ?? ''); next.set('cursor', nextCursor); setParams(next); }
   function previousPage() { if (!pageCursors.length) return; const next = new URLSearchParams(params); next.delete('back'); pageCursors.slice(0, -1).forEach((item) => next.append('back', item)); const previous = pageCursors.at(-1); if (previous) next.set('cursor', previous); else next.delete('cursor'); setParams(next); }
 
-  return <div className="flex min-w-0 flex-col gap-6">
+  return <div className="flex min-w-0 flex-col gap-4">
     {!embedded && <PageTitle description={t('access.auditDescription')} title={t('access.auditTitle')} />}
     <form className="flex min-w-0 flex-col gap-3 border-b pb-4" onSubmit={submitFilters}>
       <div className="grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(200px,1fr)_180px_220px_auto]">

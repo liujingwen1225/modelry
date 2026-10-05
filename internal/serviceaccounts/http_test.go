@@ -166,3 +166,31 @@ func TestControlPlanePermissionMappingCoversOpenAPIRoutes(t *testing.T) {
 		}
 	}
 }
+
+// 拒绝审计不可写时仍必须阻止业务处理，向调用方明确报告存储不可用。
+func TestDeniedAuditFailureNeverInvokesProtectedHandler(t *testing.T) {
+	store, service := openService(t)
+	defer store.Close()
+	ctx := audit.WithActor(context.Background(), audit.Actor{Kind: audit.ActorOwner, ID: "own_test"})
+	created, err := service.Create(ctx, CreateInput{Name: "reader", Permission: PresetReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = store.WithTransaction(ctx, func(tx storage.Executor) error {
+		_, err := tx.ExecContext(ctx, `CREATE TRIGGER audit_unavailable BEFORE INSERT ON modelry_audit_records BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END`)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	protected := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(http.StatusOK) })
+	handler := service.ServiceAccountMiddleware(protected, protected)
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/v1/collections", nil)
+	request.Header.Set("Authorization", "Bearer "+created.APIKeyReveal.Secret)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || calls != 0 {
+		t.Fatalf("拒绝审计失败未安全关闭：状态 %d，处理次数 %d", response.Code, calls)
+	}
+}

@@ -15,7 +15,8 @@ export type CustomPermissionOperation =
   | 'sessions.read' | 'sessions.revoke'
   | 'serviceAccounts.read' | 'serviceAccounts.manage'
   | 'apiKeys.read' | 'apiKeys.create' | 'apiKeys.revoke'
-  | 'requests.read' | 'audit.read';
+  | 'requests.read' | 'audit.read'
+| 'agent.use' | 'hooks.read' | 'hooks.write' | 'webhooks.read' | 'webhooks.write' | 'webhooks.execute' | 'eventHooks.read' | 'eventHooks.write' | 'jobs.read' | 'jobs.write' | 'jobs.execute';
 
 export type ServiceAccount = {
   id: string;

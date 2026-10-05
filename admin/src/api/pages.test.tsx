@@ -112,7 +112,7 @@ describe('API workspace tabs', () => {
     expect(screen.getByRole('button', { name: 'Download openapi.json' })).toBeInTheDocument();
     // 示例命令来自契约里真实存在的第一个 Collection；没有 Collection 时不渲染这个动作。
     expect(await screen.findByRole('button', { name: 'Copy cURL example' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Connect a coding agent through MCP/ })).toHaveAttribute('href', '/mcp');
+    expect(screen.getByRole('link', { name: /Connect a coding agent through MCP/ })).toHaveAttribute('href', '/agent?tab=mcp');
   });
 
   it('keeps the OpenAPI tab recoverable when the contract cannot be loaded', async () => {

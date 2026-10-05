@@ -32,7 +32,7 @@ describe('route map — 不映射的路径', () => {
       '/access',
       '/activity',
       '/activity/audit/audit_1',
-      '/mcp',
+      '/agent',
       '/settings',
       '/settings/runtime',
       '/settings/storage',
@@ -65,6 +65,10 @@ describe('route map — 不映射的路径', () => {
   });
 });
 
+it('旧 MCP 链接保留会话及其他查询参数', () => {
+  expect(mapped('/mcp', '?session=ags_1&tab=old')).toBe('/agent?tab=mcp&session=ags_1');
+});
+
 describe('route map — /connect → API 工作区', () => {
   it('maps bare /connect and /connect/api to the endpoints tab', () => {
     expect(mapped('/connect')).toBe('/api?tab=endpoints');
@@ -79,8 +83,8 @@ describe('route map — /connect → API 工作区', () => {
   });
 
   it('maps MCP deep links to the MCP guide', () => {
-    expect(mapped('/connect/mcp')).toBe('/mcp');
-    expect(mapped('/settings/mcp')).toBe('/mcp');
+    expect(mapped('/connect/mcp')).toBe('/agent?tab=mcp');
+    expect(mapped('/settings/mcp')).toBe('/agent?tab=mcp');
   });
 });
 

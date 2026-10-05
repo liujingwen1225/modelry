@@ -187,7 +187,7 @@ function QuickStart() {
               <CopyButton label={t('overview.copyMcpConfig')} value={t('overview.agentSetup')} />
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/mcp">{t('overview.mcpGuide')}</Link>
+              <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/agent?tab=mcp">{t('overview.mcpGuide')}</Link>
               <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/access?tab=tokens">{t('overview.permissionsLink')}</Link>
               <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/activity">{t('overview.auditLink')}</Link>
             </div>

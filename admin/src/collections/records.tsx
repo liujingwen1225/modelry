@@ -15,7 +15,6 @@ import { Button } from '../components/button';
 import { FormField } from '../components/form-field';
 import { Dialog, Sheet } from '../components/overlays';
 import { EmptyState, ErrorState, LoadingState, SpinnerLoadingState } from '../components/states';
-import { Surface } from '../components/surface';
 import {
   createRecord,
   createApplicationUser,
@@ -120,20 +119,6 @@ function cursorHistory(searchParams: URLSearchParams) {
     return Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value as string[] : [];
   } catch { return []; }
 }
-function RecordPageTitle({ collection, onCreate }: { collection: Collection; onCreate: () => void }) {
-  const { t } = useI18n();
-  return (
-    <header className="flex min-w-0 flex-wrap items-center justify-between gap-3" data-record-heading>
-      <div className="min-w-0">
-        {/* 集合名可能是不含断点的长标识符，必须允许在任意位置换行（spec 0001 §16.1 不允许横向溢出）。 */}
-        <p className="eyebrow [overflow-wrap:anywhere]">{collection.name} · {t('records.dataEyebrow')}</p>
-        <h2 className="text-base font-semibold">{t('records.title')}</h2>
-        <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{t('records.description', { name: collection.name })}</p>
-      </div>
-      <Button onClick={onCreate} variant="primary"><Plus aria-hidden="true" size={15} />{t(collection.type === 'Auth' ? 'records.createUser' : 'records.createRecord')}</Button>
-    </header>
-  );
-}
 
 export function CollectionRecordsPage() {
   const { t, formatDate, errorMessage, validationMessage } = useI18n();
@@ -157,10 +142,15 @@ export function CollectionRecordsPage() {
   const rawColumns = searchParams.get('columns');
   const fields = collection.fields.filter((field) => !field.system);
   const expandFields = fields.filter((field) => field.type === 'relation').slice(0, 10).map((field) => field.name);
+  const availableColumns = useMemo(() => [
+    'id',
+    ...collection.fields.filter((field) => !field.system && field.name !== 'id').map((field) => field.name),
+    ...collection.fields.filter((field) => field.system && field.name !== 'id').map((field) => field.name),
+  ], [collection.fields]);
   const visibleColumns = useMemo(() => {
-    if (rawColumns !== null) return rawColumns.split(',').filter((name) => name === 'id' || name === 'createdAt' || name === 'updatedAt' || fields.some((field) => field.name === name));
-    return ['id', ...fields.slice(0, 2).map((field) => field.name), 'updatedAt'];
-  }, [fields, rawColumns]);
+    if (rawColumns !== null) return rawColumns.split(',').filter((name) => availableColumns.includes(name));
+    return availableColumns;
+  }, [availableColumns, rawColumns]);
   const selectedId = searchParams.get('record') ?? '';
   const isCreating = searchParams.get('new') === '1';
   const isEditing = collection.type !== 'Auth' && searchParams.get('edit') === '1';
@@ -314,16 +304,16 @@ export function CollectionRecordsPage() {
   }
   if (state === 'loading' && !initiallyLoaded.current) return <SpinnerLoadingState label={t('records.loading')} />;
   return (
-    <div className="flex min-w-0 flex-col gap-6" data-record-page>
-      <RecordPageTitle collection={collection} onCreate={openCreate} />
+    <div className="flex min-w-0 flex-col gap-4" data-record-page>
+      <h2 className="sr-only">{t('records.title')}</h2>
       {message && <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft px-3.5 py-2.5 text-xs text-success" role="status"><span className="min-w-0 flex-1">{t(message)}</span><Button aria-label={t('records.dismissMessage')} className="size-8 px-0" onClick={() => setMessage('')} size="small" type="button" variant="quiet"><X aria-hidden="true" size={14} /></Button></div>}
-      <Surface className="flex flex-wrap items-center gap-3" variant="section">
+      <section aria-label={t('records.title')} className="flex min-w-0 flex-wrap items-center gap-3" data-record-toolbar>
         <SearchInput aria-label={t('records.search')} onChange={(event) => updateParams({ search: event.target.value || undefined }, true)} placeholder={t('records.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
-        <Label className="inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-muted-foreground"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
+        <Label className="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-semibold text-muted-foreground"><SlidersHorizontal aria-hidden="true" size={14} /><span>{t('records.filter')}</span>
           <SelectField aria-label={t('records.filterField')} onValueChange={(selectedValue) => updateParams({ filterField: selectedValue || undefined, filterOperator: 'eq', filterValue: undefined, filter: undefined }, true)} value={filterDraft.field} options={[({ value: "", label: t('records.noFilter') }), availableFilterFields.map((field) => ({ value: field.name, label: field.name }))]} />
         </Label>
         {filterDraft.field && <>
-          <Label className="inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterOperator')}</span>
+          <Label className="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterOperator')}</span>
             <SelectField aria-label={t('records.filterOperator')} onValueChange={(selectedValue) => {
               const draft = { ...filterDraft, operator: selectedValue };
               updateParams({ filterOperator: draft.operator, filter: filterSyntax(draft, availableFilterFields.find((field) => field.name === draft.field)) || undefined }, true);
@@ -332,7 +322,7 @@ export function CollectionRecordsPage() {
                 : availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'number' || availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'dateTime'
                   ? ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] : ['eq', 'ne']).map((operator) => ({ value: operator, label: operator }))]} />
           </Label>
-          <Label className="inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterValue')}</span>
+          <Label className="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-semibold text-muted-foreground"><span className="sr-only">{t('records.filterValue')}</span>
             {availableFilterFields.find((field) => field.name === filterDraft.field)?.type === 'boolean'
               ? <SelectField aria-label={t('records.filterValue')} onValueChange={(selectedValue) => {
                 const value = selectedValue;
@@ -348,12 +338,13 @@ export function CollectionRecordsPage() {
           </Label>
           <Button aria-label={t('records.clearFilter')} onClick={() => updateParams({ filter: undefined, filterField: undefined, filterOperator: undefined, filterValue: undefined }, true)} size="small" variant="quiet"><X aria-hidden="true" size={14} /></Button>
         </>}
-        <Label className="inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-muted-foreground"><span>{t('records.sort')}</span>
+        <Label className="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-semibold text-muted-foreground"><span>{t('records.sort')}</span>
           <SelectField aria-label={t('records.sortField')} onValueChange={(selectedValue) => updateParams({ sort: `${selectedValue} ${currentSortDirection}` }, true)} value={currentSortField} options={[({ value: "createdAt", label: t('records.created') }), ({ value: "updatedAt", label: t('records.updated') }), ({ value: "id", label: t('records.id') }), fields.map((field) => ({ value: field.name, label: field.name }))]} />
           <SelectField aria-label={t('records.sortDirection')} onValueChange={(selectedValue) => updateParams({ sort: `${currentSortField} ${selectedValue}` }, true)} value={currentSortDirection} options={[({ value: "desc", label: t('records.newest') }), ({ value: "asc", label: t('records.oldest') })]} />
         </Label>
-        <div className="relative ml-auto"><Popover><PopoverTrigger className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-xs font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</PopoverTrigger><PopoverContent><div className="grid min-w-[160px] gap-2 text-xs">{['id', ...fields.map((field) => field.name), 'createdAt', 'updatedAt'].map((name) => <Label className="flex items-center gap-2 text-ink-secondary" key={name}><Checkbox checked={visibleColumns.includes(name)} onCheckedChange={(checked) => toggleColumn(name, checked)} />{name}</Label>)}</div></PopoverContent></Popover></div>
-      </Surface>
+        <div className="relative ml-auto"><Popover><PopoverTrigger className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-input bg-card px-2.5 text-xs font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('records.columns')}</PopoverTrigger><PopoverContent><div className="grid min-w-[160px] gap-2 text-xs">{availableColumns.map((name) => <Label className="flex items-center gap-2 text-ink-secondary" key={name}><Checkbox checked={visibleColumns.includes(name)} onCheckedChange={(checked) => toggleColumn(name, checked)} />{name}</Label>)}</div></PopoverContent></Popover></div>
+        <Button onClick={openCreate} variant="primary"><Plus aria-hidden="true" size={15} />{t(collection.type === 'Auth' ? 'records.createUser' : 'records.createRecord')}</Button>
+      </section>
 
       {state === 'loading' && <SpinnerLoadingState label={t('records.loading')} />}
       {state === 'error' && (() => { const copy = errorCopy(error, t('records.loadFailed'), t, errorMessage, validationMessage); return <ErrorState description={copy.message} title={copy.title}><Button onClick={() => setReloadKey((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('records.retry')}</Button></ErrorState>; })()}

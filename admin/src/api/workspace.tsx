@@ -203,7 +203,7 @@ export function EndpointWorkspace({ collections, fixedCollection }: { collection
   if (!endpoints.length) return <EmptyState title={t('api.noEndpointsTitle')} description={t('api.noEndpointsDescription')} />;
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-4">
       <Surface className="min-w-0" variant="section">
         {!fixedCollection && <div className="flex flex-wrap items-end gap-4 border-b pb-4">
           <SearchInput aria-label={t('api.searchEndpoints')} onChange={(event) => { setSearch(event.target.value); updateParam('q', event.target.value); }} placeholder={t('api.searchEndpointsPlaceholder')} value={search} className="min-w-56 flex-1" />
@@ -267,11 +267,6 @@ function ApplicationResponse({ result, location, endpoint }: { result: Applicati
   </section>;
 }
 
-function APIPageHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  // 标题里含 Collection 名称（可能是不含断点的长标识符），因此必须允许任意位置换行，
-  // 否则窄屏会把整个文档撑宽（spec 0001 §16.1）。
-  return <header className="min-w-0"><div className="min-w-0"><p className="eyebrow [overflow-wrap:anywhere]">{eyebrow}</p><h2 className="text-base font-semibold [overflow-wrap:anywhere]">{title}</h2><p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{description}</p></div></header>;
-}
 
 export function CollectionAPIPage() {
   const { collection } = useCollectionWorkspace();
@@ -287,8 +282,8 @@ export function CollectionAPIPage() {
     setParams(next, { replace: true });
   }
 
-  return <div className="flex min-w-0 flex-col gap-6">
-    <APIPageHeader description={t('api.collectionDescription')} eyebrow="API" title={t('api.collectionTitle', { name: collection.name })} />
+  return <div className="flex min-w-0 flex-col gap-4">
+    <h2 className="sr-only">{t('api.collectionTitle', { name: collection.name })}</h2>
     <nav aria-label={t('api.collectionSections')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden border-b">
       <ControlButton variant="unstyled" aria-current={activeTab === 'endpoints' ? 'page' : undefined} className={`inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors  ${activeTab === 'endpoints' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('endpoints')} type="button">{t('api.endpointsTab')}</ControlButton>
       <ControlButton variant="unstyled" aria-current={activeTab === 'realtime' ? 'page' : undefined} className={`inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors  ${activeTab === 'realtime' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('realtime')} type="button">{t('api.realtimeTab')}</ControlButton>

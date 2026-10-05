@@ -115,6 +115,8 @@ describe('Collections pages', () => {
     expect(screen.getAllByText('System · Locked')).toHaveLength(1);
     await user.type(screen.getByRole('textbox', { name: 'Collection name' }), 'posts');
     await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.click(await screen.findByRole('button', { name: 'Text' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Field name 1' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 1' }), 'title');
     await user.click(screen.getByRole('checkbox', { name: 'Required' }));
     await user.click(screen.getByRole('button', { name: 'Create Collection' }));
@@ -174,6 +176,8 @@ describe('Collections pages', () => {
     await render(<MemoryRouter><CreateCollectionPage /></MemoryRouter>);
     expect(screen.queryByRole('textbox', { name: 'Field name 1' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.click(await screen.findByRole('button', { name: 'Text' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Field name 1' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 1' }), 'title');
     const rows = document.querySelector('[data-field-list]')!.querySelectorAll('[data-locked-field-row], [data-initial-field-row]');
     expect(rows[0]).toHaveTextContent('id');
@@ -194,6 +198,37 @@ describe('Collections pages', () => {
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({name: 'minimal', type: 'Normal', fields: [{name: 'title', type: 'text', required: false, unique: false, default: 'untitled'}], omitSystemFields: ['createdAt', 'updatedAt']});
   });
 
+  it('selects a type before inserting a field and supplies an editable unused name', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(response(
+      init?.method === 'POST' ? { id: 'col_counts', name: 'counts', type: 'Normal', fields: [] } : [],
+    )));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MemoryRouter><CreateCollectionPage /></MemoryRouter>);
+    await user.type(await screen.findByRole('textbox', { name: 'Collection name' }), 'counts');
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    expect(screen.queryByRole('textbox', { name: 'Field name 1' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Number' }));
+    const first = screen.getByRole('textbox', { name: 'Field name 1' });
+    expect(first).toHaveValue('number_1');
+    await user.clear(first);
+    await user.type(first, 'NUMBER_2');
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Number' }));
+    expect(screen.getByRole('textbox', { name: 'Field name 2' })).toHaveValue('number_1');
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.click(await screen.findByRole('button', { name: 'Number' }));
+    expect(screen.getByRole('textbox', { name: 'Field name 3' })).toHaveValue('number_3');
+    await user.click(screen.getByRole('button', { name: 'Create Collection' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body)).fields).toEqual([
+      { name: 'NUMBER_2', type: 'number', required: false, unique: false },
+      { name: 'number_1', type: 'number', required: false, unique: false },
+      { name: 'number_3', type: 'number', required: false, unique: false },
+    ]);
+  });
+
   it('marks duplicate initial field names inline and does not issue a create request', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(Response.json({ data: [] })));
@@ -202,8 +237,12 @@ describe('Collections pages', () => {
 
     await user.type(await screen.findByRole('textbox', { name: 'Collection name' }), 'posts');
     await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.click(await screen.findByRole('button', { name: 'Text' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Field name 1' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 1' }), 'title');
     await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.click(await screen.findByRole('button', { name: 'Text' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Field name 2' }));
     await user.type(screen.getByRole('textbox', { name: 'Field name 2' }), 'TITLE');
     await user.click(screen.getByRole('button', { name: 'Create Collection' }));
 

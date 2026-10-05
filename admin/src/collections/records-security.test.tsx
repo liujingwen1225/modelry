@@ -59,6 +59,28 @@ function workspaceResponse(path: string) {
 describe('Collection Records and Security pages', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it.each([true, false])('默认显示全部已有字段，时间字段存在状态为 %s', async (hasTimestamps) => {
+    const expandedCollection: Collection = {
+      ...collection,
+      fields: [
+        ...collection.fields.filter((field) => hasTimestamps || !['createdAt', 'updatedAt'].includes(field.name)),
+        { name: 'body', type: 'text' },
+        { name: 'published', type: 'boolean' },
+      ],
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === '/admin/api/v1/collections/col_posts') return Promise.resolve(response(expandedCollection));
+      if (path.includes('/records?')) return Promise.resolve(response([savedRecord]));
+      return Promise.resolve(workspaceResponse(path) ?? response([]));
+    }));
+    renderCollection('/collections/col_posts');
+    await screen.findByRole('columnheader', { name: 'title' });
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'ID', 'title', 'body', 'published', ...(hasTimestamps ? ['Created', 'Updated'] : []), 'Actions',
+    ]);
+  });
+
   it('进入集合时用转圈等待集合与待应用变更，避免提前显示工作区', async () => {
     let resolvePending!: (value: Response) => void;
     const pendingResponse = new Promise<Response>((resolve) => { resolvePending = resolve; });

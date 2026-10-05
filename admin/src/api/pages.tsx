@@ -62,7 +62,7 @@ export function ApiWorkspacePage() {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-4">
       {/* 真实 <nav> + <Link> 语义：键盘可达，当前 Tab 用 aria-current="page" 表达。 */}
     <h1 className="sr-only">{t('api.workspaceTitle')}</h1>
     <WorkspaceToolbar navigation={<nav aria-label={t('api.workspaceTabsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden">
@@ -79,7 +79,7 @@ export function ApiWorkspacePage() {
         ))}
       </nav>}>
 
-      <Surface className="flex min-w-0 flex-wrap items-center justify-between gap-3 pb-3" variant="section">
+      <Surface className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t-0 pt-0 pb-3" variant="section">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
           <span className="text-xs font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.baseUrlLabel')}</span>
           <code className="min-w-0 break-all font-mono text-[13px] text-foreground" data-api-base-url>{origin || '—'}</code>
@@ -157,10 +157,7 @@ function OpenApiTab() {
   }
 
   return <div className="flex min-w-0 flex-col gap-4">
-    <header className="min-w-0">
-      <h2 className="text-base font-semibold">{t('api.openApiTabTitle')}</h2>
-      <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('api.openApiTabDescription')}</p>
-    </header>
+    <h2 className="sr-only">{t('api.openApiTabTitle')}</h2>
 
     {state === 'loading' && <LoadingState label={t('api.loadingWorkspace')} />}
     {state === 'error' && (
@@ -203,7 +200,7 @@ function OpenApiTab() {
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={downloadContract} size="small" type="button" variant="primary"><Download aria-hidden="true" size={14} /> {t('api.downloadOpenApi')}</Button>
           {curlExample && <CopyButton label={t('api.copyCurl')} value={curlExample} />}
-          <ButtonLink size="small" to="/mcp">{t('api.mcpLink')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>
+          <ButtonLink size="small" to="/agent?tab=mcp">{t('api.mcpLink')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>
         </div>
         {curlExample && <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-muted px-3 py-2.5"><code className="min-w-0 break-all font-mono text-[13px] text-ink-secondary">{curlExample}</code></div>}
         <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('api.sdkGuidance')}</p>

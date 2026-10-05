@@ -22,52 +22,52 @@ const CustomPermissionVersion = 1
 type Operation string
 
 const (
-	OperationRuntimeRead Operation = "runtime.read"
-	OperationStorageRead Operation = "storage.read"
-	OperationCollectionsRead Operation = "collections.read"
-	OperationCollectionsCreate Operation = "collections.create"
-	OperationRecordsRead Operation = "records.read"
-	OperationRecordsCreate Operation = "records.create"
-	OperationRecordsUpdate Operation = "records.update"
-	OperationRecordsDelete Operation = "records.delete"
-	OperationFilesRead Operation = "files.read"
-	OperationFilesWrite Operation = "files.write"
-	OperationSchemaRead Operation = "schema.read"
-	OperationSchemaWrite Operation = "schema.write"
-	OperationSchemaApply Operation = "schema.apply"
-	OperationAccessRulesRead Operation = "accessRules.read"
-	OperationAccessRulesWrite Operation = "accessRules.write"
-	OperationAccessRulesApply Operation = "accessRules.apply"
-	OperationAuthenticationRead Operation = "authentication.read"
-	OperationAuthenticationWrite Operation = "authentication.write"
-	OperationAuthenticationApply Operation = "authentication.apply"
-	OperationUsersRead Operation = "users.read"
-	OperationUsersCreate Operation = "users.create"
-	OperationUsersManagePassword Operation = "users.managePassword"
-	OperationSessionsRead Operation = "sessions.read"
-	OperationSessionsRevoke Operation = "sessions.revoke"
-	OperationServiceAccountsRead Operation = "serviceAccounts.read"
+	OperationRuntimeRead           Operation = "runtime.read"
+	OperationStorageRead           Operation = "storage.read"
+	OperationCollectionsRead       Operation = "collections.read"
+	OperationCollectionsCreate     Operation = "collections.create"
+	OperationRecordsRead           Operation = "records.read"
+	OperationRecordsCreate         Operation = "records.create"
+	OperationRecordsUpdate         Operation = "records.update"
+	OperationRecordsDelete         Operation = "records.delete"
+	OperationFilesRead             Operation = "files.read"
+	OperationFilesWrite            Operation = "files.write"
+	OperationSchemaRead            Operation = "schema.read"
+	OperationSchemaWrite           Operation = "schema.write"
+	OperationSchemaApply           Operation = "schema.apply"
+	OperationAccessRulesRead       Operation = "accessRules.read"
+	OperationAccessRulesWrite      Operation = "accessRules.write"
+	OperationAccessRulesApply      Operation = "accessRules.apply"
+	OperationAuthenticationRead    Operation = "authentication.read"
+	OperationAuthenticationWrite   Operation = "authentication.write"
+	OperationAuthenticationApply   Operation = "authentication.apply"
+	OperationUsersRead             Operation = "users.read"
+	OperationUsersCreate           Operation = "users.create"
+	OperationUsersManagePassword   Operation = "users.managePassword"
+	OperationSessionsRead          Operation = "sessions.read"
+	OperationSessionsRevoke        Operation = "sessions.revoke"
+	OperationServiceAccountsRead   Operation = "serviceAccounts.read"
 	OperationServiceAccountsManage Operation = "serviceAccounts.manage"
-	OperationAPIKeysRead Operation = "apiKeys.read"
-	OperationAPIKeysCreate Operation = "apiKeys.create"
-	OperationAPIKeysRevoke Operation = "apiKeys.revoke"
-	OperationRequestsRead Operation = "requests.read"
-	OperationAuditRead Operation = "audit.read"
-	OperationAdministratorsRead Operation = "administrators.read"
-	OperationAdministratorsManage Operation = "administrators.manage"
-	OperationMailRead Operation = "mail.read"
-	OperationMailManage Operation = "mail.manage"
-	OperationActivityRead Operation = "activity.read"
-	OperationDriftRead Operation = "drift.read"
-	OperationDriftReconcile Operation = "drift.reconcile"
-	OperationPolicySimulate Operation = "policy.simulate"
-	OperationSettingsRead Operation = "settings.read"
-	OperationSettingsWrite Operation = "settings.write"
-	OperationBackupCreate Operation = "backup.create"
-	OperationRestorePreflight Operation = "restore.preflight"
-	OperationRecordsExport Operation = "records.export"
-	OperationRecordsImport Operation = "records.import"
-	OperationDeveloperRead Operation = "developer.read"
+	OperationAPIKeysRead           Operation = "apiKeys.read"
+	OperationAPIKeysCreate         Operation = "apiKeys.create"
+	OperationAPIKeysRevoke         Operation = "apiKeys.revoke"
+	OperationRequestsRead          Operation = "requests.read"
+	OperationAuditRead             Operation = "audit.read"
+	OperationAdministratorsRead    Operation = "administrators.read"
+	OperationAdministratorsManage  Operation = "administrators.manage"
+	OperationMailRead              Operation = "mail.read"
+	OperationMailManage            Operation = "mail.manage"
+	OperationActivityRead          Operation = "activity.read"
+	OperationDriftRead             Operation = "drift.read"
+	OperationDriftReconcile        Operation = "drift.reconcile"
+	OperationPolicySimulate        Operation = "policy.simulate"
+	OperationSettingsRead          Operation = "settings.read"
+	OperationSettingsWrite         Operation = "settings.write"
+	OperationBackupCreate          Operation = "backup.create"
+	OperationRestorePreflight      Operation = "restore.preflight"
+	OperationRecordsExport         Operation = "records.export"
+	OperationRecordsImport         Operation = "records.import"
+	OperationDeveloperRead         Operation = "developer.read"
 )
 
 // Grant 是 Owner 之外的 Control Plane 主体持有的许可。
@@ -87,6 +87,18 @@ type InvalidGrant struct {
 func (invalid *InvalidGrant) Error() string { return invalid.Message }
 
 var allOperationsV1 = []Operation{
+	Operation("agent.use"),
+	Operation("hooks.read"),
+	Operation("hooks.write"),
+	Operation("webhooks.read"),
+	Operation("webhooks.write"),
+	Operation("webhooks.execute"),
+	Operation("eventHooks.read"),
+	Operation("eventHooks.write"),
+	Operation("jobs.read"),
+	Operation("jobs.write"),
+	Operation("jobs.execute"),
+
 	Operation("runtime.read"),
 	Operation("storage.read"),
 	Operation("collections.read"),
@@ -136,27 +148,33 @@ var allOperationsV1 = []Operation{
 }
 
 var readOnlyOperations = map[Operation]struct{}{
-	Operation("runtime.read"): {},
-	Operation("storage.read"): {},
-	Operation("collections.read"): {},
-	Operation("records.read"): {},
-	Operation("files.read"): {},
-	Operation("schema.read"): {},
-	Operation("accessRules.read"): {},
-	Operation("authentication.read"): {},
-	Operation("users.read"): {},
-	Operation("sessions.read"): {},
+	Operation("agent.use"):       {},
+	Operation("hooks.read"):      {},
+	Operation("webhooks.read"):   {},
+	Operation("eventHooks.read"): {},
+	Operation("jobs.read"):       {},
+
+	Operation("runtime.read"):         {},
+	Operation("storage.read"):         {},
+	Operation("collections.read"):     {},
+	Operation("records.read"):         {},
+	Operation("files.read"):           {},
+	Operation("schema.read"):          {},
+	Operation("accessRules.read"):     {},
+	Operation("authentication.read"):  {},
+	Operation("users.read"):           {},
+	Operation("sessions.read"):        {},
 	Operation("serviceAccounts.read"): {},
-	Operation("apiKeys.read"): {},
-	Operation("requests.read"): {},
-	Operation("audit.read"): {},
-	Operation("administrators.read"): {},
-	Operation("mail.read"): {},
-	Operation("activity.read"): {},
-	Operation("drift.read"): {},
-	Operation("policy.simulate"): {},
-	Operation("settings.read"): {},
-	Operation("records.export"): {},
+	Operation("apiKeys.read"):         {},
+	Operation("requests.read"):        {},
+	Operation("audit.read"):           {},
+	Operation("administrators.read"):  {},
+	Operation("mail.read"):            {},
+	Operation("activity.read"):        {},
+	Operation("drift.read"):           {},
+	Operation("policy.simulate"):      {},
+	Operation("settings.read"):        {},
+	Operation("records.export"):       {},
 }
 
 // AllOperations 返回当前受支持的 Control Plane 操作枚举副本。

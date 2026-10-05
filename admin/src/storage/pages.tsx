@@ -191,10 +191,10 @@ export function FileStoragePage() {
     }
   }
 
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('storage.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-4"><LoadingState label={t('storage.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-4">
         <ErrorState title={t('storage.loadFailed')} description={t('storage.loadFailedDescription')}>
           <Button onClick={refresh} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('storage.retry')}</Button>
         </ErrorState>
@@ -207,12 +207,8 @@ export function FileStoragePage() {
   const activeMigration = migrations.find((item) => item.status === 'running' || item.status === 'pending')
   const targetLabel = status.activeProvider === 'local' ? 'S3-compatible' : 'Local';
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <p className="eyebrow">{t('storage.eyebrow')}</p>
-        <h2 className="text-lg font-semibold">{t('storage.title')}</h2>
-        <p className="mt-2.5 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('storage.description')}</p>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+      <h2 className="sr-only">{t('storage.title')}</h2>
 
       <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-center gap-3">

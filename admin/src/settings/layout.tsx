@@ -12,6 +12,7 @@ import { useI18n, type TranslationKey } from '../i18n/i18n';
 
 const sections: Array<{ to: string; label: TranslationKey; operation?: string }> = [
   { to: '/settings', label: 'settings.navigation.general', operation: 'runtime.read' },
+  { to: '/settings/agent', label: 'agent.settingsTitle' },
   { to: '/settings/runtime', label: 'settings.navigation.runtime', operation: 'settings.read' },
   { to: '/settings/storage', label: 'settings.navigation.filesStorage', operation: 'storage.read' },
   { to: '/settings/mail', label: 'settings.navigation.mail', operation: 'mail.read' },

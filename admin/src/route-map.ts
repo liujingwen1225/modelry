@@ -18,7 +18,7 @@
 //   /activity[?source=audit|facts]                           活动记录
 //   /activity/audit/:auditRecordId                           审计详情
 //   /settings[/runtime|/storage|/mail|/secrets|/data|/backups]  系统设置
-//   /mcp                                                      MCP 接入说明（不占一级菜单）
+//   /agent[?tab=mcp]                                         Agent 工作台 / MCP 配置
 //
 // 映射语义：
 // - 返回 null 表示该路径不需要映射（已经是 canonical 路径或未知路径，交给路由表/404 处理）。
@@ -97,8 +97,7 @@ export function mapLegacyPath(pathname: string, search = ''): MappedRoute | null
     case 'changes':
     case 'events':
     case 'schedules':
-    case 'mcp':
-      // `/changes`、`/events`、`/schedules`、`/mcp` 已是 canonical；
+      // `/changes`、`/events`、`/schedules` 已是 canonical；
       // `/changes?view=` 与 `/events/hooks` 这两种历史形式由下方收敛。
       if (segments[0] === 'changes' && segments.length === 1) {
         const params = new URLSearchParams(search);
@@ -132,11 +131,14 @@ export function mapLegacyPath(pathname: string, search = ''): MappedRoute | null
       // 这里交给页面把未知 tab 归一到 endpoints。
       return null;
 
+    case 'mcp':
+      return segments.length === 1 ? { pathname: '/agent', search: withTab(search, 'mcp') } : null;
+
     case 'connect': {
       if (segments.length === 1) return { pathname: '/api', search: withTab(search, 'endpoints') };
       if (segments.length === 2 && segments[1] === 'api') return { pathname: '/api', search: withTab(search, 'endpoints') };
       if (segments.length === 2 && segments[1] === 'sdk') return { pathname: '/api', search: withTab(search, 'openapi') };
-      if (segments.length === 2 && segments[1] === 'mcp') return { pathname: '/mcp', search };
+      if (segments.length === 2 && segments[1] === 'mcp') return { pathname: '/agent', search: withTab(search, 'mcp') };
       return null;
     }
 
@@ -211,8 +213,8 @@ export function mapLegacyPath(pathname: string, search = ''): MappedRoute | null
           return { pathname: '/settings/backups', search };
         case 'developer': // /settings/developer → API 工作区 / OpenAPI
           return { pathname: '/api', search: withTab(search, 'openapi') };
-        case 'mcp': // /settings/mcp → MCP 接入说明
-          return { pathname: '/mcp', search };
+        case 'mcp': // /settings/mcp → Agent / MCP 配置
+          return { pathname: '/agent', search: withTab(search, 'mcp') };
         case 'drift': // /settings/drift → 变更 / 结构漂移
           return { pathname: '/changes', search: withTab(search, 'drift') };
         // /settings/runtime|storage|mail|secrets|data|backups 在新 IA 中路径不变。

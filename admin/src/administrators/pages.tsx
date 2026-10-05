@@ -204,11 +204,7 @@ export function AdministratorsPage({ embedded = false }: { embedded?: boolean })
     <div className="flex min-w-0 flex-col gap-6">
       {embedded
         ? <WorkspaceActions><div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
-          <div className="min-w-0 flex-1">
-            {/* 工作面标题与创建动作共享当前身份上下文。 */}
-            <h2 className="m-0 text-base font-semibold">{t('administrators.title')}</h2>
-            <p className="mt-1 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('administrators.description')}</p>
-          </div>
+          <h2 className="sr-only">{t('administrators.title')}</h2>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setCreateOpen(true)} size="small" type="button" variant="primary">
               <UserPlus aria-hidden="true" size={14} /> {t('administrators.createAction')}

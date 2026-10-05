@@ -18,7 +18,7 @@ export function Surface({
       data-variant={variant}
       className={cn(
         variant !== 'section' && 'rounded-lg border',
-        variant === 'section' && 'border-t bg-transparent pt-6',
+        variant === 'section' && 'border-t bg-transparent pt-4',
         variant === 'inset' && 'bg-muted',
         variant === 'raised' && 'bg-card',
         variant === 'standard' && 'bg-card',

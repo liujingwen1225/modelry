@@ -233,15 +233,8 @@ export function CollectionSecurityPage() {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="eyebrow">{collection.name} · {t('security.eyebrow')}</p>
-          <h2 className="text-base font-semibold">{t('security.title')}</h2>
-          <p className="mt-2 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('security.description')}</p>
-        </div>
-        <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><Shield size={19} /></span>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+      <h2 className="sr-only">{t('security.title')}</h2>
       <nav aria-label={t('security.sectionsLabel')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden border-b" role="tablist">
         <ControlButton variant="unstyled"
           aria-controls="security-panel-rules"

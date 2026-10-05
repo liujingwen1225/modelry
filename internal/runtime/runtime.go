@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/liujingwen1225/modelry/internal/accesscontrol"
 	"github.com/liujingwen1225/modelry/internal/activity"
 	"github.com/liujingwen1225/modelry/internal/adminauth"
+	"github.com/liujingwen1225/modelry/internal/agent"
 	"github.com/liujingwen1225/modelry/internal/appauth"
 	"github.com/liujingwen1225/modelry/internal/applicationapi"
 	"github.com/liujingwen1225/modelry/internal/audit"
@@ -59,6 +61,7 @@ type Options struct {
 }
 
 type Runtime struct {
+	agents         *agent.Service
 	root           project.Root
 	lock           *project.RuntimeLock
 	store          *storage.Store
@@ -76,6 +79,7 @@ type Runtime struct {
 	databaseHealth string
 	fileHealth     string
 	mu             sync.RWMutex
+	mutationGate   *agent.MutationGate
 	state          string
 	listener       net.Listener
 	server         *http.Server
@@ -139,7 +143,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Owner authentication: %w", err)
 	}
-	backendModel, err := backendmodel.NewService(context.Background(), store)
+	auditService, err := audit.NewService(context.Background(), store)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Audit History: %w", err)
+	}
+	backendModel, err := backendmodel.NewService(context.Background(), store, auditService)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Backend Model: %w", err)
 	}
@@ -158,10 +166,6 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Extension Runtime: %w", err)
-	}
-	auditService, err := audit.NewService(context.Background(), store)
-	if err != nil {
-		return nil, fmt.Errorf("cannot initialize Modelry Audit History: %w", err)
 	}
 	// Administrator 生命周期审计通过注入的 AuditSink 写入，避免 adminauth 依赖 Audit 包。
 	ownerAuth.SetAuditSink(adminAuthAuditSink{audits: auditService})
@@ -317,14 +321,37 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		serviceaccounts.NewModule(serviceAccountService),
 		audit.NewModule(auditService),
 	)
+
+	agentService, err := agent.NewService(context.Background(), store, extensionService, auditService, func(ctx context.Context, actor agent.Actor) (context.Context, error) {
+		if actor.Kind == "owner" {
+			return ownerAuth.AgentContext(ctx, actor.ID, actor.KeyID)
+		}
+		return serviceAccountService.AgentContext(ctx, actor.ID, actor.KeyID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	agentService.SetHandler(rawAdminAPI)
+	instance.mutationGate = agent.NewMutationGate()
+	agentService.SetMutationGuard(instance.mutationGate)
+	instance.agents = agentService
+	agentRouter := httpapi.NewAPIRouter(agent.NewModule(agentService))
+	businessAPI := rawAdminAPI
+	rawAdminAPI = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/admin/api/v1/agent/") {
+			agentRouter.ServeHTTP(w, r)
+		} else {
+			businessAPI.ServeHTTP(w, r)
+		}
+	})
 	ownerProtectedAPI := ownerAuth.Middleware(rawAdminAPI)
 	serviceAccountProtectedAPI := serviceAccountService.ServiceAccountMiddleware(ownerProtectedAPI, rawAdminAPI)
 	instance.server = &http.Server{
-		Handler: httpapi.NewHandler(
+		Handler: instance.serializeBusinessWrites(httpapi.NewHandler(
 			instance,
 			webui.Handler(),
 			requestService.Middleware(serviceAccountProtectedAPI),
-		),
+		)),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
@@ -448,6 +475,9 @@ func (instance *Runtime) Close() error {
 		instance.state = "stopping"
 		instance.closed = true
 		instance.mu.Unlock()
+		if instance.agents != nil {
+			instance.agents.Close()
+		}
 		var serverErr error
 		if instance.server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), drainWindow)
@@ -662,4 +692,18 @@ func probeLocalStorage(directory string) error {
 		return fmt.Errorf("cannot remove Local Storage readiness probe %q: %w", filepath.Base(name), err)
 	}
 	return nil
+}
+
+// 在单运行时内，人工业务写入与智能体的目标复核 / 写入共享同一把门锁。
+func (instance *Runtime) serializeBusinessWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		write := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+		if write && !strings.HasPrefix(r.URL.Path, "/admin/api/v1/agent/") {
+			if err := instance.mutationGate.Lock(r.Context()); err != nil {
+				return
+			}
+			defer instance.mutationGate.Unlock()
+		}
+		next.ServeHTTP(w, r)
+	})
 }

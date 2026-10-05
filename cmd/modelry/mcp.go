@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/liujingwen1225/modelry/internal/agenttools"
 	"io"
 	"strings"
 )
@@ -14,13 +15,7 @@ import (
 const mcpProtocolVersion = "2025-11-25"
 const mcpMaxMessageBytes = 2 << 20
 
-type mcpTool struct {
-	Name        string         `json:"name"`
-	Title       string         `json:"title,omitempty"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
-	Annotations map[string]any `json:"annotations,omitempty"`
-}
+type mcpTool = agenttools.Tool
 
 type mcpContent struct {
 	Type string `json:"type"`
@@ -53,6 +48,7 @@ type mcpRPCRequest struct {
 }
 
 type mcpServer struct {
+	sessionID          string
 	client             *machineAPIClient
 	initializeReceived bool
 	initialized        bool
@@ -212,15 +208,57 @@ func (server *mcpServer) callTool(request mcpRPCRequest) ([]byte, bool) {
 	if params.Arguments == nil {
 		params.Arguments = map[string]any{}
 	}
-	call, err := buildMachineAPICall(params.Name, params.Arguments)
-	if err != nil {
-		return server.reply(request.ID, nil, &mcpRPCError{Code: -32602, Message: err.Error()}), true
+
+	var result any
+	var problem *machineAPIError
+	if params.Name == "agent_operation_get" {
+		id, ok := params.Arguments["operationId"].(string)
+		if !ok || !machineIDPattern.MatchString(id) || len(params.Arguments) != 1 {
+			return server.reply(request.ID, nil, &mcpRPCError{Code: -32602, Message: "operationId 无效"}), true
+		}
+		result, problem = server.client.execute(context.Background(), machineAPICall{method: "GET", path: "/admin/api/v1/agent/operations/" + id})
+	} else if params.Name == "agent_session_get" {
+		if len(params.Arguments) != 0 {
+			return server.reply(request.ID, nil, &mcpRPCError{Code: -32602, Message: "不接受附加参数"}), true
+		}
+		if server.sessionID == "" {
+			result = map[string]any{"sessionId": "", "hint": "先调用任一业务工具创建会话"}
+		} else {
+			result, problem = server.client.execute(context.Background(), machineAPICall{method: "GET", path: "/admin/api/v1/agent/sessions/" + server.sessionID})
+		}
+	} else {
+		if _, err := agenttools.BuildCall(params.Name, params.Arguments); err != nil {
+			return server.reply(request.ID, nil, &mcpRPCError{Code: -32602, Message: err.Error()}), true
+		}
+		if server.sessionID == "" {
+			created, createProblem := server.client.execute(context.Background(), machineAPICall{method: "POST", path: "/admin/api/v1/agent/sessions", body: map[string]any{"title": "MCP 智能体会话"}})
+			if createProblem != nil {
+				return server.reply(request.ID, machineResult(createProblem.output(), true), nil), true
+			}
+			envelope, _ := created.(map[string]any)
+			data, _ := envelope["data"].(map[string]any)
+			server.sessionID, _ = data["id"].(string)
+			if server.sessionID == "" {
+				return server.reply(request.ID, machineResult(map[string]any{"error": "无效的会话响应"}, true), nil), true
+			}
+		}
+		result, problem = server.client.execute(context.Background(), machineAPICall{method: "POST", path: "/admin/api/v1/agent/sessions/" + server.sessionID + "/tools", body: map[string]any{"name": params.Name, "arguments": params.Arguments}})
 	}
-	result, problem := server.client.execute(context.Background(), call)
-	var payload any
 	if problem != nil {
-		payload = problem.output()
-		return server.reply(request.ID, machineResult(payload, true), nil), true
+		if problem.Details == nil {
+			problem.Details = map[string]any{}
+		}
+		problem.Details["sessionId"] = server.sessionID
+		problem.Details["reviewUrl"] = server.client.baseURL + "/agent?session=" + server.sessionID
+		return server.reply(request.ID, machineResult(problem.output(), true), nil), true
+	}
+
+	if envelope, ok := result.(map[string]any); ok {
+		if data, ok := envelope["data"].(map[string]any); ok {
+			if review, ok := data["reviewUrl"].(string); ok && strings.HasPrefix(review, "/agent?") {
+				data["reviewUrl"] = server.client.baseURL + review
+			}
+		}
 	}
 	return server.reply(request.ID, machineResult(result, false), nil), true
 }
@@ -254,85 +292,10 @@ func encodeMCPResponse(response mcpRPCResponse) []byte {
 }
 
 func modelryMCPTools() []mcpTool {
-	read := map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true}
-	write := map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false}
-	destructive := map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": false}
-	id := map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"}
-	stringField := func(description string) map[string]any {
-		return map[string]any{"type": "string", "description": description}
+	tools := agenttools.Tools()
+	for i := range tools {
+		tools[i].Description += " 内置 Agent 与 MCP 共用执行层；写操作依据身份策略返回 approvalRequired，需 Owner 在 reviewUrl 确认；高风险操作始终确认。"
 	}
-	object := func(properties map[string]any, required ...string) map[string]any {
-		return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
-	}
-	bodyObject := map[string]any{"type": "object", "additionalProperties": true}
-	listProperties := map[string]any{
-		"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
-		"cursor": stringField("Opaque cursor returned by the previous page"),
-	}
-	listTool := func(name, description string, extra map[string]any, required ...string) mcpTool {
-		properties := make(map[string]any, len(listProperties)+len(extra))
-		for key, value := range listProperties {
-			properties[key] = value
-		}
-		for key, value := range extra {
-			properties[key] = value
-		}
-		return mcpTool{Name: name, Description: description, InputSchema: object(properties, required...), Annotations: read}
-	}
-	collection := map[string]any{"collectionId": id}
-	record := map[string]any{"collectionId": id, "recordId": id}
-	pageFilters := map[string]any{
-		"search": stringField("Applied Model-aware text search"),
-		"filter": stringField("One supported field operator and JSON scalar"),
-		"sort":   stringField("Comma-separated Applied Field names with optional asc or desc"),
-	}
-	recordWrite := object(map[string]any{"values": map[string]any{"type": "object", "additionalProperties": true}}, "values")
-	versionBody := object(map[string]any{"expectedVersion": map[string]any{"type": "integer", "minimum": 1}}, "expectedVersion")
-	applyBody := object(map[string]any{
-		"expectedVersion": map[string]any{"type": "integer", "minimum": 1},
-		"confirmRisk":     map[string]any{"type": "boolean"},
-	}, "expectedVersion")
-	tools := []mcpTool{
-		listTool("collections_list", "List Collections in the current Project.", nil),
-		{Name: "collections_get", Description: "Read a Collection by ID.", InputSchema: object(collection, "collectionId"), Annotations: read},
-		{Name: "collections_create", Description: "Create a Collection with its initial Model.", InputSchema: object(map[string]any{"body": bodyObject}, "body"), Annotations: write},
-		listTool("records_list", "List Records in a Collection with bounded search, filter, sort, and paging.", mergeSchemaProperties(collection, pageFilters), "collectionId"),
-		{Name: "records_get", Description: "Read a Record from a Collection.", InputSchema: object(record, "collectionId", "recordId"), Annotations: read},
-		{Name: "records_create", Description: "Create a Record using the Applied Model; Runtime-managed fields are not writable.", InputSchema: object(map[string]any{"collectionId": id, "body": recordWrite}, "collectionId", "body"), Annotations: write},
-		{Name: "records_update", Description: "Update a Record through the applied Record API.", InputSchema: object(map[string]any{"collectionId": id, "recordId": id, "body": recordWrite}, "collectionId", "recordId", "body"), Annotations: write},
-		{Name: "records_delete", Description: "Delete a Record through the applied Record API.", InputSchema: object(record, "collectionId", "recordId"), Annotations: destructive},
-		{Name: "schema_pending_get", Description: "Read the durable Schema Pending Change for a Collection.", InputSchema: object(collection, "collectionId"), Annotations: read},
-		{Name: "schema_operation_add", Description: "Add a Field, Relation, or Index operation to the durable Pending Change.", InputSchema: object(map[string]any{"collectionId": id, "body": bodyObject}, "collectionId", "body"), Annotations: write},
-		{Name: "schema_operation_update", Description: "Update an operation in the durable Schema Pending Change.", InputSchema: object(map[string]any{"collectionId": id, "operationId": id, "body": bodyObject}, "collectionId", "operationId", "body"), Annotations: write},
-		{Name: "schema_operation_remove", Description: "Remove an operation from the durable Schema Pending Change.", InputSchema: object(map[string]any{"collectionId": id, "operationId": id}, "collectionId", "operationId"), Annotations: destructive},
-		{Name: "schema_preview", Description: "Preview the durable Pending Change at an expected version.", InputSchema: object(map[string]any{"collectionId": id, "body": versionBody}, "collectionId", "body"), Annotations: read},
-		{Name: "schema_apply", Description: "Apply the reviewed Schema Pending Change through the standard Change lifecycle.", InputSchema: object(map[string]any{"collectionId": id, "body": applyBody}, "collectionId", "body"), Annotations: destructive},
-		{Name: "schema_discard", Description: "Discard the Schema Pending Change using its expected version.", InputSchema: object(map[string]any{"collectionId": id, "body": versionBody}, "collectionId", "body"), Annotations: destructive},
-		listTool("schema_history", "List Applied Model history for a Collection.", collection, "collectionId"),
-		{Name: "access_rules_get", Description: "Read applied and pending Access Rules for a Collection.", InputSchema: object(collection, "collectionId"), Annotations: read},
-		{Name: "access_rules_save", Description: "Save a versioned Access Rule Pending Change; rules continue to govern Application Data Plane access.", InputSchema: object(map[string]any{"collectionId": id, "body": bodyObject}, "collectionId", "body"), Annotations: write},
-		{Name: "access_rules_apply", Description: "Apply saved Access Rule changes at the expected version.", InputSchema: object(map[string]any{"collectionId": id, "body": versionBody}, "collectionId", "body"), Annotations: destructive},
-		{Name: "access_rules_discard", Description: "Discard Access Rule changes at the expected version.", InputSchema: object(map[string]any{"collectionId": id, "body": versionBody}, "collectionId", "body"), Annotations: destructive},
-		listTool("requests_list", "List safe Application RequestRecord metadata.", pageFilters),
-		{Name: "requests_get", Description: "Read one safe Application Request Detail by canonical request ID.", InputSchema: object(map[string]any{"requestId": id}, "requestId"), Annotations: read},
-		listTool("audit_list", "List durable Control Plane AuditRecords.", nil),
-		{Name: "audit_get", Description: "Read one durable Control Plane AuditRecord.", InputSchema: object(map[string]any{"auditRecordId": id}, "auditRecordId"), Annotations: read},
-	}
-	for index := range tools {
-		if info, exists := machineOperationCatalog[tools[index].Name]; exists {
-			tools[index].Description = strings.TrimSpace(tools[index].Description) + " Canonical API: `" + info.method + " " + info.path + "`. Required Permission: `" + info.permission + "`. Purpose: " + info.purpose + ". The Modelry Runtime enforces this Permission and returns structured denial details when access is denied."
-		}
-	}
+	tools = append(tools, mcpTool{Name: "agent_operation_get", Description: "查询本账号提出的操作状态与真实执行结果；不能批准操作", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"operationId": map[string]any{"type": "string"}}, "required": []string{"operationId"}, "additionalProperties": false}}, mcpTool{Name: "agent_session_get", Description: "查询本 MCP 会话及审核链接；数据授权在 Admin 完成", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}})
 	return tools
-}
-
-func mergeSchemaProperties(first, second map[string]any) map[string]any {
-	result := make(map[string]any, len(first)+len(second))
-	for key, value := range first {
-		result[key] = value
-	}
-	for key, value := range second {
-		result[key] = value
-	}
-	return result
 }

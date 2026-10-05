@@ -15,6 +15,30 @@ async function render(ui: React.ReactNode) {
 describe('Changes page', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('shows the actual before and after attributes once for an applied change', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'zh-CN');
+    const migration = { id: 'mig_1', collectionId: 'col_posts', changeSetId: 'chg_applied', applyAttemptId: 'attempt_1', appliedAt: '2026-10-04T10:00:00Z', diff: [{
+      kind: 'field', action: 'update', name: 'afd', before: { id: 'fld_1', name: 'afd', type: 'text', required: true }, after: { id: 'fld_1', name: 'afd', type: 'text', required: true, unique: true },
+    }] };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.includes('/changes?')) return Promise.resolve(Response.json({ data: [migration] }));
+      if (path.includes('/collections?')) return Promise.resolve(Response.json({ data: [{ id: 'col_posts', name: 'posts', fields: [] }] }));
+      return Promise.resolve(Response.json({ data: { collectionId: 'col_posts', changeSetId: 'chg_applied', status: 'applied', version: 2,
+        operations: [{ id: 'op_1', kind: 'field', action: 'update', definition: { name: 'afd', unique: true } }],
+        applyAttempts: [], appliedMigration: migration,
+      } }));
+    }));
+    await render(<MemoryRouter initialEntries={['/changes?tab=history&changeSet=chg_applied']}><ChangesPage /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: '修改字段 afd' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '修改前' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '修改后' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: '唯一 否 是' })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: '必填' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '待应用变更' })).not.toBeInTheDocument();
+    expect(screen.queryByText('update field afd')).not.toBeInTheDocument();
+  });
+
   it('restores a recovery deep link and keeps the selected Collection actionable', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {

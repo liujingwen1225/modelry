@@ -1,3 +1,4 @@
+import { ChangeDiff, changeSummary } from './change-diff';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { SearchInput } from '@/components/ui/search-input';
 import { useEffect, useMemo, useState } from 'react';
@@ -7,7 +8,7 @@ import { useI18n, type TranslationKey } from '../i18n/i18n';
 import { ApiClientError } from '../api/client';
 import { Button, ButtonLink } from '../components/button';
 import { EmptyState, ErrorState, LoadingState, PartialState, StatusChip } from '../components/states';
-import { diffLabel, preconditionMessage, preconditionStatus } from './preview-copy';
+import { preconditionMessage, preconditionStatus } from './preview-copy';
 import { applySchemaChange, discardSchemaChange, getChange, listAllChanges, listAllCollections, previewSchemaChange, type ChangeDetail, type ChangeListItem, type Collection, type PendingChange, type PendingOperation, type SchemaPreview } from './client';
 
 // Spec 0001 §3.2：`变更` 的二级工作面固定为「待应用 / 已应用历史 / 结构漂移」，
@@ -48,7 +49,7 @@ function changeError(
 function operationSummary(operation: PendingOperation, translate: ReturnType<typeof useI18n>['t']) {
   const definition = safeRecord(operation.definition);
   const name = typeof definition.name === 'string' ? definition.name : operation.targetId ? translate('changes.savedItem') : translate('changes.schema');
-  const subject = operation.kind === 'relation' ? translate('changes.relation') : operation.kind;
+  const subject = translate(`changes.diffKinds.${operation.kind === 'index' ? 'index' : operation.kind === 'relation' ? 'relation' : 'field'}`);
   const action = operation.action === 'add' ? translate('changes.added') : operation.action === 'update' ? translate('changes.updated') : translate('changes.removed');
   return `${action} ${subject} ${name}`;
 }
@@ -58,6 +59,7 @@ function summaryFor(item: ChangeListItem, translate: ReturnType<typeof useI18n>[
     return item.operations.length === 1 ? operationSummary(item.operations[0]!, translate) : translate('changes.schemaChanges', { count: item.operations.length });
   }
   const count = item.diff?.length ?? 0;
+  if (count === 1) return changeSummary(item.diff![0]!, translate);
   return translate(count === 1 ? 'changes.appliedSchemaChange' : 'changes.appliedSchemaChanges', { count });
 }
 
@@ -264,6 +266,7 @@ function ChangeDetailPanel({
         onRetry();
       } else {
         setNotice('changes.appliedResult');
+        onRetry();
       }
       onChanged();
     } catch (error) {
@@ -296,7 +299,7 @@ function ChangeDetailPanel({
       <div className="min-w-0">
         <p className="eyebrow">{t('changes.detailEyebrow')}</p>
         <h2 className="truncate text-base font-semibold">{collectionNames.get(detail.collectionId) ?? t('changes.collection')}</h2>
-        <span className="text-xs text-muted-foreground">{statusLabel(detail.status, t)}</span>
+        {detail.appliedMigration && <span className="text-xs text-muted-foreground">{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span>}
       </div>
       <StatusChip state={detail.status}>{statusLabel(detail.status, t)}</StatusChip>
     </div>
@@ -305,7 +308,9 @@ function ChangeDetailPanel({
     {actionError !== undefined && (() => { const copy = changeError(actionError, t, errorMessage); return <ErrorState description={copy.message} title={copy.title} />; })()}
     {failed && <div className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2.5 text-xs text-danger" role="alert"><AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} /><div className="min-w-0"><strong className="block">{t('changes.recoveryNeeded')}</strong><span className="opacity-90">{t('changes.recoverySummary')}</span></div></div>}
     {detail.status === 'needsReview' && <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs text-warning" role="status"><ShieldAlert aria-hidden="true" className="mt-0.5 shrink-0" size={15} /><span>{t('changes.reviewHint')}</span></div>}
-    {operations.length > 0 && <section className="flex flex-col gap-1.5"><h3>{t('changes.pendingChanges')}</h3><ul className="m-0 flex list-none flex-col gap-1 p-0">{operations.map((operation) => <li className="border-b py-3 text-sm text-ink-secondary" key={operation.id}>{operationSummary(operation, t)}</li>)}</ul></section>}
+    {!detail.appliedMigration && operations.length > 0 && <section className="flex flex-col gap-1.5"><h3>{t('changes.pendingChanges')}</h3><ul className="m-0 flex list-none flex-col gap-1 p-0">{operations.map((operation) => <li className="border-b py-3 text-sm text-ink-secondary" key={operation.id}>{operationSummary(operation, t)}</li>)}</ul></section>}
+
+    {detail.appliedMigration?.diff && <section className="flex min-w-0 flex-col gap-3"><h3 className="text-sm font-semibold">{t('changes.changeContent')}</h3><ChangeDiff changes={detail.appliedMigration.diff} /></section>}
 
     {pending && operations.length > 0 && (
       <section aria-label={t('changes.reviewTitle')} className="flex min-w-0 flex-col gap-3 border-t pt-4">
@@ -340,15 +345,7 @@ function ChangeDetailPanel({
 
             {preview.diff.length > 0 && <div className="flex flex-col gap-1.5">
               <h5 className="m-0 text-xs font-semibold text-foreground">{t('schema.whatWillChange')}</h5>
-              <ul className="m-0 flex list-none flex-col gap-1 p-0">
-                {preview.diff.map((change, index) => (
-                  <li className="flex items-center gap-2 border-b py-3 text-[13px]" key={index}>
-                    <span aria-hidden="true" className="font-mono font-bold text-ink-secondary">{change.action === 'remove' ? '−' : change.action === 'update' ? '~' : '+'}</span>
-                    <span className="min-w-0 truncate text-ink-secondary">{diffLabel(change, t)}</span>
-                    <code className="ml-auto text-xs text-muted-foreground">{String(change.kind ?? '')}</code>
-                  </li>
-                ))}
-              </ul>
+              <ChangeDiff changes={preview.diff} />
             </div>}
 
             <div className="flex flex-wrap items-center gap-2 rounded-md border bg-secondary px-3 py-2 text-xs">
@@ -407,7 +404,7 @@ function ChangeDetailPanel({
       </section>
     )}
 
-    {detail.applyAttempts.length > 0 && <section className="flex flex-col gap-1.5"><h3>{t('changes.applyAttempts')}</h3><ol className="m-0 flex list-none flex-col gap-2 p-0">{detail.applyAttempts.map((rawAttempt, index) => {
+    {!detail.appliedMigration && detail.applyAttempts.length > 0 && <section className="flex flex-col gap-1.5"><h3>{t('changes.applyAttempts')}</h3><ol className="m-0 flex list-none flex-col gap-2 p-0">{detail.applyAttempts.map((rawAttempt, index) => {
       const attempt = safeRecord(rawAttempt);
       return <li className="flex flex-col gap-1 rounded-md border bg-secondary px-3 py-2" key={String(attempt.id ?? index)}>
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><strong className="font-semibold text-foreground">{typeof attempt.status === 'string' ? statusLabel(attempt.status, t) : t('changes.attempt')}</strong><time className="text-xs text-muted-foreground">{typeof attempt.startedAt === 'string' ? new Date(attempt.startedAt).toLocaleString() : ''}</time></div>
@@ -415,9 +412,9 @@ function ChangeDetailPanel({
         <Collapsible data-slot="collapsible" className="text-xs text-muted-foreground [&_pre]:mt-1.5 [&_pre]:max-h-52 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-card [&_pre]:p-2 [&_pre]:text-[13px] [&_[data-slot=collapsible-trigger]]:w-fit [&_[data-slot=collapsible-trigger]]:cursor-pointer [&_[data-slot=collapsible-trigger]]:font-semibold [&_[data-slot=collapsible-trigger]:hover]:text-foreground"><CollapsibleTrigger>{t('changes.technicalDetails')}</CollapsibleTrigger><CollapsibleContent><pre>{JSON.stringify(diagnosticDetails(rawAttempt), null, 2)}</pre></CollapsibleContent></Collapsible>
       </li>;
     })}</ol></section>}
-    {detail.appliedMigration && <section className="flex flex-col gap-1.5"><h3>{t('changes.appliedModel')}</h3><div className="flex items-center gap-2 border-b py-3 text-sm text-ink-secondary"><Check aria-hidden="true" className="shrink-0 text-success" size={15} /><span>{t('changes.appliedAt', { date: new Date(detail.appliedMigration.appliedAt).toLocaleString() })}</span></div>{detail.appliedMigration.diff && <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-ink-secondary">{detail.appliedMigration.diff.map((diff, index) => <li key={index}>{String(diff.action ?? t('changes.changed'))} {String(diff.kind ?? t('changes.schema'))} {String(diff.name ?? '')}</li>)}</ul>}</section>}
+
     {detail.recoveryState && <section className="flex flex-col gap-1.5"><h3>{t('changes.recommendedSteps')}</h3><ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-ink-secondary">{recoveryActions.map((action, index) => <li key={index}>{action}</li>)}</ul></section>}
     <div className="flex flex-wrap gap-2"><ButtonLink size="small" to={`/collections/${encodeURIComponent(detail.collectionId)}/model`}>{failed ? t('changes.continueRecovery') : t('changes.reviewInSchema')}<ArrowRight aria-hidden="true" size={14} /></ButtonLink></div>
-    {detail.appliedMigration && <Collapsible data-slot="collapsible" className="border-t pt-3 text-xs text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_[data-slot=collapsible-trigger]]:w-fit [&_[data-slot=collapsible-trigger]]:cursor-pointer [&_[data-slot=collapsible-trigger]]:font-semibold [&_[data-slot=collapsible-trigger]:hover]:text-foreground"><CollapsibleTrigger>{t('changes.technicalDetails')}</CollapsibleTrigger><CollapsibleContent><dl><div className="flex gap-2"><dt className="font-semibold">{t('changes.changeReference')}</dt><dd className="m-0"><code>{detail.changeSetId}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.appliedModelRecord')}</dt><dd className="m-0"><code>{detail.appliedMigration.id}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.applyAttempt')}</dt><dd className="m-0"><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl></CollapsibleContent></Collapsible>}
+    {detail.appliedMigration && <Collapsible data-slot="collapsible" className="border-t pt-3 text-xs text-muted-foreground [&_dl]:mt-2 [&_dl]:grid [&_dl]:gap-1 [&_[data-slot=collapsible-trigger]]:w-fit [&_[data-slot=collapsible-trigger]]:cursor-pointer [&_[data-slot=collapsible-trigger]]:font-semibold [&_[data-slot=collapsible-trigger]:hover]:text-foreground"><CollapsibleTrigger>{t('changes.technicalDetails')}</CollapsibleTrigger><CollapsibleContent><dl><div className="flex gap-2"><dt className="font-semibold">{t('changes.changeReference')}</dt><dd className="m-0"><code>{detail.changeSetId}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.appliedModelRecord')}</dt><dd className="m-0"><code>{detail.appliedMigration.id}</code></dd></div><div className="flex gap-2"><dt className="font-semibold">{t('changes.applyAttempt')}</dt><dd className="m-0"><code>{detail.appliedMigration.applyAttemptId}</code></dd></div></dl>{detail.applyAttempts.length > 0 && <div className="mt-3"><h4>{t('changes.applyAttempts')}</h4><pre className="mt-2 max-h-52 overflow-auto rounded-md border bg-secondary p-2">{JSON.stringify(diagnosticDetails(detail.applyAttempts), null, 2)}</pre></div>}</CollapsibleContent></Collapsible>}
   </aside>;
 }

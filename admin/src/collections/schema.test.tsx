@@ -125,7 +125,7 @@ describe('Collection schema workflow', () => {
     renderSchema();
 
     expect(await screen.findByRole('heading', { name: '结构' })).toBeInTheDocument();
-    expect(screen.getByText('定义该集合可以承载的数据。保存的编辑会保留在这里，直到你应用它们。')).toBeInTheDocument();
+    expect(screen.queryByText('定义该集合可以承载的数据。保存的编辑会保留在这里，直到你应用它们。')).not.toBeInTheDocument();
     // 导航与面板必须整体中文化，不能残留英文产品术语。
     expect(screen.getByRole('button', { name: '关系' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '索引' })).toBeInTheDocument();

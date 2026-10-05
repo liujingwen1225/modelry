@@ -58,6 +58,7 @@ const primaryNavigationLabels = [
   'Overview',
   'Collections',
   'API workspace',
+  'Agent',
   'Hooks & Events',
   'Scheduled jobs',
   'Changes',
@@ -80,18 +81,15 @@ describe('Modelry Admin shell', () => {
     expect(links.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);
     expect(links.map((link) => link.getAttribute('title'))).toEqual(primaryNavigationLabels);
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/', '/collections', '/api', '/events', '/schedules', '/changes', '/access', '/activity', '/settings',
+      '/', '/collections', '/api', '/agent', '/events', '/schedules', '/changes', '/access', '/activity', '/settings',
     ]);
 
     const groups = Array.from(navigation.querySelectorAll('[data-nav-group-label]')).map((label) => label.textContent);
     expect(groups).toEqual(['Workspace', 'Build', 'Operate', 'System']);
 
-    // 顶栏显示当前目的地；侧栏底部显示真实 Runtime 上下文（状态来自诊断请求，需等待其解析）。
+    // 顶栏显示当前目的地；侧栏不再显示底部项目栏。
     expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('Overview');
-    const runtimeCard = document.querySelector('[data-shell-runtime-context]');
-    expect(runtimeCard).not.toBeNull();
-    expect(runtimeCard).toHaveAttribute('href', '/settings/runtime');
-    await waitFor(() => expect(runtimeCard?.textContent).toContain('Ready'));
+    expect(document.querySelector('[data-shell-runtime-context]')).toBeNull();
   });
 
   it('受限管理员的运行时事实不提供未授权的设置入口', async () => {
@@ -108,7 +106,8 @@ describe('Modelry Admin shell', () => {
     render(<App />);
     const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
     expect(within(navigation).queryByRole('link', { name: 'System settings' })).not.toBeInTheDocument();
-    expect(document.querySelector('[data-shell-runtime-context]')).not.toHaveAttribute('href');
+    expect(within(navigation).queryByRole('link', { name: 'Agent' })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-shell-runtime-context]')).toBeNull();
     expect(document.querySelector('[data-runtime-badge]')).not.toHaveAttribute('href');
   });
 
@@ -194,16 +193,21 @@ describe('Modelry Admin shell', () => {
     expect(await screen.findByRole('heading', { name: 'API workspace', level: 1 })).toBeInTheDocument();
   });
 
-  it('opens the MCP guide and links back to the new destinations', async () => {
+  it('旧 MCP 入口跳转统一 Agent 页面，配置页不重复执行历史', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     window.history.replaceState({}, '', '/mcp');
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'MCP', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Agent', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
-    // MCP 不占一级菜单，但接入入口必须可达（spec §3.3）。
-    expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('MCP');
+    // 侧栏仅保留 Agent，旧链接打开它的 MCP 配置页签。
+    const navigation = screen.getByRole('navigation', { name: 'Project navigation' });
+    expect(within(navigation).getByRole('link', { name: 'Agent' })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('Agent');
+    expect(window.location.pathname + window.location.search).toBe('/agent?tab=mcp');
+    expect(screen.getByRole('link', {name: 'MCP configuration'})).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByText('Recent agent operations')).not.toBeInTheDocument();
   });
 
   it('persists a keyboard reachable light and dark theme toggle', async () => {

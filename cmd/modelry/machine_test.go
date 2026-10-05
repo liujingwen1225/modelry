@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"github.com/liujingwen1225/modelry/internal/agenttools"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -155,22 +156,36 @@ func TestMCPStdioNegotiatesToolsAndCallsCanonicalHTTPOnly(t *testing.T) {
 	var calls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		calls++
-		if request.URL.Path == "/admin/api/v1/collections" {
-			if request.Method != http.MethodGet || request.Header.Get("Authorization") != "Bearer mcp-secret" {
-				t.Errorf("unexpected MCP API request: %s %s auth=%q", request.Method, request.URL, request.Header.Get("Authorization"))
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"data":[{"id":"col_123","name":"posts"}]}`)
+		if request.Header.Get("Authorization") != "Bearer mcp-secret" {
+			t.Errorf("MCP 丢失服务账号认证")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if request.URL.Path == "/admin/api/v1/agent/sessions" && request.Method == http.MethodPost {
+			io.WriteString(w, `{"data":{"id":"ags_test"}}`)
 			return
 		}
-		if request.URL.Path == "/admin/api/v1/collections/col_123/schema/apply" {
-			w.Header().Set("Content-Type", "application/json")
+		if request.URL.Path != "/admin/api/v1/agent/sessions/ags_test/tools" || request.Method != http.MethodPost {
+			t.Errorf("MCP 绕过共享执行层: %s %s", request.Method, request.URL.Path)
+			http.NotFound(w, request)
+			return
+		}
+		var in struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&in); err != nil {
+			t.Fatal(err)
+		}
+		if in.Name == "collections_list" {
+			io.WriteString(w, `{"data":{"operation":{"state":"succeeded","result":{"data":[{"id":"col_123","name":"posts"}]}}}}`)
+			return
+		}
+		if in.Name == "schema_apply" {
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = io.WriteString(w, `{"error":{"code":"FORBIDDEN","message":"Permission denied","hint":"Check Service Account Permission","requestId":"req_12345678","details":{"requiredPermission":"schema.apply"}}}`)
+			io.WriteString(w, `{"error":{"code":"FORBIDDEN","message":"Permission denied","hint":"Check Service Account Permission","requestId":"req_12345678","details":{"requiredPermission":"schema.apply"}}}`)
 			return
 		}
-		t.Errorf("MCP called an unapproved path: %s %s", request.Method, request.URL.Path)
-		http.NotFound(w, request)
+		t.Errorf("未知工具: %s", in.Name)
 	}))
 	defer server.Close()
 	client, err := newMachineAPIClient(server.URL, "mcp-secret")
@@ -189,8 +204,8 @@ func TestMCPStdioNegotiatesToolsAndCallsCanonicalHTTPOnly(t *testing.T) {
 	if err := serveMCP(strings.NewReader(input), &stdout, &stderr, client, "test"); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 2 {
-		t.Fatalf("HTTP call count=%d, want only the two valid fixed operations", calls)
+	if calls != 3 {
+		t.Fatalf("HTTP call count=%d, want a session and two valid shared operations", calls)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("MCP diagnostics unexpectedly reported an error: %s", stderr.String())
@@ -229,12 +244,15 @@ func TestMCPStdioNegotiatesToolsAndCallsCanonicalHTTPOnly(t *testing.T) {
 	if len(tools.Tools) < 20 {
 		t.Fatalf("core MCP tool set is incomplete: %d tools", len(tools.Tools))
 	}
-	if len(tools.Tools) != len(machineOperationCatalog) {
+	if len(tools.Tools) != len(modelryMCPTools()) {
 		t.Fatalf("MCP tools=%d operation catalog=%d", len(tools.Tools), len(machineOperationCatalog))
 	}
 	for _, tool := range tools.Tools {
-		info, exists := machineOperationCatalog[tool.Name]
-		if !exists || !strings.Contains(tool.Description, info.method+" "+info.path) || !strings.Contains(tool.Description, info.permission) {
+		if tool.Name == "agent_operation_get" || tool.Name == "agent_session_get" {
+			continue
+		}
+		info, exists := agenttools.Operations[tool.Name]
+		if !exists || !strings.Contains(tool.Description, info.Method+" "+info.Path) || !strings.Contains(tool.Description, info.Permission) {
 			t.Errorf("MCP tool %q is missing its canonical path or Permission: %q", tool.Name, tool.Description)
 		}
 	}
