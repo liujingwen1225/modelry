@@ -30,7 +30,7 @@ function DropdownMenuItem({ className, variant = 'default', ...props }: React.Co
       data-slot="dropdown-menu-item"
       data-variant={variant}
       className={cn(
-        "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-[11px] outline-none transition-colors data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-55 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:text-current",
+        "relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-55 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:text-current",
         variant === 'destructive' && 'text-danger focus:bg-danger-soft focus:text-danger',
         className,
       )}
@@ -40,7 +40,7 @@ function DropdownMenuItem({ className, variant = 'default', ...props }: React.Co
 }
 
 function DropdownMenuLabel({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.GroupLabel>) {
-  return <DropdownMenuPrimitive.GroupLabel data-slot="dropdown-menu-label" className={cn('px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground', className)} {...props} />;
+  return <DropdownMenuPrimitive.GroupLabel data-slot="dropdown-menu-label" className={cn('px-2.5 py-1.5 text-xs font-semibold text-muted-foreground', className)} {...props} />;
 }
 
 function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {

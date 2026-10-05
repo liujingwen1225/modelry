@@ -432,7 +432,7 @@ describe('Hooks & Events and Scheduled jobs Admin surfaces', () => {
     expect(await screen.findByRole('heading', { name: '定时任务' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '创建定时触发' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '立即运行' })).toBeInTheDocument();
-    expect(screen.getByText('按五字段 UTC Cron 计划发送 Webhook。定时触发不会执行代码。')).toBeInTheDocument();
+    expect(screen.queryByText('按五字段 UTC Cron 计划发送 Webhook。定时触发不会执行代码。')).not.toBeInTheDocument();
   });
 
   it('does not offer retry for a capacity-exceeded Delivery without a retained payload', async () => {

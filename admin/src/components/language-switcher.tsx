@@ -9,7 +9,7 @@ export function LanguageSwitcher() {
   return (
     <Button
       aria-label={label}
-      className="shrink-0 font-mono"
+      className="size-11 shrink-0 font-mono"
       size="icon"
       data-locale-switcher
       onClick={() => setLocale(nextLocale)}

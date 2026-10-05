@@ -74,6 +74,7 @@ WORKSPACE
 BUILD
   集合 / Collections
   API 工作区 / API Workspace
+  MCP / 智能体接入 / MCP / Agent connection
   Hooks & Events
   定时任务 / Scheduled Jobs
 
@@ -92,7 +93,8 @@ SYSTEM
 | --- | --- | --- |
 | 总览 | 当前项目真正需要继续处理的工作、最近上下文和必要运行状态 | 不做独立 KPI Dashboard |
 | 集合 | Collection 全生命周期入口：记录、Schema、集合访问规则、集合 API | Relations、Indexes 并入 Schema |
-| API 工作区 | 全局端点浏览、请求调试、OpenAPI 与请求日志 | Requests 并入本页；SDK / Contract 由 OpenAPI 上下文提供；MCP 作为开发者接入入口保留但不占一级菜单 |
+| API 工作区 | 全局端点浏览、请求调试、OpenAPI 与请求日志 | Requests 并入本页；SDK / Contract 由 OpenAPI 上下文提供 |
+| MCP / 智能体接入 | 编码智能体连接说明、Service Account 权限摘要与接入配置 | 凭据管理仍进入访问与认证，操作审计仍进入活动记录 |
 | Hooks & Events | 生命周期 Hook、Webhook、事件触发与外部投递事实 | 不再使用笼统的 Automations 一级菜单；定时任务移出 |
 | 定时任务 | 独立管理时间驱动任务、时间规则、启停、手动执行与执行历史 | 原 Scheduled Triggers / Schedules |
 | 变更 | 待应用 Change Set、已应用历史与 Schema Drift | Model health / Drift 并入本页 |
@@ -109,6 +111,7 @@ SYSTEM
 | 总览 | 无 | 总览是一屏工作台，不通过 Tab 拆分状态 |
 | 集合 | 列表页无 Tab；进入 Collection 后：`记录` / `Schema` / `访问规则` / `API` | Relations 与 Indexes 作为 Schema 内容呈现，不再拆二级页 |
 | API 工作区 | `端点` / `OpenAPI` / `请求日志` | SDK / Contract 从 OpenAPI 上下文提供；MCP 以开发者接入卡片、命令面板或关联入口提供 |
+| MCP / 智能体接入 | 无 | 直接进入现有 `/mcp` 接入说明页；入口沿用 Owner 可见边界 |
 | Hooks & Events | `Hooks` / `Webhooks` / `事件触发` / `投递历史` | 只处理事件驱动能力；不包含定时任务 |
 | 定时任务 | `任务` / `执行历史` | 任务页负责 Cron / 固定时间、时区、启停、最近/下次执行和手动运行 |
 | 变更 | `待应用` / `已应用历史` / `结构漂移` | Drift 只能生成受控修复变更，不允许静默修复 |
@@ -140,7 +143,7 @@ Collection 工作区保持同一个 Collection 上下文：
 - Relations / Indexes → Collection `Schema`；
 - Administrators、Application Auth、Service Account / API Token → `访问与认证`；
 - Runtime、Storage、Mail、Secrets、Data import/export、Backup/Restore → `系统设置`；
-- MCP 不占一级菜单，但连接方式、Service Account 权限摘要和 Agent 操作入口仍必须可发现；
+- MCP 在构建分组提供一级入口，连接方式、Service Account 权限摘要和 Agent 操作入口必须可发现；
 - SDK / Contract 不占一级菜单，通过 `API 工作区 / OpenAPI` 及相邻接入说明继续提供。
 
 ## 3.4 导航行为
@@ -222,15 +225,7 @@ Shell 的侧栏使用低对比度底色，当前目的地使用清晰的选中�
 
 总览不是传统运维 Dashboard，也不是所有子系统数字的汇总页。页面只保留能帮助用户继续工作、发现异常或进入下一步的真实信息。
 
-页面标题与主操作：
-
-~~~text
-项目总览
-把今天真正需要处理的事情放在这里：数据结构、API 使用、
-事件执行、定时任务和待应用变更。系统诊断保留，但不成为页面主角。
-
-[ 打开 API 工作区 ]    [ 审查 N 条变更 ]
-~~~
+总览由主导航标识位置，不重复显示页面标题或固定介绍。主操作进入 API 工作区或审查待应用变更，具体操作按当前权限和真实状态显示。
 
 当没有待应用变更时，不显示“审查 0 条变更”；主操作根据项目真实状态切换为 `新建集合`、`创建第一条记录`、`调试 API` 等下一步。
 
@@ -288,7 +283,7 @@ MCP / 编码智能体作为低权重接入卡保留在快捷开始下方：
 - 显示当前绑定的 Service Account / 权限摘要；
 - 凭据管理仍进入 `访问与认证`；
 - Agent 的审计操作仍进入 `活动记录`；
-- MCP 不占一级菜单，也不因为导航收敛而删除。
+- MCP 同时在侧栏构建分组提供直接入口。
 
 快捷开始根据权限与当前项目状态隐藏不适用动作，不显示无实现能力的 Placeholder。
 
@@ -370,7 +365,7 @@ Schema drift      1 项
 
 页面目的：找到要管理的业务数据模型，或创建新的 Collection。
 
-- 标题下说明 Collection 定义数据字段并提供记录、规则和 API 工作区。
+- 从搜索、筛选与创建操作开始，不重复显示导航标题或固定介绍；首次使用提示放在空状态。
 - 主操作为 `Create Collection`。
 - 支持搜索、Normal / Auth 类型筛选、排序和卡片/列表切换；默认使用卡片，显式选择列表后将视图保存在 URL 中。
 - 每项显示名称、类型、记录数、字段数和最近更新。Pending / Failed 只在需要关注时强调。
@@ -407,7 +402,7 @@ updatedAt     Date / Time    System                           [ Remove ]
 规则：
 
 - Name 可读、必填、唯一性错误就地呈现。
-- 创建页默认展示 `id`、`createdAt`、`updatedAt`，与自定义字段共用一个列表。底部 `New` 添加字段，新增行位于 `id` 下方；仅 `id` 必须保留并锁定，两个时间字段在创建时可移除并耐久保存。认证集合的 `email` 保持必填唯一。运行时时间元数据仍由系统管理。
+- 创建页默认展示 `id`、`createdAt`、`updatedAt`，与自定义字段共用一个列表。底部 `New` 使用带图标的类型选择面板，宽屏四列、窄屏两列；先选择字段类型，再插入字段；自动提供可修改且不重名的字段名（如 `number_1`），并选中名称便于直接替换。字段名按 Enter 也打开类型选择。新增行位于 `id` 下方；仅 `id` 必须保留并锁定，两个时间字段在创建时可移除并耐久保存。认证集合的 `email` 保持必填唯一。运行时时间元数据仍由系统管理。
 - 字段录入后焦点返回新字段行；Enter 只在输入完整且动作明确时添加字段。
 - 重复名称在当前行提示，不清空其它字段或滚回页面顶部。
 - 建立 Relation 时通过行尾字段设置按钮配置目标 Collection 和 cardinality。
@@ -420,16 +415,16 @@ updatedAt     Date / Time    System                           [ Remove ]
 
 ## 6.3 Collection 工作区
 
-标题区持续提供 Collection 名称、类型、状态以及进入其它集合的返回路径。主操作由当前子页面任务决定。
+标题区以紧凑单行持续提供一次 Collection 名称、类型、待处理状态以及返回集合的入口。描述、模型版本与字段数量通过集合详情入口按需展开。当前子页面不重复展示集合名称、页签名称和固定介绍；保留隐藏标题语义。主操作并入当前子页面工具栏。
 
 `Records` | `Model` | `Access` | `API` 四个子页共享 Collection 身份和 pending-change 状态。
 
 记录页头示意：
 
 ~~~text
-Collections / posts
-posts                                     [ Create record ]
+← Collections   posts   Normal            [ Collection details ]
 Records   Model   Access   API
+Search   Filter   Sort   Columns           [ Create record ]
 ~~~
 
 ## 6.4 Records
@@ -578,6 +573,8 @@ users        Remove legacyRole            Needs review     1 hour ago
 - Discard 只允许针对尚未应用的 pending operation，并说明会删除哪些已保存操作。
 
 ## 10.3 Applied history 与 Schema Drift
+
+变更详情优先展示操作对象与产品属性的修改前 / 修改后，仅突出实际变化；新增与删除明确标识。已应用详情不重复展示待应用操作，应用尝试与内部引用收进技术详情。历史缺少属性快照时明确说明，不用当前模型推断历史。模型预览与变更详情共用属性对比。
 
 Applied history 展示已应用变更事实。Migration ID、Change ID、Ledger 等实现信息只进入 Technical details。
 
@@ -763,7 +760,7 @@ Mutation 默认等待服务端权威结果。Pending / Applied / Failed 状态�
 | 活动记录 | `/activity` | `?source=audit｜facts`（缺省 audit，作为筛选器） |
 | 审计详情 | `/activity/audit/:auditRecordId` | `?from=` 返回上下文 |
 | 系统设置 | `/settings`、`/settings/runtime｜storage｜mail｜secrets｜data｜backups` | 页内本地设置导航 |
-| MCP 接入说明 | `/mcp` | 不占一级导航，从总览与 API 工作区可达 |
+| MCP / 智能体接入 | `/mcp` | 侧栏构建分组的一级入口，同时从总览与 API 工作区可达 |
 
 页内 Tab 是 URL 状态，必须用真实链接表达（可分享、可新开标签页、可前进/后退），并用 `aria-current="page"` 标记当前工作面；切换 Tab 不得丢弃同一页面内的其它可分享参数。
 
@@ -992,3 +989,17 @@ Run API request
 - 旧深链接映射到新信息架构并保留 resource/query context；
 - Light / Dark、English / Simplified Chinese、响应式和 WCAG 2.2 AA 验收通过；
 - 完成第 18 节真实浏览器的业务闭环与耐久性验收。
+
+
+## Agent 与模型（共享 Agent 工作台）
+
+顶栏 Agent 打开桌面右侧面板 / 窄屏全屏面板，`/agent` 提供完整会话和审核工作面。内置 Agent 与 MCP 操作同一套工具，界面只显示真实执行状态。普通操作支持固定清单批次确认，高风险独立确认；目标或权限变化必须重新预览。
+
+`/settings/agent` 由 Owner 管理 API 地址、模型名、加密密钥、连接测试和内置 Agent 操作策略。MCP 服务账号的策略放在其详情，实际许可与策略相交。默认写入需确认，可按许可授权普通写入自动；删除、应用、丢弃、启用、外部副作用及启用中的自动化修改不能豁免。
+
+数据授权显示具体集合及字段，说明向模型发送的范围，默认单次最多 20 条。刷新和重启不丢失会话及待确认内容，不自动重放已执行写入。外部模型配置由 MCP 客户端负责。
+
+
+### Agent 与 MCP 统一页面（2026-10-05）
+
+一级导航统一为 Agent（`/agent`），默认打开工作台，集中展示内置 Agent 和外部 MCP 的会话、待确认操作及执行历史。`/agent?tab=mcp` 仅展示 MCP 接入命令、连接信息、服务账号及权限配置入口，不重复展示执行历史。页签切换保留当前会话；模型设置仍由 Owner 在 `/settings/agent` 管理。旧 `/mcp`、`/connect/mcp`、`/settings/mcp` 深链接保留查询参数并重定向到 MCP 配置页签。两入口共用的工具、权限、审批和审计规则不变。

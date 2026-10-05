@@ -329,7 +329,7 @@ async function createEventHook(page: Page, name: string, collectionId: string, w
   await page.getByRole('button', { name: 'Create event trigger' }).click();
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await selectOption(page, page.getByLabel('Collection', { exact: true }), collectionId);
-  await selectOption(page, page.getByLabel('Record Event'), 'record.created');
+  await selectOption(page, page.getByRole('combobox', { name: 'Record Event', exact: true }), 'record.created');
   await selectOption(page, page.getByLabel('Webhook', { exact: true }), webhookId);
   await page.getByRole('button', { name: 'Save event trigger' }).click();
   const card = page.locator('[data-automation-card]').filter({ hasText: name });
@@ -458,8 +458,9 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(page).toHaveURL(/\/collections\/new$/);
   await page.getByLabel('Collection name').fill('webhook-events');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByLabel('Field name 1').fill('title');
-  await page.getByLabel('Required', { exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Required', exact: true }).check();
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'webhook-events' })).toBeVisible();
   const collectionId = decodeURIComponent(new URL(page.url()).pathname.split('/')[2] ?? '');
@@ -651,6 +652,9 @@ test('WP24 Webhooks and Jobs use real Chromium, pinned HTTPS fixture, durable SQ
   await expect(page.getByRole('heading', { name: 'Hooks & Events', level: 1 })).toBeVisible();
   await expect(page.getByText(interruptedDelivery.id, { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(privateRecordMarker);
+  // 先关闭模态投递详情，再操作工作台偏好；不穿透 Sheet 点击背景控件。
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-slot="sheet-content"]')).toHaveCount(0);
   if (await page.locator('html').getAttribute('lang') !== 'zh-CN') await page.locator('[data-locale-switcher]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect(page.getByRole('heading', { name: 'Hooks & Events', exact: true })).toBeVisible();

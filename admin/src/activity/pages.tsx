@@ -74,12 +74,8 @@ export function ActivityWorkspacePage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
-        <div className="sr-only">
-          <p className="eyebrow">{t('activity.eyebrow')}</p>
-          <h1>{t('activity.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{source === 'facts' ? t('activity.description') : t('access.auditDescription')}</p>
-        </div>
+      <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-2" data-workspace-toolbar>
+        <h1 className="sr-only">{t('activity.title')}</h1>
         <nav aria-label={t('activity.sourcesLabel')} className="flex flex-wrap items-center gap-1.5" data-activity-source>
           {activitySourceOrder.map((candidate) => <ButtonLink
             aria-current={source === candidate ? 'page' : undefined}
@@ -176,23 +172,21 @@ export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
             <Button onClick={() => setReloadKey((value) => value + 1)} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('activity.retry')}</Button>
           </div>
         </ErrorState>
-        {error instanceof ApiClientError && <p className="m-0 text-xs text-danger" role="alert">{error.apiError.message}</p>}
+        {error instanceof ApiClientError && <p className="m-0 text-sm text-danger" role="alert">{error.apiError.message}</p>}
       </div>
     );
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {!embedded && <header className="sr-only">
+      {!embedded && <header className="min-w-0">
         <div className="min-w-0">
-          <p className="eyebrow">{t('activity.eyebrow')}</p>
-          <h1>{t('activity.title')}</h1>
-          <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('activity.description')}</p>
+          <h1 className="sr-only">{t('activity.title')}</h1>
         </div>
         <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-ink-secondary"><ActivityIcon size={19} /></span>
       </header>}
 
-      <Surface className="flex flex-wrap items-end gap-3 p-3" variant="standard">
+      <Surface className="flex flex-wrap items-end gap-3" variant="section">
         <div className="w-full min-w-[190px] max-w-[220px]">
           <FormField htmlFor="activity-kind" label={t('activity.filter')}>
             <SelectField id="activity-kind" onValueChange={(selectedValue) => updateQuery('kind', selectedValue)} value={kind} options={[({ value: "", label: t('activity.filterAll') }), kinds.map((candidate) => ({ value: candidate, label: t(kindKey(candidate)) }))]} />
@@ -205,14 +199,14 @@ export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       </Surface>
 
-      <Surface className="flex min-w-0 flex-col gap-3 p-4" variant="standard">
+      <Surface className="flex min-w-0 flex-col gap-3" variant="section">
         {facts.length === 0
           ? <EmptyState description={t('activity.empty.description')} title={t('activity.empty.title')} />
           : (
-            <ul className="m-0 flex list-none flex-col gap-3 p-0">
+            <ul className="m-0 flex list-none flex-col p-0">
               {facts.map((fact) => (
                 <li
-                  className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border bg-card p-3.5${statusTone(fact.status) === 'unavailable' ? ' border-danger/30' : ''}`}
+                  className={`flex min-w-0 flex-wrap items-start justify-between gap-3 border-b py-3${statusTone(fact.status) === 'unavailable' ? ' bg-danger-soft/30' : ''}`}
                   data-activity-kind={fact.kind}
                   key={fact.id}
                 >
@@ -222,14 +216,14 @@ export function ActivityPage({ embedded = false }: { embedded?: boolean }) {
                       {fact.title && <span className="truncate text-xs font-medium text-ink-secondary">{fact.title}</span>}
                     </div>
                     <p className="m-0 mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                      <code className="font-mono text-[11px]">{fact.resourceId}</code>
+                      <code className="font-mono text-[13px]">{fact.resourceId}</code>
                       <span aria-hidden="true">·</span>
-                      <small className="text-[11px]">{new Date(fact.occurredAt).toLocaleString()}</small>
+                      <small className="text-xs">{new Date(fact.occurredAt).toLocaleString()}</small>
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <StatusChip state={statusTone(fact.status)}>{t(('activity.statuses.' + fact.status) as TranslationKey, { status: fact.status })}</StatusChip>
-                    <Link className="text-xs font-semibold text-primary hover:underline" to={canonicalDeepLink(fact.deepLink)}>{t('activity.open')}</Link>
+                    <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={canonicalDeepLink(fact.deepLink)}>{t('activity.open')}</Link>
                   </div>
                 </li>
               ))}

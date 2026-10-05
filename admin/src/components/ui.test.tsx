@@ -10,7 +10,8 @@ describe('Admin interface primitives', () => {
   it('exposes the status with its visual state and readable label', () => {
     render(<StatusChip state="ready">Ready</StatusChip>);
     expect(screen.getByText('Ready')).toHaveAttribute('data-slot', 'badge');
-    expect(screen.getByText('Ready')).toHaveClass('bg-success-soft');
+    expect(screen.getByText('Ready')).toHaveAttribute('data-status-tone', 'success');
+    expect(screen.getByText('Ready')).toHaveClass('bg-transparent');
   });
 
   it('associates a form hint with the input for assistive technology', () => {

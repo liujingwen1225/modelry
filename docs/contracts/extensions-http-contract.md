@@ -6,7 +6,7 @@
 - **Base path:** `/admin/api/v1`
 - **Authorization:** active Modelry Owner session cookie; unsafe browser requests retain the existing same-origin/CSRF checks
 
-These endpoints are Control Plane APIs. Application Sessions, Service Account API Keys and Application Record Access Rules cannot authorize them. Secret values are accepted only on create/replace and never returned.
+These endpoints are Control Plane APIs. Application Sessions and Application Record Access Rules cannot authorize them. Extension / Hook routes additionally accept a Service Account API Key with hooks.read / hooks.write. Secret management remains Owner-only. Secret values are accepted only on create/replace and never returned.
 
 ## 1. Extensions
 
@@ -120,3 +120,7 @@ There is no guest-controlled log API. Hook Run diagnostics contain only host-gen
 - A missing key with encrypted rows returns `SECRET_KEY_UNAVAILABLE` and never creates a replacement key.
 - Existing V0.1 Projects have no Extension or Secret rows. Upgrade creates the empty feature store and may create a key only when the first Secret is written.
 - Limits and phase semantics are normative in [Domain Spec 0005](../specs/0005-extension-runtime-domain-spec.md). This Contract does not add public Application API routes.
+
+## Agent 与 MCP 执行
+
+Hook 配置共用正式 API 和 `hooks.read/write` 许可；启用和修改已启用的 Hook 必须由 Owner 确认。模型密钥与项目 Secret 明文不可通过工具读取或写入。详见 [Agent 契约](./agent-http-contract.md)。

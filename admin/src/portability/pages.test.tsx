@@ -47,7 +47,7 @@ describe('Settings developer surfaces', () => {
     const fetchMock = setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Backup and restore', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Backup and restore', level: 2 })).toBeInTheDocument();
     const settingsNavigation = await screen.findByRole('navigation', { name: 'Settings sections' });
     expect(within(settingsNavigation).getByRole('link', { name: 'Backup and restore' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByTestId('contract-hash')).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('Settings developer surfaces', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: 'Backup and restore', level: 1 });
+    await screen.findByRole('heading', { name: 'Backup and restore', level: 2 });
     const file = new File([new Uint8Array([9])], 'bundle.tar', { type: 'application/x-tar' });
     await userEvent.upload(screen.getByLabelText('Validate a backup bundle'), file);
     await waitFor(() => expect(screen.getByText('Not compatible')).toBeInTheDocument());
@@ -87,7 +87,7 @@ describe('Settings developer surfaces', () => {
     const fetchMock = setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Data import / export', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Data import / export', level: 2 })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Collection import / export' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export NDJSON' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create and download backup' })).not.toBeInTheDocument();

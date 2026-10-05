@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { Input, Textarea } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button as ControlButton } from '@/components/ui/button';
@@ -21,17 +22,9 @@ import { useI18n, type TranslationKey } from '../i18n/i18n';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
-// HTTP 方法胶囊：仅表达方法语义的视觉，不携带行为；保持小号 monospace。
-const methodTones: Record<string, string> = {
-  get: 'bg-success-soft text-success',
-  post: 'bg-accent-cta-soft text-accent-cta-ink',
-  patch: 'bg-warning-soft text-warning',
-  put: 'bg-warning-soft text-warning',
-  delete: 'bg-danger-soft text-danger',
-};
-
+// HTTP 方法是技术标识，使用中性语义，不借用成功/失败状态色。
 function MethodPill({ method }: { method: string }) {
-  return <span className={`inline-flex min-w-14 shrink-0 justify-center rounded px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none ${methodTones[method.toLowerCase()] ?? 'bg-muted text-ink-secondary'}`}>{method}</span>;
+  return <Badge variant="default" className="min-w-14 justify-center font-mono text-[13px]">{method}</Badge>;
 }
 
 function errorCopy(error: unknown, fallback: string, t: Translate, errorMessage: ReturnType<typeof useI18n>['errorMessage']) {
@@ -210,11 +203,11 @@ export function EndpointWorkspace({ collections, fixedCollection }: { collection
   if (!endpoints.length) return <EmptyState title={t('api.noEndpointsTitle')} description={t('api.noEndpointsDescription')} />;
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <Surface className="overflow-hidden p-0" variant="standard">
-        {!fixedCollection && <div className="flex flex-wrap items-end gap-4 border-b p-4">
+    <div className="flex min-w-0 flex-col gap-4">
+      <Surface className="min-w-0" variant="section">
+        {!fixedCollection && <div className="flex flex-wrap items-end gap-4 border-b pb-4">
           <SearchInput aria-label={t('api.searchEndpoints')} onChange={(event) => { setSearch(event.target.value); updateParam('q', event.target.value); }} placeholder={t('api.searchEndpointsPlaceholder')} value={search} className="min-w-56 flex-1" />
-          <Label className="grid min-w-48 gap-1 text-[11px] text-muted-foreground">
+          <Label className="grid min-w-48 gap-1 text-xs text-muted-foreground">
             <span>{t('api.collectionFilter')}</span>
             <SelectField aria-label={t('api.filterByCollection')} onValueChange={(selectedValue) => updateParam('collection', selectedValue)} value={collectionFilter} options={[({ value: "", label: t('api.allCollections') }), collections.map((item) => ({ value: item.id, label: item.name }))]} />
           </Label>
@@ -222,26 +215,26 @@ export function EndpointWorkspace({ collections, fixedCollection }: { collection
         {/* 宽屏左右并排；窄屏上下堆叠，保留请求详情的可用宽度。 */}
         <div className="grid min-h-[38rem] min-[1024px]:grid-cols-[minmax(15rem,19rem)_minmax(0,1fr)]">
           <nav aria-label={t('api.endpointsLabel')} className="max-h-56 min-w-0 overflow-auto border-b p-3 min-[1024px]:max-h-none min-[1024px]:overflow-visible min-[1024px]:border-r min-[1024px]:border-b-0" data-api-endpoint-list>
-            <div className="flex items-center justify-between px-2 pt-1 pb-2 text-[10px] font-bold tracking-[0.08em] text-muted-foreground uppercase min-[681px]:col-span-2">{t('api.endpointsSection')} <span className="text-ink-secondary">{formatNumber(visibleEndpoints.length)}</span></div>
-            {visibleEndpoints.map((item) => <ControlButton variant="unstyled" aria-current={endpoint?.collectionId === item.collectionId && endpoint.operationId === item.operationId ? 'page' : undefined} className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:shadow-none ${endpoint?.collectionId === item.collectionId && endpoint.operationId === item.operationId ? 'border-primary bg-secondary' : 'border-transparent hover:bg-secondary'}`} data-api-endpoint-option key={`${item.collectionId}:${item.operationId}`} onClick={() => selectEndpoint(item)} type="button">
-              <MethodPill method={item.method} /><span className="grid min-w-0 gap-0.5"><strong className="text-xs font-semibold text-foreground">{endpointTitle(item, t)}</strong><small className="truncate font-mono text-[10px] text-muted-foreground">{item.path}</small>{!fixedCollection && <small className="truncate text-[10px] text-muted-foreground">{item.collectionName}</small>}</span>
+            <div className="flex items-center justify-between px-2 pt-1 pb-2 text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase min-[681px]:col-span-2">{t('api.endpointsSection')} <span className="text-ink-secondary">{formatNumber(visibleEndpoints.length)}</span></div>
+            {visibleEndpoints.map((item) => <ControlButton variant="unstyled" aria-current={endpoint?.collectionId === item.collectionId && endpoint.operationId === item.operationId ? 'page' : undefined} className={`flex min-h-11 w-full items-start gap-2.5 border-b p-3 text-left transition-colors  ${endpoint?.collectionId === item.collectionId && endpoint.operationId === item.operationId ? 'bg-secondary' : 'hover:bg-secondary'}`} data-api-endpoint-option key={`${item.collectionId}:${item.operationId}`} onClick={() => selectEndpoint(item)} type="button">
+              <MethodPill method={item.method} /><span className="grid min-w-0 gap-0.5"><strong className="text-sm font-semibold text-foreground">{endpointTitle(item, t)}</strong><small className="truncate font-mono text-[13px] text-muted-foreground">{item.path}</small>{!fixedCollection && <small className="truncate text-xs text-muted-foreground">{item.collectionName}</small>}</span>
             </ControlButton>)}
             {!visibleEndpoints.length && <p className="px-2 py-3 text-xs text-muted-foreground">{t('api.noEndpointsMatch')}</p>}
           </nav>
 
           {activeEndpoint && selectedCollection ? <section aria-label={t('api.endpointDetailsLabel')} className="min-w-0 p-4 min-[681px]:p-5">
-            <header className="flex min-w-0 flex-col items-start justify-between gap-4 min-[681px]:flex-row" data-api-endpoint-heading><div className="min-w-0 flex-1"><p className="eyebrow [overflow-wrap:anywhere]">{selectedCollection.name} · {collectionTypeLabel(selectedCollection, t)}</p><h2 className="mt-1 mb-3">{endpointTitle(activeEndpoint, t)}</h2><p className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 break-words"><MethodPill method={activeEndpoint.method} /><code className="min-w-0 font-mono text-xs break-all text-foreground">{activeEndpoint.path}</code></p></div><div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" data-api-heading-actions><CopyButton label={t('api.copyEndpointPath')} value={activeEndpoint.path} /><div className="relative max-w-full" data-api-openapi><Popover><PopoverTrigger className="w-fit max-w-full cursor-pointer list-none rounded-md border border-input bg-card px-2.5 py-1.5 text-[11px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('api.viewOpenApi')}</PopoverTrigger><PopoverContent><pre className="max-h-96 w-[42rem] max-w-[70vw] overflow-auto text-[11px]"><code className="block font-mono break-all whitespace-pre-wrap">{JSON.stringify(endpointOpenApiSnippet(activeEndpoint, selectedCollection), null, 2)}</code></pre></PopoverContent></Popover></div></div></header>
-            <div className="mt-5 flex flex-wrap gap-x-7 gap-y-3 border-y py-3" data-api-endpoint-meta><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.operationLabel')}</strong>{activeEndpoint.operationId}</span><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.collectionModelLabel')}</strong>{t('api.collectionModelValue', { version: selectedCollection.schemaVersion ?? 1, count: selectedCollection.fields.length })}</span>{accessOperation && <span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedAccessLabel')}</strong>{ruleReady ? accessRuleLabel(appliedAccessMode, t) : t('api.loadingAccess')}</span>}</div>
-            <div className="my-4 flex flex-col gap-2"><strong className="text-[10px] font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedFields')}</strong><div className="flex flex-wrap gap-2">{selectedCollection.fields.map((field) => <span className="inline-flex items-center gap-2 rounded-full border bg-muted px-2 py-1" key={field.id ?? field.name}><code className="font-mono text-[11px] text-foreground">{field.name}</code><small className="text-[10px] text-muted-foreground">{field.type}{field.required ? t('api.fieldRequired') : ''}</small></span>)}</div></div>
+            <header className="flex min-w-0 flex-col items-start justify-between gap-4 min-[681px]:flex-row" data-api-endpoint-heading><div className="min-w-0 flex-1"><p className="eyebrow [overflow-wrap:anywhere]">{selectedCollection.name} · {collectionTypeLabel(selectedCollection, t)}</p><h2 className="mt-1 mb-3 text-base font-semibold">{endpointTitle(activeEndpoint, t)}</h2><p className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 break-words"><MethodPill method={activeEndpoint.method} /><code className="min-w-0 font-mono text-[13px] break-all text-foreground">{activeEndpoint.path}</code></p></div><div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5" data-api-heading-actions><CopyButton label={t('api.copyEndpointPath')} value={activeEndpoint.path} /><div className="relative max-w-full" data-api-openapi><Popover><PopoverTrigger className="inline-flex min-h-11 w-fit max-w-full items-center cursor-pointer list-none rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">{t('api.viewOpenApi')}</PopoverTrigger><PopoverContent><pre className="max-h-96 w-[42rem] max-w-[70vw] overflow-auto text-[13px]"><code className="block font-mono break-all whitespace-pre-wrap">{JSON.stringify(endpointOpenApiSnippet(activeEndpoint, selectedCollection), null, 2)}</code></pre></PopoverContent></Popover></div></div></header>
+            <div className="mt-5 flex flex-wrap gap-x-7 gap-y-3 border-y py-3" data-api-endpoint-meta><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-xs font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.operationLabel')}</strong>{activeEndpoint.operationId}</span><span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-xs font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.collectionModelLabel')}</strong>{t('api.collectionModelValue', { version: selectedCollection.schemaVersion ?? 1, count: selectedCollection.fields.length })}</span>{accessOperation && <span className="grid gap-1 text-xs text-ink-secondary"><strong className="text-xs font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedAccessLabel')}</strong>{ruleReady ? accessRuleLabel(appliedAccessMode, t) : t('api.loadingAccess')}</span>}</div>
+            <div className="my-4 flex flex-col gap-2"><strong className="text-xs font-bold tracking-[0.05em] text-muted-foreground uppercase">{t('api.appliedFields')}</strong><div className="flex flex-wrap gap-2">{selectedCollection.fields.map((field) => <span className="inline-flex items-center gap-2 rounded-full border bg-muted px-2 py-1" key={field.id ?? field.name}><code className="font-mono text-[13px] text-foreground">{field.name}</code><small className="text-xs text-muted-foreground">{field.type}{field.required ? t('api.fieldRequired') : ''}</small></span>)}</div></div>
             <section className="rounded-lg border bg-muted p-4">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={`/api?tab=logs&collection=${encodeURIComponent(selectedCollection.id)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.runnerEyebrow')}</p><h3>{t('api.runnerTitle')}</h3></div><Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline" to={`/api?tab=logs&collection=${encodeURIComponent(selectedCollection.id)}`}>{t('api.viewCollectionRequests')} <ArrowRight aria-hidden="true" size={14} /></Link></div>
               <form className="flex flex-col gap-3.5" onSubmit={(event) => void run(event)}>
                 {activeEndpoint.template.includes('{recordId}') && <FormField htmlFor="api-record-id" label={t('api.recordIdLabel')}><Input autoComplete="off" id="api-record-id" onChange={(event) => setPathValues((value) => ({ ...value, recordId: event.target.value }))} value={pathValues.recordId ?? ''} /></FormField>}
                 {activeEndpoint.template.includes('{sessionId}') && <FormField htmlFor="api-session-id" label={t('api.sessionIdLabel')}><Input autoComplete="off" id="api-session-id" onChange={(event) => setPathValues((value) => ({ ...value, sessionId: event.target.value }))} value={pathValues.sessionId ?? ''} /></FormField>}
                 {activeEndpoint.template.includes('{fieldName}') && <FormField htmlFor="api-file-field" label={t('api.fileFieldLabel')}><SelectField id="api-file-field" onValueChange={(selectedValue) => setPathValues((value) => ({ ...value, fieldName: selectedValue }))} value={pathValues.fieldName ?? ''} options={[({ value: "", label: t('api.chooseFileField') }), selectedCollection.fields.filter((field) => field.type === 'file').map((field) => ({ value: field.name, label: field.name }))]} /></FormField>}
                 {activeEndpoint.operationId === 'listApplicationRecords' && <div className="grid gap-3.5 min-[681px]:grid-cols-2"><FormField htmlFor="api-limit" label={t('api.limitLabel')}><Input id="api-limit" max="100" min="1" onChange={(event) => updateParam('runLimit', event.target.value)} type="number" value={limit} /></FormField><FormField htmlFor="api-search" label={t('api.searchLabel')}><SearchInput id="api-search" onChange={(event) => updateParam('runSearch', event.target.value)} value={searchValue} /></FormField><FormField htmlFor="api-filter" hint={t('api.filterHint')} label={t('api.filterLabel')}><Input id="api-filter" onChange={(event) => updateParam('runFilter', event.target.value)} value={filter} /></FormField><FormField htmlFor="api-sort" label={t('api.sortLabel')} hint={t('api.sortHint')}><Input id="api-sort" onChange={(event) => updateParam('runSort', event.target.value)} value={sort} /></FormField></div>}
                 {(!activeEndpoint.authOnly || activeEndpoint.requiresSession) && <FormField htmlFor="api-app-session" hint={t('api.appSessionHint')} label={t('api.appSessionLabel')}><Input autoComplete="off" id="api-app-session" onChange={(event) => setAppSession(event.target.value)} type="password" value={appSession} /></FormField>}
-                {activeEndpoint.bodySchema && <FormField htmlFor="api-request-body" hint={t('api.jsonBodyHint', { schema: activeEndpoint.bodySchema })} label={t('api.jsonBodyLabel')}><Textarea autoComplete="off" className="min-h-40 font-mono" id="api-request-body" onChange={(event) => setBody(event.target.value)} rows={8} spellCheck={false} value={body} />{runError instanceof SyntaxError && <span className="text-[11px] font-semibold text-danger" role="alert">{t('api.invalidJson')}</span>}</FormField>}
+                {activeEndpoint.bodySchema && <FormField htmlFor="api-request-body" hint={t('api.jsonBodyHint', { schema: activeEndpoint.bodySchema })} label={t('api.jsonBodyLabel')}><Textarea autoComplete="off" className="min-h-40 font-mono text-[13px]" id="api-request-body" onChange={(event) => setBody(event.target.value)} rows={8} spellCheck={false} value={body} />{runError instanceof SyntaxError && <span className="text-xs font-semibold text-danger" role="alert">{t('api.invalidJson')}</span>}</FormField>}
                 {runError !== undefined && !(runError instanceof SyntaxError) && (() => { const copy = errorCopy(runError, t('api.requestFailed'), t, errorMessage); return <ErrorState description={copy.detail} title={copy.title} />; })()}
                 <div className="flex flex-wrap items-center gap-2"><Button disabled={running} type="submit" variant="primary">{running ? <><RefreshCw aria-hidden="true" className="animate-spin" size={15} /> {t('api.sending')}</> : t('api.sendRequest', { method: activeEndpoint.method })}</Button><CopyButton label={t('api.copyCommand')} value={`curl -X ${activeEndpoint.method} '${activeEndpoint.path}'`} /></div>
               </form>
@@ -261,12 +254,12 @@ function ApplicationResponse({ result, location, endpoint }: { result: Applicati
   return <section aria-label={t('api.responseLabel')} className="mt-4 flex flex-col gap-3 border-t pt-3.5" role="region">
     <header className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><p className="eyebrow">{t('api.responseEyebrow')}</p><h3>{t('api.responseTitle')}</h3></div><StatusChip state={result.status < 400 ? 'success' : 'error'}>{result.status}</StatusChip></header>
     <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-xs" data-api-response-metadata>
-      {result.requestId && <><dt className="text-muted-foreground">{t('common.requestId')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2 break-words"><code className="font-mono text-[11px] text-foreground">{result.requestId}</code><CopyButton label={t('api.copyRequestId')} value={result.requestId} /></dd></>}
-      <dt className="text-muted-foreground">{t('api.durationLabel')}</dt><dd className="m-0">{formatNumber(result.durationMs)} ms</dd><dt className="text-muted-foreground">{t('api.endpointLabel')}</dt><dd className="m-0 min-w-0 break-words"><code className="font-mono text-[11px] text-foreground">{endpoint.method} {endpoint.path}</code></dd>
+      {result.requestId && <><dt className="text-muted-foreground">{t('common.requestId')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2 break-words"><code className="font-mono text-[13px] text-foreground">{result.requestId}</code><CopyButton label={t('api.copyRequestId')} value={result.requestId} /></dd></>}
+      <dt className="text-muted-foreground">{t('api.durationLabel')}</dt><dd className="m-0">{formatNumber(result.durationMs)} ms</dd><dt className="text-muted-foreground">{t('api.endpointLabel')}</dt><dd className="m-0 min-w-0 break-words"><code className="font-mono text-[13px] text-foreground">{endpoint.method} {endpoint.path}</code></dd>
       {result.structuredError && <><dt className="text-muted-foreground">{t('api.errorLabel')}</dt><dd className="m-0 break-words"><strong>{result.structuredError.code}</strong> · {errorMessage(result.structuredError.code) ?? t('errors.requestFailed')}</dd></>}
     </dl>
     {result.textResponseHidden && <p className="m-0 text-xs text-muted-foreground">{t('api.hiddenContent')}</p>}
-    {result.body !== undefined && <pre className="m-0 max-h-96 overflow-auto rounded-lg border bg-card p-3.5 text-[11px]" data-api-response-body><code className="block font-mono break-all whitespace-pre-wrap">{JSON.stringify(result.body, null, 2)}</code></pre>}
+    {result.body !== undefined && <pre className="m-0 max-h-96 overflow-auto rounded-lg border bg-card p-3.5 text-[13px]" data-api-response-body><code className="block font-mono break-all whitespace-pre-wrap">{JSON.stringify(result.body, null, 2)}</code></pre>}
     <div className="flex flex-wrap items-center gap-2.5">
       {result.requestId && result.requestRecordPersisted && <ButtonLink size="small" to={`/api/requests/${encodeURIComponent(result.requestId)}?from=${encodeURIComponent(from)}`}>{t('api.viewRequestDetails')} <ArrowRight aria-hidden="true" size={14} /></ButtonLink>}
       {result.requestId && !result.requestRecordPersisted && <span className="text-xs text-muted-foreground">{t('api.requestUnavailable')}</span>}
@@ -274,11 +267,6 @@ function ApplicationResponse({ result, location, endpoint }: { result: Applicati
   </section>;
 }
 
-function APIPageHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  // 标题里含 Collection 名称（可能是不含断点的长标识符），因此必须允许任意位置换行，
-  // 否则窄屏会把整个文档撑宽（spec 0001 §16.1）。
-  return <header className="sr-only"><div className="min-w-0"><p className="eyebrow [overflow-wrap:anywhere]">{eyebrow}</p><h1 className="[overflow-wrap:anywhere]">{title}</h1><p className="mt-2 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p></div></header>;
-}
 
 export function CollectionAPIPage() {
   const { collection } = useCollectionWorkspace();
@@ -294,11 +282,11 @@ export function CollectionAPIPage() {
     setParams(next, { replace: true });
   }
 
-  return <div className="flex min-w-0 flex-col gap-6">
-    <APIPageHeader description={t('api.collectionDescription')} eyebrow="API" title={t('api.collectionTitle', { name: collection.name })} />
+  return <div className="flex min-w-0 flex-col gap-4">
+    <h2 className="sr-only">{t('api.collectionTitle', { name: collection.name })}</h2>
     <nav aria-label={t('api.collectionSections')} className="flex flex-wrap items-center gap-1 overflow-x-auto overflow-y-hidden border-b">
-      <ControlButton variant="unstyled" aria-current={activeTab === 'endpoints' ? 'page' : undefined} className={`border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === 'endpoints' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('endpoints')} type="button">{t('api.endpointsTab')}</ControlButton>
-      <ControlButton variant="unstyled" aria-current={activeTab === 'realtime' ? 'page' : undefined} className={`border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:shadow-none ${activeTab === 'realtime' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('realtime')} type="button">{t('api.realtimeTab')}</ControlButton>
+      <ControlButton variant="unstyled" aria-current={activeTab === 'endpoints' ? 'page' : undefined} className={`inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors  ${activeTab === 'endpoints' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('endpoints')} type="button">{t('api.endpointsTab')}</ControlButton>
+      <ControlButton variant="unstyled" aria-current={activeTab === 'realtime' ? 'page' : undefined} className={`inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-[13px] font-medium whitespace-nowrap transition-colors  ${activeTab === 'realtime' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => selectTab('realtime')} type="button">{t('api.realtimeTab')}</ControlButton>
     </nav>
     {activeTab === 'realtime' ? <RealtimeWorkspace collection={collection} example={sample} /> : <EndpointWorkspace collections={[collection]} fixedCollection={collection} />}
   </div>;
@@ -431,20 +419,20 @@ function RealtimeWorkspace({ collection, example }: { collection: Collection; ex
   const listMode = ruleState?.applied.find((rule) => rule.operation === 'list')?.mode;
   const endpoint = `/api/v1/${encodeURIComponent(collection.name)}/events`;
 
-  return <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
+  return <Surface className="flex min-w-0 flex-col gap-4" variant="section">
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0"><p className="eyebrow">{t('api.realtimeProtocol')}</p><h2 className="mt-1 mb-2">{t('api.realtimeHeading')}</h2><p className="m-0 max-w-[52rem] text-[13px] text-ink-secondary">{t('api.realtimeDescription')}</p></div>
+      <div className="min-w-0"><p className="eyebrow">{t('api.realtimeProtocol')}</p><h2 className="mt-1 mb-2 text-base font-semibold">{t('api.realtimeHeading')}</h2><p className="m-0 max-w-[52rem] text-sm text-ink-secondary">{t('api.realtimeDescription')}</p></div>
       <CopyButton label={t('api.copyRealtimeExample')} value={example} />
     </header>
     <dl className="m-0 grid gap-4 border-y py-3.5 min-[681px]:grid-cols-2" data-api-realtime-metadata>
-      <div className="grid min-w-0 gap-1.5"><dt className="text-[10px] font-bold tracking-[0.04em] text-muted-foreground uppercase">{t('api.realtimeEndpoint')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 break-words"><MethodPill method="GET" /><code className="font-mono text-[11px] break-all text-foreground">{endpoint}</code></dd></div>
-      <div className="grid min-w-0 gap-1.5"><dt className="text-[10px] font-bold tracking-[0.04em] text-muted-foreground uppercase">{t('api.realtimeAccess')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 text-xs break-words">{state === 'loading' ? <LoadingState label={t('runtime.connecting')} /> : state === 'error' ? t('api.realtimeUnavailable') : listMode ? accessRuleLabel(listMode, t) : t('api.realtimeUnavailable')}</dd></div>
+      <div className="grid min-w-0 gap-1.5"><dt className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">{t('api.realtimeEndpoint')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 break-words"><MethodPill method="GET" /><code className="font-mono text-[13px] break-all text-foreground">{endpoint}</code></dd></div>
+      <div className="grid min-w-0 gap-1.5"><dt className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">{t('api.realtimeAccess')}</dt><dd className="m-0 flex min-w-0 flex-wrap items-center gap-2.5 text-xs break-words">{state === 'loading' ? <LoadingState label={t('runtime.connecting')} /> : state === 'error' ? t('api.realtimeUnavailable') : listMode ? accessRuleLabel(listMode, t) : t('api.realtimeUnavailable')}</dd></div>
     </dl>
     <p className="m-0 text-xs text-muted-foreground">{t('api.realtimeAccessHint')}</p>
     {state === 'error' && <ErrorState description={t('api.realtimeUnavailableHint')} title={t('api.realtimeUnavailable')} />}
-    <section className="grid gap-3 rounded-lg border bg-muted p-4" data-api-realtime-example>
+    <section className="grid gap-3 border-t pt-4" data-api-realtime-example>
       <header className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><h3>{t('api.realtimeExampleHeading')}</h3><p className="mt-1 mb-0 text-[13px] text-ink-secondary">{t('api.realtimeExampleDescription')}</p></div></header>
-      <pre className="m-0 max-h-[36rem] overflow-auto rounded-md border bg-card p-3.5 text-[11px] leading-relaxed"><code className="font-mono break-all whitespace-pre-wrap">{example}</code></pre>
+      <pre className="m-0 max-h-[36rem] overflow-auto rounded-md border bg-card p-3.5 text-[13px] leading-relaxed"><code className="font-mono break-all whitespace-pre-wrap">{example}</code></pre>
       <p className="m-0 text-xs text-muted-foreground">{t('api.realtimeExampleCallbackHint')}</p>
     </section>
   </Surface>;

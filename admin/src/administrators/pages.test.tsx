@@ -22,7 +22,7 @@ function setupFetch(options: { administrators?: unknown[]; createError?: { statu
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     const method = init?.method ?? 'GET';
-    if (path.endsWith('/auth/session')) return response({ owner: { id: 'own_test', email: 'owner@example.test' }, expiresAt: '2026-09-25T12:00:00Z', role: 'owner', permission: { preset: 'fullAccess' } });
+    if (path.endsWith('/auth/session')) return response({ owner: { id: 'own_test', email: 'owner@example.test' }, expiresAt: new Date(Date.now() + 3_600_000).toISOString(), role: 'owner', permission: { preset: 'fullAccess' } });
     if (path.endsWith('/runtime/status')) return response({ state: 'ready', observedAt: '2026-09-25T09:00:00Z', database: { state: 'ready' }, localStorage: { state: 'ready', message: 'ok' } });
     if (path.endsWith('/storage/status')) return response({ database: { state: 'ready' }, localStorage: { state: 'ready', provider: 'Local' } });
     if (path.startsWith('/admin/api/v1/collections?')) return response({ data: [] });
@@ -48,7 +48,7 @@ describe('Administrators Admin surface', () => {
     setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Administrators' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Administrators', level: 2 })).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: /Administrator accounts/ });
     expect(within(table).getByText('colleague@example.test')).toBeInTheDocument();
     expect(within(table).getByText('Read only')).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('Administrators Admin surface', () => {
     setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '管理员' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '管理员', level: 2 })).toBeInTheDocument();
     // 新 IA：页面标题是「访问与认证」，管理员是其中的一个工作面。
     expect(document.body.textContent).toContain('访问与认证');
     expect(document.body.textContent).not.toMatch(/控制面|控制平面/);
@@ -73,14 +73,14 @@ describe('Administrators Admin surface', () => {
     window.history.pushState({}, '', '/administrators');
     const fetchMock = setupFetch();
     render(<App />);
-    await screen.findByRole('heading', { name: 'Administrators' });
+    await screen.findByRole('heading', { name: 'Administrators', level: 2 });
 
     await userEvent.click(screen.getByRole('button', { name: 'Create Administrator' }));
     const dialog = within(await screen.findByRole('dialog'));
     await userEvent.type(dialog.getByLabelText('Email'), 'second@example.test');
     await userEvent.type(dialog.getByLabelText('Initial password'), 'administrator-password');
     await selectOption(userEvent, dialog.getByLabelText('Permission preset'), 'custom');
-    await userEvent.click(dialog.getByLabelText('audit.read'));
+    await userEvent.click(dialog.getByRole('checkbox', { name: 'audit.read' }));
     await userEvent.click(dialog.getByRole('button', { name: 'Create Administrator' }));
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input) === '/admin/api/v1/administrators' && (init as RequestInit | undefined)?.method === 'POST')).toBe(true));
@@ -94,7 +94,7 @@ describe('Administrators Admin surface', () => {
     window.history.pushState({}, '', '/administrators');
     const fetchMock = setupFetch();
     render(<App />);
-    await screen.findByRole('heading', { name: 'Administrators' });
+    await screen.findByRole('heading', { name: 'Administrators', level: 2 });
 
     await userEvent.click(screen.getByRole('button', { name: 'Disable colleague@example.test' }));
     await waitFor(() => expect(screen.getByText('Administrator disabled and all sessions revoked.')).toBeInTheDocument());
@@ -121,7 +121,7 @@ describe('Administrators Admin surface', () => {
     window.history.pushState({}, '', '/administrators');
     setupFetch({ createError: { status: 403, code: 'FORBIDDEN' } });
     render(<App />);
-    await screen.findByRole('heading', { name: 'Administrators' });
+    await screen.findByRole('heading', { name: 'Administrators', level: 2 });
 
     await userEvent.click(screen.getByRole('button', { name: 'Create Administrator' }));
     const dialog = within(await screen.findByRole('dialog'));

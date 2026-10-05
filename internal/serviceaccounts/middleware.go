@@ -11,6 +11,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
 	"github.com/liujingwen1225/modelry/internal/permissions"
+	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
 type grantContextKey struct{}
@@ -71,6 +72,20 @@ func (service *Service) ServiceAccountMiddleware(ownerProtected, rawAdminAPI htt
 		}
 		operation, found := controlPlaneOperation(request.Method, request.URL.Path)
 		if !found || !grantAllows(grant, operation) {
+			resourceID := string(operation)
+			if !found {
+				resourceID = "unmapped"
+			}
+			err := service.store.WithTransaction(request.Context(), func(tx storage.Executor) error {
+				return service.audits.AppendInTransaction(request.Context(), tx, audit.AppendInput{
+					Actor: audit.Actor{Kind: audit.ActorServiceAccount, ID: principal.ID}, Action: "controlPlane.denied",
+					Resource: audit.Resource{Kind: "controlPlaneOperation", ID: resourceID}, Result: "denied",
+				})
+			})
+			if err != nil {
+				writeMiddlewareError(w, request, http.StatusServiceUnavailable, "STORAGE_UNAVAILABLE", "Permission denial audit is temporarily unavailable.")
+				return
+			}
 			writeMiddlewareError(w, request, http.StatusForbidden, "FORBIDDEN", "This Service Account does not have Permission for this Control Plane operation.")
 			return
 		}

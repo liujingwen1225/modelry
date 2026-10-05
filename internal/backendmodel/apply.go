@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -159,6 +160,15 @@ func (service *Service) Apply(ctx context.Context, collectionID string, expected
 		row.change.UpdatedAt = committedAt
 		if err := persistPending(ctx, tx, &row, false); err != nil {
 			return err
+		}
+		if service.audits != nil {
+			actor, ok := audit.ActorFromContext(ctx)
+			if !ok {
+				return fmt.Errorf("%w: authenticated audit actor is required", ErrInvalidArgument)
+			}
+			return service.audits.AppendInTransaction(ctx, tx, audit.AppendInput{
+				Actor: actor, Action: "schema.apply", Resource: audit.Resource{Kind: "changeSet", ID: row.change.ChangeSetID}, Result: "success",
+			})
 		}
 		return nil
 	})

@@ -23,8 +23,14 @@ export const test = base.extend({
     try {
       await use(page);
     } finally {
-      await flushNetworkCapture();
-      await saveWorkerValues();
+      try {
+        // 先终止页面遗留网络等待，再收尾取证；取消请求的 Header RPC 会随 Page 关闭而结束。
+        // 保留全部脱敏步骤，不用超时跳过仍在进行的敏感值采集。
+        if (!page.isClosed()) await page.close();
+        await flushNetworkCapture();
+      } finally {
+        await saveWorkerValues();
+      }
     }
   },
 });

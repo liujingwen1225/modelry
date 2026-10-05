@@ -41,7 +41,7 @@ import {
 
 type ViewState = 'loading' | 'ready' | 'error';
 
-const LINK_CLASS = 'inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline';
+const LINK_CLASS = 'inline-flex min-h-11 w-fit items-center gap-1.5 text-xs font-semibold text-primary hover:underline';
 const CODE_CONTROL_CLASS = 'min-h-[190px] font-mono leading-relaxed';
 const SECTION_HEADING_CLASS = 'flex flex-wrap items-start justify-between gap-3 border-b pb-3';
 const SECTION_HEADING_COPY_CLASS = 'min-w-0';
@@ -115,13 +115,14 @@ function errorDetails(error: unknown, t: ReturnType<typeof useI18n>['t']) {
   return lines.join(' ');
 }
 
-function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
+function PageHeading({ eyebrow, title, description, action, level = 1 }: { eyebrow: string; title: string; description: string; action?: ReactNode; level?: 1 | 2 }) {
+  if (level === 2) return <h2 className="sr-only">{title}</h2>;
   return (
-    <header className={action ? "flex min-w-0 flex-wrap items-center justify-end gap-3" : "sr-only"}>
-      <div className="sr-only">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+    <header className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        {level === 1 && <p className="sr-only">{eyebrow}</p>}
+        {level === 1 ? <h1 className="text-2xl font-semibold [overflow-wrap:anywhere]">{title}</h1> : <h2 className="sr-only">{title}</h2>}
+        {level === 1 && <p className="mt-1 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{description}</p>}
       </div>
       {action && <div className="flex shrink-0 flex-wrap items-center gap-3">{action}</div>}
     </header>
@@ -166,11 +167,12 @@ export function HooksPanel() {
   }
 
   return <section aria-labelledby="events-hooks-heading" className="flex min-w-0 flex-col gap-4">
+    <header className="min-w-0"><h2 className="text-base font-semibold" id="events-hooks-heading">{t('events.tabs.hooks')}</h2><p className="mt-1 max-w-[620px] text-sm leading-relaxed text-muted-foreground">{t('extensions.description')}</p></header>
     <WorkspaceActions><div className="flex flex-wrap items-center justify-end gap-3">
-      <div className="sr-only"><h2 id="events-hooks-heading">{t('events.tabs.hooks')}</h2><p className="mt-1 max-w-[620px] text-xs leading-relaxed text-muted-foreground">{t('extensions.description')}</p></div>
+
       <div className="flex flex-wrap items-center gap-3"><ButtonLink to={`/events/hooks/new${search ? `?q=${encodeURIComponent(search)}` : ''}`} variant="primary"><Plus aria-hidden="true" size={15} />{t('extensions.createAction')}</ButtonLink></div>
     </div></WorkspaceActions>
-    <Surface className="flex flex-wrap items-center justify-between gap-3 p-3" variant="standard">
+    <Surface className="flex flex-wrap items-center justify-between gap-3" variant="section">
       <SearchInput aria-label={t('extensions.search')} onChange={(event) => updateQuery(event.target.value)} placeholder={t('extensions.searchPlaceholder')} value={search} className="min-w-[200px] flex-1 md:max-w-sm" />
       <span className="whitespace-nowrap text-xs font-medium tabular-nums text-muted-foreground">{t('extensions.count', { count: visible.length })}</span>
     </Surface>
@@ -179,7 +181,7 @@ export function HooksPanel() {
     {state === 'ready' && visible.length === 0 && items.length === 0 && <EmptyState title={t('extensions.emptyTitle')} description={t('extensions.emptyDescription')} />}
     {state === 'ready' && visible.length === 0 && items.length > 0 && <EmptyState title={t('extensions.noMatches')} description={t('extensions.noMatchesDescription')} />}
     {visible.length > 0 && <nav className="flex min-w-0 flex-col gap-2" aria-label={t('extensions.list')}>
-      {visible.map((item) => <Link className="group flex flex-wrap items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5 transition-colors" key={item.id} to={`/events/hooks/${encodeURIComponent(item.id)}`}>
+      {visible.map((item) => <Link className="group flex flex-wrap items-center gap-3 border-b px-1 py-4 last:border-b-0 transition-colors" key={item.id} to={`/events/hooks/${encodeURIComponent(item.id)}`}>
         <span className="grid min-w-0 flex-1 gap-1">
           <strong className="truncate text-sm font-semibold text-foreground group-hover:text-primary">{item.name}</strong>
           <span className="truncate text-xs text-muted-foreground">{t('extensions.listMeta', { language: t(`extensions.languages.${item.language}`), revision: item.activeRevision, date: formatDate(item.updatedAt) })}</span>
@@ -224,7 +226,7 @@ export function HookCreatePage() {
           <FormField htmlFor="extension-create-name" label={t('extensions.name')}><Input autoComplete="off" id="extension-create-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} /></FormField>
           <FormField htmlFor="extension-create-language" label={t('extensions.language')}><SelectField id="extension-create-language" onValueChange={(selectedValue) => setLanguage(selectedValue as ExtensionLanguage)} value={language} options={[({ value: "javascript", label: t('extensions.languages.javascript') }), ({ value: "typescript", label: t('extensions.languages.typescript') })]} /></FormField>
           <FormField htmlFor="extension-create-source" hint={t('extensions.sourceHint')} label={t('extensions.source')}><Textarea className={CODE_CONTROL_CLASS} id="extension-create-source" onChange={(event) => setSource(event.target.value)} required spellCheck={false} value={source} /></FormField>
-          <span className={`text-[11px] tabular-nums ${new TextEncoder().encode(source).byteLength > 262144 ? 'text-danger' : 'text-muted-foreground'}`}>{t('extensions.byteCount', { count: new TextEncoder().encode(source).byteLength, limit: 262144 })}</span>
+          <span className={`text-xs tabular-nums ${new TextEncoder().encode(source).byteLength > 262144 ? 'text-danger' : 'text-muted-foreground'}`}>{t('extensions.byteCount', { count: new TextEncoder().encode(source).byteLength, limit: 262144 })}</span>
           {createError !== undefined ? <p className="m-0 text-xs leading-relaxed text-danger" role="alert">{createError instanceof Error && createError.message === 'source-limit' ? t('extensions.sourceTooLarge') : errorDetails(createError, t)}</p> : null}
           <div className="flex flex-wrap justify-end gap-2"><ButtonLink to={backToList}>{t('automation.common.cancel')}</ButtonLink><Button disabled={saving || !name.trim() || !source.trim() || new TextEncoder().encode(source).byteLength > 262144} type="submit" variant="primary"><Plus aria-hidden="true" size={15} />{saving ? t('extensions.creating') : t('extensions.createAction')}</Button></div>
         </form>
@@ -340,17 +342,22 @@ export function ExtensionEditor({ extensionId }: { extensionId: string }) {
     finally { setBusy(false); }
   }
 
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('extensions.loadingDetail')} /></div>;
-  if (state === 'error' || !detail || !draft) return <div className="flex min-w-0 flex-col gap-6"><ErrorState description={errorDetails(error, t)} title={t('extensions.loadFailed')}><div className="mt-3 flex flex-wrap items-center gap-3"><Link className="text-xs font-semibold text-primary hover:underline" to="/events?tab=hooks">{t('extensions.backToList')}</Link><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.retry')}</Button></div></ErrorState></div>;
+  const hookContext = <>
+    <Link className={LINK_CLASS} to="/events?tab=hooks"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
+    <PageHeading eyebrow={t('extensions.eyebrow')} title={detail?.name ?? t('events.tabs.hooks')} description={t('extensions.description')} />
+    <code className="break-all font-mono text-[13px] text-muted-foreground">{extensionId}</code>
+  </>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6">{hookContext}<LoadingState label={t('extensions.loadingDetail')} /></div>;
+  if (state === 'error' || !detail || !draft) return <div className="flex min-w-0 flex-col gap-6">{hookContext}<ErrorState description={errorDetails(error, t)} title={t('extensions.loadFailed')}><div className="mt-3 flex flex-wrap items-center gap-3"><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.retry')}</Button></div></ErrorState></div>;
 
   return <div className="flex min-w-0 flex-col gap-6">
     <Link className={LINK_CLASS} to="/events?tab=hooks"><ArrowLeft aria-hidden="true" size={15} />{t('extensions.backToList')}</Link>
-    <PageHeading eyebrow={t('extensions.eyebrow')} title={detail.name} description={t('extensions.detailDescription', { revision: detail.activeRevision })} action={<div className="grid justify-items-end gap-1.5"><Button disabled={busy || hasUnsavedChanges} onClick={() => void toggleEnabled()} variant={detail.enabled ? 'danger' : 'primary'}>{detail.enabled ? t('extensions.disable') : t('extensions.enable')}</Button>{hasUnsavedChanges && <span className="max-w-[240px] text-right text-[10px] leading-relaxed text-muted-foreground" role="status">{t('extensions.saveBeforeStateChange')}</span>}</div>} />
+    <PageHeading eyebrow={t('extensions.eyebrow')} title={detail.name} description={t('extensions.detailDescription', { revision: detail.activeRevision })} action={<div className="grid justify-items-end gap-1.5"><Button disabled={busy || hasUnsavedChanges} onClick={() => void toggleEnabled()} variant={detail.enabled ? 'danger' : 'primary'}>{detail.enabled ? t('extensions.disable') : t('extensions.enable')}</Button>{hasUnsavedChanges && <span className="max-w-[240px] text-right text-xs leading-relaxed text-muted-foreground" role="status">{t('extensions.saveBeforeStateChange')}</span>}</div>} />
     {actionError !== undefined ? <ErrorState description={errorDetails(actionError, t)} title={t('extensions.actionFailed')} /> : null}
     <nav aria-label={t('extensions.tabs')} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b">
       {(['settings', 'runs'] as const).map((nextTab) => <Link
         aria-current={tab === nextTab ? 'page' : undefined}
-        className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors focus-visible:outline-none focus-visible:shadow-none ${tab === nextTab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+        className={`inline-flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium no-underline transition-colors  ${tab === nextTab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
         key={nextTab}
         replace
         to={tabTarget(nextTab)}
@@ -358,31 +365,31 @@ export function ExtensionEditor({ extensionId }: { extensionId: string }) {
     </nav>
     <TabContent activeKey={tab}>
     {tab === 'settings' ? <form className="flex min-w-0 flex-col gap-3.5" data-extension-editor onSubmit={(event) => void save(event)}>
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
-        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.sourceEyebrow')}</p><h2>{t('extensions.sourceSection')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.sourceDescription')}</p></div></div>
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
+        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.sourceEyebrow')}</p><h2 className="text-base font-semibold">{t('extensions.sourceSection')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.sourceDescription')}</p></div></div>
         <div className="grid max-w-[820px] gap-3.5">
           <FormField htmlFor="extension-name" label={t('extensions.name')}><Input autoComplete="off" id="extension-name" maxLength={120} onChange={(event) => updateDraft('name', event.target.value)} required value={draft.name} /></FormField>
           <FormField htmlFor="extension-language" label={t('extensions.language')}><SelectField id="extension-language" onValueChange={(selectedValue) => updateDraft('language', selectedValue as ExtensionLanguage)} value={draft.language} options={[({ value: "javascript", label: t('extensions.languages.javascript') }), ({ value: "typescript", label: t('extensions.languages.typescript') })]} /></FormField>
           <FormField htmlFor="extension-source" hint={t('extensions.sourceHint')} label={t('extensions.source')}><Textarea className={CODE_CONTROL_CLASS} id="extension-source" maxLength={262144} onChange={(event) => updateDraft('source', event.target.value)} required spellCheck={false} value={draft.source} /></FormField>
-          <span className={`text-[11px] tabular-nums ${new TextEncoder().encode(draft.source).byteLength > 262144 ? 'text-danger' : 'text-muted-foreground'}`}>{t('extensions.byteCount', { count: new TextEncoder().encode(draft.source).byteLength, limit: 262144 })}</span>
+          <span className={`text-xs tabular-nums ${new TextEncoder().encode(draft.source).byteLength > 262144 ? 'text-danger' : 'text-muted-foreground'}`}>{t('extensions.byteCount', { count: new TextEncoder().encode(draft.source).byteLength, limit: 262144 })}</span>
         </div>
       </Surface>
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
-        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.bindingEyebrow')}</p><h2>{t('extensions.bindings')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.bindingDescription')}</p></div><Button onClick={() => updateDraft('bindings', [...draft.bindings, { collectionId: collections[0]?.id ?? '', operation: 'create', phase: 'before' }])} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('extensions.addBinding')}</Button></div>
-        {draft.bindings.length === 0 ? <p className="m-0 text-xs text-muted-foreground">{t('extensions.noBindings')}</p> : <div className="grid gap-2.5">{draft.bindings.map((binding, index) => <div className="grid items-end gap-2.5 rounded-lg border border-input bg-secondary p-2.5 min-[761px]:grid-cols-[minmax(180px,1.2fr)_minmax(130px,0.8fr)_minmax(140px,0.8fr)_auto]" key={`${bindingKey(binding)}-${index}`}>
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
+        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.bindingEyebrow')}</p><h2 className="text-base font-semibold">{t('extensions.bindings')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.bindingDescription')}</p></div><Button onClick={() => updateDraft('bindings', [...draft.bindings, { collectionId: collections[0]?.id ?? '', operation: 'create', phase: 'before' }])} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('extensions.addBinding')}</Button></div>
+        {draft.bindings.length === 0 ? <p className="m-0 text-xs text-muted-foreground">{t('extensions.noBindings')}</p> : <div className="grid gap-2.5">{draft.bindings.map((binding, index) => <div className="grid items-end gap-2.5 border-b py-3 min-[761px]:grid-cols-[minmax(180px,1.2fr)_minmax(130px,0.8fr)_minmax(140px,0.8fr)_auto]" key={`${bindingKey(binding)}-${index}`}>
           <FormField htmlFor={`binding-collection-${index}`} label={t('extensions.collection')}><SelectField id={`binding-collection-${index}`} onValueChange={(selectedValue) => updateDraft('bindings', draft.bindings.map((item, position) => position === index ? { ...item, collectionId: selectedValue } : item))} required value={binding.collectionId} options={[({ value: "", label: t('extensions.chooseCollection') }), collections.map((collection) => ({ value: collection.id, label: <>{collection.name}{collection.type === 'Auth' ? ` · ${t('extensions.authCollection')}` : ''}</> }))]} /></FormField>
           <FormField htmlFor={`binding-operation-${index}`} label={t('extensions.operation')}><SelectField id={`binding-operation-${index}`} onValueChange={(selectedValue) => updateDraft('bindings', draft.bindings.map((item, position) => position === index ? { ...item, operation: selectedValue as ExtensionOperation } : item))} value={binding.operation} options={[(['create', 'update', 'delete'] as const).map((operation) => ({ value: operation, label: t(`extensions.operations.${operation}`) }))]} /></FormField>
           <FormField htmlFor={`binding-phase-${index}`} label={t('extensions.phase')}><SelectField id={`binding-phase-${index}`} onValueChange={(selectedValue) => updateDraft('bindings', draft.bindings.map((item, position) => position === index ? { ...item, phase: selectedValue as ExtensionPhase } : item))} value={binding.phase} options={[({ value: "before", label: t('extensions.phases.before') }), ({ value: "afterCommit", label: t('extensions.phases.afterCommit') })]} /></FormField>
           <Button aria-label={t('extensions.removeBinding')} className="justify-self-end" onClick={() => updateDraft('bindings', draft.bindings.filter((_, position) => position !== index))} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>
         </div>)}</div>}
       </Surface>
-      <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
-        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.capabilitiesEyebrow')}</p><h2>{t('extensions.secretsAndOrigins')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.capabilitiesDescription')}</p></div></div>
-        <section className="grid gap-3 border-t pt-3"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-xs font-semibold text-ink-secondary">{t('extensions.secretAliases')}</h3><Link className="text-xs font-semibold text-primary hover:underline" to="/settings/secrets">{t('extensions.manageSecrets')}</Link></div>
-          {draft.secretBindings.map((binding, index) => <div className="grid items-end gap-2.5 rounded-lg border border-input bg-secondary p-2.5 min-[761px]:grid-cols-[minmax(180px,1fr)_minmax(160px,1fr)_auto_auto]" key={`secret-${index}`}>
+      <Surface className="flex min-w-0 flex-col gap-4" variant="section">
+        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.capabilitiesEyebrow')}</p><h2 className="text-base font-semibold">{t('extensions.secretsAndOrigins')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.capabilitiesDescription')}</p></div></div>
+        <section className="grid gap-3 border-t pt-3"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-xs font-semibold text-ink-secondary">{t('extensions.secretAliases')}</h3><Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/settings/secrets">{t('extensions.manageSecrets')}</Link></div>
+          {draft.secretBindings.map((binding, index) => <div className="grid items-end gap-2.5 border-b py-3 min-[761px]:grid-cols-[minmax(180px,1fr)_minmax(160px,1fr)_auto_auto]" key={`secret-${index}`}>
             <FormField htmlFor={`secret-alias-${index}`} label={t('extensions.alias')}><Input autoComplete="off" id={`secret-alias-${index}`} maxLength={64} onChange={(event) => updateDraft('secretBindings', draft.secretBindings.map((item, position) => position === index ? { ...item, alias: event.target.value } : item))} pattern="[A-Za-z][A-Za-z0-9_]{0,63}" required value={binding.alias} /></FormField>
             <FormField htmlFor={`secret-id-${index}`} label={t('extensions.secret')}><SelectField id={`secret-id-${index}`} onValueChange={(selectedValue) => updateDraft('secretBindings', draft.secretBindings.map((item, position) => position === index ? { ...item, secretId: selectedValue } : item))} required value={binding.secretId} options={[({ value: "", label: t('extensions.chooseSecret') }), secrets.map((secret) => ({ value: secret.id, label: secret.name }))]} /></FormField>
-            <span className="self-center text-[11px] text-muted-foreground">{t('extensions.writeOnlyConfigured')}</span>
+            <span className="self-center text-xs text-muted-foreground">{t('extensions.writeOnlyConfigured')}</span>
             <Button aria-label={t('extensions.removeSecretAlias')} className="justify-self-end" onClick={() => updateDraft('secretBindings', draft.secretBindings.filter((_, position) => position !== index))} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>
           </div>)}
           <div className="flex flex-wrap items-center gap-2">
@@ -458,30 +465,30 @@ function HookRunsPanel({ extensionId }: { extensionId: string }) {
   }
 
   return <div className="flex min-w-0 flex-col gap-4">
-    <Surface className="flex flex-wrap items-start justify-between gap-3 p-4" variant="standard"><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.runsEyebrow')}</p><h2>{t('extensions.runs')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.runsDescription')}</p></div><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.refresh')}</Button></Surface>
+    <Surface className="flex flex-wrap items-start justify-between gap-3" variant="section"><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.runsEyebrow')}</p><h2 className="text-base font-semibold">{t('extensions.runs')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.runsDescription')}</p></div><Button onClick={() => setReload((value) => value + 1)} size="small"><RefreshCw aria-hidden="true" size={14} />{t('extensions.refresh')}</Button></Surface>
     {state === 'loading' && <LoadingState label={t('extensions.loadingRuns')} />}
     {state === 'error' && <ErrorState description={errorDetails(error, t)} title={t('extensions.runsFailed')}><Button onClick={() => setReload((value) => value + 1)} size="small">{t('extensions.retry')}</Button></ErrorState>}
     {state === 'ready' && runs.length === 0 && <EmptyState title={t('extensions.noRuns')} description={t('extensions.noRunsDescription')} />}
     {state === 'ready' && runs.length > 0 && <div className="grid gap-2.5" role="list" aria-label={t('extensions.runs')}>
-      {runs.map((run) => <article className="grid items-center gap-4 rounded-xl border bg-card px-4 py-3 min-[761px]:grid-cols-[minmax(170px,1fr)_minmax(130px,0.75fr)_auto]" key={run.runId} role="listitem">
-        <div className="grid min-w-0 justify-items-start gap-1 text-[11px] text-muted-foreground"><div className="flex flex-wrap items-center gap-2"><StatusChip state={run.status}>{t(`extensions.statuses.${run.status}`)}</StatusChip><span>{t(`extensions.operations.${run.operation}`)} · {t(`extensions.phases.${run.phase}`)}</span></div><strong className="text-xs font-semibold text-foreground">{t('extensions.runRevision', { revision: run.revision })}</strong><span>{formatDate(run.startedAt)}{typeof run.durationMs === 'number' ? ` · ${t('extensions.duration', { duration: formatNumber(run.durationMs) })}` : ''}</span></div>
-        <div className="grid min-w-0 justify-items-start gap-1 text-[11px] text-muted-foreground"><span className="break-all">{t('extensions.collectionId', { id: run.collectionId })}</span>{run.recordId && <Link className="font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(run.collectionId)}?record=${encodeURIComponent(run.recordId)}`}>{t('extensions.recordId', { id: run.recordId })}</Link>}{run.eventId && <span className="break-all">{t('extensions.eventId', { id: run.eventId })}</span>}</div>
-        <div className="grid min-w-0 justify-items-start gap-1 text-[11px] text-muted-foreground min-[761px]:justify-items-end min-[761px]:text-right"><span>{run.errorCode !== 'none' ? t(`extensions.errorCodes.${run.errorCode}` as never) : ''}</span><Button onClick={() => selectRun(run.runId)} size="small">{t('extensions.safeDetails')}</Button></div>
+      {runs.map((run) => <article className="grid items-center gap-4 border-b px-1 py-4 last:border-b-0 min-[761px]:grid-cols-[minmax(170px,1fr)_minmax(130px,0.75fr)_auto]" key={run.runId} role="listitem">
+        <div className="grid min-w-0 justify-items-start gap-1 text-xs text-muted-foreground"><div className="flex flex-wrap items-center gap-2"><StatusChip state={run.status}>{t(`extensions.statuses.${run.status}`)}</StatusChip><span>{t(`extensions.operations.${run.operation}`)} · {t(`extensions.phases.${run.phase}`)}</span></div><strong className="text-xs font-semibold text-foreground">{t('extensions.runRevision', { revision: run.revision })}</strong><span>{formatDate(run.startedAt)}{typeof run.durationMs === 'number' ? ` · ${t('extensions.duration', { duration: formatNumber(run.durationMs) })}` : ''}</span></div>
+        <div className="grid min-w-0 justify-items-start gap-1 text-xs text-muted-foreground"><span className="break-all">{t('extensions.collectionId', { id: run.collectionId })}</span>{run.recordId && <Link className="font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(run.collectionId)}?record=${encodeURIComponent(run.recordId)}`}>{t('extensions.recordId', { id: run.recordId })}</Link>}{run.eventId && <span className="break-all">{t('extensions.eventId', { id: run.eventId })}</span>}</div>
+        <div className="grid min-w-0 justify-items-start gap-1 text-xs text-muted-foreground min-[761px]:justify-items-end min-[761px]:text-right"><span>{run.errorCode !== 'none' ? t(`extensions.errorCodes.${run.errorCode}` as never) : ''}</span><Button onClick={() => selectRun(run.runId)} size="small">{t('extensions.safeDetails')}</Button></div>
       </article>)}
-      <nav aria-label={t('extensions.runPages')} className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><Button disabled={!backCursors.length} onClick={() => pageTo()} size="small"><ArrowLeft aria-hidden="true" size={14} />{t('extensions.previous')}</Button><span>{t('extensions.pageLimit')}</span><Button disabled={!nextCursor} onClick={() => pageTo(nextCursor)} size="small">{t('extensions.next')}<ArrowRight aria-hidden="true" size={14} /></Button></nav>
+      <nav aria-label={t('extensions.runPages')} className="flex items-center justify-between gap-3 text-xs text-muted-foreground"><Button disabled={!backCursors.length} onClick={() => pageTo()} size="small"><ArrowLeft aria-hidden="true" size={14} />{t('extensions.previous')}</Button><span>{t('extensions.pageLimit')}</span><Button disabled={!nextCursor} onClick={() => pageTo(nextCursor)} size="small">{t('extensions.next')}<ArrowRight aria-hidden="true" size={14} /></Button></nav>
     </div>}
     {selectedId && <Surface className="flex min-w-0 flex-col gap-3.5 p-4" variant="standard"><div className="flex flex-wrap items-start justify-between gap-3"><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('extensions.safeDiagnostics')}</p><h3>{t('extensions.runDetail')}</h3><p className={SECTION_DESCRIPTION_CLASS}>{t('extensions.safeDiagnosticsDescription')}</p></div><Button aria-label={t('extensions.closeDetails')} onClick={() => selectRun()} size="small" variant="quiet">×</Button></div>
       {detailState === 'loading' && <LoadingState label={t('extensions.loadingRun')} />}
       {detailState === 'error' && <ErrorState description={t('extensions.runNotFound')} title={t('extensions.runDetailFailed')} />}
       {detailState === 'ready' && selected && <dl className="m-0 grid grid-cols-1 gap-2.5 min-[561px]:grid-cols-2 min-[561px]:gap-x-5">
-        <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.runId')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><code className="font-mono">{selected.runId}</code></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.status')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{t(`extensions.statuses.${selected.status}`)}</dd></div>
-        <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.revision')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{selected.revision}</dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.operation')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{t(`extensions.operations.${selected.operation}`)} · {t(`extensions.phases.${selected.phase}`)}</dd></div>
-        <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.collection')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><Link className="font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(selected.collectionId)}`}>{selected.collectionId}</Link></dd></div>
-        {selected.recordId && <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.record')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><Link className="font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(selected.collectionId)}?record=${encodeURIComponent(selected.recordId)}`}>{selected.recordId}</Link></dd></div>}
-        {selected.eventId && <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.event')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{selected.eventId}</dd></div>}
-        <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.startedAt')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{formatDate(selected.startedAt)}</dd></div>{selected.completedAt && <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.completedAt')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{formatDate(selected.completedAt)}</dd></div>}
-        {typeof selected.durationMs === 'number' && <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.durationLabel')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{t('extensions.duration', { duration: formatNumber(selected.durationMs) })}</dd></div>}
-        <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.errorCategory')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{selected.errorCode === 'none' ? t('extensions.noError') : t(`extensions.errorCodes.${selected.errorCode}` as never)}</dd></div>{selected.correlationId && <div className="grid min-w-0 gap-0.5"><dt className="text-[11px] text-muted-foreground">{t('extensions.correlationId')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><code className="font-mono">{selected.correlationId}</code></dd></div>}
+        <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.runId')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><code className="font-mono">{selected.runId}</code></dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.status')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{t(`extensions.statuses.${selected.status}`)}</dd></div>
+        <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.revision')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{selected.revision}</dd></div><div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.operation')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{t(`extensions.operations.${selected.operation}`)} · {t(`extensions.phases.${selected.phase}`)}</dd></div>
+        <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.collection')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><Link className="font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(selected.collectionId)}`}>{selected.collectionId}</Link></dd></div>
+        {selected.recordId && <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.record')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><Link className="font-semibold text-primary hover:underline" to={`/collections/${encodeURIComponent(selected.collectionId)}?record=${encodeURIComponent(selected.recordId)}`}>{selected.recordId}</Link></dd></div>}
+        {selected.eventId && <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.event')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{selected.eventId}</dd></div>}
+        <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.startedAt')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{formatDate(selected.startedAt)}</dd></div>{selected.completedAt && <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.completedAt')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{formatDate(selected.completedAt)}</dd></div>}
+        {typeof selected.durationMs === 'number' && <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.durationLabel')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{t('extensions.duration', { duration: formatNumber(selected.durationMs) })}</dd></div>}
+        <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.errorCategory')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary">{selected.errorCode === 'none' ? t('extensions.noError') : t(`extensions.errorCodes.${selected.errorCode}` as never)}</dd></div>{selected.correlationId && <div className="grid min-w-0 gap-0.5"><dt className="text-xs text-muted-foreground">{t('extensions.correlationId')}</dt><dd className="m-0 min-w-0 break-words text-xs text-ink-secondary"><code className="font-mono">{selected.correlationId}</code></dd></div>}
       </dl>}
     </Surface>}
   </div>;
@@ -560,22 +567,22 @@ export function SecretsPage() {
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
-    <PageHeading eyebrow={t('secrets.eyebrow')} title={t('secrets.title')} description={t('secrets.description')} />
+    <PageHeading level={2} eyebrow={t('secrets.eyebrow')} title={t('secrets.title')} description={t('secrets.description')} />
     <Surface className="flex flex-wrap items-start gap-2.5 border-warning/35 bg-warning-soft px-4 py-3.5 text-warning" variant="standard"><ShieldAlert aria-hidden="true" className="mt-0.5 shrink-0" size={19} /><p className="m-0 text-xs leading-relaxed text-ink-secondary">{t('secrets.writeOnlyNotice')}</p></Surface>
     <div className="min-w-0" data-extension-secret-create>
       <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
-        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('secrets.createEyebrow')}</p><h2>{t('secrets.createTitle')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('secrets.createDescription')}</p></div></div>
+        <div className={SECTION_HEADING_CLASS}><div className={SECTION_HEADING_COPY_CLASS}><p className="eyebrow">{t('secrets.createEyebrow')}</p><h2 className="text-base font-semibold">{t('secrets.createTitle')}</h2><p className={SECTION_DESCRIPTION_CLASS}>{t('secrets.createDescription')}</p></div></div>
         <form className="grid max-w-[820px] gap-3.5" onSubmit={(event) => void addSecret(event)}>
           <FormField htmlFor="secret-name" label={t('secrets.name')}><Input autoComplete="off" id="secret-name" maxLength={120} onChange={(event) => setName(event.target.value)} required value={name} /></FormField>
           <FormField htmlFor="secret-value" hint={t('secrets.valueHint')} label={t('secrets.value')}><Input autoComplete="new-password" id="secret-value" onChange={(event) => setValue(event.target.value)} required type="password" value={value} /></FormField>
-          <span className={`text-[11px] tabular-nums ${new TextEncoder().encode(value).byteLength > 16384 ? 'text-danger' : 'text-muted-foreground'}`}>{t('secrets.byteCount', { count: new TextEncoder().encode(value).byteLength, limit: 16384 })}</span>
+          <span className={`text-xs tabular-nums ${new TextEncoder().encode(value).byteLength > 16384 ? 'text-danger' : 'text-muted-foreground'}`}>{t('secrets.byteCount', { count: new TextEncoder().encode(value).byteLength, limit: 16384 })}</span>
           {formError !== undefined ? <p className="m-0 text-xs leading-relaxed text-danger" role="alert">{formError instanceof Error && formError.message === 'secret-limit' ? t('secrets.valueTooLarge') : errorDetails(formError, t)}</p> : null}
           {notice && <p className="m-0 text-xs leading-relaxed text-success" role="status">{t('secrets.createdNotice')}</p>}
           <div className="flex flex-wrap justify-end gap-2"><Button disabled={saving || !name.trim() || !value || !validSecretValue(value)} type="submit" variant="primary"><Plus aria-hidden="true" size={15} />{saving ? t('secrets.saving') : t('secrets.createAction')}</Button></div>
         </form>
       </Surface>
     </div>
-    <Surface className="flex flex-wrap items-center gap-3 p-3" variant="standard">
+    <Surface className="flex flex-wrap items-center gap-3" variant="section">
       <SearchInput aria-label={t('secrets.search')} onChange={(event) => updateQuery(event.target.value)} placeholder={t('secrets.searchPlaceholder')} value={search} className="min-h-9 min-w-[180px] max-w-[450px] flex-1" />
       <span className="whitespace-nowrap text-xs font-medium tabular-nums text-muted-foreground">{t('secrets.count', { count: visible.length })}</span>
     </Surface>
@@ -617,8 +624,8 @@ function SecretRow({ secret, onChanged, onDelete }: { secret: SecretMetadata; on
     finally { setBusy(false); }
   }
 
-  return <Surface className="flex min-w-0 flex-col gap-3.5 p-4" variant="standard">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div className={SECTION_HEADING_COPY_CLASS}><h2 className="truncate text-sm font-semibold text-foreground">{secret.name}</h2><p className="mt-1 text-xs text-muted-foreground">{t('secrets.secretMeta', { date: formatDate(secret.updatedAt) })}</p></div><StatusChip state="configured">{t('secrets.configured')}</StatusChip></div>
+  return <Surface className="flex min-w-0 flex-col gap-3.5" variant="section">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div className={SECTION_HEADING_COPY_CLASS}><h2 className="truncate text-base font-semibold text-foreground">{secret.name}</h2><p className="mt-1 text-xs text-muted-foreground">{t('secrets.secretMeta', { date: formatDate(secret.updatedAt) })}</p></div><StatusChip state="configured">{t('secrets.configured')}</StatusChip></div>
     <div className="grid items-end gap-3 min-[761px]:grid-cols-[minmax(210px,1fr)_minmax(240px,1fr)_auto]">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2"><FormField htmlFor={`secret-rename-${secret.id}`} label={t('secrets.rename')}><Input autoComplete="off" id={`secret-rename-${secret.id}`} maxLength={120} onChange={(event) => setName(event.target.value)} value={name} /></FormField><Button disabled={busy || !name.trim() || name.trim() === secret.name} onClick={() => void saveName()} size="small" type="button">{t('secrets.saveName')}</Button></div>
       <form className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2" onSubmit={(event) => void saveValue(event)}><FormField htmlFor={`secret-value-${secret.id}`} hint={t('secrets.replaceHint')} label={t('secrets.replaceValue')}><Input autoComplete="new-password" id={`secret-value-${secret.id}`} onChange={(event) => setValue(event.target.value)} type="password" value={value} /></FormField><Button disabled={busy || !value || !validSecretValue(value)} size="small" type="submit"><Save aria-hidden="true" size={14} />{t('secrets.replaceAction')}</Button></form>

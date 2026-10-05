@@ -203,3 +203,8 @@ func newRequestID() string {
 	}
 	return fmt.Sprintf("req_%d_%d", time.Now().UTC().UnixNano(), fallbackRequestID.Add(1))
 }
+
+// WithRequestID 让共享执行层的业务调用与耐久工具步骤使用同一请求关联 ID。
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDKey{}, id)
+}

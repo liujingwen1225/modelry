@@ -165,7 +165,7 @@ async function createCollection(page: Page, name: string): Promise<string> {
 // Spec 0001 §18.6：真实浏览器验收覆盖四个断点、刷新/深链/返回、locale+theme 持久化、
 // 纯键盘流程与焦点返回，以及控制台异常和意外 5xx。
 test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow and console health', async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(900_000);
   const consoleErrors: string[] = [];
   const unexpectedFailures: string[] = [];
   const expectedFailures = new Set<string>();
@@ -202,7 +202,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}`, { timeout: 20_000 });
     // exact：集合名（如 shell_visual_records）也包含 "records" 子串。
-    await expect(page.getByRole('heading', { name: 'Records', level: 1, exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Records', level: 2, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create record', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Collection workspace' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth), `no horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
@@ -215,7 +215,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
   await page.reload({ timeout: 20_000 });
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
-  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Changes', level: 1 })).toHaveClass('sr-only');
   await expect(page.getByRole('navigation', { name: 'Change sections' })).toBeVisible();
   await page.goto(`${runtimeURL}/activity/audit`, { timeout: 20_000 });
   await page.goBack({ timeout: 20_000 });
@@ -223,12 +223,12 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
 
   // locale + theme 选择在刷新后保持，且不改变当前深链接。
   await page.getByRole('button', { name: 'Switch language to Simplified Chinese' }).click();
-  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toHaveClass('sr-only');
   await page.getByRole('button', { name: '切换为深色主题' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload({ timeout: 20_000 });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '变更', level: 1 })).toHaveClass('sr-only');
   await expect(page).toHaveURL(/\/changes\?tab=pending$/);
   await page.getByRole('button', { name: '切换语言为 English' }).click();
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
@@ -236,6 +236,7 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
 
   // 纯键盘：跳过链接 → 命令面板 → Escape 后焦点回到触发控件。
   await page.goto(`${runtimeURL}/collections`, { timeout: 20_000 });
+  await expect(page.locator('[data-workspace-toolbar]')).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
   const paletteTrigger = page.locator('[data-command-palette-trigger]');
@@ -252,6 +253,98 @@ test('Shell visual acceptance: breakpoints, durable preferences, keyboard flow a
   await page.keyboard.press('Escape');
   await expect(palette).toHaveCount(0);
   await expect(paletteTrigger).toBeFocused();
+
+  // Quiet Workbench：真实 Runtime 下遍历所有工作对象的主题、语言和四断点。
+  const destinations = [
+    '/', '/collections', `/collections/${collectionId}`, `/collections/${collectionId}/model`,
+    `/collections/${collectionId}/access`, `/collections/${collectionId}/api`,
+    '/api', '/events', '/schedules', '/changes', '/access', '/activity',
+    '/settings', '/settings/runtime', '/settings/storage', '/settings/mail',
+    '/settings/secrets', '/settings/data', '/settings/backups',
+  ];
+  for (const locale of ['en', 'zh-CN']) {
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(({ locale, theme }) => {
+        localStorage.setItem('modelry-admin-locale', locale);
+        localStorage.setItem('modelry-admin-theme', theme);
+      }, { locale, theme });
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const destination of destinations) {
+          await test.step(`${locale} / ${theme} / ${width} / ${destination}`, async () => {
+            await page.goto(runtimeURL + destination);
+            await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+            await expect(page.locator('main h1')).toHaveCount(1);
+            // 一级页面由导航标识位置；资源工作面保留可见资源名。
+            if (destination.startsWith(`/collections/${collectionId}`)) {
+              await expect(page.locator('main h1')).toBeVisible();
+            } else {
+              await expect(page.locator('main h1')).toHaveClass('sr-only');
+              expect(await page.locator('main h1').evaluate((heading) => heading.getBoundingClientRect().height)).toBeLessThanOrEqual(1);
+            }
+            await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+            const smallText = await page.locator('main').evaluate((main) => Array.from(main.querySelectorAll<HTMLElement>('*'))
+              .filter((element) => element.getClientRects().length && !element.closest('.sr-only') && Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
+              .filter((element) => parseFloat(getComputedStyle(element).fontSize) < 12)
+              .map((element) => element.tagName + ':' + getComputedStyle(element).fontSize));
+            expect(smallText, '正常文字至少 12px').toEqual([]);
+            if ((locale === 'en' && theme === 'light' && width === 1440) || (locale === 'zh-CN' && theme === 'dark' && width === 390)) {
+              await test.info().attach(`quiet-${locale}-${theme}-${width}-${destination.replaceAll('/', '-')}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+            }
+          });
+        }
+      }
+    }
+  }
+
+  // 共享浮层在两语言、两主题、四断点下都可用，且只读体验不产生配置副作用。
+  for (const locale of ['en', 'zh-CN']) {
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(({ locale, theme }) => {
+        localStorage.setItem('modelry-admin-locale', locale);
+        localStorage.setItem('modelry-admin-theme', theme);
+      }, { locale, theme });
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(runtimeURL + '/events?tab=webhooks');
+        const createWebhook = page.getByRole('button', { name: locale === 'en' ? 'Create Webhook' : '创建 Webhook', exact: true });
+        await createWebhook.click();
+        const sheet = page.locator('[data-slot="sheet-content"]');
+        await expect(sheet).toBeVisible();
+        await expect(sheet.locator('button[type="submit"]')).toBeDisabled();
+        expect((await sheet.boundingBox())!.width).toBeLessThanOrEqual(width);
+        await page.keyboard.press('Escape');
+        await expect(sheet).toHaveCount(0);
+
+        await page.goto(runtimeURL + '/access?tab=administrators');
+        await page.getByRole('button', { name: locale === 'en' ? 'Create Administrator' : '新建管理员', exact: true }).click();
+        const dialog = page.locator('[data-slot="dialog-content"]');
+        await expect(dialog).toBeVisible();
+        expect((await dialog.boundingBox())!.width).toBeLessThanOrEqual(width);
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+
+        const ownerTrigger = page.locator('[data-owner-menu] > button');
+        await ownerTrigger.click();
+        const popover = page.locator('[data-slot="popover-content"]');
+        await expect(popover).toBeVisible();
+        expect((await popover.boundingBox())!.width).toBeLessThanOrEqual(width);
+        await page.keyboard.press('Escape');
+        await expect(popover).toHaveCount(0);
+        await expect(ownerTrigger).toBeFocused();
+
+        await paletteTrigger.focus();
+        await page.keyboard.press('Control+k');
+        const commands = page.locator('[data-slot="dialog-content"]');
+        await expect(commands).toBeVisible();
+        expect((await commands.boundingBox())!.width).toBeLessThanOrEqual(width);
+        await page.keyboard.press('Escape');
+        await expect(commands).toHaveCount(0);
+        await expect(paletteTrigger).toBeFocused();
+      }
+    }
+  }
 
   expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   expect(unexpectedFailures, `unexpected 5xx: ${unexpectedFailures.join(' | ')}`).toEqual([]);

@@ -26,7 +26,8 @@ import { FileStoragePage } from './storage/pages';
 import { MailPage } from './mail/pages';
 import { HookCreatePage, SecretsPage } from './extensions/pages';
 import { DataTransferPage, BackupRestorePage } from './portability/pages';
-import { MCPGuidePage } from './developer/pages';
+import { AgentPage } from './agent/workbench';
+import { AgentSettingsPage } from './agent/settings';
 import { mapLegacyPath } from './route-map';
 
 function NotFoundPage() {
@@ -94,6 +95,7 @@ function AuthenticatedWorkspace() {
     <Routes>
       <Route element={<AppShell onLogout={logout} ownerEmail={session.owner.email} permission={session.permission} role={session.role} sessionExpiresAt={session.expiresAt} />}>
         <Route element={<OverviewPage />} path="/" />
+<Route element={<AgentPage />} path="/agent" />
         {/* BUILD — Collections（Collection 工作区：记录 | Model | 访问规则 | API） */}
         <Route element={<CollectionsPage />} path="/collections" />
         <Route element={<CreateCollectionPage />} path="/collections/new" />
@@ -120,11 +122,12 @@ function AuthenticatedWorkspace() {
         <Route element={<ActivityWorkspacePage />} path="/activity" />
         <Route element={<AuditPage />} path="/activity/audit/:auditRecordId" />
         {/* MCP 不占一级菜单，但从总览与 API 工作区可达 */}
-        <Route element={<MCPGuidePage />} path="/mcp" />
+        <Route element={<LegacyRedirect />} path="/mcp" />
         {/* SYSTEM — 系统设置（本地设置导航，分节用路径表达） */}
         <Route element={<SettingsLayout />} path="/settings">
           <Route element={<SettingsGeneralPage />} index />
           <Route element={<RuntimeSettingsPage />} path="runtime" />
+<Route element={<AgentSettingsPage />} path="agent" />
           <Route element={<FileStoragePage />} path="storage" />
           <Route element={<MailPage />} path="mail" />
           <Route element={<SecretsPage />} path="secrets" />

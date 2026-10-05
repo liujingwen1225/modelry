@@ -25,9 +25,9 @@ export function FormField({
     : children;
   return (
     <div data-slot="form-field" className="grid gap-1.5">
-      <Label className="text-[11px] font-semibold text-ink-secondary" htmlFor={htmlFor}>{label}</Label>
+      <Label className="text-[13px] font-medium text-ink-secondary" htmlFor={htmlFor}>{label}</Label>
       {describedChild}
-      {hint && <p className="m-0 text-[10px] text-muted-foreground" id={hintId}>{hint}</p>}
+      {hint && <p className="m-0 text-xs text-muted-foreground" id={hintId}>{hint}</p>}
     </div>
   );
 }

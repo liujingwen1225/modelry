@@ -45,7 +45,7 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
       <Button
         aria-label={label}
         aria-describedby={failed ? feedbackId : undefined}
-        className="ml-auto min-h-6 px-1.5"
+        className="ml-auto shrink-0 px-2"
         onClick={() => void handleCopy()}
         size="small"
         type="button"

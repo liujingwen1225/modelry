@@ -1,4 +1,5 @@
 import { TabContent } from '../components/tab-content';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -6,7 +7,7 @@ import { Button as ControlButton } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { SelectField } from '@/components/ui/select-field';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, Settings2, Trash2, CircleAlert, Database, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
+import { Type, Hash, ToggleLeft, Calendar, Braces, GitBranch, File, Files, ArrowLeft, ArrowRight, Check, Settings2, Trash2, CircleAlert, Database, Info, LayoutGrid, List, Plus, RefreshCw, Shield } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../api/client';
 import { Badge } from '@/components/ui/badge';
@@ -45,9 +46,12 @@ type FieldDraft = {
 
 type FieldErrors = Record<string, string>;
 
-function newFieldDraft(key: string): FieldDraft {
+const INITIAL_FIELD_TYPES: FieldType[] = ['text', 'number', 'boolean', 'dateTime', 'json', 'relation', 'file', 'files'];
+const FIELD_TYPE_ICONS = { text: Type, number: Hash, boolean: ToggleLeft, dateTime: Calendar, json: Braces, relation: GitBranch, file: File, files: Files };
+
+function newFieldDraft(key: string, name: string, type: FieldType): FieldDraft {
   return {
-    key, name: '', type: 'text', required: false, unique: false,
+    key, name, type, required: false, unique: false,
     description: '', defaultValue: '', validation: '', targetCollectionId: '', cardinality: 'many-to-one',
   };
 }
@@ -125,16 +129,8 @@ export function CollectionsPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <header className="sr-only">
-        <div className="sr-only">
-          <p className="eyebrow">{t('collections.eyebrow')}</p>
-          <h1>{t('collections.title')}</h1>
-          <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.description')}</p>
-        </div>
-
-      </header>
-
       <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-3 border-b pb-2" data-workspace-toolbar>
+        <h1 className="sr-only">{t('collections.title')}</h1>
         <SearchInput aria-label={t('collections.search')} onChange={(event) => updateQuery('q', event.target.value)} placeholder={t('collections.searchPlaceholder')} value={search} className="min-w-[180px] flex-1 md:max-w-sm" />
         <Select items={typeItems} onValueChange={(value) => updateQuery('type', String(value) === 'all' ? '' : String(value))} value={type}>
           <SelectTrigger aria-label={t('collections.type')} className="w-28"><SelectValue /></SelectTrigger>
@@ -155,7 +151,7 @@ export function CollectionsPage() {
           {(['list', 'card'] as const).map((option) => (
             <ControlButton variant="unstyled"
               aria-pressed={view === option}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:shadow-none ${view === option ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
+              className={`inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors  ${view === option ? 'bg-primary text-primary-foreground' : 'bg-card text-ink-secondary hover:bg-accent hover:text-accent-foreground'}`}
               key={option}
               onClick={() => updateQuery('view', option === 'card' ? '' : 'list')}
               type="button"
@@ -184,7 +180,7 @@ export function CollectionsPage() {
         <EmptyState description={t('collections.noMatchDescription')} title={t('collections.noMatchTitle')} />
       )}
       {state === 'ready' && visible.length > 0 && view === 'list' && (
-        <Surface className="overflow-hidden p-0" variant="standard">
+        <Surface className="overflow-hidden p-0" variant="section">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -201,7 +197,7 @@ export function CollectionsPage() {
         </Surface>
       )}
       {state === 'ready' && visible.length > 0 && view === 'card' && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((collection) => <CollectionCard collection={collection} key={collection.id} />)}
         </div>
       )}
@@ -217,7 +213,7 @@ function CollectionListRow({ collection }: { collection: CollectionSummary }) {
         {/* 整行可点击：链接的伪元素铺满行，键盘焦点仍落在链接上（§13.4）。 */}
         <Link className="flex min-w-0 flex-col gap-0.5 after:absolute after:inset-0" to={`/collections/${encodeURIComponent(collection.id)}`}>
           <span className="truncate font-semibold text-foreground group-hover:text-primary">{collection.name}</span>
-          <span className="truncate text-xs text-muted-foreground">{collection.description || t('collections.noDescription')}</span>
+          <span className="truncate text-sm text-muted-foreground">{collection.description || t('collections.noDescription')}</span>
         </Link>
       </TableCell>
       <TableCell>
@@ -235,14 +231,14 @@ function CollectionListRow({ collection }: { collection: CollectionSummary }) {
 function CollectionCard({ collection }: { collection: CollectionSummary }) {
   const { t, formatDate } = useI18n();
   return (
-    <Link className="group relative flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors " to={`/collections/${encodeURIComponent(collection.id)}`}>
+    <Link className="group relative flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-4 transition-colors " to={`/collections/${encodeURIComponent(collection.id)}`}>
       <div className="flex items-center justify-between gap-2">
         <span aria-hidden="true" className="grid size-9 place-items-center rounded-lg bg-muted text-ink-secondary"><Database size={18} /></span>
         <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
       </div>
       <div className="min-w-0">
-        <h2 className="truncate text-sm font-semibold text-foreground group-hover:text-primary">{collection.name}</h2>
-        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{collection.description || t('collections.noDescription')}</p>
+        <h2 className="truncate text-base font-semibold text-foreground group-hover:text-primary">{collection.name}</h2>
+        <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{collection.description || t('collections.noDescription')}</p>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
         <span>{collectionCount(collection.recordCount, 'record', t)}</span>
@@ -324,6 +320,7 @@ export function CreateCollectionPage() {
   const [description, setDescription] = useState('');
   const [type, setType] = useState<CollectionType>('Normal');
   const [fields, setFields] = useState<FieldDraft[]>([]);
+  const [fieldTypeMenuOpen, setFieldTypeMenuOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, FieldErrors>>({});
   const [nameError, setNameError] = useState('');
   const [authentication, setAuthentication] = useState<AuthenticationConfiguration>(authDefaults);
@@ -360,17 +357,26 @@ export function CreateCollectionPage() {
     setRequestError(undefined);
   }
 
-  function addField() {
+  function addField(fieldType: FieldType) {
     const key = `field-${nextFieldNumber.current++}`;
-    setFields((current) => [...current, newFieldDraft(key)]);
-    setTimeout(() => document.getElementById(`field-name-${key}`)?.focus(), 0);
+    const reservedNames = new Set([...SYSTEM_FIELDS.map((field) => field.name), ...(type === 'Auth' ? ['email'] : []), ...fields.map((field) => field.name.trim().toLowerCase())].map((name) => name.toLowerCase()));
+    let suffix = 1;
+    let suggestedName = `${fieldType}_${suffix}`;
+    while (reservedNames.has(suggestedName.toLowerCase())) suggestedName = `${fieldType}_${++suffix}`;
+    setFields((current) => [...current, newFieldDraft(key, suggestedName, fieldType)]);
+    setFieldTypeMenuOpen(false);
+    setTimeout(() => {
+      const input = document.getElementById(`field-name-${key}`) as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
+    }, 0);
   }
 
   function handleFieldEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (!event.currentTarget.value.trim() || event.nativeEvent.isComposing) return;
-    addField();
+    setFieldTypeMenuOpen(true);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -419,12 +425,12 @@ export function CreateCollectionPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-[880px] min-w-0 flex-col gap-6">
-      <Link className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
+      <Link className="inline-flex min-h-11 w-fit items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground" to="/collections"><ArrowLeft aria-hidden="true" size={14} />{t('collections.title')}</Link>
 
-      <header className="sr-only">
+      <header className="min-w-0 border-b pb-4">
         <p className="eyebrow">{t('collections.buildEyebrow')}</p>
-        <h1>{t('collections.create')}</h1>
-        <p className="mt-1.5 max-w-[680px] text-[13px] leading-relaxed text-muted-foreground">{t('collections.createDescription')}</p>
+        <h1 className="text-2xl font-semibold">{t('collections.create')}</h1>
+        <p className="mt-1.5 max-w-[680px] text-sm leading-relaxed text-muted-foreground">{t('collections.createDescription')}</p>
       </header>
 
       {requestError !== undefined && (() => {
@@ -434,7 +440,7 @@ export function CreateCollectionPage() {
           <ErrorState description={copy.message} title={copy.title}>
             {api?.details.violations && Array.isArray(api.details.violations) && <ul className="mt-2 flex list-none flex-col gap-1 p-0">
               {api.details.violations.map((violation, index) => <li key={`${violation.path}-${index}`}>
-                {typeof violation.code === 'string' && <code className="mr-1.5 text-[10px]">{violation.code}</code>}
+                {typeof violation.code === 'string' && <code className="mr-1.5 text-xs">{violation.code}</code>}
                 {(typeof violation.code === 'string' ? validationMessage(violation.code) : undefined) ?? t('collections.validation.reviewField')}
               </li>)}
             </ul>}
@@ -443,12 +449,12 @@ export function CreateCollectionPage() {
       })()}
 
       <form className="flex min-w-0 flex-col gap-5" noValidate onSubmit={(event) => void submit(event)}>
-        <Surface className="flex min-w-0 flex-col gap-5 p-5" variant="standard">
-          <div><p className="eyebrow">{t('collections.detailsEyebrow')}</p><h2>{t('collections.detailsTitle')}</h2></div>
+        <Surface className="flex min-w-0 flex-col gap-5" variant="section">
+          <div><p className="eyebrow">{t('collections.detailsEyebrow')}</p><h2 className="text-base font-semibold">{t('collections.detailsTitle')}</h2></div>
 
           {/* Spec 0001 §6.2：类型选择留在名称旁边，Auth 选项随后就地出现。 */}
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend className="mb-1 text-[11px] font-semibold text-ink-secondary">{t('collections.type')}</legend>
+            <legend className="mb-1 text-xs font-semibold text-ink-secondary">{t('collections.type')}</legend>
             <RadioGroup aria-label={t('collections.type')} className="grid gap-3 sm:grid-cols-2" name="collection-type" value={type} onValueChange={setType}>
               {(['Normal', 'Auth'] as const).map((option) => {
                 const selected = type === option;
@@ -460,7 +466,7 @@ export function CreateCollectionPage() {
                     <RadioGroupItem aria-label={t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')} className="mt-0.5" value={option} />
                     <span className="min-w-0">
                       <strong className="block text-xs font-semibold text-foreground">{t(option === 'Normal' ? 'collections.typeNormal' : 'collections.typeAuth')}</strong>
-                      <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{t(option === 'Normal' ? 'collections.typeNormalDescription' : 'collections.typeAuthDescription')}</span>
                     </span>
                   </Label>
                 );
@@ -472,7 +478,7 @@ export function CreateCollectionPage() {
             <FormField htmlFor="collection-name" label={t('collections.nameLabel')} hint={t('collections.nameHint')}>
               <Input aria-invalid={Boolean(nameError)} aria-describedby={nameError ? 'collection-name-error' : undefined} autoComplete="off" id="collection-name" onChange={(event) => { setName(event.target.value); setNameError(''); setRequestError(undefined); }} value={name} />
             </FormField>
-            {nameError && <p className="m-0 self-start text-[11px] font-semibold text-danger" id="collection-name-error" role="alert">{nameError}</p>}
+            {nameError && <p className="m-0 self-start text-xs font-semibold text-danger" id="collection-name-error" role="alert">{nameError}</p>}
             <FormField htmlFor="collection-description" label={t('collections.descriptionLabel')} hint={t('collections.descriptionHint')}>
               <Textarea id="collection-description" onChange={(event) => setDescription(event.target.value)} rows={2} value={description} />
             </FormField>
@@ -481,9 +487,9 @@ export function CreateCollectionPage() {
 
 
 
-        <Surface className="flex min-w-0 flex-col gap-4 p-5" data-collection-field-editor variant="standard">
+        <Surface className="flex min-w-0 flex-col gap-4" data-collection-field-editor variant="section">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2>{t('collections.fieldsEditorTitle')}</h2>
+            <h2 className="text-base font-semibold">{t('collections.fieldsEditorTitle')}</h2>
             <Badge variant="outline">{collectionCount(SYSTEM_FIELDS.length - omittedSystemFields.length + fields.length + (type === 'Auth' ? 1 : 0), 'field', t)}</Badge>
           </div>
           {targetsError && (
@@ -493,10 +499,10 @@ export function CreateCollectionPage() {
               <Button onClick={() => { setTargetsLoading(true); setTargetsError(false); void listAllCollections().then(setTargets).catch(() => setTargetsError(true)).finally(() => setTargetsLoading(false)); }} size="small" type="button">{t('collections.retry')}</Button>
             </div>
           )}
-          <div className="min-w-0 overflow-hidden rounded-lg border bg-card" data-field-list>
+          <div className="@container min-w-0 overflow-hidden rounded-lg border bg-card" data-field-list>
             <h3 className="sr-only">{t('collections.systemTitle')}</h3>
-            <div className="hidden gap-3 bg-muted/40 px-3.5 py-2.5 text-[11px] font-semibold text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px]" aria-hidden="true">
-              <span>{t('collections.fieldName')}</span><span>{t('collections.fieldType')}</span><span>{t('collections.systemAccess')}</span><span />
+            <div className="hidden gap-2 bg-muted/40 px-3.5 py-2.5 text-xs font-semibold text-muted-foreground @[640px]:grid @[640px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_200px_88px]" aria-hidden="true">
+              <span>{t('collections.fieldName')}</span><span>{t('collections.fieldType')}</span><span>{t('collections.fieldConstraints')}</span><span />
             </div>
             <div className="divide-y">
               <LockedFieldRow name="id" type="text" />
@@ -514,21 +520,33 @@ export function CreateCollectionPage() {
               />)}
               {type === 'Auth' && <LockedFieldRow name="email" type="text" authIdentifier />}
               {(['createdAt', 'updatedAt'] as const).filter((name) => !omittedSystemFields.includes(name)).map((name) => <LockedFieldRow key={name} name={name} type="dateTime" onRemove={() => { setOmittedSystemFields((current) => [...current, name]); setRequestError(undefined); }} />)}
-              <div className="p-2"><Button className="w-full justify-center" onClick={addField} size="small" type="button"><Plus aria-hidden="true" size={14} />{t('collections.newField')}</Button></div>
+              <div className="p-2">
+                <Popover open={fieldTypeMenuOpen} onOpenChange={setFieldTypeMenuOpen}>
+                  <PopoverTrigger render={<Button className="w-full justify-center" size="small" type="button" />}><Plus aria-hidden="true" size={14} />{t('collections.newField')}</PopoverTrigger>
+                  <PopoverContent aria-label={t('collections.fieldType')} className="@container w-(--anchor-width) p-2" data-field-type-picker>
+                    <div className="grid grid-cols-2 gap-1 @[600px]:grid-cols-4">
+                      {INITIAL_FIELD_TYPES.map((fieldType) => {
+                        const Icon = FIELD_TYPE_ICONS[fieldType];
+                        return <Button className="justify-start gap-3 px-3" key={fieldType} onClick={() => addField(fieldType)} type="button" variant="quiet"><Icon aria-hidden="true" size={18} />{t(`schema.fieldTypes.${fieldType}`)}</Button>;
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
           </div>
         </Surface>
 
         {type === 'Auth' && (
-          <Surface className="flex min-w-0 flex-col gap-4 p-5" variant="standard">
-            <div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2>{t('collections.authTitle')}</h2><p className="mt-1 text-[11px] text-muted-foreground">{t('collections.authDescription')}</p></div>
+          <Surface className="flex min-w-0 flex-col gap-4" variant="section">
+            <div><p className="eyebrow">{t('collections.authEyebrow')}</p><h2 className="text-base font-semibold">{t('collections.authTitle')}</h2><p className="mt-1 text-xs text-muted-foreground">{t('collections.authDescription')}</p></div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
                 <span className="min-w-0">
                   <strong className="block text-xs font-semibold text-foreground">{t('collections.emailPassword')}</strong>
-                  <small className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t('collections.emailPasswordHint')}</small>
+                  <small className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{t('collections.emailPasswordHint')}</small>
                 </span>
-                <span className="inline-flex shrink-0 items-center gap-2 text-[11px] text-ink-secondary">
+                <span className="inline-flex shrink-0 items-center gap-2 text-xs text-ink-secondary">
                   <Checkbox checked={authentication.emailPasswordEnabled} onCheckedChange={(checked) => setAuthentication((value) => ({ ...value, emailPasswordEnabled: checked }))} />
                   {t('collections.enabled')}
                 </span>
@@ -536,7 +554,7 @@ export function CreateCollectionPage() {
               <Label className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3.5">
                 <span className="min-w-0">
                   <strong className="block text-xs font-semibold text-foreground">{t('collections.selfRegistration')}</strong>
-                  <small className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{t('collections.selfRegistrationHint')}</small>
+                  <small className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{t('collections.selfRegistrationHint')}</small>
                 </span>
                 <Checkbox aria-label={t('collections.selfRegistration')} checked={authentication.selfRegistration} className="mt-0.5 shrink-0" onCheckedChange={(checked) => setAuthentication((value) => ({ ...value, selfRegistration: checked }))} />
               </Label>
@@ -557,7 +575,7 @@ export function CreateCollectionPage() {
 
 function LockedFieldRow({ name, type, authIdentifier = false, onRemove }: { name: string; type: 'text' | 'dateTime'; authIdentifier?: boolean; onRemove?: () => void }) {
   const { t } = useI18n();
-  return <div className="grid min-w-0 gap-3 px-3.5 py-3 text-xs lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px] lg:items-center" data-locked-field-row>
+  return <div className="grid min-w-0 grid-cols-2 items-center gap-2 px-3.5 py-2 text-xs @[640px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_200px_88px]" data-locked-field-row>
     <strong className="font-mono font-semibold text-foreground">{name}</strong>
     <span className="text-muted-foreground">{t(type === 'text' ? 'schema.fieldTypes.text' : 'schema.fieldTypes.dateTime')}</span>
     <Badge className="w-fit" variant="outline"><Shield aria-hidden="true" size={13} />{t(authIdentifier ? 'collections.requiredUnique' : onRemove ? 'collections.systemManaged' : 'collections.systemLocked')}</Badge>
@@ -584,22 +602,24 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
     if (errors.defaultValue || errors.validation || errors.target) setAdvancedOpen(true);
   }, [errors.defaultValue, errors.validation, errors.target]);
   return (
-    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-3 p-3.5" data-initial-field-row>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_160px_76px] lg:items-center lg:[&_[data-slot=form-field]>label]:sr-only">
+    <section aria-label={t('collections.initialFieldLabel', { index: index + 1 })} className="flex min-w-0 flex-col gap-2 px-3.5 py-2" data-initial-field-row>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)] items-center gap-2 @[640px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.8fr)_200px_88px] @[640px]:[&_[data-slot=form-field]>label]:sr-only">
         <FormField htmlFor={`field-name-${field.key}`} label={t('collections.fieldName')}>
           <Input aria-label={t('collections.fieldNameLabel', { index: index + 1 })} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? `field-name-error-${field.key}` : undefined} autoComplete="off" id={`field-name-${field.key}`} onChange={(event) => onUpdate({ name: event.target.value })} onKeyDown={onEnter} placeholder={t('collections.fieldNamePlaceholder')} value={field.name} />
-          {errors.name && <span className="text-[11px] font-semibold text-danger" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
+          {errors.name && <span className="text-xs font-semibold text-danger" id={`field-name-error-${field.key}`} role="alert">{errors.name}</span>}
         </FormField>
         <FormField htmlFor={`field-type-${field.key}`} label={t('collections.fieldType')}>
           <SelectField id={`field-type-${field.key}`} onValueChange={(selectedValue) => { onUpdate({ type: selectedValue as FieldType, ...(selectedValue === 'relation' ? {} : { targetCollectionId: '' }) }); if (selectedValue === 'relation') setAdvancedOpen(true); }} value={field.type} options={[({ value: "text", label: t('schema.fieldTypes.text') }), ({ value: "number", label: t('schema.fieldTypes.number') }), ({ value: "boolean", label: t('schema.fieldTypes.boolean') }), ({ value: "dateTime", label: t('schema.fieldTypes.dateTime') }), ({ value: "json", label: t('schema.fieldTypes.json') }), ({ value: "relation", label: t('schema.fieldTypes.relation') }), ({ value: "file", label: t('schema.fieldTypes.file') }), ({ value: "files", label: t('schema.fieldTypes.files') })]} />
         </FormField>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
-          <Label className="inline-flex items-center gap-2"><Checkbox checked={field.required} onCheckedChange={(checked) => onUpdate({ required: checked })} />{t('collections.fieldRequired')}</Label>
-          <Label className="inline-flex items-center gap-2"><Checkbox checked={field.unique} onCheckedChange={(checked) => onUpdate({ unique: checked })} />{t('collections.fieldUnique')}</Label>
-        </div>
-        <div className="flex items-center justify-end gap-1">
-          <Button aria-label={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} aria-haspopup="dialog" title={t('collections.advancedFieldSettings')} onClick={() => setAdvancedOpen(true)} size="small" type="button" variant="quiet"><Settings2 aria-hidden="true" size={15} /></Button>
-          {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>}
+        <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 @[640px]:contents" data-field-options>
+          <div className="inline-flex shrink-0 flex-nowrap items-center gap-1 whitespace-nowrap text-xs text-ink-secondary">
+            <Label className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"><Checkbox checked={field.required} onCheckedChange={(checked) => onUpdate({ required: checked })} />{t('collections.fieldRequired')}</Label>
+            <Label className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"><Checkbox checked={field.unique} onCheckedChange={(checked) => onUpdate({ unique: checked })} />{t('collections.fieldUnique')}</Label>
+          </div>
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            <Button aria-label={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} aria-haspopup="dialog" title={t('collections.advancedFieldSettings')} onClick={() => setAdvancedOpen(true)} size="small" type="button" variant="quiet"><Settings2 aria-hidden="true" size={15} /></Button>
+            {removable && <Button aria-label={t('collections.removeInitialField', { index: index + 1 })} onClick={onRemove} size="small" type="button" variant="quiet"><Trash2 aria-hidden="true" size={15} /></Button>}
+          </div>
         </div>
       </div>
       <Dialog open={advancedOpen} title={t('collections.advancedFieldSettingsFor', { name: field.name || String(index + 1) })} closeLabel={t('common.closeDialog')} onClose={() => setAdvancedOpen(false)}>
@@ -608,7 +628,7 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
             <div className="grid gap-3 rounded-md border bg-secondary p-3 sm:grid-cols-2">
               <FormField htmlFor={`field-target-${field.key}`} label={t('collections.targetCollection')}>
                 <SelectField id={`field-target-${field.key}`} aria-invalid={Boolean(errors.target)} onValueChange={(selectedValue) => onUpdate({ targetCollectionId: selectedValue })} value={field.targetCollectionId} options={[({ value: "", label: targetsLoading ? t('collections.loadingCollections') : t('collections.chooseCollection') }), targets.map((target) => ({ value: target.id, label: target.name }))]} />
-                {errors.target && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.target}</span>}
+                {errors.target && <span className="text-xs font-semibold text-danger" role="alert">{errors.target}</span>}
               </FormField>
               <FormField htmlFor={`field-cardinality-${field.key}`} label={t('collections.cardinality')}>
                 <SelectField id={`field-cardinality-${field.key}`} onValueChange={(selectedValue) => onUpdate({ cardinality: selectedValue })} value={field.cardinality} options={[({ value: "many-to-one", label: t('collections.manyToOne') }), ({ value: "one-to-one", label: t('collections.oneToOne') }), ({ value: "one-to-many", label: t('collections.oneToMany') }), ({ value: "many-to-many", label: t('collections.manyToMany') })]} />
@@ -621,11 +641,11 @@ function FieldEditorRow({ errors, field, index, onEnter, onRemove, onUpdate, rem
             </FormField>
             <FormField htmlFor={`field-default-${field.key}`} label={t('collections.defaultValue') + ' (JSON)'} hint={t('collections.defaultValueHint')}>
               <Input aria-invalid={Boolean(errors.defaultValue)} id={`field-default-${field.key}`} onChange={(event) => onUpdate({ defaultValue: event.target.value })} placeholder={t('collections.optional')} value={field.defaultValue} />
-              {errors.defaultValue && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.defaultValue}</span>}
+              {errors.defaultValue && <span className="text-xs font-semibold text-danger" role="alert">{errors.defaultValue}</span>}
             </FormField>
             <FormField htmlFor={`field-validation-${field.key}`} label={t('collections.validationLabel') + ' (JSON)'} hint={t('collections.validationHint')}>
               <Textarea aria-invalid={Boolean(errors.validation)} id={`field-validation-${field.key}`} onChange={(event) => onUpdate({ validation: event.target.value })} placeholder={t('collections.optional')} rows={2} value={field.validation} />
-              {errors.validation && <span className="text-[11px] font-semibold text-danger" role="alert">{errors.validation}</span>}
+              {errors.validation && <span className="text-xs font-semibold text-danger" role="alert">{errors.validation}</span>}
             </FormField>
           </div>
         <div className="flex justify-end"><Button onClick={() => setAdvancedOpen(false)} type="button">{t('collections.doneFieldSettings')}</Button></div>
@@ -706,7 +726,7 @@ export function CollectionWorkspacePage() {
     return () => controller.abort();
   }, [collectionId, reportPendingChange]);
 
-  if (loadingCollection || loadedWorkspaceId !== collectionId) return <div className="flex min-w-0 flex-col gap-6" data-collection-workspace><SpinnerLoadingState label={t('collections.loadingWorkspace')} /></div>;
+  if (loadingCollection || loadedWorkspaceId !== collectionId) return <div className="flex min-w-0 flex-col gap-3" data-collection-workspace><SpinnerLoadingState label={t('collections.loadingWorkspace')} /></div>;
   if (collectionError || !collection) {
     const copy = apiErrorCopy(collectionError, t('collections.workspaceLoadFailed'), t, errorMessage);
     return (
@@ -731,30 +751,27 @@ export function CollectionWorkspacePage() {
     { label: t('navigation.api'), to: `/collections/${collectionId}/api`, end: false },
   ];
   return (
-    <div className="flex min-w-0 flex-col gap-6" data-collection-workspace>
-      {/* Spec 0001 §6.3：标题区持续提供 Collection 名称、类型、状态与返回路径。 */}
-      <nav aria-label={t('collections.breadcrumbLabel')} className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <Link className="font-medium text-muted-foreground transition-colors hover:text-foreground" to="/collections">{t('navigation.collections')}</Link>
-        <span aria-hidden="true" className="text-subtle-foreground">/</span>
-        {/* 集合名可能是不含断点的长标识符：允许任意位置换行，避免窄屏横向溢出（spec 0001 §16.1）。 */}
-        <span className="min-w-0 font-semibold text-foreground [overflow-wrap:anywhere]">{collection.name}</span>
-      </nav>
-
-      <header className="flex flex-wrap items-start justify-between gap-4" data-collection-header>
-        <div className="flex min-w-0 items-start gap-3" data-collection-identity>
-          <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg border bg-card text-ink-secondary"><Database size={20} /></span>
-          <div className="min-w-0" data-collection-title>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="sr-only">{collection.name}</h1>
-              <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
-              {pendingOperationCount > 0 && (
-                <Badge variant={pendingTone}>{formatPlural(pendingOperationCount, { one: t('shell.pendingChangeOne'), other: t('shell.pendingChangeMany') })}</Badge>
-              )}
-            </div>
-            <p className="sr-only">{collection.description || t('collections.workspaceDescription')}</p>
-          </div>
+    <div className="flex min-w-0 flex-col gap-3" data-collection-workspace>
+      {/* 集合身份只显示一次，详情按需展开，待处理状态直接可见。 */}
+      <header className="flex min-w-0 flex-wrap items-center gap-2" data-collection-header>
+        <nav aria-label={t('collections.breadcrumbLabel')} className="shrink-0">
+          <Link className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground" to="/collections"><ArrowLeft aria-hidden="true" size={16} />{t('navigation.collections')}</Link>
+        </nav>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2" data-collection-identity>
+          <h1 className="min-w-0 text-xl font-semibold [overflow-wrap:anywhere]" data-collection-title>{collection.name}</h1>
+          <Badge variant={collection.type === 'Auth' ? 'primary' : 'outline'}>{collectionTypeName(collection.type, t)}</Badge>
+          {pendingOperationCount > 0 && <Badge variant={pendingTone}>{formatPlural(pendingOperationCount, { one: t('shell.pendingChangeOne'), other: t('shell.pendingChangeMany') })}</Badge>}
         </div>
-        <span className="text-xs text-muted-foreground">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</span>
+        <Popover>
+          <PopoverTrigger render={<ControlButton variant="ghost" size="icon" aria-label={t('collections.workspaceDetails')} />}><Info aria-hidden="true" size={17} /></PopoverTrigger>
+          <PopoverContent className="max-w-[calc(100vw-2rem)]">
+            <div className="grid gap-2 text-sm">
+              <strong>{t('collections.workspaceDetails')}</strong>
+              {collection.description && <p className="text-muted-foreground [overflow-wrap:anywhere]">{collection.description}</p>}
+              <p className="text-xs text-muted-foreground">{t('collections.workspaceMeta', { version: collection.schemaVersion ?? 1, count: collection.fields.length })}</p>
+            </div>
+          </PopoverContent>
+        </Popover>
       </header>
 
       {newlyCreated && (
@@ -788,7 +805,7 @@ export function CollectionWorkspacePage() {
       <nav aria-label={t('navigation.collectionWorkspace')} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b" data-collection-tabs>
         {tabs.map((tab) => (
           <NavLink
-            className={({ isActive }) => `whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            className={({ isActive }) => `whitespace-nowrap inline-flex min-h-11 items-center border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             end={tab.end}
             key={tab.to}
             to={tab.to}

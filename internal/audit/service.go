@@ -19,6 +19,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/adminauth"
 	"github.com/liujingwen1225/modelry/internal/authorization"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/permissions"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -123,6 +124,7 @@ func ensureAuditSchema(ctx context.Context, tx storage.Executor) error {
 	}
 	return nil
 }
+
 // ActorFromContext 返回已通过 Owner 或 Service Account 认证边界建立的 Actor。
 func ActorFromContext(ctx context.Context) (Actor, bool) {
 	if actor, ok := ctx.Value(contextActorKey{}).(Actor); ok && validActor(actor) {
@@ -304,11 +306,16 @@ func (service *Service) List(ctx context.Context, options ListOptions) (Page, er
 
 func validateAppendInput(input AppendInput, when time.Time) error {
 	if (input.ID != "" && !auditIDPattern.MatchString(input.ID)) || when.IsZero() || when.Year() < 1970 || !validActor(input.Actor) ||
-		!actionPattern.MatchString(input.Action) || !resourcePattern.MatchString(input.Resource.Kind) || !actorIDPattern.MatchString(input.Resource.ID) ||
+		!actionPattern.MatchString(input.Action) || !resourcePattern.MatchString(input.Resource.Kind) || !validResourceID(input.Resource.Kind, input.Resource.ID) ||
 		(input.RequestID != "" && !requestIDPattern.MatchString(input.RequestID)) || !validResult(input.Result) {
 		return ErrInvalidArgument
 	}
 	return nil
+}
+
+// 权限拒绝使用权威操作名作为资源 ID；实体 ID 仍保持原有校验。
+func validResourceID(kind, id string) bool {
+	return actorIDPattern.MatchString(id) || ((kind == "controlPlaneOperation" || kind == "") && permissions.KnownOperation(permissions.Operation(id)))
 }
 
 func validActor(actor Actor) bool {
@@ -340,7 +347,7 @@ func normalizeListOptions(options ListOptions) (ListOptions, error) {
 	if (options.ActorID != "" && !actorIDPattern.MatchString(options.ActorID)) ||
 		(options.Action != "" && (len(options.Action) > 128 || !actionPattern.MatchString(options.Action))) ||
 		(options.ResourceKind != "" && !resourcePattern.MatchString(options.ResourceKind)) ||
-		(options.ResourceID != "" && !actorIDPattern.MatchString(options.ResourceID)) {
+		(options.ResourceID != "" && !validResourceID(options.ResourceKind, options.ResourceID)) {
 		return ListOptions{}, fmt.Errorf("%w: Audit filter value is invalid", ErrInvalidArgument)
 	}
 	if options.From != nil && !validFilterTime(*options.From) {

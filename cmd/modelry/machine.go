@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/liujingwen1225/modelry/internal/agenttools"
 	"io"
 	"net/http"
 	"net/url"
@@ -49,32 +50,15 @@ type machineOperationInfo struct {
 	purpose    string
 }
 
-var machineOperationCatalog = map[string]machineOperationInfo{
-	"collections_list":        {method: http.MethodGet, path: "/admin/api/v1/collections", permission: "collections.read", purpose: "列出当前 Project 的 Collections"},
-	"collections_get":         {method: http.MethodGet, path: "/admin/api/v1/collections/{collectionId}", permission: "collections.read", purpose: "读取 Collection 与其 Applied Model 摘要"},
-	"collections_create":      {method: http.MethodPost, path: "/admin/api/v1/collections", permission: "collections.create", purpose: "创建 Collection 及初始 Model"},
-	"records_list":            {method: http.MethodGet, path: "/admin/api/v1/collections/{collectionId}/records", permission: "records.read", purpose: "按 Applied Model 查询、过滤、排序和分页 Records"},
-	"records_get":             {method: http.MethodGet, path: "/admin/api/v1/collections/{collectionId}/records/{recordId}", permission: "records.read", purpose: "读取一个 Record"},
-	"records_create":          {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/records", permission: "records.create", purpose: "按 Applied Model 创建 Record"},
-	"records_update":          {method: http.MethodPatch, path: "/admin/api/v1/collections/{collectionId}/records/{recordId}", permission: "records.update", purpose: "按 Applied Model 更新 Record"},
-	"records_delete":          {method: http.MethodDelete, path: "/admin/api/v1/collections/{collectionId}/records/{recordId}", permission: "records.delete", purpose: "删除 Record"},
-	"schema_pending_get":      {method: http.MethodGet, path: "/admin/api/v1/collections/{collectionId}/schema/pending-change", permission: "schema.read", purpose: "读取耐久保存的 Schema Pending Change"},
-	"schema_operation_add":    {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/schema/pending-operations", permission: "schema.write", purpose: "向 Pending Change 添加一个 Schema operation"},
-	"schema_operation_update": {method: http.MethodPatch, path: "/admin/api/v1/collections/{collectionId}/schema/pending-operations/{operationId}", permission: "schema.write", purpose: "修改 Pending Change 中的 Schema operation"},
-	"schema_operation_remove": {method: http.MethodDelete, path: "/admin/api/v1/collections/{collectionId}/schema/pending-operations/{operationId}", permission: "schema.write", purpose: "从 Pending Change 移除 Schema operation"},
-	"schema_preview":          {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/schema/preview", permission: "schema.read", purpose: "预览指定版本的 Pending Change"},
-	"schema_apply":            {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/schema/apply", permission: "schema.apply", purpose: "通过标准 Change lifecycle 应用 Schema"},
-	"schema_discard":          {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/schema/discard", permission: "schema.write", purpose: "丢弃指定版本的 Schema Pending Change"},
-	"schema_history":          {method: http.MethodGet, path: "/admin/api/v1/collections/{collectionId}/schema/history", permission: "schema.read", purpose: "读取 Applied Model history"},
-	"access_rules_get":        {method: http.MethodGet, path: "/admin/api/v1/collections/{collectionId}/access-rules", permission: "accessRules.read", purpose: "读取 Applied 与 Pending Access Rules"},
-	"access_rules_save":       {method: http.MethodPut, path: "/admin/api/v1/collections/{collectionId}/access-rules", permission: "accessRules.write", purpose: "保存版本化 Access Rule Pending Change"},
-	"access_rules_apply":      {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/access-rules/apply", permission: "accessRules.apply", purpose: "应用指定版本的 Access Rules"},
-	"access_rules_discard":    {method: http.MethodPost, path: "/admin/api/v1/collections/{collectionId}/access-rules/discard", permission: "accessRules.write", purpose: "丢弃指定版本的 Access Rule Pending Change"},
-	"requests_list":           {method: http.MethodGet, path: "/admin/api/v1/requests", permission: "requests.read", purpose: "查询已脱敏的 Application RequestRecord metadata"},
-	"requests_get":            {method: http.MethodGet, path: "/admin/api/v1/requests/{requestId}", permission: "requests.read", purpose: "读取一个已脱敏的 Application Request Detail"},
-	"audit_list":              {method: http.MethodGet, path: "/admin/api/v1/audit", permission: "audit.read", purpose: "查询耐久 Control Plane AuditRecords"},
-	"audit_get":               {method: http.MethodGet, path: "/admin/api/v1/audit/{auditRecordId}", permission: "audit.read", purpose: "读取一个 Control Plane AuditRecord"},
-}
+var machineOperationCatalog = func() map[string]machineOperationInfo {
+	result := map[string]machineOperationInfo{}
+	for _, action := range machineCLIActions {
+		name := action.tool
+		op := agenttools.Operations[name]
+		result[name] = machineOperationInfo{op.Method, op.Path, op.Permission, op.Purpose}
+	}
+	return result
+}()
 
 func newMachineAPIClient(apiURL, apiKey string) (*machineAPIClient, error) {
 	apiURL = strings.TrimRight(strings.TrimSpace(apiURL), "/")
@@ -199,271 +183,8 @@ func (problem *machineAPIError) output() any {
 }
 
 func buildMachineAPICall(tool string, arguments map[string]any) (machineAPICall, error) {
-	operation, supported := machineOperationCatalog[tool]
-	if !supported {
-		return machineAPICall{}, fmt.Errorf("unsupported Modelry operation %q", tool)
-	}
-	if arguments == nil {
-		arguments = map[string]any{}
-	}
-	call := machineAPICall{method: operation.method, path: operation.path, query: make(url.Values)}
-	addListQuery := func(allowed ...string) error {
-		return addMachineListQuery(&call, arguments, nil, allowed...)
-	}
-	addListQueryWithRouteIDs := func(routeIDs []string, allowed ...string) error {
-		return addMachineListQuery(&call, arguments, routeIDs, allowed...)
-	}
-	addID := func(name string) (string, error) {
-		value, ok := arguments[name].(string)
-		if !ok || !machineIDPattern.MatchString(value) {
-			return "", fmt.Errorf("%s must be a valid Modelry ID", name)
-		}
-		return url.PathEscape(value), nil
-	}
-	getBody := func() (any, error) {
-		body, ok := arguments["body"].(map[string]any)
-		if !ok || body == nil {
-			return nil, errors.New("body must be a JSON object matching the documented API request DTO")
-		}
-		return body, nil
-	}
-	checkArgs := func(names ...string) error {
-		allowed := make(map[string]bool, len(names))
-		for _, name := range names {
-			allowed[name] = true
-		}
-		for name := range arguments {
-			if !allowed[name] {
-				return fmt.Errorf("unsupported argument %q", name)
-			}
-		}
-		return nil
-	}
-	setRouteID := func(name string) error {
-		id, err := addID(name)
-		if err != nil {
-			return err
-		}
-		placeholder := "{" + name + "}"
-		if !strings.Contains(call.path, placeholder) {
-			return fmt.Errorf("operation %q does not define route parameter %q", tool, name)
-		}
-		call.path = strings.Replace(call.path, placeholder, id, 1)
-		return nil
-	}
-	setBody := func() error {
-		body, err := getBody()
-		if err != nil {
-			return err
-		}
-		call.body = body
-		return nil
-	}
-
-	switch tool {
-	case "collections_list":
-		if err := addListQuery("limit", "cursor"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "collections_get":
-		if err := checkArgs("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "collections_create":
-		if err := checkArgs("body"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setBody(); err != nil {
-			return machineAPICall{}, err
-		}
-	case "records_list":
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := addListQueryWithRouteIDs([]string{"collectionId"}, "limit", "cursor", "search", "filter", "sort"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "records_create":
-		if err := checkArgs("collectionId", "body"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setBody(); err != nil {
-			return machineAPICall{}, err
-		}
-	case "records_get", "records_update", "records_delete":
-		if err := checkArgs("collectionId", "recordId", "body"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("recordId"); err != nil {
-			return machineAPICall{}, err
-		}
-		switch tool {
-		case "records_get":
-			if _, exists := arguments["body"]; exists {
-				return machineAPICall{}, errors.New("body is not accepted for records_get")
-			}
-		case "records_update":
-			if err := setBody(); err != nil {
-				return machineAPICall{}, err
-			}
-		case "records_delete":
-			if _, exists := arguments["body"]; exists {
-				return machineAPICall{}, errors.New("body is not accepted for records_delete")
-			}
-		}
-	case "schema_pending_get":
-		if err := checkArgs("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "schema_operation_add", "schema_operation_update":
-		allowedArgs := []string{"collectionId", "body"}
-		if tool == "schema_operation_update" {
-			allowedArgs = append(allowedArgs, "operationId")
-		}
-		if err := checkArgs(allowedArgs...); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if tool == "schema_operation_update" {
-			if err := setRouteID("operationId"); err != nil {
-				return machineAPICall{}, err
-			}
-		}
-		if err := setBody(); err != nil {
-			return machineAPICall{}, err
-		}
-	case "schema_operation_remove":
-		if err := checkArgs("collectionId", "operationId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("operationId"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "schema_preview", "schema_apply", "schema_discard":
-		if err := checkArgs("collectionId", "body"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setBody(); err != nil {
-			return machineAPICall{}, err
-		}
-	case "schema_history":
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := addListQueryWithRouteIDs([]string{"collectionId"}, "limit", "cursor"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "access_rules_get":
-		if err := checkArgs("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "access_rules_save", "access_rules_apply", "access_rules_discard":
-		if err := checkArgs("collectionId", "body"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("collectionId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setBody(); err != nil {
-			return machineAPICall{}, err
-		}
-	case "requests_list":
-		if err := addListQuery("limit", "cursor", "search", "filter", "sort"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "requests_get":
-		if err := checkArgs("requestId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("requestId"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "audit_list":
-		if err := addListQuery("limit", "cursor"); err != nil {
-			return machineAPICall{}, err
-		}
-	case "audit_get":
-		if err := checkArgs("auditRecordId"); err != nil {
-			return machineAPICall{}, err
-		}
-		if err := setRouteID("auditRecordId"); err != nil {
-			return machineAPICall{}, err
-		}
-	default:
-		return machineAPICall{}, fmt.Errorf("unsupported Modelry operation %q", tool)
-	}
-	if strings.Contains(call.path, "{") {
-		return machineAPICall{}, fmt.Errorf("operation %q has an unresolved route parameter", tool)
-	}
-	return call, nil
-}
-
-func addMachineListQuery(call *machineAPICall, arguments map[string]any, allowedRouteIDs []string, allowedQuery ...string) error {
-	accepted := make(map[string]bool, len(allowedRouteIDs)+len(allowedQuery))
-	for _, name := range allowedRouteIDs {
-		accepted[name] = true
-	}
-	for _, name := range allowedQuery {
-		accepted[name] = true
-		if value, exists := arguments[name]; exists {
-			text := ""
-			switch typed := value.(type) {
-			case string:
-				text = typed
-			case json.Number:
-				if name != "limit" {
-					return fmt.Errorf("%s must be a string no longer than 4096 characters", name)
-				}
-				text = typed.String()
-			case int:
-				if name != "limit" {
-					return fmt.Errorf("%s must be a string no longer than 4096 characters", name)
-				}
-				text = strconv.Itoa(typed)
-			default:
-				return fmt.Errorf("%s must be a string no longer than 4096 characters", name)
-			}
-			if len(text) > 4096 {
-				return fmt.Errorf("%s must be a string no longer than 4096 characters", name)
-			}
-			if name == "limit" {
-				limit, err := strconv.Atoi(text)
-				if err != nil || limit < 1 || limit > 100 {
-					return errors.New("limit must be between 1 and 100")
-				}
-			}
-			call.query.Set(name, text)
-		}
-	}
-	for name := range arguments {
-		if !accepted[name] {
-			return fmt.Errorf("unsupported argument %q", name)
-		}
-	}
-	return nil
+	call, err := agenttools.BuildCall(tool, arguments)
+	return machineAPICall{method: call.Method, path: call.Path, query: call.Query, body: call.Body}, err
 }
 
 func runAdmin(args []string, stdout, stderr io.Writer) int {

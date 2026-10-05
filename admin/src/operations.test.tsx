@@ -5,7 +5,7 @@ import { App } from './app';
 
 const session = {
   owner: { id: 'own_test', email: 'owner@example.test' },
-  expiresAt: '2026-10-25T12:00:00Z',
+  expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   role: 'owner',
   permission: { preset: 'fullAccess' },
 };
@@ -129,7 +129,7 @@ describe('Operations surfaces', () => {
     const fetchMock = setupFetch();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Runtime settings', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Runtime settings', level: 2 })).toBeInTheDocument();
     expect(await screen.findAllByText('built-in default')).toHaveLength(2);
     await userEvent.type(screen.getByLabelText('Listen address'), '127.0.0.1:9090');
     await userEvent.clear(screen.getByLabelText('Request retention (days)'));

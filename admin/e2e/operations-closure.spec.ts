@@ -205,7 +205,7 @@ test('WP27 policy simulation, activity, drift, and runtime settings stay product
 
   // Runtime Settings：默认来源、flag 优先级、restart requirement 与持久化。
   await page.goto(runtimeURL + '/settings/runtime');
-  await expect(page.getByRole('heading', { name: 'Runtime settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Runtime settings', level: 2 })).toBeVisible();
   await expect(page.getByText('from --listen').first()).toBeVisible();
   const saved = await requestJSON(page, 'PUT', '/admin/api/v1/settings', {
     expectedRevision: 1, listenAddress: '127.0.0.1:0', requestRetentionDays: 14,

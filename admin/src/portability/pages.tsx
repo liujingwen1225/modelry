@@ -151,10 +151,10 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
     }
   }
 
-  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-6"><LoadingState label={t('portability.loading')} /></div>;
+  if (state === 'loading') return <div className="flex min-w-0 flex-col gap-4"><LoadingState label={t('portability.loading')} /></div>;
   if (state === 'error') {
     return (
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-4">
         <ErrorState description={t('portability.loadFailedDescription')} title={t('portability.loadFailed')}>
           <Button onClick={() => window.location.reload()} size="small" variant="secondary"><RefreshCw aria-hidden="true" size={14} /> {t('portability.retry')}</Button>
         </ErrorState>
@@ -162,27 +162,20 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
     );
   }
   const titleKey = surface === 'backup' ? 'portability.surfaces.backupTitle' : 'portability.surfaces.dataTitle';
-  const descriptionKey = surface === 'backup' ? 'portability.surfaces.backupDescription' : 'portability.surfaces.dataDescription';
-  // 眉标沿用系统设置分节词汇（spec 0001 §3.1、§11.2）。
-  const eyebrowKey = surface === 'backup' ? 'settings.navigation.backupRestore' : 'settings.navigation.dataTransfer';
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="sr-only">
-        <p className="eyebrow">{t(eyebrowKey)}</p>
-        <h1>{t(titleKey as TranslationKey)}</h1>
-        <p className="mt-2.5 max-w-[620px] text-[13px] leading-relaxed text-muted-foreground">{t(descriptionKey as TranslationKey)}</p>
-      </header>
+    <div className="flex min-w-0 flex-col gap-4">
+      <h2 className="sr-only">{t(titleKey as TranslationKey)}</h2>
 
-      {surface === 'backup' && <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      {surface === 'backup' && <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="flex flex-wrap items-center gap-3">
           <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted text-ink-secondary"><Package size={17} /></span>
           <div className="min-w-0">
             <p className="eyebrow">{t('portability.backup.eyebrow')}</p>
-            <h2>{t('portability.backup.title')}</h2>
+            <h2 className="text-base font-semibold">{t('portability.backup.title')}</h2>
           </div>
         </div>
-        <p className="m-0 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('portability.backup.description')}</p>
+        <p className="m-0 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('portability.backup.description')}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button disabled={busy !== null} onClick={() => void backup()} size="small" type="button" variant="primary">
             <Download aria-hidden="true" size={14} /> {busy === 'backup' ? t('portability.backup.running') : t('portability.backup.action')}
@@ -203,11 +196,11 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
               {preflight.compatible ? t('portability.restore.compatible') : t('portability.restore.incompatible')}
             </StatusChip>
             <dl className="m-0 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.projectId')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary"><code className="font-mono">{preflight.projectId ?? '—'}</code></dd></div>
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.runtimeVersion')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.runtimeVersion ?? '—'}</dd></div>
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.collections')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.collections}</dd></div>
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.records')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.records}</dd></div>
-              <div className="rounded-lg border bg-secondary px-3 py-2.5"><dt className="text-[11px] font-semibold text-muted-foreground">{t('portability.facts.objects')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.objects}</dd></div>
+              <div className="border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.projectId')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary"><code className="font-mono">{preflight.projectId ?? '—'}</code></dd></div>
+              <div className="border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.runtimeVersion')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.runtimeVersion ?? '—'}</dd></div>
+              <div className="border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.collections')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.collections}</dd></div>
+              <div className="border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.records')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.records}</dd></div>
+              <div className="border-b py-3"><dt className="text-xs font-semibold text-muted-foreground">{t('portability.facts.objects')}</dt><dd className="m-0 mt-1 break-words text-xs text-ink-secondary">{preflight.counts.objects}</dd></div>
             </dl>
             {preflight.findings.length > 0 && (
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-xs">
@@ -221,15 +214,15 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
                 ))}
               </ul>
             )}
-            <p className="m-0 text-[11px] text-muted-foreground">{t('portability.restore.adminHint')}</p>
+            <p className="m-0 text-sm text-muted-foreground">{t('portability.restore.adminHint')}</p>
           </div>
         )}
       </Surface>}
 
-      {surface === 'data' && <Surface className="flex min-w-0 flex-col gap-4 p-4" variant="standard">
+      {surface === 'data' && <Surface className="flex min-w-0 flex-col gap-4" variant="section">
         <div className="min-w-0">
-          <h2>{t('portability.transfer.title')}</h2>
-          <p className="mt-1.5 max-w-[720px] text-[13px] leading-relaxed text-muted-foreground">{t('portability.transfer.description')}</p>
+          <h2 className="text-base font-semibold">{t('portability.transfer.title')}</h2>
+          <p className="mt-1.5 max-w-[720px] text-sm leading-relaxed text-muted-foreground">{t('portability.transfer.description')}</p>
         </div>
         {collections.length === 0
           ? <EmptyState description={t('portability.transfer.emptyDescription')} title={t('portability.transfer.empty')} />
@@ -266,7 +259,7 @@ function PortabilitySurface({ surface }: { surface: Surface }) {
       </Surface>}
 
       {error !== undefined && <ErrorState description={actionMessage(error)} title={t('portability.actionFailed')} />}
-      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-xs text-success" role="status">{notice}</p>}
+      {notice !== null && <p className="m-0 rounded-lg border border-success/30 bg-success-soft px-3 py-2.5 text-sm text-success" role="status">{notice}</p>}
     </div>
   );
 }

@@ -5,7 +5,7 @@
 - **Domain semantics:** [Webhooks & Jobs Domain Spec](../specs/0006-webhooks-jobs-domain-spec.md)
 - **Issue:** [#24](https://github.com/liujingwen1225/modelry/issues/24)
 
-All routes are under `/admin/api/v1` and require the active Owner session. Mutations use the existing same-origin CSRF protection, canonical `X-Request-Id`, and redacted RequestRecord behavior. Request bodies, Webhook URL paths, Record payloads, Secret values, signatures, response bodies and raw network errors are never copied into RequestRecord or Audit.
+All routes are under `/admin/api/v1` and accept an active Owner session or a Service Account API Key with the mapped webhooks / eventHooks / jobs operation permission. Mutations use the existing same-origin CSRF protection, canonical `X-Request-Id`, and redacted RequestRecord behavior. Request bodies, Webhook URL paths, Record payloads, Secret values, signatures, response bodies and raw network errors are never copied into RequestRecord or Audit.
 
 ## Webhooks
 
@@ -84,3 +84,7 @@ Validation errors use `422 VALIDATION_FAILED` with allowlisted JSON Pointer viol
 All list/read/write routes are bounded. IDs and cursors are opaque; no SQL, arbitrary filters, arbitrary headers, response-body inspection, manual event replay, or application-user access is exposed.
 
 Deleting a selected Project Secret disables every referencing Webhook, retains the unavailable Secret ID on its configuration, cancels pending Deliveries with `secretRevoked`, and requests cancellation of in-flight attempts. Secret value replacement preserves the Secret ID and does not cancel deliveries; attempts that start later use the replacement value. If the Project encryption key is missing or invalid, selecting another Secret cannot decrypt existing ciphertext; restore the matching `.modelry/secrets.key` with its protected permissions and restart Runtime before retrying an eligible failed Delivery. Cancellation cannot undo a request already accepted by the receiver.
+
+## Agent 与 MCP 执行
+
+服务账号许可复用 `webhooks.read/write/execute`、`eventHooks.read/write`、`jobs.read/write/execute`。两个 Agent 入口经共享执行层应用确认策略；原人工页面与正式 API 不改变执行方式。详见 [Agent 契约](./agent-http-contract.md)。

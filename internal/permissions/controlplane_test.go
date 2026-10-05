@@ -46,7 +46,7 @@ func TestControlPlaneOperationMapsAdministratorsAndMail(t *testing.T) {
 		{http.MethodPost, "/admin/api/v1/mail/deliveries"},
 		// 总览是只读聚合：非 GET 与自动化路由都不参与 Control Plane 映射。
 		{http.MethodPost, "/admin/api/v1/overview"},
-		{http.MethodPost, "/admin/api/v1/jobs/job_0123456789abcdef0123456789abcdef/run"},
+		{http.MethodDelete, "/admin/api/v1/jobs/job_0123456789abcdef0123456789abcdef/run"},
 	}
 	for _, testCase := range against {
 		if _, ok := ControlPlaneOperation(testCase.method, testCase.path); ok {

@@ -18,8 +18,8 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-card px-3 text-sm text-foreground transition-[color,background-color,border-color] outline-none',
-        'focus-visible:outline-none focus-visible:shadow-none',
+        'flex min-h-11! w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-sm text-foreground transition-[color,background-color,border-color] outline-none',
+        'focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]',
         'aria-invalid:border-destructive data-[placeholder]:text-muted-foreground',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-55',
         '[&_svg]:pointer-events-none [&_svg]:shrink-0',
@@ -50,7 +50,7 @@ function SelectContent({
 }: React.ComponentProps<typeof SelectPrimitive.Popup>) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner sideOffset={6} className="z-50 outline-none">
+      <SelectPrimitive.Positioner alignItemWithTrigger={false} sideOffset={6} className="z-50 outline-none">
         <SelectPrimitive.Popup data-slot="select-content" className={cn(selectPopupClassName, 'p-1', className)} {...props}>
           {children}
         </SelectPrimitive.Popup>
@@ -68,7 +68,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm text-foreground outline-none',
+        'relative flex min-h-11! w-full cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm text-foreground outline-none',
         'data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-55',
         className,
@@ -91,7 +91,7 @@ function SelectLabel(props: React.ComponentProps<typeof SelectPrimitive.GroupLab
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn('px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', props.className)}
+      className={cn('px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', props.className)}
       {...props}
     />
   );

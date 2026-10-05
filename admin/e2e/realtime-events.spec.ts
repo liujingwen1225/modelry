@@ -364,9 +364,10 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(page).toHaveURL(/\/collections\/new$/);
   await page.getByLabel('Collection name').fill('posts');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByLabel('Field name 1').fill('title');
-  await page.getByLabel('Required', { exact: true }).check();
-  await page.getByRole('button', { name: 'Add initial field' }).click();
+  await page.getByRole('checkbox', { name: 'Required', exact: true }).check();
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await page.getByLabel('Field name 2').fill('visibility');
   await page.getByRole('button', { name: 'Create Collection', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'posts' })).toBeVisible();
@@ -377,7 +378,7 @@ test('WP21 Realtime uses current authorization and recovers across reconnect, re
   await page.goto(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/security`);
   await expect(page).toHaveURL(`${runtimeURL}/collections/${encodeURIComponent(collectionId)}/access`);
   await page.getByRole('button', { name: 'Edit List access' }).click();
-  await page.getByLabel('Custom rule').check();
+  await page.getByRole('radio', { name: 'Custom rule' }).check();
   await page.getByRole('button', { name: 'Add condition', exact: true }).click();
   await selectOption(page, page.getByLabel('Condition 1 field'), { label: 'visibility' });
   await page.getByLabel('Condition value', { exact: true }).fill('public');

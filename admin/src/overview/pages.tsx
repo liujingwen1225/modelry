@@ -24,17 +24,13 @@ function PageHeading({ actions }: { actions: React.ReactNode }) {
   const { t } = useI18n();
   return (
     <header className="flex min-h-12 min-w-0 flex-wrap items-center justify-end gap-3 border-b pb-2" data-workspace-toolbar>
-      <div className="sr-only">
-        <p className="eyebrow">{t('overview.eyebrow')}</p>
-        <h1>{t('overview.title')}</h1>
-        <p className="mt-2 max-w-[700px] text-[13px] leading-relaxed text-muted-foreground">{t('overview.description')}</p>
-      </div>
+      <h1 className="sr-only">{t('overview.title')}</h1>
       <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
     </header>
   );
 }
 
-function SummaryCard({
+function SummaryItem({
   title,
   subtitle,
   metric,
@@ -57,11 +53,11 @@ function SummaryCard({
 }) {
   const { t } = useI18n();
   return (
-    <Surface className="flex min-w-0 flex-col gap-3 p-4" data-overview-card={testId} variant="standard">
+    <section className="flex min-w-0 flex-col gap-2 py-4 sm:px-4" data-overview-card={testId}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="m-0 text-sm font-semibold text-foreground">{title}</h2>
-          <p className="m-0 mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
+          <h2 className="m-0 text-base font-semibold text-foreground"><Link className="inline-flex min-h-11 items-center gap-1 hover:underline" title={subtitle} to={to}>{title}<ArrowRight aria-hidden="true" size={13} /></Link></h2>
+          {testId === 'api' && <p className="m-0 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         <StatusChip state={chip.state}>{chip.label}</StatusChip>
       </div>
@@ -71,24 +67,21 @@ function SummaryCard({
         <LoadingState label={t('overview.loading')} />
       ) : (
         <>
-          <p className="m-0 flex items-baseline gap-1.5">
-            <span className="text-[26px] leading-none font-semibold tracking-[-0.6px] text-foreground">{metric}</span>
-            <span className="text-[11px] text-muted-foreground">{metricLabel}</span>
+          <p className="m-0 flex flex-wrap items-baseline gap-1.5">
+            <span className="text-2xl leading-none font-semibold tracking-[-0.6px] text-foreground">{metric}</span>
+            <span className="text-xs text-muted-foreground">{metricLabel}</span>
           </p>
-          <dl className="m-0 grid gap-1.5 border-t pt-2.5">
+          <dl className="m-0 grid gap-1.5 pt-1">
             {rows.map((row) => (
               <div className="flex items-center justify-between gap-3" key={row.label}>
-                <dt className="text-[11px] text-muted-foreground">{row.label}</dt>
-                <dd className={`m-0 font-mono text-[11px] ${row.tone === 'danger' ? 'text-danger' : row.tone === 'warning' ? 'text-warning' : 'text-ink-secondary'}`}>{row.value}</dd>
+                <dt className="text-xs text-muted-foreground">{row.label}</dt>
+                <dd className={`m-0 font-mono text-[13px] ${row.tone === 'danger' ? 'text-danger' : row.tone === 'warning' ? 'text-warning' : 'text-ink-secondary'}`}>{row.value}</dd>
               </div>
             ))}
           </dl>
         </>
       )}
-      <Link className="mt-auto inline-flex w-fit items-center gap-1 text-xs font-semibold text-primary hover:underline" to={to}>
-        {title}<ArrowRight aria-hidden="true" size={13} />
-      </Link>
-    </Surface>
+    </section>
   );
 }
 
@@ -111,11 +104,11 @@ function ContinueWorking() {
   const recent = collections?.recent ?? [];
 
   return (
-    <Surface className="flex min-w-0 flex-col gap-3 p-4" data-overview-continue variant="standard">
+    <Surface className="flex min-w-0 flex-col gap-3" data-overview-continue variant="section">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="m-0 text-sm font-semibold text-foreground">{t('overview.continueTitle')}</h2>
-          <p className="m-0 mt-0.5 text-[11px] text-muted-foreground">{t('overview.continueSub')}</p>
+          <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.continueTitle')}</h2>
+          <p className="m-0 mt-0.5 text-xs text-muted-foreground">{t('overview.continueSub')}</p>
         </div>
         <ButtonLink size="small" to="/collections" variant="quiet">{t('overview.continueViewAll')}</ButtonLink>
       </div>
@@ -128,7 +121,7 @@ function ContinueWorking() {
         <div className="min-w-0 overflow-x-auto">
           <Table className="w-full min-w-[520px] border-collapse text-left">
             <TableHeader>
-              <TableRow className="border-b text-[10px] font-bold tracking-[0.6px] text-muted-foreground uppercase">
+              <TableRow className="border-b text-xs font-bold tracking-[0.6px] text-muted-foreground uppercase">
                 <TableHead className="py-2 pr-3 font-bold">{t('navigation.collections')}</TableHead>
                 <TableHead className="py-2 pr-3 font-bold">{t('overview.collectionFields')}</TableHead>
                 <TableHead className="py-2 pr-3 font-bold">{t('overview.collectionRecords')}</TableHead>
@@ -142,11 +135,11 @@ function ContinueWorking() {
                 return (
                   <TableRow className="border-b last:border-b-0" key={collection.id}>
                     <TableCell className="py-2.5 pr-3">
-                      <span className="block truncate text-xs font-semibold text-foreground">{collection.name}</span>
-                      <small className="font-mono text-[10px] text-muted-foreground">{collection.type === 'Auth' ? t('overview.authCollection') : t('overview.collection')}</small>
+                      <span className="block truncate text-sm font-semibold text-foreground">{collection.name}</span>
+                      <small className="font-mono text-[13px] text-muted-foreground">{collection.type === 'Auth' ? t('overview.authCollection') : t('overview.collection')}</small>
                     </TableCell>
-                    <TableCell className="py-2.5 pr-3 font-mono text-[11px] text-ink-secondary">{formatNumber(collection.fieldCount)}</TableCell>
-                    <TableCell className="py-2.5 pr-3 font-mono text-[11px] text-ink-secondary">{collection.recordCount === undefined ? t('overview.unknown') : formatNumber(collection.recordCount)}</TableCell>
+                    <TableCell className="py-2.5 pr-3 font-mono text-[13px] text-ink-secondary">{formatNumber(collection.fieldCount)}</TableCell>
+                    <TableCell className="py-2.5 pr-3 font-mono text-[13px] text-ink-secondary">{collection.recordCount === undefined ? t('overview.unknown') : formatNumber(collection.recordCount)}</TableCell>
                     <TableCell className="py-2.5 pr-3"><StatusChip state={status.state}>{status.label}</StatusChip></TableCell>
                     <TableCell className="py-2.5 text-right">
                       <ButtonLink size="small" to={`/collections/${encodeURIComponent(collection.id)}`} variant="secondary">{t('overview.continueOpen')}</ButtonLink>
@@ -171,16 +164,15 @@ function QuickStart() {
     { title: 'overview.quickCreateSchedule', hint: 'overview.quickCreateScheduleHint', to: '/schedules?tab=jobs&create=1' },
   ];
   return (
-    <Surface className="flex min-w-0 flex-col gap-3 p-4" data-overview-quick-start variant="standard">
+    <Surface className="flex min-w-0 flex-col gap-3" data-overview-quick-start variant="section">
       <div className="min-w-0">
-        <h2 className="m-0 text-sm font-semibold text-foreground">{t('overview.quickTitle')}</h2>
-        <p className="m-0 mt-0.5 text-[11px] text-muted-foreground">{t('overview.quickSub')}</p>
+        <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.quickTitle')}</h2>
       </div>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {actions.map((action) => (
-          <Link className="flex min-w-0 flex-col gap-1 rounded-lg border bg-muted px-3 py-2.5 no-underline transition-colors " key={action.to} to={action.to}>
-            <strong className="text-xs font-semibold text-foreground">{t(action.title)}</strong>
-            <span className="text-[11px] leading-relaxed text-muted-foreground">{t(action.hint)}</span>
+          <Link className="flex min-h-11 min-w-0 flex-col justify-center gap-1 border-b py-3 no-underline transition-colors hover:bg-muted/50" key={action.to} to={action.to}>
+            <strong className="text-sm font-semibold text-foreground">{t(action.title)}</strong>
+            <span className="text-xs leading-relaxed text-muted-foreground">{t(action.hint)}</span>
           </Link>
         ))}
       </div>
@@ -189,15 +181,15 @@ function QuickStart() {
           <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-ink-secondary"><Bot size={15} /></span>
           <div className="grid min-w-0 flex-1 gap-1.5">
             <strong className="text-xs font-semibold text-foreground">{t('overview.mcpCardTitle')}</strong>
-            <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t('overview.mcpCardDescription')}</p>
+            <p className="m-0 text-xs leading-relaxed text-muted-foreground">{t('overview.mcpCardDescription')}</p>
             <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border bg-muted px-2.5 py-2">
-              <code className="min-w-0 truncate font-mono text-[11px] text-ink-secondary">{t('overview.agentSetup')}</code>
+              <code className="min-w-0 truncate font-mono text-[13px] text-ink-secondary">{t('overview.agentSetup')}</code>
               <CopyButton label={t('overview.copyMcpConfig')} value={t('overview.agentSetup')} />
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Link className="text-[11px] font-semibold text-primary hover:underline" to="/mcp">{t('overview.mcpGuide')}</Link>
-              <Link className="text-[11px] font-semibold text-primary hover:underline" to="/access?tab=tokens">{t('overview.permissionsLink')}</Link>
-              <Link className="text-[11px] font-semibold text-primary hover:underline" to="/activity">{t('overview.auditLink')}</Link>
+              <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/agent?tab=mcp">{t('overview.mcpGuide')}</Link>
+              <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/access?tab=tokens">{t('overview.permissionsLink')}</Link>
+              <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to="/activity">{t('overview.auditLink')}</Link>
             </div>
           </div>
         </div>
@@ -244,11 +236,10 @@ function RecentActivity() {
   }, [allowed, generation]);
 
   return (
-    <Surface className="flex min-w-0 flex-col gap-3 p-4" data-overview-recent-activity variant="standard">
+    <Surface className="flex min-w-0 flex-col gap-3" data-overview-recent-activity variant="section">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="m-0 text-sm font-semibold text-foreground">{t('overview.recentActivityTitle')}</h2>
-          <p className="m-0 mt-0.5 text-[11px] text-muted-foreground">{t('overview.recentActivitySub')}</p>
+          <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.recentActivityTitle')}</h2>
         </div>
         <ButtonLink size="small" to="/activity" variant="quiet">{t('overview.recentActivityAll')}</ButtonLink>
       </div>
@@ -265,16 +256,16 @@ function RecentActivity() {
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {facts?.map((fact) => (
             <li className="grid grid-cols-[64px_minmax(0,1fr)] items-start gap-3 border-b pb-2 last:border-b-0 last:pb-0" key={fact.id}>
-              <time className="font-mono text-[10px] text-muted-foreground" dateTime={fact.occurredAt}>{formatDate(fact.occurredAt, { hour: '2-digit', minute: '2-digit' })}</time>
+              <time className="font-mono text-[13px] text-muted-foreground" dateTime={fact.occurredAt}>{formatDate(fact.occurredAt, { hour: '2-digit', minute: '2-digit' })}</time>
               <div className="min-w-0">
-                <p className="m-0 text-xs text-ink-secondary">
+                <p className="m-0 text-sm text-ink-secondary">
                   {fact.title ? <strong className="font-semibold text-foreground">{fact.title}</strong> : <strong className="font-semibold text-foreground">{fact.resourceKind}</strong>}
                   {' · '}
                   <Link className="font-semibold text-primary hover:underline" to={activityTarget(fact)}>{fact.resourceId}</Link>
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <StatusChip state={fact.status === 'failed' ? 'failed' : fact.status === 'succeeded' || fact.status === 'applied' ? 'ready' : 'unknown'}>{fact.status}</StatusChip>
-                  <span className="font-mono text-[10px] text-muted-foreground">{fact.kind}</span>
+                  <span className="font-mono text-[13px] text-muted-foreground">{fact.kind}</span>
                 </div>
               </div>
             </li>
@@ -318,11 +309,10 @@ function RuntimeStatusPanel() {
   ];
 
   return (
-    <Surface className="flex min-w-0 flex-col gap-3 p-4" data-overview-runtime variant="standard">
+    <Surface className="flex min-w-0 flex-col gap-3" data-overview-runtime variant="section">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="m-0 text-sm font-semibold text-foreground">{t('overview.runtimeTitle')}</h2>
-          <p className="m-0 mt-0.5 text-[11px] text-muted-foreground">{t('overview.runtimeSub')}</p>
+          <h2 className="m-0 text-base font-semibold text-foreground">{t('overview.runtimeTitle')}</h2>
         </div>
         <StatusChip state={runtimeState === 'ready' && databaseState === 'ready' && fileState === 'ready' ? 'ready' : 'degraded'}>
           {runtimeState === 'ready' && databaseState === 'ready' && fileState === 'ready' ? t('overview.runtimeAllNormal') : t('overview.unavailable')}
@@ -331,10 +321,10 @@ function RuntimeStatusPanel() {
       <dl className="m-0 grid gap-1.5">
         {rows.map((row) => (
           <div className="flex flex-wrap items-center justify-between gap-2 border-b py-1.5 last:border-b-0" key={row.label}>
-            <dt className="text-[11px] text-muted-foreground">{row.label}</dt>
+            <dt className="text-xs text-muted-foreground">{row.label}</dt>
             <dd className="m-0 flex items-center gap-2">
-              {row.state ? <StatusChip state={row.state}>{row.value}</StatusChip> : <span className="text-[11px] text-ink-secondary">{row.value}</span>}
-              {row.to ? <Link className="text-[11px] font-semibold text-primary hover:underline" to={row.to}>{t('overview.view')}</Link> : null}
+              {row.state ? <StatusChip state={row.state}>{row.value}</StatusChip> : <span className="text-xs text-ink-secondary">{row.value}</span>}
+              {row.to ? <Link className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline" to={row.to}>{t('overview.view')}</Link> : null}
             </dd>
           </div>
         ))}
@@ -355,6 +345,16 @@ export function OverviewPage() {
 
   const sectionState = (present: boolean): SummaryState => (overview.state === 'loading' && !present ? 'loading' : present ? 'ready' : 'unavailable');
 
+  // 只有所有摘要事实已知且为零时才收起零值摘要，避免空集合遮住真实错误或不可用状态。
+  const quietEmptyProject = Boolean(collections && requests && events && changes && overview.value?.drift
+    && collections.count === 0 && collections.recordCount === 0
+    && collections.withPendingChanges === 0 && collections.withFailedChanges === 0
+    && requests.requestCount === 0 && requests.clientErrorCount === 0 && requests.serverErrorCount === 0
+    && events.enabledHooks === 0 && events.enabledWebhooks === 0 && events.enabledEventHooks === 0 && events.enabledJobs === 0
+    && events.runCount === 0 && events.deliveryCount === 0 && events.failedDeliveryCount === 0 && events.pendingDeliveryCount === 0
+    && changes.pendingCount === 0 && changes.needsReviewCount === 0 && changes.failedCount === 0
+    && overview.value.drift.differenceCount === 0);
+
   // 主操作随真实状态切换：没有待应用变更时不显示「审查 0 条变更」。
   const primaryAction = useMemo(() => {
     if (changes && changes.pendingCount > 0) {
@@ -372,7 +372,7 @@ export function OverviewPage() {
             <Button onClick={refresh} size="small" type="button" variant="secondary">
               <RefreshCw aria-hidden="true" size={15} /> {t('overview.refresh')}
             </Button>
-            <ButtonLink size="small" to="/api" variant="secondary">{t('overview.openApiWorkspace')}</ButtonLink>
+            {primaryAction.to !== '/api?tab=endpoints' && <ButtonLink size="small" to="/api" variant="secondary">{t('overview.openApiWorkspace')}</ButtonLink>}
             <ButtonLink size="small" to={primaryAction.to} variant="primary">{primaryAction.label}</ButtonLink>
           </>
         }
@@ -386,8 +386,8 @@ export function OverviewPage() {
         </ErrorState>
       ) : null}
 
-      <section aria-label={t('overview.cardsLabel')} className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-overview-cards>
-        <SummaryCard
+      {!quietEmptyProject && <section aria-label={t('overview.cardsLabel')} className="grid min-w-0 grid-cols-2 gap-x-4 border-y sm:gap-x-0 sm:[&>section:nth-child(even)]:border-l xl:grid-cols-4 xl:[&>section+section]:border-l" data-overview-cards>
+        <SummaryItem
           chip={{ label: collections?.withFailedChanges ? t('overview.statusFailed') : collections?.withPendingChanges ? t('overview.statusPending') : t('overview.statusSynced'), state: collections?.withFailedChanges ? 'unavailable' : collections?.withPendingChanges ? 'degraded' : 'ready' }}
           metric={collections ? formatNumber(collections.count) : '—'}
           metricLabel={t('navigation.collections')}
@@ -401,7 +401,7 @@ export function OverviewPage() {
           title={t('overview.cardCollections')}
           to="/collections"
         />
-        <SummaryCard
+        <SummaryItem
           chip={{ label: requests && requests.serverErrorCount > 0 ? t('overview.statusFailed') : requests && requests.clientErrorCount > 0 ? t('overview.needsReview') : t('overview.statusSynced'), state: requests && requests.serverErrorCount > 0 ? 'unavailable' : requests && requests.clientErrorCount > 0 ? 'degraded' : 'ready' }}
           metric={requests ? formatNumber(requests.requestCount) : '—'}
           metricLabel={t('overview.requests')}
@@ -416,7 +416,7 @@ export function OverviewPage() {
           title={t('overview.cardApi')}
           to="/api?tab=logs"
         />
-        <SummaryCard
+        <SummaryItem
           chip={{ label: events && events.failedDeliveryCount > 0 ? t('overview.statusFailed') : t('overview.statusSynced'), state: events && events.failedDeliveryCount > 0 ? 'unavailable' : 'ready' }}
           metric={events ? formatNumber(events.enabledHooks + events.enabledWebhooks + events.enabledEventHooks) : '—'}
           metricLabel={t('overview.active')}
@@ -430,7 +430,7 @@ export function OverviewPage() {
           title={t('overview.cardEvents')}
           to="/events"
         />
-        <SummaryCard
+        <SummaryItem
           chip={{ label: changes && changes.pendingCount > 0 ? t('overview.statusPending') : t('overview.statusSynced'), state: changes && changes.failedCount > 0 ? 'unavailable' : changes && changes.pendingCount > 0 ? 'degraded' : 'ready' }}
           metric={changes ? formatNumber(changes.pendingCount) : '—'}
           metricLabel={t('overview.pending')}
@@ -444,14 +444,14 @@ export function OverviewPage() {
           title={t('overview.cardChanges')}
           to="/changes?tab=pending"
         />
-      </section>
+      </section>}
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <ContinueWorking />
         <QuickStart />
       </div>
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <RecentActivity />
         <RuntimeStatusPanel />
       </div>

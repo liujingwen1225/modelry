@@ -20,7 +20,7 @@ function diagnosticResponse(path: string): Response {
   if (path.endsWith('/auth/session')) {
     return Response.json({
       owner: { id: 'own_test', email: 'owner@example.com' },
-      expiresAt: '2026-09-25T09:00:00Z',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       role: 'owner',
       permission: { preset: 'fullAccess' },
     });
@@ -58,6 +58,7 @@ const primaryNavigationLabels = [
   'Overview',
   'Collections',
   'API workspace',
+  'Agent',
   'Hooks & Events',
   'Scheduled jobs',
   'Changes',
@@ -80,18 +81,49 @@ describe('Modelry Admin shell', () => {
     expect(links.map((link) => link.getAttribute('aria-label'))).toEqual(primaryNavigationLabels);
     expect(links.map((link) => link.getAttribute('title'))).toEqual(primaryNavigationLabels);
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/', '/collections', '/api', '/events', '/schedules', '/changes', '/access', '/activity', '/settings',
+      '/', '/collections', '/api', '/agent', '/events', '/schedules', '/changes', '/access', '/activity', '/settings',
     ]);
 
     const groups = Array.from(navigation.querySelectorAll('[data-nav-group-label]')).map((label) => label.textContent);
     expect(groups).toEqual(['Workspace', 'Build', 'Operate', 'System']);
 
-    // 顶栏显示当前目的地；侧栏底部显示真实 Runtime 卡（状态来自诊断请求，需等待其解析）。
+    // 顶栏显示当前目的地；侧栏不再显示底部项目栏。
     expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('Overview');
-    const runtimeCard = document.querySelector('[data-shell-runtime-card]');
-    expect(runtimeCard).not.toBeNull();
-    expect(runtimeCard).toHaveAttribute('href', '/settings');
-    await waitFor(() => expect(runtimeCard?.textContent).toContain('Ready'));
+    expect(document.querySelector('[data-shell-runtime-context]')).toBeNull();
+  });
+
+  it('受限管理员的运行时事实不提供未授权的设置入口', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/collections');
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      return Promise.resolve(path.endsWith('/auth/session') ? Response.json({
+        owner: { id: 'adm_test', email: 'reader@example.test' },
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        role: 'administrator', permission: { preset: 'custom', customOperations: ['collections.read'] },
+      }) : diagnosticResponse(path));
+    }));
+    render(<App />);
+    const navigation = await screen.findByRole('navigation', { name: 'Project navigation' });
+    expect(within(navigation).queryByRole('link', { name: 'System settings' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: 'Agent' })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-shell-runtime-context]')).toBeNull();
+    expect(document.querySelector('[data-runtime-badge]')).not.toHaveAttribute('href');
+  });
+
+  it('closes the navigation drawer with Escape and restores its trigger focus', async () => {
+    window.localStorage.setItem('modelry-admin-locale', 'en');
+    window.history.replaceState({}, '', '/');
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
+    const user = userEvent.setup();
+    render(<App />);
+    const trigger = await screen.findByRole('button', { name: 'Expand project navigation' });
+    await user.click(trigger);
+    const drawer = await screen.findByRole('dialog', { name: 'Project navigation' });
+    expect(within(drawer).getByRole('link', { name: 'Collections' })).toHaveAttribute('href', '/collections');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Project navigation' })).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it('shows real navigation counts from the shared overview snapshot', async () => {
@@ -161,16 +193,21 @@ describe('Modelry Admin shell', () => {
     expect(await screen.findByRole('heading', { name: 'API workspace', level: 1 })).toBeInTheDocument();
   });
 
-  it('opens the MCP guide and links back to the new destinations', async () => {
+  it('旧 MCP 入口跳转统一 Agent 页面，配置页不重复执行历史', async () => {
     window.localStorage.setItem('modelry-admin-locale', 'en');
     window.history.replaceState({}, '', '/mcp');
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(diagnosticResponse(String(input)))));
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'MCP', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Agent', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('modelry mcp --api-url <Modelry API origin> --api-key <Service Account API Key>')).toBeInTheDocument();
-    // MCP 不占一级菜单，但接入入口必须可达（spec §3.3）。
-    expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('MCP');
+    // 侧栏仅保留 Agent，旧链接打开它的 MCP 配置页签。
+    const navigation = screen.getByRole('navigation', { name: 'Project navigation' });
+    expect(within(navigation).getByRole('link', { name: 'Agent' })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelector('[data-shell-destination]')).toHaveTextContent('Agent');
+    expect(window.location.pathname + window.location.search).toBe('/agent?tab=mcp');
+    expect(screen.getByRole('link', {name: 'MCP configuration'})).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByText('Recent agent operations')).not.toBeInTheDocument();
   });
 
   it('persists a keyboard reachable light and dark theme toggle', async () => {
@@ -237,7 +274,7 @@ describe('Modelry Admin shell', () => {
     await screen.findByRole('navigation', { name: 'Project navigation' });
     const trigger = screen.getByRole('button', { name: /Search commands/ });
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+    await user.keyboard('{Control>}k{/Control}');
     const dialog = await screen.findByRole('dialog', { name: 'Command palette' });
     const input = within(dialog).getByRole('combobox', { name: 'Search commands' });
     await user.type(input, 'System settings');

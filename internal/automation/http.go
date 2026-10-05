@@ -10,8 +10,9 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/liujingwen1225/modelry/internal/adminauth"
 	"github.com/liujingwen1225/modelry/internal/httpapi"
+	"github.com/liujingwen1225/modelry/internal/permissions"
+	"github.com/liujingwen1225/modelry/internal/serviceaccounts"
 )
 
 const maximumAutomationRequestBytes = 1 << 20
@@ -55,7 +56,8 @@ func (module *Module) RegisterRoutes(mux *http.ServeMux) {
 
 func (module *Module) protect(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, request *http.Request) {
-		if _, ok := adminauth.OwnerFromContext(request.Context()); !ok {
+		operation, known := permissions.ControlPlaneOperation(request.Method, request.URL.Path)
+		if !known || !serviceaccounts.HasPermission(request.Context(), operation) {
 			automationHTTPError(w, request, http.StatusUnauthorized, "UNAUTHENTICATED", "An active Owner session is required.", nil)
 			return
 		}

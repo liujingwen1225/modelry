@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liujingwen1225/modelry/internal/audit"
 	"github.com/liujingwen1225/modelry/internal/storage"
 )
 
@@ -19,8 +20,14 @@ type TransactionalStore interface {
 	WithReadSnapshot(context.Context, func(storage.Executor) error) error
 }
 
+// AuditWriter 在模型应用事务内保存治理审计。
+type AuditWriter interface {
+	AppendInTransaction(context.Context, storage.Executor, audit.AppendInput) error
+}
+
 type Service struct {
-	store TransactionalStore
+	store  TransactionalStore
+	audits AuditWriter
 }
 
 // CollectionInitializer runs inside the same transaction as the new Collection
@@ -31,11 +38,14 @@ type CollectionInitializer func(context.Context, storage.Executor, Collection) e
 
 // NewService initializes the Backend Model-owned tables and recovers attempts
 // left In Progress by a prior process. Create one Service per Runtime startup.
-func NewService(ctx context.Context, store TransactionalStore) (*Service, error) {
+func NewService(ctx context.Context, store TransactionalStore, audits ...AuditWriter) (*Service, error) {
 	if store == nil {
 		return nil, fmt.Errorf("%w: storage is required", ErrInvalidArgument)
 	}
 	service := &Service{store: store}
+	if len(audits) > 0 {
+		service.audits = audits[0]
+	}
 	if err := service.store.WithTransaction(ctx, func(tx storage.Executor) error {
 		for _, statement := range backendModelSchema {
 			if _, err := tx.ExecContext(ctx, statement); err != nil {
