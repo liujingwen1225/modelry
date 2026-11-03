@@ -13,7 +13,6 @@ Modelry 最核心的要求是产品化。
 - Figma：https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
 - `docs/specs/0010-figma-frontend-rebuild.md`
 
-旧 `docs/specs/0001-admin-product-ux-spec.md` 与 `DESIGN.md` 不再约束新前端。
 
 # 产品体验规则
 
