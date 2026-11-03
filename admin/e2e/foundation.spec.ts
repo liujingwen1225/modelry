@@ -88,12 +88,13 @@ test('导航可用：未交付分区显示真实状态，不伪造页面', async
   await page.goto('/')
   const nav = page.getByRole('navigation', { name: '主导航' })
 
-  await nav.getByText('数据', { exact: true }).click()
-  await expect(page).toHaveURL(/\/data$/)
+  // 数据分区已在 #43 交付；用户与访问仍按 Issue 顺序推进。
+  await nav.getByText('用户与访问', { exact: true }).click()
+  await expect(page).toHaveURL(/\/access$/)
   await expect(page.getByText('按 Figma 设计交付中')).toBeVisible()
 
   await page.reload()
-  await expect(page).toHaveURL(/\/data$/)
+  await expect(page).toHaveURL(/\/access$/)
   await expect(page.getByText('按 Figma 设计交付中')).toBeVisible()
 })
 

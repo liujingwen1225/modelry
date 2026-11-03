@@ -97,6 +97,15 @@ export const api = {
   put: <T>(path: string, body?: unknown) => apiRequest<T>('PUT', path, { body: body ?? {} }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>('PATCH', path, { body: body ?? {} }),
   delete: <T>(path: string, body?: unknown) => apiRequest<T>('DELETE', path, body === undefined ? {} : { body }),
+  /** 文件上传：由浏览器设置 multipart 边界，不能手写 Content-Type。 */
+  upload: async <T>(path: string, body: FormData): Promise<T> => {
+    const response = await fetch(path, { method: 'POST', credentials: 'same-origin', body, headers: { Accept: 'application/json' } })
+    const payload = await readBody(response)
+    if (!response.ok) {
+      throw new ApiError(response.status, payload as ApiErrorBody, `上传失败（HTTP ${response.status}）`)
+    }
+    return payload as T
+  },
 }
 
 export function errorMessage(error: unknown): string {
