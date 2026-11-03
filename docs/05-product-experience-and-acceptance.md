@@ -6,9 +6,14 @@ Modelry 最核心的要求是产品化。
 
 技术行为正确，但用户找不到入口、不理解状态、需要反复跳页、无法恢复错误，仍然不算完成。
 
-本文件定义跨页面体验、Design System 和验收原则。
+本文件定义跨页面体验、状态、可访问性和真实验收原则，不定义新前端的具体页面、导航、视觉和组件布局。
 
-Exact Sidebar、Collection Workspace 与具体页面结构只由 docs/specs/0001-admin-product-ux-spec.md 定义。
+新前端的页面、信息架构、视觉、组件组合和交互唯一依据是：
+
+- Figma：https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
+- `docs/specs/0010-figma-frontend-rebuild.md`
+
+旧 `docs/specs/0001-admin-product-ux-spec.md` 与 `DESIGN.md` 不再约束新前端。
 
 # 产品体验规则
 
@@ -27,6 +32,8 @@ Secondary Action 进入：
 - secondary toolbar
 - overflow
 
+具体位置和视觉形式以 Figma 为准。
+
 ## 3. 优先减少用户步骤
 
 每个流程都必须问：
@@ -40,7 +47,7 @@ Secondary Action 进入：
 - API Error 一键进入对应 Request Detail；
 - Service Account 创建时默认同时创建 API Key；
 - Auth User 创建时同时创建 Profile Record 与 Password Credential；
-- 首次 Bootstrap 后直接进入 Create Collection。
+- 首次 Bootstrap 后直接进入 Figma 设计的下一步。
 
 ## 4. Domain Language 不等于 UI Language
 
@@ -86,17 +93,7 @@ saved pending operation
 
 切换页面、刷新、重新登录都不能丢失。
 
-UI 应显示：
-
-~~~text
-3 pending changes
-~~~
-
-而不是：
-
-~~~text
-3 unsaved changes
-~~~
+UI 应显示明确的待处理变更数量和状态，不要将已保存的待应用变更描述为未保存表单。
 
 ## 7. Error 必须可行动
 
@@ -115,7 +112,7 @@ Risk 由 Runtime 计算。
 
 SAFE 不增加无意义确认。
 
-Risk / Destructive Change 在当前业务 Context 中 Review / Confirm。
+Risk / Destructive Change 在当前业务 Context 中 Review / Confirm。确认交互以 Figma 为准。
 
 ## 9. Progressive Complexity
 
@@ -128,58 +125,17 @@ Risk / Destructive Change 在当前业务 Context 中 Review / Confirm。
 - Internal Ledger
 - ChangeSet Object Model
 
-高级信息进入 Technical Details / Diagnostics。
+高级信息进入 Technical Details / Diagnostics；没有出现在 Figma 中的技术工作台不应擅自增加。
 
-# 视觉与 Design System Contract
+# 视觉与组件使用规则
 
-固定实现关系：
-
-~~~text
-React + TypeScript + Vite
-        ↓
-Modelry Design System
-        ↓
-shadcn/ui
-        ↓
-Base UI
-        ↓
-Tailwind CSS v4
-~~~
-
-业务状态：
-
-- TanStack Query
-- TanStack Table
-- React Hook Form
-- Zod
-- URL State
-- React Local State
-
-## Semantic Tokens
-
-至少定义：
-
-- surface
-- surface-subtle
-- border
-- text
-- text-muted
-- primary
-- success
-- warning
-- danger
-- focus
-
-Light / Dark 使用同一 semantic token contract。
-
-## Density
-
-V0.1 组件支持：
-
-- Standard
-- Compact Table
-
-不需要给用户做 Density 设置。
+- 新前端只使用 Ant Design（`antd`）作为基础 UI 组件库。
+- 不引入 shadcn/ui、Base UI、Mantine、Ant Design X 或其它 UI 组件库。
+- 基础交互控件必须使用 Ant Design 对应组件，并通过统一 UI 出口和静态检查约束。
+- Ant Design 默认主题不等于 Modelry 视觉；颜色、字体、间距、尺寸、边框、圆角、状态和亮暗主题均按 Figma 定制。
+- Figma 的「界面控件与状态基线」画板是组件和状态验收参考。
+- 自定义组件只负责产品特有的业务组合，不重复实现 Ant Design 已有的基础交互能力。
+- 不以旧前端组件、旧 CSS、旧 Design Tokens 或旧 Surface 规则约束新前端。
 
 ## Form Pattern
 
@@ -193,7 +149,7 @@ V0.1 组件支持：
 - Server error
 - Disabled reason
 
-提交失败后 focus 第一处 invalid field。
+提交失败后 focus 第一处 invalid field。具体控件、布局和反馈形式以 Figma 为准。
 
 ## Table Pattern
 
@@ -211,28 +167,11 @@ V0.1 组件支持：
 - copyable stable ID
 - context preservation
 
-无 Bulk Action 时不展示 Row Selection。
+无 Bulk Action 时不展示 Row Selection。表格的列、密度、工具栏和操作位置以 Figma 为准。
 
 ## Surface Boundary
 
-~~~text
-Standard Sheet
-→ short detail / short form
-
-Wide Sheet
-→ record / complex field
-
-Focused Workspace
-→ Create Collection / long-form task
-
-Split Pane
-→ list + persistent inspect workflow
-
-Dialog
-→ destructive / revoke / disable / unsaved local form
-~~~
-
-复杂长期编辑器禁止放进窄 Modal。
+Card、Drawer、Modal、Popover、Split Pane、Focused Workspace 等具体表面类型和组合，全部按 Figma 实现。跨页面通用的安全和可用性要求不能成为偏离 Figma 的理由。
 
 ## Feedback
 
@@ -263,7 +202,7 @@ Failure
 - Enter for expected simple form action
 - Escape where safe
 - Cmd/Ctrl + Enter for explicit submit where appropriate
-- focus return after Sheet / Dialog
+- focus return after overlay
 - safe destructive confirmation focus
 
 ## Accessibility
@@ -289,7 +228,7 @@ Failure
 - sort
 - page / cursor where reasonable
 - selected resource
-- detail / sheet identity
+- detail / overlay identity
 
 Browser Back 必须尽可能恢复列表 Context。
 
@@ -303,7 +242,7 @@ API、Diff、Debug Surface 共用 Structured Viewer：
 - wrap
 - search when useful
 
-不要每个页面自行使用 Raw pre。
+不要每个页面自行使用 Raw pre。展示形式按 Figma。
 
 ## Copy Interaction
 
@@ -320,12 +259,12 @@ API Key one-time reveal 是单独 Security Flow。
 
 # State Ownership
 
-- Server State → Query / Cache
-- Form State → Form Library + Validation Schema
-- URL State → navigation / filter / deep-link
-- Local UI State → transient presentation
+- Server State：使用明确的请求、缓存和刷新策略。
+- Form State：由表单组件与校验规则管理。
+- URL State：管理导航、筛选和深链接状态。
+- Local UI State：只保存临时展示状态。
 
-不要因为方便把所有状态放进 Global Store。
+不要因为方便把所有状态放进 Global Store。不要将旧前端的状态管理库作为新前端的强制依赖。
 
 # Product Definition of Done
 
@@ -338,7 +277,7 @@ API Key one-time reveal 是单独 Security Flow。
 路径连续、默认值合理、步骤足够少。
 
 ### Visual Closure
-遵守统一 Design System 与 Information Hierarchy。
+遵守 Figma 的页面和视觉设计。
 
 ### Error Closure
 主要失败模式可理解、可恢复。
@@ -357,9 +296,9 @@ Real SQLite
 +
 Real HTTP
 +
-Real Admin
+Real Frontend
 +
-Real Chromium
+Real Browser
 ~~~
 
 禁止用 Mock Backend 代替核心闭环。
