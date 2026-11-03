@@ -77,7 +77,7 @@ Runtime 在 Project Root 下使用以下平台无关的相对布局，实际分�
 
 Record 或 API 调用的 RequestRecord 属于运行遥测，不是 Audit fact。它只保留已接受范围内的请求元数据；不因记录失败而伪造业务提交，也不把 Raw Credential、Authorization Header 或敏感完整请求 / 响应体写入日志。#4 Domain Spec 定义事件级归属和安全字段；本 ADR 冻结提交原子性。
 
-密码等 Credential 的原始值不作为持久数据库值或日志内容保存；#4 Domain Spec 定义凭证对象，具体派生算法由后续安全设计冻结。该边界与 [Admin Product UX Spec](../specs/0001-admin-product-ux-spec.md) 中 password 不进入 Schema、不回显、不出现在普通 Record API response 的要求一致。
+密码等 Credential 的原始值不作为持久数据库值或日志内容保存。Password 是 Credential 而不是 Field，不得被普通 Record API 读取或回显；该领域边界由 SPEC-0002 定义，传输层约束由 Core HTTP Contract 定义。具体凭证派生算法由后续安全设计冻结。
 
 ### 6. Applied Model、Pending Change、Physical Migration 与 Ledger
 
@@ -110,7 +110,7 @@ V0.1 只支持 Local Storage 和 Single File Value。多个文件值、S3 provid
 
 顺序为：解析配置与 Root → 锁定 Project → 建立目录 → 打开 / 验证 SQLite → 执行内部迁移与一致性检查 → 初始化模块 → bind Listener → 对外切换至 READY。更早的阶段是 Starting；任一步失败都不得报告 READY。可提供诊断响应时必须明确标为 Not Ready / Unavailable，且不允许通过产品 API 执行不安全写操作；否则退出并附可行动错误。运行期依赖失效时立即撤销 READY，并遵守同一门禁。
 
-Status/Settings 诊断遵从 [Admin Product UX Spec](../specs/0001-admin-product-ux-spec.md)：Runtime、Database、Storage 的 Unknown / Unavailable 不得显示为 Ready；展示 provider、路径、健康和适用的重启指导。外部 HTTP 字段与错误映射由 Contract 定义。
+Runtime、Database、Storage 的 Unknown / Unavailable 不得被运行时状态接口映射为 Ready；可用诊断响应必须明确报告 Not Ready / Unavailable，外部 HTTP 字段与错误映射由 Contract 定义。Admin 如何呈现状态、入口和操作，以当前 Figma 前端实施规格为准。
 
 ### 9. Graceful Shutdown
 
@@ -148,7 +148,6 @@ Status/Settings 诊断遵从 [Admin Product UX Spec](../specs/0001-admin-product
 - [04 V0.1 Community Scope](../04-v0.1-community-scope.md)
 - [05 Product Experience and Acceptance](../05-product-experience-and-acceptance.md)
 - [06 Product Architecture](../06-product-architecture.md)
-- [SPEC-0001 Admin Product UX](../specs/0001-admin-product-ux-spec.md)
 
 ### SQLite primary references
 
