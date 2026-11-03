@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Button, Drawer, Field, Input, Notice, Select, Switch, Table } from '@/ui'
 import type { TableColumnsType } from '@/ui'
 import { PlusOutlined } from '@ant-design/icons'
-import { collectionsApi, type CollectionSummary, type FieldInput, type FieldType } from '@/api/collections'
+import { useQuery } from '@tanstack/react-query'
+import { collectionsApi, collectionKeys, type CollectionSummary, type FieldInput, type FieldType } from '@/api/collections'
 import { errorMessage } from '@/api/client'
-import { useData } from './DataContext'
 
 type FieldRow = { name: string; type: FieldType; required: boolean }
 
@@ -31,21 +31,23 @@ export function CreateCollectionDrawer(props: {
   onClose: () => void
   onCreated: (collection: CollectionSummary) => void
 }) {
-  const data = useData()
   const [name, setName] = useState('')
+  const [collectionType, setCollectionType] = useState<'Normal' | 'Auth'>('Normal')
   const [description, setDescription] = useState('')
   const [rows, setRows] = useState<FieldRow[]>([{ name: 'title', type: 'text', required: true }])
   const [error, setError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
 
   const reset = () => {
+    setCollectionType('Normal')
     setName('')
     setDescription('')
     setRows([{ name: 'title', type: 'text', required: true }])
     setError(null)
   }
 
-  const nameTaken = data.collections.some((collection) => collection.name.toLowerCase() === name.trim().toLowerCase())
+  const existing = useQuery({ queryKey: collectionKeys.list, queryFn: collectionsApi.list })
+  const nameTaken = (existing.data ?? []).some((collection) => collection.name.toLowerCase() === name.trim().toLowerCase())
   const nameValid = NAME_PATTERN.test(name) && !nameTaken
   const fieldsValid = rows.every((row) => NAME_PATTERN.test(row.name)) && new Set(rows.map((row) => row.name)).size === rows.length
 
@@ -57,7 +59,12 @@ export function CreateCollectionDrawer(props: {
     setError(null)
     try {
       const fields: FieldInput[] = rows.map((row) => ({ name: row.name, type: row.type, required: row.required }))
-      const collection = await collectionsApi.create({ name, description: description.trim() || undefined, fields })
+      const collection = await collectionsApi.create({
+        name,
+        description: description.trim() || undefined,
+        type: collectionType,
+        fields,
+      })
       reset()
       props.onCreated({ ...collection, recordCount: 0 })
     } catch (cause) {
@@ -174,6 +181,17 @@ export function CreateCollectionDrawer(props: {
           <p className="mr-drawer__check mr-drawer__check--error">✕ 需以小写字母开头，仅含小写字母、数字和下划线</p>
         )
       ) : null}
+
+      <Field label="集合类型" hint="认证集合会额外准备邮箱、密码与会话，用于应用用户登录。">
+        <Select
+          value={collectionType}
+          options={[
+            { value: 'Normal', label: '普通集合' },
+            { value: 'Auth', label: '认证集合' },
+          ]}
+          onChange={(value: 'Normal' | 'Auth') => setCollectionType(value)}
+        />
+      </Field>
 
       <Field label="说明">
         <Input value={description} placeholder="想读、在读和读过的书单" onChange={(event) => setDescription(event.target.value)} />

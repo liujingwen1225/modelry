@@ -10,6 +10,7 @@ import { PendingModule } from '@/pages/pending/PendingModule'
 import { DataLayout } from '@/pages/data/DataLayout'
 import { DataIndex } from '@/pages/data/DataIndex'
 import { CollectionPane } from '@/pages/data/CollectionPane'
+import { AccessPage } from '@/pages/access/AccessPage'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -35,7 +36,8 @@ export function AppRoutes() {
           <Route path=":collectionId" element={<CollectionPane />} />
           <Route path=":collectionId/:tab" element={<CollectionPane />} />
         </Route>
-        <Route path="access/*" element={<PendingModule />} />
+        <Route path="access" element={<AccessPage />} />
+        <Route path="access/:tab" element={<AccessPage />} />
         <Route path="developer/*" element={<PendingModule />} />
         <Route path="logic/*" element={<PendingModule />} />
         <Route path="changes/*" element={<PendingModule />} />
