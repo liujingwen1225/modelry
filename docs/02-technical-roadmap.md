@@ -97,46 +97,38 @@ PostgreSQL 当前不在既定路线中。
 
 未来云服务可以在外层管理多个独立后端，不要求先把自托管运行时改造成多项目服务器。
 
-## 4. Admin：React + TypeScript + Vite
+## 4. Admin：React + TypeScript + Vite + Ant Design
 
-Admin 是核心产品工作台，不是内部数据库管理器。
+Admin 是核心产品工作台。当前新前端不是旧 Admin 的换肤或渐进迁移，而是按照已确认的 Figma 设计从零实现。
 
-前端基础保持：
+唯一设计依据：
+- Figma：https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
+- 实施规格：`docs/specs/0011-figma-frontend-rebuild.md`
+
+技术基线：
 
 ~~~text
-Modelry 产品界面
+React + TypeScript + Vite
         ↓
-Modelry 设计系统
+Ant Design（唯一 UI 组件库）
         ↓
-shadcn/ui
-        ↓
-Base UI
-        ↓
-Tailwind CSS v4
+Modelry Figma Design Tokens / CSS Variables
 ~~~
 
-业务状态继续使用：
+约束：
 
-- TanStack Query；
-- TanStack Table；
-- React Hook Form；
-- Zod；
-- URL 状态；
-- React 局部状态。
+- 使用 `antd` 与 `@ant-design/icons`。
+- Button、Input、Select、Form、Table、Modal、Drawer、Menu、Upload 等基础交互能力使用 Ant Design 对应组件。
+- 通过 ConfigProvider / Design Tokens 和 CSS Variables 映射 Figma 的颜色、字体、尺寸、间距、边框、圆角、状态及亮暗主题。
+- Ant Design 默认主题不等于 Modelry 视觉设计；不得直接套用默认外观。
+- 不引入 shadcn/ui、Base UI、Mantine、Ant Design X 或第二套 UI 组件库。
+- 自定义组件只实现 Figma 特有的业务组合，不重造基础交互控件。
+- 新前端独立建立页面、路由、状态和 API Client；不复制旧前端页面、组件、CSS、Design Tokens 或导航。
+- 保留 Go 单二进制嵌入交付，构建产物继续输出到 `internal/webui/dist`。
 
-设计系统继续统一：
+状态按职责管理：服务端状态、表单状态、URL 状态和临时界面状态分离。具体实现以新前端代码与实施规格为准，不将旧前端的状态管理库或组件体系设为强制依赖。
 
-- 语义色；
-- 字体和间距；
-- 表单 / 表格；
-- 侧边面板 / 工作区 / 对话框边界；
-- 加载 / 空状态 / 错误 / 部分可用 / 恢复；
-- 键盘和焦点；
-- WCAG 2.2 AA 目标；
-- 明暗主题；
-- 国际化；
-- 结构化数据查看；
-- URL / 深链接上下文。
+跨页面体验仍须满足可恢复错误、键盘可用、WCAG 2.2 AA、国际化、明暗主题、结构化数据查看及 URL / 深链接上下文等产品验收要求。
 
 ## 5. 模块化单体
 
@@ -321,9 +313,11 @@ Go 核心默认不暴露：
 - 任意进程控制；
 - 直接访问原始环境变量。
 
-现有生命周期钩子、事件钩子、Webhook、定时任务的安全和持久语义继续由已接受 ADR / Spec 定义。
+现有生命周期钩子、事件钩子、Webhook、定时任务的后端安全和持久语义继续由已接受 ADR / Spec 定义。
 
-下一阶段技术重点是**编写、测试和可观测性体验**，而不是扩大任意执行权限。
+当前 Figma 新前端不提供要求用户编写或调试代码的 Hook、Lifecycle Hook、Extension 编辑器或管理工作台。Figma 中的可视化「业务逻辑」是独立的产品能力，按新前端实施规格实现。
+
+后续是否改善扩展开发体验，必须由真实用户反馈驱动；不得将代码型 Hook 工作台自动加入当前前端或路线。
 
 ## 12. SDK 与 MCP
 
@@ -413,10 +407,10 @@ V0.2 重点：
 
 ## 技术阶段
 
-1. **已完成** — Go / SQLite / Admin / 契约基础；
-2. **已完成** — 核心后端闭环；
-3. **已完成** — 实时订阅 / 扩展 / 自动化 / 可迁移能力成熟化；
-4. **当前** — 发布工程 + 安装 / 快速开始；
-5. **下一步** — 应用 OAuth + SDK 接入 + MCP / 编码智能体体验；
-6. **随后** — 基于真实反馈改进开发工作流；
+1. **已完成** — Go / SQLite / 契约基础与核心后端闭环；
+2. **已完成** — 实时订阅 / 扩展 / 自动化 / 可迁移能力成熟化；
+3. **当前** — 按 Figma 从零重建 React + TypeScript + Vite + Ant Design 前端；
+4. **当前验收** — 真实 Go Runtime / SQLite / HTTP / Browser 联调、Playwright 业务闭环和 Figma 视觉对照；
+5. **随后** — 项目所有者真实体验，再决定是否进入首次公开发布准备；
+6. **后续** — 根据真实反馈推进应用 OAuth、SDK、MCP / 编码智能体体验；
 7. **未来** — 产品采用情况足够明确后验证 Modelry 云服务。

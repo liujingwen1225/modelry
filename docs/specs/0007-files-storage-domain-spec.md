@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-25
 - **Issue:** [#25](https://github.com/liujingwen1225/modelry/issues/25)
-- **Depends on:** [ADR-0005](../adr/0005-file-values-and-storage-providers.md), [Local File Values and Storage Providers](../product-model/0002-files-and-storage.md), [Admin Product UX Spec](./0001-admin-product-ux-spec.md), [Extension Runtime Domain Spec](./0005-extension-runtime-domain-spec.md)
+- **Depends on:** [ADR-0005](../adr/0005-file-values-and-storage-providers.md), [Local File Values and Storage Providers](../product-model/0002-files-and-storage.md), [Extension Runtime Domain Spec](./0005-extension-runtime-domain-spec.md)
 - **Contract:** [OpenAPI](../contracts/openapi.yaml)
 
 本 Spec 定义 Multiple File values、Local 与 S3-compatible Storage Provider、Provider migration、Diagnostics 与 Admin 行为。Transport 细节以 OpenAPI 为准；本 Spec 定义领域语义。

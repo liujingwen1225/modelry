@@ -110,23 +110,39 @@ Goal #22 已完成并合入 main。
 
 这一阶段完成后，Modelry 已经具备完整后端基础，不需要再靠增加大型基础设施功能证明产品成立。
 
-## 阶段 D — V0.1 产品体验收口 → 候选 UX 复审与项目所有者真实体验（待完成）
+## 阶段 D — Figma 驱动的新前端重建与真实体验（进行中）
 
-Modelry 当前面向独立个人开发者及其编码智能体，提供自托管后端工作区。当前任务是根据已交付 V0.1.x 能力校准产品表面、国际化、真实浏览器验收与恢复体验；不是默认直接首次公开发布。
+V0.1 / V0.1.x 的 Go 后端、SQLite、业务服务和 HTTP Contracts 继续保留。本阶段不再继续修补旧 Admin，而是严格按照 ljw 账号中的 Figma 设计，从零重新实现前端。
+
+唯一设计依据：
+https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
+
+实施基线：
+- `docs/specs/0011-figma-frontend-rebuild.md`
+- PR #40：Figma + Ant Design 前端实施基线文档
+- Issue #41：新前端重建 Epic
 
 本阶段顺序：
 
 ~~~text
-#33 / #34 产品表面与 i18n 初步实现
-→ #37-A 新用户盲测与明显 UX / IA 修复
-→ #35 校准权威 UX / Browser Acceptance 文档
-→ #36 全量真实 Playwright 回归
-→ #37-B 定向最终 Computer Use 复审
-→ 候选 UX 复审与项目所有者真实体验
+PR #40 合并新前端实施基线
+→ 建立全新的 React + TypeScript + Vite + Ant Design 前端
+→ 按 Figma 完成所有页面、状态和交互
+→ 对接现有 Go API；仅补齐 Figma 实际需要的缺失接口
+→ Playwright 真实业务验收 + Figma 截图对照
+→ 项目所有者真实体验
 → 再决定是否首次公开发布
 ~~~
 
-#37-A 的当前独立首用盲测已完成：用户完成 Owner 首启后，Reviewer 创建并持久化 Note 集合与记录，尝试匿名 API List 并沿请求详情进入 Access Rules；其后新增并应用可选 `body` 字段。结论、实际误点及复验、MCP 权限说明修复和未复验的命令面板布局修复见 `docs/specs/0003-browser-acceptance-spec.md`。证据脱敏复审另发现一个尚待复验的 P1；#36 全量浏览器验收、#37-B 定向复审及项目所有者体验也仍待完成，本阶段尚未作首次公开发布决策。
+范围约束：
+
+- Figma 已设计的页面和交互全部实现。
+- Figma 没有的页面和功能暂存，不主动增加。
+- 不复用旧前端页面、组件、路由、状态、CSS 或 Design Tokens。
+- Ant Design 是唯一 UI 组件库；不再使用 shadcn/ui、Base UI、Mantine 或 Ant Design X。
+- 不建设要求用户编写或调试代码的 Hook / Lifecycle Hook / Extension 编辑器。
+- Figma 中的可视化「业务逻辑」页面属于当前实施范围。
+- PR #39 的旧前端改动不作为新实现基础；其中后端能力只有在对应 Figma 场景需要时才单独评估。
 
 ### 首次公开发布决策（所有者体验后的条件门）
 
@@ -261,8 +277,7 @@ MCP 从普通开发接口提升为核心产品入口。
 
 根据 V0.1 / V0.2 真实使用反馈，优先增强最常用路径：
 
-- 扩展编写体验；
-- 钩子调试 / 测试；
+- 可视化业务逻辑的体验增强（仅依据真实使用反馈决定）；
 - 实时订阅客户端体验；
 - 定时任务 / Webhook；
 - 可复用后端模板；
@@ -335,7 +350,7 @@ MCP 从普通开发接口提升为核心产品入口。
 不要：
 
 - 把自托管版做成云服务试用版；
-- 为收费切断认证、OAuth、实时订阅、钩子、SDK、MCP 等核心开发能力；
+- 为收费切断认证、OAuth、实时订阅、SDK、MCP 等核心开发能力；
 - 为未来数据库兼容制造没有当前产品价值的抽象；
 - 把云端概念提前塞进自托管 Admin；
 - 让内部领域对象数量决定页面数量；
