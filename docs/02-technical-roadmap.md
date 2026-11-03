@@ -103,7 +103,7 @@ Admin 是核心产品工作台。当前新前端不是旧 Admin 的换肤或渐�
 
 唯一设计依据：
 - Figma：https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
-- 实施规格：`docs/specs/0010-figma-frontend-rebuild.md`
+- 实施规格：`docs/specs/0011-figma-frontend-rebuild.md`
 
 技术基线：
 
