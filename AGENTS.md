@@ -16,7 +16,7 @@
 涉及新前端时，必须同时查看 Figma 设计文件：
 https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
 
-旧 `docs/specs/0001-admin-product-ux-spec.md` 与 `DESIGN.md` 是旧前端的历史设计资料，不再约束新前端的信息架构、页面、视觉、组件或交互。不得因为旧文档要求而恢复旧 UI。
+新前端页面、信息架构、视觉、组件和交互只依据 Figma 与 `docs/specs/0010-figma-frontend-rebuild.md`。不得恢复任何已废止的旧 UI 设计。
 
 ## 当前产品定位
 
