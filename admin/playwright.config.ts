@@ -1,22 +1,21 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
+
+const baseURL = process.env.MODELRY_BASE_URL ?? 'http://127.0.0.1:8080'
 
 export default defineConfig({
   testDir: './e2e',
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   fullyParallel: false,
-  forbidOnly: Boolean(process.env.CI),
-  retries: 0,
   workers: 1,
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
-  timeout: 300_000,
-  expect: { timeout: 8_000 },
+  reporter: [['list']],
+  outputDir: './test-results',
   use: {
-    ...devices['Desktop Chrome'],
-    browserName: 'chromium',
-    baseURL: process.env.MODELRY_BASE_URL ?? 'http://127.0.0.1:8080',
-    actionTimeout: 10_000,
-    headless: true,
-    screenshot: 'only-on-failure',
+    baseURL,
+    locale: 'zh-CN',
+    viewport: { width: 1440, height: 900 },
     trace: 'retain-on-failure',
-    video: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
-});
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],
+})

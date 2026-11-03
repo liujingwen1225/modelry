@@ -1,0 +1,401 @@
+/* 全局工作区外壳：严格对应 Figma「主导航」「全局页眉」与页面工作面。 */
+
+.mr-app {
+  display: flex;
+  height: 100%;
+  min-height: 100vh;
+  background: var(--mr-color-surface);
+}
+
+/* ── 主导航 ─────────────────────────────────────────────── */
+.mr-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: var(--mr-nav-width);
+  padding: 25px 14px 18px;
+  border-right: 1px solid var(--mr-color-border);
+  background: var(--mr-color-surface-nav);
+  overflow: hidden;
+}
+
+.mr-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px 28px;
+}
+
+.mr-nav__mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 25px;
+  height: 25px;
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-action);
+  color: #ffffff;
+  font-family: var(--mr-font-brand);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mr-nav__wordmark {
+  color: var(--mr-color-text);
+  font-family: var(--mr-font-brand);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.0333em;
+  line-height: 1.2;
+}
+
+.mr-nav__project {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 12px 25px;
+}
+
+.mr-nav__project-name {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-nav__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-nav__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--mr-color-action);
+  flex: 0 0 auto;
+}
+
+.mr-nav__dot--warn {
+  background: var(--mr-color-warning);
+}
+
+/* Ant Design Menu 只提供导航行为，尺寸与状态全部按 Figma 覆盖。 */
+.mr-nav__menu.ant-menu {
+  background: transparent;
+  border-inline-end: none;
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-nav__menu.ant-menu-inline .ant-menu-item {
+  height: var(--mr-nav-item-height);
+  line-height: var(--mr-nav-item-height);
+  margin: 0 0 5px;
+  padding-inline: 12px !important;
+  border-radius: var(--mr-radius-md);
+  color: var(--mr-color-text-secondary);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.mr-nav__menu.ant-menu-inline .ant-menu-item:last-child {
+  margin-bottom: 0;
+}
+
+.mr-nav__menu.ant-menu-inline .ant-menu-item:hover {
+  background: #f1f3f0;
+  color: var(--mr-color-text);
+}
+
+.mr-nav__menu.ant-menu-inline .ant-menu-item-selected {
+  background: var(--mr-color-surface-green);
+  color: var(--mr-color-action);
+  font-weight: 700;
+}
+
+.mr-nav__menu.ant-menu-inline .ant-menu-item-selected:hover {
+  background: var(--mr-color-surface-green);
+}
+
+.mr-nav__menu .ant-menu-item .anticon,
+.mr-nav__menu .ant-menu-item .ant-menu-item-icon {
+  font-size: 16px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  color: inherit;
+}
+
+.mr-nav__menu .ant-menu-item .anticon + span,
+.mr-nav__menu .ant-menu-item .ant-menu-item-icon + span,
+.mr-nav__menu .ant-menu-title-content {
+  margin-inline-start: 11px;
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-nav__hint {
+  margin: 0;
+  padding: 7px 0 0 39px;
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+  line-height: 1.6;
+}
+
+.mr-nav__review {
+  padding-top: 25px;
+}
+
+.mr-nav__divider {
+  height: 1px;
+  margin: 0;
+  background: var(--mr-color-border);
+}
+
+.mr-nav__review .mr-nav__divider {
+  margin-bottom: 12px;
+}
+
+.mr-nav__review-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mr-nav__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 21px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--mr-radius-sm);
+  background: var(--mr-color-surface);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-xs);
+  font-weight: 400;
+}
+
+.mr-nav__menu--review .ant-menu-item-selected .mr-nav__count {
+  background: var(--mr-color-surface);
+}
+
+.mr-nav__spacer {
+  flex: 1 1 auto;
+  min-height: var(--mr-space-6);
+}
+
+.mr-nav__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.mr-nav__settings.ant-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  height: 20px;
+  padding: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-nav__settings.ant-btn:hover {
+  background: transparent;
+  color: var(--mr-color-text);
+}
+
+.mr-nav__settings .anticon {
+  font-size: 16px;
+}
+
+.mr-nav__origin {
+  color: var(--mr-color-text-secondary);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-nav__footnote {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+/* ── 工作区 ─────────────────────────────────────────────── */
+.mr-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--mr-color-surface);
+}
+
+.mr-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-6);
+  flex: 0 0 auto;
+  height: var(--mr-topbar-height);
+  padding: 0 var(--mr-space-7);
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-topbar__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mr-topbar__segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mr-topbar__project {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  white-space: nowrap;
+}
+
+.mr-topbar__separator {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-topbar__current {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mr-topbar__tools {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+.mr-topbar__context {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-topbar__ai.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--mr-control-height);
+  padding: 0 12px;
+  border-radius: var(--mr-radius-md);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  font-weight: 500;
+}
+
+.mr-topbar__ai.ant-btn:hover {
+  background: var(--mr-color-surface-subtle);
+  color: var(--mr-color-text);
+}
+
+.mr-topbar__avatar-button.ant-btn {
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.mr-topbar__avatar-button.ant-btn:hover {
+  background: transparent;
+}
+
+.mr-topbar__avatar.ant-avatar {
+  background: var(--mr-color-surface-subtle);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+  line-height: 27px;
+}
+
+/* ── 页面工作面 ─────────────────────────────────────────── */
+.mr-canvas {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--mr-color-surface);
+}
+
+.mr-page {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+  flex: 1 0 auto;
+  padding: var(--mr-page-padding-top) var(--mr-page-padding-x) var(--mr-page-padding-bottom);
+}
+
+.mr-page--wide {
+  padding-inline: 36px;
+}
+
+.mr-page__footnote {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+/* 认证与首次设置页面不在 Figma 产品画板内，但产品必须具备。
+   这里只复用同一套设计变量，不新增产品页面或导航。 */
+.mr-auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--mr-space-10);
+  background: var(--mr-color-surface-nav);
+}
+
+.mr-auth__panel {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--mr-space-8);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface);
+}
+
+.mr-auth__brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: var(--mr-space-6);
+}
+
+.mr-auth__hint {
+  margin: 0 0 var(--mr-space-6);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  line-height: 1.6;
+}
+
+.mr-auth__title {
+  margin: 0 0 var(--mr-space-2);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-section);
+  font-weight: 700;
+  line-height: 1.4;
+}
