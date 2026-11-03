@@ -1,47 +1,45 @@
-import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url'
+import { defineConfig, type ProxyOptions } from 'vite'
+import react from '@vitejs/plugin-react'
 
-const projectDirectory = fileURLToPath(new URL('.', import.meta.url));
+const runtimeTarget = process.env.MODELRY_DEV_RUNTIME ?? 'http://127.0.0.1:8090'
 
+/**
+ * 开发时把 API 代理到真实 Go 运行时。
+ *
+ * 管理面按同源校验 Origin，因此代理会把 Origin 改写成运行时地址，
+ * 让本地开发与单二进制部署走同一套安全语义。
+ */
+function apiProxy(): ProxyOptions {
+  return {
+    target: runtimeTarget,
+    changeOrigin: true,
+    configure(proxy) {
+      proxy.on('proxyReq', (proxyRequest) => {
+        proxyRequest.setHeader('origin', runtimeTarget)
+      })
+    },
+  }
+}
+
+/** 构建产物直接落进 Go 单二进制的 Embed 目录，保留 internal/webui 接缝。 */
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  build: {
-    outDir: fileURLToPath(new URL('../internal/webui/dist/', import.meta.url)),
-    emptyOutDir: true,
-    assetsDir: 'assets',
-    sourcemap: false,
-  },
+  plugins: [react()],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src/', import.meta.url)),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   server: {
+    port: 5173,
     proxy: {
-      '/api/v1': {
-        target: process.env.MODELRY_RUNTIME_URL ?? 'http://127.0.0.1:8080',
-        changeOrigin: false,
-      },
-      '/admin/api': {
-        target: process.env.MODELRY_RUNTIME_URL ?? 'http://127.0.0.1:8080',
-        changeOrigin: false,
-      },
-    },
-    fs: {
-      allow: [projectDirectory, fileURLToPath(new URL('../', import.meta.url))],
+      '/admin/api': apiProxy(),
+      '/api': apiProxy(),
     },
   },
-  test: {
-    environment: 'jsdom',
-    setupFiles: './src/test-setup.ts',
-    include: ['src/**/*.test.{ts,tsx}'],
-    restoreMocks: true,
-    clearMocks: true,
-    // 页面测试在 jsdom 下渲染整棵 Admin 页面树，并行满载时首个断言前
-    // 的环境构建可能超过 vitest 默认 5s；这里放宽超时以避免与产品逻辑
-    // 无关的假失败（真实断言失败仍会照常报出）。
-    testTimeout: 20000,
+  build: {
+    outDir: '../internal/webui/dist',
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 1600,
   },
-});
+})

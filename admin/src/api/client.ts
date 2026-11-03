@@ -1,83 +1,110 @@
-export type ErrorDetails = Record<string, unknown> & {
-  violations?: Array<{ path: string; code: string; message: string }>;
-};
-
-export type ApiError = {
-  code: string;
-  message: string;
-  details: ErrorDetails;
-  hint?: string;
-  requestId: string;
-};
-
-export class ApiClientError extends Error {
-  readonly name = 'ApiClientError';
-
-  constructor(
-    readonly status: number,
-    readonly apiError: ApiError,
-  ) {
-    super(apiError.message);
+export type ApiErrorBody = {
+  error?: {
+    code?: string
+    message?: string
+    hint?: string
+    requestId?: string
+    details?: unknown
   }
 }
 
-type ErrorEnvelope = { error?: Partial<ApiError> };
+export class ApiError extends Error {
+  readonly status: number
+  readonly code: string
+  readonly hint?: string
+  readonly requestId?: string
+  readonly details?: unknown
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  constructor(status: number, body: ApiErrorBody | undefined, fallback: string) {
+    const fault = body?.error
+    super(fault?.message || fallback)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = fault?.code || 'INTERNAL_ERROR'
+    this.hint = fault?.hint
+    this.requestId = fault?.requestId
+    this.details = fault?.details
+  }
 }
 
-function asErrorDetails(value: unknown): ErrorDetails {
-  return isRecord(value) ? value : {};
+type QueryValue = string | number | boolean | undefined | null
+
+export type RequestOptions = {
+  body?: unknown
+  query?: Record<string, QueryValue>
+  signal?: AbortSignal
 }
 
-async function readError(response: Response): Promise<ApiClientError> {
-  let body: ErrorEnvelope = {};
-
+async function readBody(response: Response): Promise<unknown> {
+  if (response.status === 204) {
+    return undefined
+  }
+  const text = await response.text()
+  if (!text) {
+    return undefined
+  }
   try {
-    const parsed: unknown = await response.json();
-    if (isRecord(parsed) && isRecord(parsed.error)) body = parsed as ErrorEnvelope;
+    return JSON.parse(text) as unknown
   } catch {
-    body = {};
+    return text
   }
-
-  const candidate = body.error ?? {};
-  const headerRequestId = response.headers.get('X-Request-Id') ?? undefined;
-  const apiError: ApiError = {
-    code: typeof candidate.code === 'string' ? candidate.code : 'INTERNAL_ERROR',
-    message:
-      typeof candidate.message === 'string'
-        ? candidate.message
-        : `The request failed with status ${response.status}.`,
-    details: asErrorDetails(candidate.details),
-    ...(typeof candidate.hint === 'string' ? { hint: candidate.hint } : {}),
-    requestId:
-      headerRequestId ??
-      (typeof candidate.requestId === 'string' ? candidate.requestId : 'unavailable'),
-  };
-
-  return new ApiClientError(response.status, apiError);
 }
 
-export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
+function buildUrl(path: string, query?: Record<string, QueryValue>): string {
+  const url = new URL(path, window.location.origin)
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === '') {
+        continue
+      }
+      url.searchParams.set(key, String(value))
+    }
+  }
+  return url.pathname + url.search
+}
+
+/**
+ * 唯一的 HTTP 入口：Admin 会话走同源 Cookie，错误统一收敛成 ApiError。
+ * 不缓存、不重试——重试策略由调用方（查询层）决定。
+ */
+export async function apiRequest<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  let body: string | undefined
+  if (options.body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    body = JSON.stringify(options.body)
+  }
+
+  const response = await fetch(buildUrl(path, options.query), {
+    method,
     credentials: 'same-origin',
-    cache: 'no-store',
-    signal,
-  });
+    headers,
+    body,
+    signal: options.signal,
+  })
 
-  if (!response.ok) throw await readError(response);
-
-  try {
-    return (await response.json()) as T;
-  } catch {
-    throw new ApiClientError(response.status, {
-      code: 'INTERNAL_ERROR',
-      message: 'The Runtime returned an unreadable response.',
-      details: {},
-      requestId: response.headers.get('X-Request-Id') ?? 'unavailable',
-    });
+  const payload = await readBody(response)
+  if (!response.ok) {
+    throw new ApiError(response.status, payload as ApiErrorBody, `请求失败（HTTP ${response.status}）`)
   }
+  return payload as T
+}
+
+export const api = {
+  get: <T>(path: string, options?: Omit<RequestOptions, 'body'>) => apiRequest<T>('GET', path, options ?? {}),
+  post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) =>
+    apiRequest<T>('POST', path, { ...options, body: body ?? {} }),
+  put: <T>(path: string, body?: unknown) => apiRequest<T>('PUT', path, { body: body ?? {} }),
+  patch: <T>(path: string, body?: unknown) => apiRequest<T>('PATCH', path, { body: body ?? {} }),
+  delete: <T>(path: string, body?: unknown) => apiRequest<T>('DELETE', path, body === undefined ? {} : { body }),
+}
+
+export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.hint ? `${error.message}（${error.hint}）` : error.message
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return '发生未知错误'
 }

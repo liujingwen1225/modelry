@@ -1,0 +1,127 @@
+/*
+ * Modelry 新前端设计变量。
+ *
+ * 唯一视觉来源：Figma「Modelry」Page 1，尤其画板「界面控件与状态基线」(#20:19598)。
+ * React 组件、Ant Design 主题和页面 CSS 都只读取这里；页面里不写裸色值。
+ *
+ * 设计语言：白色工作面 · 中性侧栏 · 克制的灰绿强调。
+ */
+:root {
+  color-scheme: light;
+
+  /* 字体：Figma 使用 Noto Sans SC（中文）/ Inter（品牌）/ JetBrains Mono（技术数据） */
+  --mr-font-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --mr-font-brand: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --mr-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* 字号：26 页面标题 / 21 引导标题 / 18 区块标题 / 17 主标题 / 16 小节标题 / 15 抽屉标题 / 14 项目名
+     13 正文与操作 / 12 次要正文 / 11 辅助与标签 / 10 说明文字 */
+  --mr-font-size-display: 26px;
+  --mr-font-size-lead: 21px;
+  --mr-font-size-section: 18px;
+  --mr-font-size-title: 17px;
+  --mr-font-size-subtitle: 16px;
+  --mr-font-size-dialog: 15px;
+  --mr-font-size-strong: 14px;
+  --mr-font-size-md: 13px;
+  --mr-font-size-sm: 12px;
+  --mr-font-size-xs: 11px;
+  --mr-font-size-2xs: 10px;
+
+  --mr-line-height: 1.6;
+
+  /* 间距：4 / 8 / 12 / 16 / 24 / 32 / 36 */
+  --mr-space-1: 4px;
+  --mr-space-2: 8px;
+  --mr-space-3: 12px;
+  --mr-space-4: 16px;
+  --mr-space-5: 20px;
+  --mr-space-6: 24px;
+  --mr-space-7: 28px;
+  --mr-space-8: 32px;
+  --mr-space-9: 36px;
+  --mr-space-10: 40px;
+  --mr-space-12: 48px;
+
+  /* 圆角 4 / 6 / 8 */
+  --mr-radius-sm: 4px;
+  --mr-radius-md: 6px;
+  --mr-radius-lg: 8px;
+  --mr-radius-pill: 999px;
+
+  /* 语义色 */
+  --mr-color-text: #252b28;
+  --mr-color-text-secondary: #6d756f;
+  --mr-color-text-tertiary: #98a099;
+  --mr-color-action: #385a4b;
+  --mr-color-action-hover: #2f4b3e;
+  --mr-color-warning: #8a6939;
+  --mr-color-danger: #a45149;
+  --mr-color-danger-hover: #8f463f;
+
+  /* 表面与边界 */
+  --mr-color-surface: #ffffff;
+  --mr-color-surface-nav: #f7f8f6;
+  --mr-color-surface-subtle: #f6f7f5;
+  --mr-color-surface-green: #eaf1eb;
+  --mr-color-surface-warning: #faf5e9;
+  --mr-color-surface-danger: #fcf1ee;
+  --mr-color-border: #e6e9e4;
+  --mr-color-border-strong: #d3d8d2;
+
+  /* 控件尺寸 */
+  --mr-control-height: 34px;
+  --mr-input-height: 38px;
+  --mr-nav-item-height: 40px;
+
+  /* 布局 */
+  --mr-nav-width: 216px;
+  --mr-topbar-height: 64px;
+  --mr-page-padding-x: 40px;
+  --mr-page-padding-top: 31px;
+  --mr-page-padding-bottom: 26px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--mr-color-surface);
+  color: var(--mr-color-text);
+  font-family: var(--mr-font-sans);
+  font-size: var(--mr-font-size-md);
+  line-height: var(--mr-line-height);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--mr-color-action);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--mr-color-action-hover);
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--mr-font-mono);
+}
+
+/* 可访问焦点：与 Figma 的克制语言一致，不引入额外装饰。 */
+:focus-visible {
+  outline: 2px solid var(--mr-color-action);
+  outline-offset: 2px;
+}
