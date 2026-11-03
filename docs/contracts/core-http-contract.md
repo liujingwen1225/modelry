@@ -143,5 +143,4 @@ V0.1 是单 Runtime / 单隐式 Project；路径不含 organization、tenant、e
 - [Issue #5 — Core HTTP Contract & OpenAPI](https://github.com/liujingwen1225/modelry/issues/5)
 - [ADR-0001 Runtime / Storage](../adr/0001-runtime-storage-architecture.md)
 - [SPEC-0002 V0.1 Domain Foundation](../specs/0002-v0.1-foundation-spec.md)
-- [SPEC-0001 Admin Product UX](../specs/0001-admin-product-ux-spec.md)
 - [OpenAPI Specification 3.1.1](https://spec.openapis.org/oas/v3.1.1.html)
