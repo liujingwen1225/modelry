@@ -10,9 +10,13 @@
 6. docs/04-v0.1-community-scope.md
 7. docs/05-product-experience-and-acceptance.md
 8. docs/06-product-architecture.md
-9. docs/specs/0001-admin-product-ux-spec.md
-10. DESIGN.md（涉及 Admin / 前端 / UI / UX 实现时必须读取）
-11. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
+9. `docs/specs/0010-figma-frontend-rebuild.md`（涉及新前端实现时必须读取）
+10. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
+
+涉及新前端时，必须同时查看 Figma 设计文件：
+https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
+
+旧 `docs/specs/0001-admin-product-ux-spec.md` 与 `DESIGN.md` 是旧前端的历史设计资料，不再约束新前端的信息架构、页面、视觉、组件或交互。不得因为旧文档要求而恢复旧 UI。
 
 ## 当前产品定位
 
@@ -53,6 +57,7 @@ Modelry 是面向个人开发者、独立开发者和编码智能体的本地优
 - Go
 - SQLite
 - React + TypeScript + Vite
+- Ant Design（新前端唯一 UI 组件库）
 - 模块化单体
 - 契约优先
 - 零配置优先
@@ -89,7 +94,7 @@ SQLite 与单运行时 / 单项目是当前有意的产品架构，不是等待�
 → 审计
 ~~~
 
-V0.1.x 产品成熟化已经完成。实时订阅、钩子、密钥配置、Webhook、任务、S3、多管理员、策略模拟、活动记录、漂移检测、运行时设置、SDK、导入 / 导出、备份 / 恢复均已交付，不得再次当作未完成未来项。
+V0.1.x 后端成熟化能力已经交付。后端已有能力不代表必须在新前端增加对应菜单或页面；新前端只实现 Figma 已定义的产品范围。
 
 ## 架构规则
 
@@ -102,18 +107,23 @@ V0.1.x 产品成熟化已经完成。实时订阅、钩子、密钥配置、Webh
 - Admin、HTTP、SDK、CLI、MCP 操作同一套产品语义。
 - MCP 不拥有隐藏旁路，不得直接改 SQLite 绕过变更生命周期。
 - 先定义契约，再实现传输层。
-- Go 核心不要求用户编写 Go 插件；扩展面向 JavaScript / TypeScript。
 - 外部副作用不得被描述为可回滚数据库事务。
 
-## 前端设计规则
+## 新前端强制规则
 
-涉及 Admin / 前端 / UI / UX 的实现必须同时遵守：
+新前端唯一实施基线是 `docs/specs/0010-figma-frontend-rebuild.md` 和对应 Figma 文件。
 
-- `docs/specs/0001-admin-product-ux-spec.md`：产品体验、信息架构、页面职责、用户旅程、状态与 URL；
-- `DESIGN.md`：视觉语言、排版、密度、Surface、组件组合、响应式与交互反馈；
-- `admin/src/components/ui/*`：shadcn/ui + Base UI 通用交互原语。
-
-不得通过页面级手写样式绕过设计系统重新建立第二套 Button、Input、Table、Dialog、Sheet、Badge 或状态体系。产品页面优先使用连续画布、层级、留白和分隔线组织内容，避免 Card Everywhere。
+- 新前端必须按 Figma 从头实现；旧 React 页面、组件、布局、路由、状态管理、CSS 和 Design Tokens 不得复制、迁移或作为实现模板。
+- React + TypeScript + Vite；Ant Design（`antd`）是唯一 UI 组件库。
+- 不得引入 shadcn/ui、Base UI、Mantine、Ant Design X 或其它 UI 组件库。
+- 基础交互控件必须使用 Ant Design；通过统一 `src/ui/` 出口、ESLint 和静态检查约束，禁止业务页面自行实现原生 Button / Input / Select / Textarea 等基础控件。
+- 允许实现 Figma 特有的业务组件，但不能用自定义组件替代 Ant Design 已有的基础组件。
+- Ant Design 默认主题不是 Modelry 的视觉基线；所有视觉以 Figma 为准，使用主题 Token 和 CSS 变量实现。
+- 不增加 Figma 没有的页面、菜单或功能；后端现有功能不自动成为新前端范围。
+- 不建设要求用户编写或调试代码的 Hook / Lifecycle Hook / Extension 编辑器或工作台。Figma 中的可视化「业务逻辑」页面仍属于当前范围。
+- AI 页面使用 Ant Design 基础组件与业务组件实现，不引入 Ant Design X。
+- 新 API Client 根据后端 HTTP Contracts / OpenAPI 重新实现；只在 Figma 中的实际操作无法由现有 API 支持时，才增加最小必要后端接口。
+- 保留 Go 单二进制嵌入方式和 `internal/webui/dist` 输出接缝；`admin/` 目录名可保留，但不代表复用旧前端源码。
 
 ## 界面术语
 
@@ -130,15 +140,9 @@ Policy          → 访问规则
 
 ## 近期优先级
 
-1. 首次公开发布、打包和安装；
-2. 5 分钟完成首个可用后端；
-3. GitHub / Google 应用 OAuth / OIDC；
-4. SDK 接入体验；
-5. MCP / 编码智能体接入与安全演进；
-6. 示例应用 / 模板 / 部署指引；
-7. 邮件配置体验。
+当前优先完成 Figma 定义的新前端实现与真实体验验收。不要把旧 UI Closure、旧导航或旧组件库作为继续开发的前置任务。
 
-不要自行把企业版、PostgreSQL 或云端控制面基础设施插到这些优先级之前。
+不要自行把企业版、PostgreSQL 或云端控制面基础设施插到当前前端重建任务之前。
 
 ## 质量规则
 
@@ -161,6 +165,7 @@ Policy          → 访问规则
 - 真实运行时；
 - 真实 SQLite；
 - 真实 HTTP；
-- 真实 Admin 浏览器；
+- 真实浏览器；
 - 耐久状态验证；
-- 跨界面验证。
+- 跨界面验证；
+- Figma 截图对照。
