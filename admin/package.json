@@ -12,7 +12,8 @@
     "test": "npm run check",
     "api:types": "openapi-typescript ../docs/contracts/openapi.yaml -o src/api/schema.ts",
     "browser:acceptance": "node ./e2e/run-acceptance.mjs",
-    "browser:smoke": "node ./e2e/run-acceptance.mjs e2e/foundation.spec.ts"
+    "browser:smoke": "node ./e2e/run-acceptance.mjs e2e/foundation.spec.ts",
+    "browser:data": "node ./e2e/run-acceptance.mjs e2e/data-workspace.spec.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

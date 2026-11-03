@@ -117,13 +117,16 @@ export function StatusTag(props: { tone?: StatusTone; children: ReactNode; title
 }
 
 export function Field(props: { label: ReactNode; hint?: ReactNode; error?: ReactNode; required?: boolean; children: ReactNode; className?: string }) {
+  // 用 <label> 包住标签与控件：点击标签即聚焦控件，读屏与测试都能按名称找到输入框。
   return (
     <div className={`mr-field ${props.className ?? ''}`}>
-      <span className="mr-field__label">
-        {props.label}
-        {props.required ? <span className="mr-field__required">*</span> : null}
-      </span>
-      {props.children}
+      <label className="mr-field__control">
+        <span className="mr-field__label">
+          {props.label}
+          {props.required ? <span className="mr-field__required">*</span> : null}
+        </span>
+        {props.children}
+      </label>
       {props.error ? <span className="mr-field__error">{props.error}</span> : props.hint ? <span className="mr-field__hint">{props.hint}</span> : null}
     </div>
   )

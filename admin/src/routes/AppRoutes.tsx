@@ -7,6 +7,9 @@ import { LoginPage } from '@/pages/login/LoginPage'
 import { SetupPage } from '@/pages/setup/SetupPage'
 import { OverviewPage } from '@/pages/overview/OverviewPage'
 import { PendingModule } from '@/pages/pending/PendingModule'
+import { DataLayout } from '@/pages/data/DataLayout'
+import { DataIndex } from '@/pages/data/DataIndex'
+import { CollectionPane } from '@/pages/data/CollectionPane'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -27,7 +30,11 @@ export function AppRoutes() {
         }
       >
         <Route index element={<OverviewPage />} />
-        <Route path="data/*" element={<PendingModule />} />
+        <Route path="data" element={<DataLayout />}>
+          <Route index element={<DataIndex />} />
+          <Route path=":collectionId" element={<CollectionPane />} />
+          <Route path=":collectionId/:tab" element={<CollectionPane />} />
+        </Route>
         <Route path="access/*" element={<PendingModule />} />
         <Route path="developer/*" element={<PendingModule />} />
         <Route path="logic/*" element={<PendingModule />} />

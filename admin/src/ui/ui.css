@@ -207,6 +207,13 @@
   min-width: 0;
 }
 
+.mr-field__control {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
 .mr-field__label {
   color: var(--mr-color-text);
   font-size: var(--mr-font-size-sm);
@@ -391,4 +398,30 @@
   color: var(--mr-color-text);
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* ── 全站共用的小工具样式 ──────────────────────────────── */
+.mr-divider-line {
+  height: 1px;
+  background: var(--mr-color-border);
+  flex: 0 0 auto;
+}
+
+.mr-muted-note {
+  margin: var(--mr-space-3) 0 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  line-height: 1.6;
+}
+
+.mr-inline-link.ant-btn {
+  height: auto;
+  padding: 0;
+  color: var(--mr-color-action);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-inline-link.ant-btn:hover {
+  background: transparent;
+  color: var(--mr-color-action-hover);
 }
