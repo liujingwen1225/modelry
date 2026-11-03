@@ -11,7 +11,7 @@ Modelry 最核心的要求是产品化。
 新前端的页面、信息架构、视觉、组件组合和交互唯一依据是：
 
 - Figma：https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
-- `docs/specs/0010-figma-frontend-rebuild.md`
+- `docs/specs/0011-figma-frontend-rebuild.md`
 
 
 # 产品体验规则
