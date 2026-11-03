@@ -10,13 +10,13 @@
 6. docs/04-v0.1-community-scope.md
 7. docs/05-product-experience-and-acceptance.md
 8. docs/06-product-architecture.md
-9. `docs/specs/0010-figma-frontend-rebuild.md`（涉及新前端实现时必须读取）
+9. `docs/specs/0011-figma-frontend-rebuild.md`（涉及新前端实现时必须读取）
 10. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
 
 涉及新前端时，必须同时查看 Figma 设计文件：
 https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
 
-新前端页面、信息架构、视觉、组件和交互只依据 Figma 与 `docs/specs/0010-figma-frontend-rebuild.md`。不得恢复任何已废止的旧 UI 设计。
+新前端页面、信息架构、视觉、组件和交互只依据 Figma 与 `docs/specs/0011-figma-frontend-rebuild.md`。不得恢复任何已废止的旧 UI 设计。
 
 ## 当前产品定位
 
@@ -111,7 +111,7 @@ V0.1.x 后端成熟化能力已经交付。后端已有能力不代表必须在�
 
 ## 新前端强制规则
 
-新前端唯一实施基线是 `docs/specs/0010-figma-frontend-rebuild.md` 和对应 Figma 文件。
+新前端唯一实施基线是 `docs/specs/0011-figma-frontend-rebuild.md` 和对应 Figma 文件。
 
 - 新前端必须按 Figma 从头实现；旧 React 页面、组件、布局、路由、状态管理、CSS 和 Design Tokens 不得复制、迁移或作为实现模板。
 - React + TypeScript + Vite；Ant Design（`antd`）是唯一 UI 组件库。
