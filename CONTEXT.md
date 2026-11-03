@@ -237,7 +237,7 @@ PostgreSQL、组织 / 团队治理、企业单点登录、HA、集群、Kubernet
 5. docs/04-v0.1-community-scope.md
 6. docs/05-product-experience-and-acceptance.md
 7. docs/06-product-architecture.md
-8. docs/specs/0010-figma-frontend-rebuild.md（涉及新前端时）
+8. docs/specs/0011-figma-frontend-rebuild.md（涉及新前端时）
 9. 与当前任务直接相关的已接受 Product Model / ADR / Spec / Contract
 
 文件名中的 community / editions 为保持历史链接稳定而保留，不表示仍采用旧的社区版 → 企业版路线。
