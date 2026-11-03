@@ -84,20 +84,6 @@ test('全局工作区：导航与页眉严格按 Figma 分组', async ({ page })
   await expect(page.getByRole('button', { name: 'AI 助手' })).toBeVisible()
 })
 
-test('导航可用：未交付分区显示真实状态，不伪造页面', async ({ page }) => {
-  await page.goto('/')
-  const nav = page.getByRole('navigation', { name: '主导航' })
-
-  // 数据分区已在 #43 交付；用户与访问仍按 Issue 顺序推进。
-  await nav.getByText('用户与访问', { exact: true }).click()
-  await expect(page).toHaveURL(/\/access$/)
-  await expect(page.getByText('按 Figma 设计交付中')).toBeVisible()
-
-  await page.reload()
-  await expect(page).toHaveURL(/\/access$/)
-  await expect(page.getByText('按 Figma 设计交付中')).toBeVisible()
-})
-
 test('概览：有集合后切换为继续工作，并读取真实计数', async ({ page }) => {
   await page.goto('/')
   const collectionId = await createNotesCollection(page)

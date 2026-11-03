@@ -124,7 +124,7 @@ export const collectionsApi = {
     api.get<{ data: CollectionSummary[]; nextCursor?: string }>('/admin/api/v1/collections').then((page) => page.data),
   get: (collectionId: string) =>
     api.get<{ data: Collection }>(`/admin/api/v1/collections/${collectionId}`).then((response) => response.data),
-  create: (input: { name: string; description?: string; type?: 'Normal'; fields: FieldInput[] }) =>
+  create: (input: { name: string; description?: string; type?: 'Normal' | 'Auth'; fields: FieldInput[] }) =>
     api.post<{ data: Collection }>('/admin/api/v1/collections', { type: 'Normal', ...input }).then((response) => response.data),
 
   pendingChange: (collectionId: string) =>

@@ -1,0 +1,95 @@
+/* 用户与访问：用户列表、认证配置、访问规则入口。 */
+
+.mr-access__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+}
+
+.mr-access__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mr-access__tabs {
+  margin-bottom: var(--mr-space-1);
+}
+
+.mr-access__tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  padding-bottom: var(--mr-space-3);
+}
+
+.mr-access__empty,
+.mr-access__rules {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--mr-space-3);
+  padding: var(--mr-space-8) 0;
+}
+
+.mr-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-session-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-session-list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mr-auth-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  max-width: 560px;
+  padding-top: var(--mr-space-2);
+}
+
+.mr-auth-config__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-6);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-auth-config__row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mr-auth-config__label {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  font-weight: 700;
+}
+
+.mr-auth-config__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+}
