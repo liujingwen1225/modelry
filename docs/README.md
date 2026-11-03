@@ -30,7 +30,7 @@ Modelry 当前定位：
 5. **04-v0.1-community-scope.md** — 已完成的 V0.1 / V0.1.x 后端交付边界；旧文件名继续保留
 6. **05-product-experience-and-acceptance.md** — 跨页面体验与质量验收原则
 7. **06-product-architecture.md** — 领域、接口、运行时、编码智能体和云服务边界
-8. **specs/0010-figma-frontend-rebuild.md** — 当前新前端唯一实施基线：Figma 页面、Ant Design 组件库、重建边界和验收标准
+8. **specs/0011-figma-frontend-rebuild.md** — 当前新前端唯一实施基线：Figma 页面、Ant Design 组件库、重建边界和验收标准
 9. 与当前任务直接相关的已接受 Product Model / ADR / Contract
 
 ## 当前交付状态
@@ -78,7 +78,7 @@ HTTP Contract / OpenAPI
 新前端的页面、信息架构、布局、视觉、组件组合和交互，以：
 
 - [Figma — Modelry](https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1)
-- `specs/0010-figma-frontend-rebuild.md`
+- `specs/0011-figma-frontend-rebuild.md`
 
 为唯一实施依据。
 
