@@ -118,7 +118,7 @@ V0.1 / V0.1.x 的 Go 后端、SQLite、业务服务和 HTTP Contracts 继续保�
 https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1
 
 实施基线：
-- `docs/specs/0010-figma-frontend-rebuild.md`
+- `docs/specs/0011-figma-frontend-rebuild.md`
 - PR #40：Figma + Ant Design 前端实施基线文档
 - Issue #41：新前端重建 Epic
 
