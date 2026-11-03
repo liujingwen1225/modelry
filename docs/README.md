@@ -82,10 +82,4 @@ HTTP Contract / OpenAPI
 
 为唯一实施依据。
 
-旧的 `specs/0001-admin-product-ux-spec.md` 与根目录 `DESIGN.md` 只作为旧前端历史资料，不得覆盖 Figma 的新设计。后端领域语义、权限、安全和 HTTP Contract 仍然有效。
-
-## 历史资料
-
-旧 Admin UX Spec 和 DESIGN.md 暂时保留，以便追溯旧实现和历史决策；它们不再是新前端的设计约束。
-
-历史资料只能作为证据来源，不能覆盖当前 Figma 设计基线。
+后端领域语义、权限、安全和 HTTP Contract 继续有效；旧前端设计文件已从当前活动文档体系中移除。
