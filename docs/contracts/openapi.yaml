@@ -1225,6 +1225,45 @@ paths:
           $ref: '#/components/responses/StructuredError'
         default:
           $ref: '#/components/responses/StructuredError'
+    delete:
+      tags: [Collections]
+      operationId: deleteCollection
+      summary: Permanently delete a Collection and all of its dependent state
+      description: >-
+        Owner-only and irreversible. Deletes the Collection, its Records projection,
+        pending and applied Schema Changes, Access Rules, authentication state and
+        Record Events in one transaction. File objects are cleaned up after commit.
+        See docs/specs/0012-collection-deletion.md.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmName:
+                  type: string
+                  description: When supplied, must match the Collection name (case-insensitive).
+      responses:
+        '200':
+          description: Collection deleted; reports the real impact.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionDeletionResponse'
+        '400':
+          $ref: '#/components/responses/StructuredError'
+        '403':
+          $ref: '#/components/responses/StructuredError'
+        '404':
+          $ref: '#/components/responses/StructuredError'
+        '409':
+          $ref: '#/components/responses/StructuredError'
+        default:
+          $ref: '#/components/responses/StructuredError'
   '/admin/api/v1/collections/{collectionId}/records':
     parameters:
       - $ref: '#/components/parameters/CollectionId'
@@ -5073,6 +5112,38 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Collection'
+    CollectionDeletionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [collectionId, name, deletedRecords, discardedChanges, revokedSessions, irreversible]
+          properties:
+            collectionId:
+              type: string
+            name:
+              type: string
+            deletedRecords:
+              type: integer
+              minimum: 0
+            discardedChanges:
+              type: integer
+              minimum: 0
+              description: Pending Schema Changes removed together with the Collection.
+            revokedSessions:
+              type: integer
+              minimum: 0
+            deletedFileObjects:
+              type: integer
+              minimum: 0
+            pendingFileObjects:
+              type: integer
+              minimum: 0
+              description: File objects left behind when post-commit cleanup could not finish.
+            irreversible:
+              type: boolean
+              enum: [true]
     CollectionListResponse:
       type: object
       required: [data]

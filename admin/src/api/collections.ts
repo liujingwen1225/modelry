@@ -80,7 +80,8 @@ export type DiffItem = {
 }
 
 export type SchemaPreview = {
-  risk: { level: string; summary?: string }
+  /** 后端 Risk 是字符串枚举，不是对象。 */
+  risk: 'safe' | 'review' | 'blocked'
   diff: DiffItem[]
   preconditions: Array<{ code: string; status: string; message: string }>
   impact: {
@@ -103,6 +104,17 @@ export type AppliedMigration = {
   diff: DiffItem[]
 }
 
+export type CollectionDeletionResult = {
+  collectionId: string
+  name: string
+  deletedRecords: number
+  discardedChanges: number
+  revokedSessions: number
+  deletedFileObjects: number
+  pendingFileObjects?: number
+  irreversible: boolean
+}
+
 export type ApplyResult = {
   state: string
   appliedMigrationId?: string
@@ -117,6 +129,8 @@ export type FieldInput = {
   unique?: boolean
   description?: string
   relation?: Relation
+  /** 文件字段约束：maxBytes / maxFiles / allowedMimeTypes，由后端 AppliedFileConstraints 校验。 */
+  validation?: unknown
 }
 
 export const collectionsApi = {
@@ -126,6 +140,12 @@ export const collectionsApi = {
     api.get<{ data: Collection }>(`/admin/api/v1/collections/${collectionId}`).then((response) => response.data),
   create: (input: { name: string; description?: string; type?: 'Normal' | 'Auth'; fields: FieldInput[] }) =>
     api.post<{ data: Collection }>('/admin/api/v1/collections', { type: 'Normal', ...input }).then((response) => response.data),
+
+  /** 不可逆删除：后端要求 Owner，并在提供 confirmName 时二次校验集合名称。 */
+  remove: (collectionId: string, confirmName: string) =>
+    api
+      .delete<{ data: CollectionDeletionResult }>(`/admin/api/v1/collections/${collectionId}`, { confirmName })
+      .then((response) => response.data),
 
   pendingChange: (collectionId: string) =>
     api
@@ -150,9 +170,9 @@ export const collectionsApi = {
       .post<{ data: SchemaPreview }>(`/admin/api/v1/collections/${collectionId}/schema/preview`, { expectedVersion })
       .then((response) => response.data),
 
-  apply: (collectionId: string, expectedVersion: number) =>
+  apply: (collectionId: string, expectedVersion: number, confirmRisk = false) =>
     api
-      .post<{ data: ApplyResult }>(`/admin/api/v1/collections/${collectionId}/schema/apply`, { expectedVersion })
+      .post<{ data: ApplyResult }>(`/admin/api/v1/collections/${collectionId}/schema/apply`, { expectedVersion, confirmRisk })
       .then((response) => response.data),
 
   discard: (collectionId: string, expectedVersion: number) =>

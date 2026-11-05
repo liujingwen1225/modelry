@@ -1,13 +1,17 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
-import { Button, ErrorState, LoadingBlock, StatusTag } from '@/ui'
-import { PlusOutlined } from '@ant-design/icons'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Button, Dropdown, ErrorState, LoadingBlock, StatusTag } from '@/ui'
+import type { MenuProps } from '@/ui'
+import { DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons'
 import { collectionsApi, collectionKeys } from '@/api/collections'
 import { useBreadcrumbTail } from '@/app/BreadcrumbContext'
 import { RecordsTab } from './RecordsTab'
 import { SchemaTab } from './SchemaTab'
 import { ApiTab } from './ApiTab'
 import { PendingChangeBanner } from './PendingChangeBanner'
+import { DeleteCollectionModal } from './DeleteCollectionModal'
+import { FileFieldConfig } from './FileFieldConfig'
 
 const TABS = [
   { key: 'records', label: '记录' },
@@ -26,6 +30,8 @@ export type CollectionTab = (typeof TABS)[number]['key']
 export function CollectionPane() {
   const params = useParams<{ collectionId: string; tab?: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const collectionId = params.collectionId ?? ''
   const tab = (params.tab ?? 'records') as CollectionTab
 
@@ -35,7 +41,12 @@ export function CollectionPane() {
     enabled: Boolean(collectionId),
   })
 
-  useBreadcrumbTail([collectionQuery.data?.name])
+  const activeFileField = collectionQuery.data?.fields.find(
+    (field) =>
+      field.id === searchParams.get('field') && (field.type === 'file' || field.type === 'files'),
+  )
+
+  useBreadcrumbTail([collectionQuery.data?.name, activeFileField?.name])
 
   if (collectionQuery.isPending) {
     return (
@@ -54,6 +65,20 @@ export function CollectionPane() {
   }
 
   const collection = collectionQuery.data
+
+  const collectionMenu: MenuProps = {
+    items: [
+      {
+        key: 'delete',
+        danger: true,
+        icon: <DeleteOutlined />,
+        label: '删除集合',
+      },
+    ],
+    onClick: ({ key }) => {
+      if (key === 'delete') setDeleteOpen(true)
+    },
+  }
 
   return (
     <>
@@ -78,6 +103,9 @@ export function CollectionPane() {
               添加字段
             </Button>
           ) : null}
+          <Dropdown menu={collectionMenu} trigger={['click']}>
+            <Button type="text" aria-label="集合操作" icon={<MoreOutlined />} />
+          </Dropdown>
         </div>
 
         <nav className="mr-tabs" aria-label="集合工作面">
@@ -97,13 +125,21 @@ export function CollectionPane() {
       <PendingChangeBanner collectionId={collectionId} />
 
       {tab === 'records' ? <RecordsTab collection={collection} /> : null}
-      {tab === 'schema' ? <SchemaTab collection={collection} /> : null}
+      {tab === 'schema' && activeFileField ? <FileFieldConfig collection={collection} field={activeFileField} /> : null}
+      {tab === 'schema' && !activeFileField ? <SchemaTab collection={collection} /> : null}
       {tab === 'api' ? <ApiTab collection={collection} /> : null}
       {tab === 'access' ? (
         <div className="mr-collection__body">
           <p className="mr-muted-note">访问规则随「用户与访问」一起交付，当前使用创建集合时的默认私人规则。</p>
         </div>
       ) : null}
+
+      <DeleteCollectionModal
+        open={deleteOpen}
+        collectionId={collection.id}
+        collectionName={collection.name}
+        onClose={() => setDeleteOpen(false)}
+      />
     </>
   )
 }

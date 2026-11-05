@@ -299,6 +299,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 			}
 			return accesscontrol.InitializeCollection(ctx, tx, collection, initialRules)
 		}),
+		backendapi.NewDeletionModule(store, auditService, collectionFileCleaner{files: fileService, records: recordService}),
 		accesscontrol.NewModule(accessRules),
 		automation.NewModule(automationService),
 		overview.NewModule(overviewService),
