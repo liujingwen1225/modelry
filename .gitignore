@@ -4,6 +4,8 @@ admin/.vite/
 admin/test-results/
 admin/playwright-report/
 admin/coverage/
+# 本地临时实验目录（旧前端试验产物，不属于交付）
+admin-v4/
 .env
 .env.*
 .codebuddy

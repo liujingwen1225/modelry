@@ -456,6 +456,16 @@
   padding: 8px 12px;
 }
 
+.mr-schema__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mr-schema__row-actions .ant-btn {
+  padding-inline: 2px;
+}
+
 .mr-schema__section {
   display: flex;
   flex-direction: column;
@@ -688,4 +698,103 @@
   margin: 0;
   color: var(--mr-color-text-secondary);
   font-size: var(--mr-font-size-sm);
+}
+
+/* ── 删除集合确认（Figma 画板 6） ───────────────────────── */
+.mr-delete-modal .ant-modal-content {
+  padding: 28px;
+  border-radius: var(--mr-radius-lg);
+  box-shadow: 0 12px 36px rgba(37, 43, 40, 0.13);
+}
+
+.mr-delete-modal .ant-modal-close {
+  top: 22px;
+  right: 22px;
+}
+
+.mr-delete-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.mr-delete-modal__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mr-delete-modal__heading-icon {
+  color: var(--mr-color-danger);
+  font-size: 22px;
+}
+
+.mr-delete-modal__heading h2 {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-lead);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.mr-delete-modal__description {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  line-height: 1.6;
+}
+
+.mr-delete-modal__table .ant-table-thead > tr > th {
+  height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mr-color-border);
+  background: var(--mr-color-surface-subtle);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+  font-weight: 400;
+}
+
+.mr-delete-modal__table .ant-table-tbody > tr > td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mr-color-border);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-delete-modal__table .ant-table-tbody > tr:last-child > td {
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-delete-modal__input.ant-input {
+  height: var(--mr-input-height);
+  border-radius: 5px;
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-delete-modal__hint--ok {
+  color: var(--mr-color-action);
+}
+
+.mr-delete-modal__cancel-note {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-delete-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-2);
+  padding-top: var(--mr-space-4);
+  border-top: 1px solid var(--mr-color-border);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-delete-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
 }

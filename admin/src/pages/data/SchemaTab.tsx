@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Drawer, Field, Input, Notice, Select, Switch, Table } from '@/ui'
 import type { TableColumnsType } from '@/ui'
@@ -28,6 +28,7 @@ export function SchemaTab(props: { collection: Collection }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<SchemaField | undefined>(undefined)
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   // 标题栏的「添加字段」通过 ?add=1 打开抽屉，关闭后清掉参数。
   useEffect(() => {
@@ -70,14 +71,25 @@ export function SchemaTab(props: { collection: Collection }) {
     },
     {
       title: '',
-      width: 96,
+      width: 156,
       render: (_value, field) =>
         field.system ? (
           <span className="mr-meta">锁定</span>
         ) : (
-          <Button type="link" size="small" onClick={() => { setEditing(field); setDrawerOpen(true) }}>
-            编辑
-          </Button>
+          <span className="mr-schema__row-actions">
+            {field.type === 'file' || field.type === 'files' ? (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => navigate(`/data/${props.collection.id}/schema?field=${encodeURIComponent(field.id)}`)}
+              >
+                配置文件
+              </Button>
+            ) : null}
+            <Button type="link" size="small" onClick={() => { setEditing(field); setDrawerOpen(true) }}>
+              编辑
+            </Button>
+          </span>
         ),
     },
   ]

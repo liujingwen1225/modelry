@@ -90,6 +90,7 @@ async function main() {
         ...process.env,
         MODELRY_BASE_URL: ready.url,
         MODELRY_PROJECT_DIR: projectDir,
+        MODELRY_TEST_OUTPUT: join(workDir, 'test-results'),
       },
     })
     const [code] = await once(playwright, 'exit')

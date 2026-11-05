@@ -1,0 +1,89 @@
+/* 数据 · 文件字段配置（Figma 画板 11）。文件是集合字段，不是独立资源页。 */
+
+.mr-file-field {
+  gap: var(--mr-space-6);
+}
+
+.mr-file-field__back {
+  margin-bottom: calc(-1 * var(--mr-space-4));
+}
+
+.mr-file-field__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mr-space-6);
+}
+
+.mr-file-field__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-file-field__meta-name {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  font-weight: 700;
+}
+
+.mr-file-field__table .ant-table-thead > tr > th {
+  height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mr-color-border);
+  background: var(--mr-color-surface-subtle);
+  color: var(--mr-color-text-secondary);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-xs);
+  font-weight: 400;
+}
+
+.mr-file-field__table .ant-table-tbody > tr > td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mr-color-border);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  vertical-align: middle;
+}
+
+.mr-file-field__table .ant-table-tbody > tr:nth-child(2) > td {
+  background: var(--mr-color-surface-green);
+}
+
+.mr-file-field__select.ant-select {
+  width: 100%;
+}
+
+.mr-file-field__example,
+.mr-file-field__description {
+  color: var(--mr-color-text-secondary);
+}
+
+.mr-file-field__notes {
+  display: flex;
+  gap: 50px;
+}
+
+.mr-file-field__notes > section {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mr-file-field__notes h2 {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-subtitle);
+  font-weight: 700;
+}
+
+.mr-file-field__notes p {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  line-height: 1.6;
+}

@@ -9,7 +9,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [['list']],
-  outputDir: './test-results',
+  // 验收输出落在临时项目目录，避免每轮清理工作区里累积的大量截图/追踪文件。
+  outputDir: process.env.MODELRY_TEST_OUTPUT ?? './test-results',
   use: {
     baseURL,
     locale: 'zh-CN',

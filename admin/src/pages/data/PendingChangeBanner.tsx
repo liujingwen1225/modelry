@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Notice } from '@/ui'
+import { App, Button, Notice } from '@/ui'
 import { PullRequestOutlined } from '@ant-design/icons'
 import { collectionsApi, collectionKeys } from '@/api/collections'
 import { errorMessage } from '@/api/client'
 import { formatMoment } from '@/lib/format'
+
+const RISK_LABELS: Record<string, string> = { safe: '安全', review: '需要确认', blocked: '被阻塞' }
 
 /**
  * 待应用变更提示条（Figma 顶部黄色提醒）。
@@ -14,6 +16,7 @@ import { formatMoment } from '@/lib/format'
  */
 export function PendingChangeBanner(props: { collectionId: string }) {
   const queryClient = useQueryClient()
+  const { message } = App.useApp()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [summary, setSummary] = useState<string | null>(null)
@@ -39,9 +42,15 @@ export function PendingChangeBanner(props: { collectionId: string }) {
     setError(null)
     try {
       const preview = await collectionsApi.preview(props.collectionId, change.version)
-      setSummary(`${preview.impact.summary} · 风险 ${preview.risk.level}`)
-      await collectionsApi.apply(props.collectionId, change.version)
-      setSummary('已应用，结构已更新')
+      setSummary(`${preview.impact.summary} · 风险 ${RISK_LABELS[preview.risk]}`)
+      if (preview.risk === 'blocked') {
+        throw new Error('当前变更被现有数据阻塞，请先处理预检里列出的前置条件。')
+      }
+      // 风险为 review 时契约要求显式确认；差异与风险已在上方提示条中展示。
+      await collectionsApi.apply(props.collectionId, change.version, preview.risk === 'review')
+      setSummary('变更已写入结构')
+      // 应用后 pending 消失会让本组件立即卸载；全局反馈保证成功结果仍然可见。
+      message.success('已应用，结构已更新')
       refresh()
     } catch (cause) {
       setError(cause)

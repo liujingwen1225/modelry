@@ -117,3 +117,87 @@ test('API 标签展示真实端点与调用地址', async ({ page }) => {
   await expect(page.getByText('列出记录')).toBeVisible()
   await expect(page.getByText('创建记录')).toBeVisible()
 })
+
+test('文件字段配置：约束保存到待应用变更，应用后由真实结构读取', async ({ page }) => {
+  await page.goto('/data')
+  await page.getByRole('navigation', { name: '集合', exact: true }).getByText('reading_lists').click()
+  const collectionId = (page.url().split('/data/')[1] ?? '').split('/')[0]
+
+  // 通过真实 API 建一个多文件字段并应用，作为画板 11 的起点。
+  const added = await page.request.post(`/admin/api/v1/collections/${collectionId}/schema/pending-operations`, {
+    data: { kind: 'field', action: 'add', definition: { name: 'attachments', type: 'files' } },
+    headers: { Origin: new URL(page.url()).origin },
+  })
+  expect(added.status()).toBe(201)
+  await page.goto(`/data/${collectionId}/schema`)
+  await expect(page.getByText(/1 项结构变更待应用/)).toBeVisible()
+  await page.getByRole('button', { name: '应用到结构' }).click()
+  await expect(page.getByText('已应用，结构已更新')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'attachments' })).toBeVisible()
+
+  await page.getByRole('button', { name: '配置文件' }).click()
+  await expect(page).toHaveURL(/field=/)
+  await expect(page.getByRole('heading', { name: '数据 · 文件字段配置' })).toBeVisible()
+  await expect(page.getByText('数量限制')).toBeVisible()
+
+  await page.getByLabel('数量限制').fill('3')
+  await page.getByLabel('单文件大小（MB）').fill('5')
+  await page.getByLabel('字段说明').fill('附于笔记的文件')
+  await page.getByRole('button', { name: '保存配置' }).click()
+
+  // 保存进入待应用变更，应用后才进入 Applied Model。
+  await expect(page.getByText(/1 项结构变更待应用/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '应用到结构' })).toBeEnabled()
+  await page.getByRole('button', { name: '应用到结构' }).click()
+  await expect(page.getByText('已应用，结构已更新')).toBeVisible()
+
+  const detail = await page.request.get(`/admin/api/v1/collections/${collectionId}`)
+  expect(detail.status()).toBe(200)
+  const payload = (await detail.json()) as { data: { fields: Array<{ name: string; validation?: Record<string, unknown> }> } }
+  const attachments = payload.data.fields.find((field) => field.name === 'attachments')
+  expect(attachments?.validation).toMatchObject({ maxBytes: 5 * 1024 * 1024, maxFiles: 3 })
+  expect(attachments?.validation?.allowedMimeTypes).toContain('application/pdf')
+
+  await page.reload()
+  await expect(page.getByRole('cell', { name: 'attachments' })).toBeVisible()
+})
+
+test('删除集合确认：名称校验、真实级联删除与刷新后不可恢复', async ({ page }) => {
+  await page.goto('/data')
+  await page.getByRole('navigation', { name: '集合', exact: true }).getByText('reading_lists').click()
+  await expect(page).toHaveURL(/\/data\/col_/)
+  const collectionId = (page.url().split('/data/')[1] ?? '').split('/')[0]
+
+  await page.getByRole('button', { name: '集合操作' }).click()
+  await page.getByRole('menuitem', { name: '删除集合' }).click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: '永久删除 reading_lists？' })).toBeVisible()
+  await expect(dialog.getByText(/影响资源/)).toBeVisible()
+  await expect(dialog.getByText('一并删除')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '永久删除集合' })).toBeDisabled()
+
+  const confirm = dialog.getByLabel('确认集合名称')
+  await confirm.fill('wrong-name')
+  await expect(dialog.getByRole('button', { name: '永久删除集合' })).toBeDisabled()
+  await expect(dialog.getByText(/名称不匹配/)).toBeVisible()
+
+  await confirm.fill('reading_lists')
+  await expect(dialog.getByText(/名称匹配/)).toBeVisible()
+  await dialog.getByRole('button', { name: '永久删除集合' }).click()
+
+  await expect(page).toHaveURL(/\/data$/)
+  await expect(page.getByRole('navigation', { name: '集合', exact: true }).getByText('reading_lists')).toHaveCount(0)
+
+  // 真实 API：集合、记录和访问规则都返回 404，审计留下不可逆事实。
+  const detail = await page.request.get(`/admin/api/v1/collections/${collectionId}`)
+  expect(detail.status()).toBe(404)
+  const records = await page.request.get(`/admin/api/v1/collections/${collectionId}/records`)
+  expect(records.status()).toBe(404)
+  const auditPage = await page.request.get('/admin/api/v1/audit?action=collection.deleted')
+  expect(auditPage.status()).toBe(200)
+  expect(await auditPage.text()).toContain(collectionId)
+
+  await page.reload()
+  await expect(page.getByRole('navigation', { name: '集合', exact: true }).getByText('reading_lists')).toHaveCount(0)
+})

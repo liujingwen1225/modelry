@@ -1,7 +1,8 @@
 # 集合删除规格
 
-- 状态：待实现（前端画板 6「数据 · 删除集合确认」依赖本规格）
+- 状态：已实现（#43 画板 6「数据 · 删除集合确认」）
 - 适用范围：`DELETE /admin/api/v1/collections/{collectionId}`
+- 实现：`internal/backendapi/deletion.go`、`internal/runtime/collection_deletion.go`
 
 ## 1. 为什么需要单独规格
 
@@ -34,18 +35,30 @@ Figma 定义了「删除集合」的确认流程，但后端没有任何集合�
 ## 3. 删除顺序
 
 ```text
-1. apply_attempts        （先于 changes，且先于 applied_migrations）
-2. applied_migrations
+1. applied_migrations    （它外键引用 apply_attempts，必须先删）
+2. apply_attempts        （先于 changes）
 3. changes
 4. record_events / sequences / watermarks
 5. access_rules
 6. auth_configurations / password_credentials / sessions / recovery_tokens
-7. DROP TABLE <记录投影表>
-8. DELETE FROM modelry_backend_collections
+7. extension_bindings    （外键引用 collections，显式清理而非依赖级联）
+8. DROP TABLE <记录投影表>
+9. DELETE FROM modelry_backend_collections
 ```
 
-前 6 步与第 8 步在同一事务内；第 7 步的 `DROP TABLE` 也在同一事务内（SQLite 支持 DDL 事务）。
-文件对象清理在事务提交之后执行，失败不回滚集合删除，只记录待处理事实。
+实现时核对建表语句发现：`modelry_backend_applied_migrations.apply_attempt_id`
+外键引用 `modelry_backend_apply_attempts(id)`，且没有 `ON DELETE CASCADE`。
+因此第 1、2 步的顺序必须与原规格草稿相反，否则 `foreign_keys(1)` 会拒绝删除。
+这里以真实约束为准。
+
+前 7 步、第 8 步与第 9 步在同一事务内（SQLite 支持 DDL 事务）。
+文件对象清理在事务提交之后执行，且只清理删除后已不被任何集合引用的对象；
+失败不回滚集合删除，只在响应的 `pendingFileObjects` 里回报待处理数量。
+
+`modelry_request_records`、`modelry_extension_intents/runs`、`modelry_automation_event_hooks`
+中的 `collection_id` 是历史事实与业务逻辑配置，不属于集合自身的数据，按 Figma 画板 6
+「notes API 与欢迎笔记逻辑将无法正常使用」的语义保留，不随集合删除。
+`modelry_audit_records` 中的 `collection.deleted` 事实同样保留。
 
 ## 4. 语义与安全
 
