@@ -12,6 +12,7 @@ import { DataIndex } from '@/pages/data/DataIndex'
 import { CollectionPane } from '@/pages/data/CollectionPane'
 import { AccessPage } from '@/pages/access/AccessPage'
 import { DeveloperPage } from '@/pages/developer/DeveloperPage'
+import { ChangesPage } from '@/pages/changes/ChangesPage'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -42,7 +43,8 @@ export function AppRoutes() {
         <Route path="developer" element={<DeveloperPage />} />
         <Route path="developer/:tab" element={<DeveloperPage />} />
         <Route path="logic/*" element={<PendingModule />} />
-        <Route path="changes/*" element={<PendingModule />} />
+        <Route path="changes" element={<ChangesPage />} />
+        <Route path="changes/:tab" element={<ChangesPage />} />
         <Route path="ai/*" element={<PendingModule />} />
         <Route path="settings/*" element={<PendingModule />} />
         <Route path="*" element={<NotFound />} />

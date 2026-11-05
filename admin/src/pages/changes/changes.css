@@ -1,0 +1,349 @@
+/*
+ * 变更中心 · 待审阅与历史（Figma 画板 19）。
+ *
+ * 只读取 theme/tokens.css 的 --mr-* 变量，保持亮色工作面；
+ * 本文件里新增的选择器一律以 .mr-changes 开头，不覆盖全局组件样式。
+ */
+
+.mr-changes {
+  gap: var(--mr-space-6);
+}
+
+/* ── 就地任务标签：Figma 46px 高、约 27px 间距、2px 绿色下划线 ── */
+.mr-changes__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--mr-space-7);
+  height: 46px;
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-changes__tab.ant-btn {
+  height: 46px;
+  padding: 0;
+  border-radius: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-md);
+  font-weight: 700;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mr-changes__tab.ant-btn:hover {
+  color: var(--mr-color-text);
+  background: transparent;
+}
+
+.mr-changes__tab--active.ant-btn {
+  color: var(--mr-color-action);
+  box-shadow: inset 0 -2px 0 var(--mr-color-action);
+}
+
+.mr-changes__tab--active.ant-btn:hover {
+  color: var(--mr-color-action);
+  background: transparent;
+}
+
+/* ── 区块、表格与工具栏 ── */
+.mr-changes__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+}
+
+.mr-changes__table {
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  overflow: hidden;
+}
+
+.mr-changes__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+  flex-wrap: wrap;
+}
+
+.mr-changes__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+}
+
+.mr-changes__select {
+  min-width: 180px;
+}
+
+.mr-changes__cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  min-width: 0;
+}
+
+.mr-changes__cell-title {
+  color: var(--mr-color-text);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-changes__cell-sub {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-changes__cell-time {
+  color: var(--mr-color-text-secondary);
+}
+
+.mr-changes__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+}
+
+/* ── 抽屉标题 ── */
+.mr-changes__drawer-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+}
+
+.mr-changes__drawer-heading {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-dialog);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.mr-changes__drawer-subtitle {
+  color: var(--mr-color-text-tertiary);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-2xs);
+  overflow-wrap: anywhere;
+}
+
+/* ── 详情：状态条、标题与说明 ── */
+.mr-changes__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+}
+
+.mr-changes__detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-3);
+  flex-wrap: wrap;
+}
+
+.mr-changes__detail-title {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-lead);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.mr-changes__detail-lede {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-md);
+  line-height: var(--mr-line-height);
+}
+
+/* ── 两栏：左主内容 + 右 355px 风险与确认卡 ── */
+.mr-changes__detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 355px;
+  gap: var(--mr-space-6);
+  align-items: start;
+}
+
+.mr-changes__detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  min-width: 0;
+}
+
+.mr-changes__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  min-width: 0;
+}
+
+/* ── 操作清单与差异条目 ── */
+.mr-changes__ops {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-changes__op {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface);
+}
+
+.mr-changes__op-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  flex-wrap: wrap;
+}
+
+.mr-changes__op-target {
+  color: var(--mr-color-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.mr-changes__before-after {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--mr-space-2);
+  align-items: center;
+}
+
+.mr-changes__arrow {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-md);
+}
+
+/* ── 前置条件列表 ── */
+.mr-changes__preconditions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-changes__preconditions li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mr-space-2);
+  flex-wrap: wrap;
+  padding: var(--mr-space-2) 0;
+  border-bottom: 1px solid var(--mr-color-border);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+/* ── 风险与确认卡（Figma 黄色面） ── */
+.mr-changes__risk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  padding: var(--mr-space-5);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface-warning);
+  position: sticky;
+  top: 0;
+}
+
+.mr-changes__risk-title {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  margin: 0;
+  color: var(--mr-color-warning);
+  font-size: var(--mr-font-size-subtitle);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.mr-changes__risk-text {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  line-height: var(--mr-line-height);
+}
+
+/* 被阻塞的前置条件：即使不切到「风险与影响」子视图也能看到原因。 */
+.mr-changes__blockers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+}
+
+.mr-changes__impact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mr-space-2);
+}
+
+.mr-changes__impact-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  padding: var(--mr-space-2);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface);
+}
+
+.mr-changes__impact-value {
+  color: var(--mr-color-text);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+}
+
+.mr-changes__impact-label {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+/* ── 恢复建议 ── */
+.mr-changes__recovery-actions {
+  margin: var(--mr-space-2) 0 0;
+  padding-inline-start: var(--mr-space-5);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  line-height: var(--mr-line-height);
+}
+
+/* ── 抽屉底部操作 ── */
+.mr-changes__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+  flex-wrap: wrap;
+}
+
+.mr-changes__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  flex-wrap: wrap;
+}
+
+/* ── 窄视口时风险卡移到主内容下方 ── */
+@media (max-width: 900px) {
+  .mr-changes__detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mr-changes__risk {
+    position: static;
+  }
+}
