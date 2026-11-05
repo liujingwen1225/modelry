@@ -11,6 +11,7 @@ import { DataLayout } from '@/pages/data/DataLayout'
 import { DataIndex } from '@/pages/data/DataIndex'
 import { CollectionPane } from '@/pages/data/CollectionPane'
 import { AccessPage } from '@/pages/access/AccessPage'
+import { DeveloperPage } from '@/pages/developer/DeveloperPage'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -38,7 +39,8 @@ export function AppRoutes() {
         </Route>
         <Route path="access" element={<AccessPage />} />
         <Route path="access/:tab" element={<AccessPage />} />
-        <Route path="developer/*" element={<PendingModule />} />
+        <Route path="developer" element={<DeveloperPage />} />
+        <Route path="developer/:tab" element={<DeveloperPage />} />
         <Route path="logic/*" element={<PendingModule />} />
         <Route path="changes/*" element={<PendingModule />} />
         <Route path="ai/*" element={<PendingModule />} />
