@@ -14,6 +14,8 @@ import { AccessPage } from '@/pages/access/AccessPage'
 import { DeveloperPage } from '@/pages/developer/DeveloperPage'
 import { ChangesPage } from '@/pages/changes/ChangesPage'
 import { LogicPage } from '@/pages/logic/LogicPage'
+import { AICollabPage } from '@/pages/ai/AICollabPage'
+import { AISharePage } from '@/pages/ai/AISharePage'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -21,6 +23,8 @@ export function AppRoutes() {
     <Routes>
       <Route path="/setup" element={<SetupPage />} />
       <Route path="/login" element={<LoginPage />} />
+      {/* 公开分享是只读、可失效的匿名页面，必须放在管理面鉴权之外。 */}
+      <Route path="/ai/share/:token" element={<AISharePage />} />
       <Route path="/overview" element={<Navigate to="/" replace />} />
       <Route
         element={
@@ -46,7 +50,7 @@ export function AppRoutes() {
         <Route path="logic/*" element={<LogicPage />} />
         <Route path="changes" element={<ChangesPage />} />
         <Route path="changes/:tab" element={<ChangesPage />} />
-        <Route path="ai/*" element={<PendingModule />} />
+        <Route path="ai/*" element={<AICollabPage />} />
         <Route path="settings/*" element={<PendingModule />} />
         <Route path="*" element={<NotFound />} />
       </Route>

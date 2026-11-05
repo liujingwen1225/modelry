@@ -1,0 +1,660 @@
+/*
+ * AI 协作 / 公开分享页样式。
+ *
+ * 约定：颜色、间距、圆角、字号、字体全部只读 theme/tokens.css 的 --mr-* 变量；
+ * 仅用亮色表面；所有选择器以 .mr-ai* 前缀开头，注释使用中文。
+ * 下面少数像素值是布局尺寸（Figma 侧栏宽 324px、左栏 260px、卡片上限、1px 描边、视口高度），
+ * 没有对应的 --mr-* 变量，单独说明，不写任何裸色值。
+ */
+
+.mr-ai {
+  width: 100%;
+}
+
+/* 三栏：左上下文 / 中主工作面 / 右 324px 助手侧栏（Figma 侧栏宽度）。 */
+.mr-ai__layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 324px;
+  gap: var(--mr-space-4);
+  align-items: start;
+  width: 100%;
+}
+
+.mr-ai__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  min-width: 0;
+}
+
+/* 通用卡片：白色工作面，中性侧栏用 --nav 变体。 */
+.mr-ai__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  min-width: 0;
+  padding: var(--mr-space-4);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface);
+}
+
+.mr-ai__card--nav {
+  background: var(--mr-color-surface-nav);
+}
+
+.mr-ai__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-2);
+}
+
+.mr-ai__card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+}
+
+.mr-ai__hint {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+  line-height: var(--mr-line-height);
+}
+
+.mr-ai__statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mr-space-3);
+}
+
+.mr-ai__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mr-space-1);
+  color: var(--mr-color-action);
+  font-size: var(--mr-font-size-sm);
+  font-weight: 700;
+}
+
+.mr-ai__link:hover {
+  color: var(--mr-color-action-hover);
+}
+
+.mr-ai__divider {
+  height: 1px;
+  background: var(--mr-color-border);
+}
+
+/* 区块小标题 */
+.mr-ai__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+  padding-bottom: var(--mr-space-2);
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-ai__section-title {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+}
+
+.mr-ai__view {
+  min-width: 0;
+}
+
+.mr-ai__view-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  padding-top: var(--mr-space-4);
+}
+
+.mr-ai__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mr-space-2);
+}
+
+/* 上下文引用标签 */
+.mr-ai__context-tags,
+.mr-ai__field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mr-space-2);
+}
+
+.mr-ai .mr-ai__tag {
+  background: var(--mr-color-surface);
+  border-color: var(--mr-color-border-strong);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-ai__tag-meta {
+  color: var(--mr-color-text-tertiary);
+}
+
+/* 提案列表：用 antd Button 承载点击，覆盖默认固定高度与居中文本。 */
+.mr-ai__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-ai .mr-ai__list-item {
+  height: auto;
+  min-height: var(--mr-space-12);
+  padding: var(--mr-space-2) var(--mr-space-3);
+  text-align: left;
+  white-space: normal;
+  border: 1px solid transparent;
+  border-radius: var(--mr-radius-md);
+  background: transparent;
+}
+
+.mr-ai .mr-ai__list-item > span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  width: 100%;
+}
+
+.mr-ai__list-item--active {
+  background: var(--mr-color-surface-green);
+  border-color: var(--mr-color-action);
+}
+
+.mr-ai__item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-2);
+  width: 100%;
+}
+
+.mr-ai__item-title {
+  overflow: hidden;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-ai__item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-2);
+  width: 100%;
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+/* 表单 */
+.mr-ai__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+}
+
+.mr-ai__control,
+.mr-ai__select {
+  width: 100%;
+}
+
+.mr-ai__hours {
+  width: 140px; /* 数字输入宽度：布局尺寸，无 --mr-* 变量 */
+}
+
+/* 需求气泡 */
+.mr-ai__req {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface-subtle);
+}
+
+.mr-ai__req-label {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-ai__req-text {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+}
+
+/* 生成中状态 */
+.mr-ai__generating {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mr-space-3);
+  padding: var(--mr-space-4);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface-subtle);
+}
+
+.mr-ai__generating-icon {
+  color: var(--mr-color-action);
+  font-size: var(--mr-font-size-section);
+}
+
+.mr-ai__generating p {
+  margin: var(--mr-space-1) 0 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+/* 影响范围四格 */
+.mr-ai__impact {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--mr-space-2);
+}
+
+.mr-ai__impact-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface-subtle);
+}
+
+.mr-ai__impact-value {
+  color: var(--mr-color-text);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-title);
+  font-weight: 700;
+}
+
+.mr-ai__impact-label {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+/* 前置条件 */
+.mr-ai__preconditions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-ai__precondition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mr-space-2);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+}
+
+/* 验证检查 */
+.mr-ai__checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-ai__check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mr-space-2);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+}
+
+.mr-ai__check-icon {
+  font-size: var(--mr-font-size-subtitle);
+}
+
+.mr-ai__check-icon--pass {
+  color: var(--mr-color-action);
+}
+
+.mr-ai__check-icon--fail {
+  color: var(--mr-color-danger);
+}
+
+.mr-ai__check-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  min-width: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-ai__check-detail {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+/* 分享链接 */
+.mr-ai__created {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-action);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface-green);
+}
+
+.mr-ai__shares {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-ai__share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+}
+
+.mr-ai__share-url {
+  color: var(--mr-color-text);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-xs);
+  word-break: break-all;
+}
+
+.mr-ai__share-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mr-space-3);
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+.mr-ai__share-actions {
+  display: flex;
+  gap: var(--mr-space-2);
+}
+
+/* 长 URL / 原始 JSON 在代码块里换行，避免横向溢出。 */
+.mr-ai .mr-code__pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 右栏：AI 助手（只读上下文）与进度 */
+.mr-ai__assistant {
+  gap: var(--mr-space-3);
+}
+
+.mr-ai__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-ai__step {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-ai__step--done {
+  color: var(--mr-color-text-secondary);
+}
+
+.mr-ai__step--active {
+  color: var(--mr-color-text);
+  font-weight: 700;
+}
+
+.mr-ai__step-dot {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--mr-space-6);
+  height: var(--mr-space-6);
+  border: 1px solid var(--mr-color-border-strong);
+  border-radius: var(--mr-radius-pill);
+  font-family: var(--mr-font-mono);
+  font-size: var(--mr-font-size-2xs);
+}
+
+.mr-ai__step--done .mr-ai__step-dot {
+  background: var(--mr-color-surface-green);
+  border-color: var(--mr-color-action);
+  color: var(--mr-color-action);
+}
+
+.mr-ai__step--active .mr-ai__step-dot {
+  background: var(--mr-color-action);
+  border-color: var(--mr-color-action);
+  color: var(--mr-color-surface);
+}
+
+.mr-ai__ref {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface);
+}
+
+.mr-ai__ref-title {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  font-weight: 700;
+}
+
+.mr-ai__assistant-foot {
+  margin-top: auto;
+  padding-top: var(--mr-space-3);
+  border-top: 1px solid var(--mr-color-border);
+}
+
+/* ── 公开只读分享页 ───────────────────────────────────────── */
+.mr-ai-share {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh; /* 视口高度：布局尺寸，无 --mr-* 变量 */
+  padding: var(--mr-space-8) var(--mr-space-4);
+  background: var(--mr-color-surface-nav);
+}
+
+.mr-ai-share__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  width: 100%;
+  max-width: 720px; /* 卡片上限：布局尺寸，无 --mr-* 变量 */
+}
+
+.mr-ai-share__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+}
+
+.mr-ai-share__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  font-weight: 700;
+}
+
+.mr-ai-share__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  padding: var(--mr-space-6);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface);
+}
+
+.mr-ai-share__status {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-3);
+}
+
+.mr-ai-share__title {
+  margin: 0 !important;
+  color: var(--mr-color-text) !important;
+  font-size: var(--mr-font-size-lead) !important;
+}
+
+.mr-ai-share__lede {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-ai-share__req {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface-subtle);
+}
+
+.mr-ai-share__req-label {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-ai-share__req-text {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-ai-share__risk {
+  display: flex;
+}
+
+.mr-ai-share__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+}
+
+.mr-ai-share__section-title {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+}
+
+.mr-ai-share__hint {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-ai-share__checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-ai-share__check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mr-space-2);
+  padding: var(--mr-space-3);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+}
+
+.mr-ai-share__check-icon {
+  font-size: var(--mr-font-size-subtitle);
+}
+
+.mr-ai-share__check-icon--pass {
+  color: var(--mr-color-action);
+}
+
+.mr-ai-share__check-icon--fail {
+  color: var(--mr-color-danger);
+}
+
+.mr-ai-share__check-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  min-width: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-ai-share__check-detail {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-ai-share__foot {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 窄屏：三栏堆叠，仍保持 .mr-ai* 前缀与亮色。 */
+@media (max-width: 1180px) {
+  .mr-ai__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mr-ai__impact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
