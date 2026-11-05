@@ -14,6 +14,7 @@ import (
 
 	"github.com/liujingwen1225/modelry/internal/accesscontrol"
 	"github.com/liujingwen1225/modelry/internal/activity"
+	"github.com/liujingwen1225/modelry/internal/aicollab"
 	"github.com/liujingwen1225/modelry/internal/adminauth"
 	"github.com/liujingwen1225/modelry/internal/appauth"
 	"github.com/liujingwen1225/modelry/internal/applicationapi"
@@ -279,6 +280,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry Visual Business Rules: %w", err)
 	}
+	// AI 协作提案复用既有的 Schema 变更生命周期；公开分享是只读、可失效的独立出口。
+	aiCollabModule, err := aicollab.NewModule(store, backendModel)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry AI Collaboration: %w", err)
+	}
 	rawAdminAPI := httpapi.NewAPIRouter(
 		ownerAuth,
 		httpapi.NewDiagnosticsModule(instance, func(ctx context.Context) bool {
@@ -307,6 +313,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		}),
 		backendapi.NewDeletionModule(store, auditService, collectionFileCleaner{files: fileService, records: recordService}),
 		visualRuleModule,
+		aiCollabModule,
 		accesscontrol.NewModule(accessRules),
 		automation.NewModule(automationService),
 		overview.NewModule(overviewService),
