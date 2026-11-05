@@ -38,6 +38,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/runtimesettings"
 	"github.com/liujingwen1225/modelry/internal/serviceaccounts"
 	"github.com/liujingwen1225/modelry/internal/storage"
+	"github.com/liujingwen1225/modelry/internal/visualrules"
 	"github.com/liujingwen1225/modelry/internal/webui"
 )
 
@@ -273,6 +274,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		fileHealth:     "ready",
 		state:          "starting",
 	}
+	// 可视化业务逻辑：独立于代码型 Hook，规则、测试与执行记录都落在自己的领域表里。
+	visualRuleModule, err := visualrules.NewModule(store, backendModel, recordService)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Visual Business Rules: %w", err)
+	}
 	rawAdminAPI := httpapi.NewAPIRouter(
 		ownerAuth,
 		httpapi.NewDiagnosticsModule(instance, func(ctx context.Context) bool {
@@ -300,6 +306,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 			return accesscontrol.InitializeCollection(ctx, tx, collection, initialRules)
 		}),
 		backendapi.NewDeletionModule(store, auditService, collectionFileCleaner{files: fileService, records: recordService}),
+		visualRuleModule,
 		accesscontrol.NewModule(accessRules),
 		automation.NewModule(automationService),
 		overview.NewModule(overviewService),

@@ -13,6 +13,7 @@ import { CollectionPane } from '@/pages/data/CollectionPane'
 import { AccessPage } from '@/pages/access/AccessPage'
 import { DeveloperPage } from '@/pages/developer/DeveloperPage'
 import { ChangesPage } from '@/pages/changes/ChangesPage'
+import { LogicPage } from '@/pages/logic/LogicPage'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -42,7 +43,7 @@ export function AppRoutes() {
         <Route path="access/:tab" element={<AccessPage />} />
         <Route path="developer" element={<DeveloperPage />} />
         <Route path="developer/:tab" element={<DeveloperPage />} />
-        <Route path="logic/*" element={<PendingModule />} />
+        <Route path="logic/*" element={<LogicPage />} />
         <Route path="changes" element={<ChangesPage />} />
         <Route path="changes/:tab" element={<ChangesPage />} />
         <Route path="ai/*" element={<PendingModule />} />
