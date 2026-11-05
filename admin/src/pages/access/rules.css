@@ -1,0 +1,399 @@
+/* 用户与访问 · 访问规则（Figma 15:11177）。
+ *
+ * 亮色主题，所有颜色 / 圆角 / 字体都取自 theme/tokens.css 的 --mr-* 变量；
+ * 350px 右栏、8px 圆角（--mr-radius-lg）与 23px padding 按画板取值。
+ * 说明：tokens.css 未提供 23px 间距变量，故该处使用画板指定的字面值 23px。
+ */
+
+.mr-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+}
+
+/* ── 访问上下文 ─────────────────────────────────────────── */
+.mr-rules__context {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--mr-space-6);
+  flex-wrap: wrap;
+}
+
+.mr-rules__context-primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  min-width: 280px;
+}
+
+.mr-rules__eyebrow {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-xs);
+  letter-spacing: 0.04em;
+}
+
+.mr-rules__picker {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-3);
+}
+
+.mr-rules__collection-select {
+  min-width: 240px;
+}
+
+.mr-rules__links {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-4);
+  flex-wrap: wrap;
+}
+
+.mr-rules__link.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  padding: 0;
+  color: var(--mr-color-action);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-rules__link.ant-btn:hover {
+  background: transparent;
+  color: var(--mr-color-action-hover);
+}
+
+/* ── 审阅操作条 ─────────────────────────────────────────── */
+.mr-rules__review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  padding: 10px 16px;
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface-subtle);
+}
+
+.mr-rules__review-label {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-rules__review-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+}
+
+/* ── 两栏：左栏自适应 / 右栏 350px ───────────────────────── */
+.mr-rules__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: var(--mr-space-8);
+  align-items: start;
+}
+
+.mr-rules__main,
+.mr-rules__verify {
+  min-width: 0;
+}
+
+/* ── 左栏引导 ───────────────────────────────────────────── */
+.mr-rules__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  padding-bottom: var(--mr-space-3);
+}
+
+.mr-rules__intro-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  min-width: 0;
+}
+
+.mr-rules__intro-title {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-section);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.mr-rules__intro-icon {
+  color: var(--mr-color-action);
+  font-size: 20px;
+}
+
+.mr-rules__intro-sub {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  line-height: 1.6;
+}
+
+/* ── 规则列表（5 行） ───────────────────────────────────── */
+.mr-rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface);
+  overflow: hidden;
+}
+
+.mr-rules__rule {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--mr-space-4);
+  padding: var(--mr-space-4) 23px;
+}
+
+.mr-rules__rule + .mr-rules__rule {
+  border-top: 1px solid var(--mr-color-border);
+}
+
+.mr-rules__rule-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mr-rules__op {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  font-weight: 700;
+}
+
+.mr-rules__rule-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  min-width: 0;
+}
+
+.mr-rules__summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mr-space-2);
+  flex-wrap: wrap;
+}
+
+.mr-rules__summary strong {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-rules__summary span {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-rules__rule .mr-code__pre {
+  max-height: 120px;
+}
+
+/* ── 待应用方案预览 ─────────────────────────────────────── */
+.mr-rules__preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  margin-top: var(--mr-space-6);
+  padding: 23px;
+  border: 1px solid var(--mr-color-border-strong);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface-warning);
+}
+
+.mr-rules__preview-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-3);
+}
+
+.mr-rules__preview-title {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-subtitle);
+  font-weight: 700;
+}
+
+.mr-rules__preview-desc {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+  line-height: 1.6;
+}
+
+.mr-rules__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-rules__diff li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: var(--mr-space-3);
+  padding: 10px 0;
+  border-top: 1px solid var(--mr-color-border);
+}
+
+.mr-rules__diff-op {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  font-weight: 700;
+}
+
+.mr-rules__diff-values {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mr-rules__diff-values > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mr-space-2);
+}
+
+.mr-rules__preview .mr-inline-link.ant-btn {
+  align-self: flex-start;
+}
+
+/* ── 右侧 350px 验证卡片 ───────────────────────────────── */
+.mr-rules__verify {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  padding: 23px;
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+  background: var(--mr-color-surface);
+}
+
+.mr-rules__verify-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mr-space-3);
+}
+
+.mr-rules__verify-icon {
+  color: var(--mr-color-action);
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.mr-rules__verify-title {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-subtitle);
+  font-weight: 700;
+}
+
+.mr-rules__verify-sub {
+  margin: 2px 0 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+  line-height: 1.6;
+}
+
+.mr-rules__verify .ant-segmented {
+  width: 100%;
+}
+
+.mr-rules__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+}
+
+.mr-rules__result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+}
+
+.mr-rules__expectations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  padding-top: var(--mr-space-2);
+}
+
+.mr-rules__expect-title {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+  font-weight: 700;
+}
+
+.mr-rules__expect-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--mr-color-border);
+}
+
+.mr-rules__expect-label {
+  min-width: 64px;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-sm);
+  font-weight: 700;
+}
+
+/* ── 编辑抽屉内的 5 行规则 ──────────────────────────────── */
+.mr-rules__edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  padding: var(--mr-space-4) 0;
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-rules__edit-row:first-of-type {
+  padding-top: 0;
+}
+
+.mr-rules__edit-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+}
+
+.mr-rules__edit-title {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+  font-weight: 700;
+}
+
+.mr-rules__edit-hint {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+  line-height: 1.6;
+}
+
+@media (max-width: 1180px) {
+  .mr-rules__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

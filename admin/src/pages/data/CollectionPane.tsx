@@ -12,6 +12,8 @@ import { ApiTab } from './ApiTab'
 import { PendingChangeBanner } from './PendingChangeBanner'
 import { DeleteCollectionModal } from './DeleteCollectionModal'
 import { FileFieldConfig } from './FileFieldConfig'
+import { useData } from './DataContext'
+import { RulesTab } from '@/pages/access/RulesTab'
 
 const TABS = [
   { key: 'records', label: '记录' },
@@ -31,6 +33,7 @@ export function CollectionPane() {
   const params = useParams<{ collectionId: string; tab?: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { collections } = useData()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const collectionId = params.collectionId ?? ''
   const tab = (params.tab ?? 'records') as CollectionTab
@@ -128,11 +131,7 @@ export function CollectionPane() {
       {tab === 'schema' && activeFileField ? <FileFieldConfig collection={collection} field={activeFileField} /> : null}
       {tab === 'schema' && !activeFileField ? <SchemaTab collection={collection} /> : null}
       {tab === 'api' ? <ApiTab collection={collection} /> : null}
-      {tab === 'access' ? (
-        <div className="mr-collection__body">
-          <p className="mr-muted-note">访问规则随「用户与访问」一起交付，当前使用创建集合时的默认私人规则。</p>
-        </div>
-      ) : null}
+      {tab === 'access' ? <RulesTab collections={collections} activeId={collectionId} /> : null}
 
       <DeleteCollectionModal
         open={deleteOpen}
