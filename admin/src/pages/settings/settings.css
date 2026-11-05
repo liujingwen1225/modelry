@@ -1,0 +1,164 @@
+/* 设置 · 本地项目（画板 22）：仅使用 --mr-* 变量、亮色主题与 .mr-settings* 前缀 */
+
+/* 两栏布局：左侧设置表单，右侧 390px 本地实例说明（对应画板「设置与运行信息」行） */
+.mr-settings__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: var(--mr-space-12);
+  align-items: start;
+}
+
+.mr-settings__main,
+.mr-settings__aside {
+  min-width: 0;
+}
+
+/* 面板内部纵向排布，间距沿用设计间距变量 */
+.mr-settings__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+}
+
+.mr-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+}
+
+.mr-settings__heading-icon {
+  margin-right: var(--mr-space-2);
+  color: var(--mr-color-action);
+}
+
+/* 字段下方的真实元信息：值 / 来源 / 生效方式 / 取值范围 */
+.mr-settings__meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mr-space-1);
+  font-size: var(--mr-font-size-sm);
+}
+
+/* 水平细分隔线 */
+.mr-settings__divider {
+  height: 1px;
+  background: var(--mr-color-border);
+  margin: var(--mr-space-2) 0;
+}
+
+/* 保存操作条：左侧上次保存时间，右侧取消 / 保存 */
+.mr-settings__savebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--mr-space-4);
+  padding-top: var(--mr-space-4);
+  margin-top: var(--mr-space-2);
+  border-top: 1px solid var(--mr-color-border);
+}
+
+.mr-settings__saved {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-settings__actions {
+  display: flex;
+  gap: var(--mr-space-2);
+}
+
+/* 运行时元信息：占满右栏宽度 */
+.mr-settings__desc {
+  width: 100%;
+}
+
+/* 画板「数据表格」：窄栏内长值（访问地址 / provider / 目录）自动换行不溢出 */
+.mr-settings__table {
+  width: 100%;
+  word-break: break-word;
+}
+
+/* 健康异常反馈：多条 Notice 纵向堆叠 */
+.mr-settings__health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+}
+
+/* 右栏底部产品说明（静态文案，非数据） */
+.mr-settings__notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-settings__notes p {
+  margin: 0;
+}
+
+.mr-settings__notes strong {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+}
+
+/* 页脚：与画板「本地项目 · 数据保存在你的设备上」呼应 */
+.mr-settings__footnote {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+/* 就地任务标签：基本设置 / 本地运行与存储 */
+.mr-settings__tabs {
+  margin-bottom: var(--mr-space-5);
+  border-bottom: 1px solid var(--mr-color-border);
+  padding-bottom: var(--mr-space-3);
+}
+
+.mr-settings__basic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-5);
+}
+
+.mr-settings__switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-6);
+  padding: var(--mr-space-3) 0;
+  border-top: 1px solid var(--mr-color-border);
+  border-bottom: 1px solid var(--mr-color-border);
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-settings__switch-row p {
+  margin: 4px 0 0;
+}
+
+.mr-settings__basic-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-3);
+}
+
+.mr-settings__basic-actions > div {
+  display: flex;
+  gap: var(--mr-space-2);
+}
+
+/* 窄屏时右栏堆叠到表单下方，避免 390px 面板被挤压 */
+@media (max-width: 1080px) {
+  .mr-settings__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--mr-space-6);
+  }
+}

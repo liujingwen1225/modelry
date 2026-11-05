@@ -6,7 +6,6 @@ import { RequireAdmin } from '@/session/gate'
 import { LoginPage } from '@/pages/login/LoginPage'
 import { SetupPage } from '@/pages/setup/SetupPage'
 import { OverviewPage } from '@/pages/overview/OverviewPage'
-import { PendingModule } from '@/pages/pending/PendingModule'
 import { DataLayout } from '@/pages/data/DataLayout'
 import { DataIndex } from '@/pages/data/DataIndex'
 import { CollectionPane } from '@/pages/data/CollectionPane'
@@ -16,6 +15,7 @@ import { ChangesPage } from '@/pages/changes/ChangesPage'
 import { LogicPage } from '@/pages/logic/LogicPage'
 import { AICollabPage } from '@/pages/ai/AICollabPage'
 import { AISharePage } from '@/pages/ai/AISharePage'
+import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { Result } from '@/ui'
 
 export function AppRoutes() {
@@ -51,7 +51,7 @@ export function AppRoutes() {
         <Route path="changes" element={<ChangesPage />} />
         <Route path="changes/:tab" element={<ChangesPage />} />
         <Route path="ai/*" element={<AICollabPage />} />
-        <Route path="settings/*" element={<PendingModule />} />
+        <Route path="settings/*" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

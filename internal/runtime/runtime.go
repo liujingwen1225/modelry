@@ -31,6 +31,7 @@ import (
 	"github.com/liujingwen1225/modelry/internal/overview"
 	"github.com/liujingwen1225/modelry/internal/portability"
 	"github.com/liujingwen1225/modelry/internal/project"
+	"github.com/liujingwen1225/modelry/internal/projectprefs"
 	"github.com/liujingwen1225/modelry/internal/realtimeapi"
 	"github.com/liujingwen1225/modelry/internal/recordevents"
 	"github.com/liujingwen1225/modelry/internal/recordlifecycle"
@@ -285,6 +286,11 @@ func New(options Options) (_ *Runtime, resultErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize Modelry AI Collaboration: %w", err)
 	}
+	// 基本设置是项目级偏好，与决定进程行为的 Runtime Settings 分开保存。
+	projectPrefsModule, err := projectprefs.NewModule(context.Background(), store)
+	if err != nil {
+		return nil, fmt.Errorf("cannot initialize Modelry Project Preferences: %w", err)
+	}
 	rawAdminAPI := httpapi.NewAPIRouter(
 		ownerAuth,
 		httpapi.NewDiagnosticsModule(instance, func(ctx context.Context) bool {
@@ -314,6 +320,7 @@ func New(options Options) (_ *Runtime, resultErr error) {
 		backendapi.NewDeletionModule(store, auditService, collectionFileCleaner{files: fileService, records: recordService}),
 		visualRuleModule,
 		aiCollabModule,
+		projectPrefsModule,
 		accesscontrol.NewModule(accessRules),
 		automation.NewModule(automationService),
 		overview.NewModule(overviewService),
