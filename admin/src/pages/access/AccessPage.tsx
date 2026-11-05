@@ -11,6 +11,7 @@ import { errorMessage } from '@/api/client'
 import { formatDateTime, formatMoment } from '@/lib/format'
 import { useBreadcrumbTail } from '@/app/BreadcrumbContext'
 import { CreateCollectionDrawer } from '@/pages/data/CreateCollectionDrawer'
+import { RulesTab } from './RulesTab'
 import './access.css'
 
 const TABS = [
@@ -82,7 +83,7 @@ export function AccessPage() {
         ))}
       </nav>
 
-      {!auth ? (
+      {!auth && tab !== 'rules' ? (
         <div className="mr-access__empty">
           <h2 className="mr-empty-state__title">还没有认证集合</h2>
           <p className="mr-empty-state__text">
@@ -98,7 +99,8 @@ export function AccessPage() {
         <UsersTab collection={auth} onOpen={(record) => setActiveUser(record)} />
       ) : null}
       {auth && tab === 'auth' ? <AuthTab collection={auth} /> : null}
-      {auth && tab === 'rules' ? <RulesTab collection={auth} /> : null}
+      {/* 访问规则作用于任意集合，不要求项目里已经有认证集合。 */}
+      {tab === 'rules' ? <RulesTab collections={collections.data ?? []} /> : null}
 
       <CreateCollectionDrawer
         open={createOpen}
@@ -467,15 +469,3 @@ function AuthTab(props: { collection: CollectionSummary }) {
   )
 }
 
-function RulesTab(props: { collection: CollectionSummary }) {
-  return (
-    <div className="mr-access__rules">
-      <h2 className="mr-empty-state__title">访问规则</h2>
-      <p className="mr-muted-note">
-        每个集合的访问规则决定谁可以读取、修改和删除记录。规则的可视化编辑随下一步交付；
-        当前可以在「数据 → 访问规则」查看每个集合的默认私人规则。
-      </p>
-      <Button onClick={() => window.location.assign(`/data/${props.collection.id}/access`)}>打开集合访问规则</Button>
-    </div>
-  )
-}

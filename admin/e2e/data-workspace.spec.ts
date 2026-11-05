@@ -150,6 +150,14 @@ test('文件字段配置：约束保存到待应用变更，应用后由真实�
   await expect(page.getByRole('button', { name: '应用到结构' })).toBeEnabled()
   await page.getByRole('button', { name: '应用到结构' }).click()
   await expect(page.getByText('已应用，结构已更新')).toBeVisible()
+  // 等待待应用变更在真实后端消失，避免读到应用完成前的旧结构。
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`/admin/api/v1/collections/${collectionId}/schema/pending-change`)
+      const body = (await response.json()) as { data: unknown }
+      return body.data === null
+    }, { timeout: 15_000 })
+    .toBe(true)
 
   const detail = await page.request.get(`/admin/api/v1/collections/${collectionId}`)
   expect(detail.status()).toBe(200)
