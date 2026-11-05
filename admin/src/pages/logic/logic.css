@@ -1,0 +1,386 @@
+/*
+ * 可视化业务逻辑（Figma 画板 25 / 17 / 18）页面样式。
+ *
+ * 只读取主题变量 --mr-*，仅亮色；所有类名以 .mr-logic 开头，避免与其它页面冲突。
+ * 页面的内边距沿用 .mr-page，这里只负责内部结构与视觉层级。
+ */
+
+.mr-logic {
+  gap: var(--mr-space-5);
+}
+
+/* 页头：标题在左、操作在右，与 Figma「页面标题」一致。 */
+.mr-logic__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+}
+
+.mr-logic__back {
+  display: flex;
+  margin-bottom: var(--mr-space-2);
+  padding-inline: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-logic__title {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-display);
+  font-weight: 700;
+  line-height: var(--mr-line-height);
+}
+
+.mr-logic__desc {
+  margin: var(--mr-space-1) 0 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-md);
+}
+
+.mr-logic__divider {
+  height: 1px;
+  background: var(--mr-color-border);
+}
+
+/* 编辑页双栏：左栏自适应，右栏固定 330px（对应 Figma 测试预览宽度）。 */
+.mr-logic__columns {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mr-space-9);
+}
+
+.mr-logic__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  min-width: 0;
+}
+
+.mr-logic__test-card {
+  display: flex;
+  flex: 0 0 330px;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  width: 330px;
+  padding: var(--mr-space-6);
+  background: var(--mr-color-surface-subtle);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+}
+
+.mr-logic__test-title {
+  margin: 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-title);
+  font-weight: 700;
+}
+
+.mr-logic__test-desc {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-logic__test-label {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+}
+
+.mr-logic__user-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+}
+
+.mr-logic__link {
+  align-self: flex-start;
+  padding-inline: 0;
+}
+
+/* 区块标题与辅助说明。 */
+.mr-logic__section-title {
+  margin: var(--mr-space-2) 0 0;
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-subtitle);
+  font-weight: 700;
+}
+
+.mr-logic__hint {
+  margin: 0;
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-logic__strong {
+  color: var(--mr-color-text);
+  font-weight: 700;
+}
+
+.mr-logic__muted {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-xs);
+}
+
+/* 触发条件三列下拉。 */
+.mr-logic__trigger-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--mr-space-4);
+}
+
+/* 可视化「触发 → 行为 → 写入」流程条。 */
+.mr-logic__flow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--mr-space-3);
+}
+
+.mr-logic__flow-step {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  min-width: 0;
+  padding: var(--mr-space-4);
+  background: var(--mr-color-surface-subtle);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+}
+
+.mr-logic__flow-eyebrow {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-logic__flow-value {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.mr-logic__flow-meta {
+  color: var(--mr-color-text-tertiary);
+  font-size: var(--mr-font-size-2xs);
+}
+
+.mr-logic__flow-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--mr-color-action);
+  font-size: var(--mr-font-size-section);
+}
+
+/* 字段模板：两列排布，标签右侧展示真实字段类型。 */
+.mr-logic__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mr-space-4);
+}
+
+.mr-logic__field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mr-space-2);
+}
+
+.mr-logic__required {
+  color: var(--mr-color-danger);
+  font-size: var(--mr-font-size-xs);
+}
+
+/* 高级配置：一行说明 + 一个控件。 */
+.mr-logic__config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  padding: var(--mr-space-3) 0;
+  border-bottom: 1px solid var(--mr-color-border);
+}
+
+.mr-logic__config-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+}
+
+.mr-logic__config-title {
+  color: var(--mr-color-text);
+  font-size: var(--mr-font-size-strong);
+  font-weight: 700;
+}
+
+.mr-logic__config-desc {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+/* 保存操作条。 */
+.mr-logic__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-space-4);
+  padding-top: var(--mr-space-4);
+  border-top: 1px solid var(--mr-color-border);
+}
+
+.mr-logic__footer-actions {
+  display: flex;
+  gap: var(--mr-space-2);
+}
+
+/* 真实执行一次面板。 */
+.mr-logic__run-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+  padding: var(--mr-space-5);
+  background: var(--mr-color-surface-subtle);
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-lg);
+}
+
+.mr-logic__run-panel .mr-logic__section-title {
+  margin: 0;
+}
+
+/* 后端真实错误：保留错误码、恢复建议与请求 ID。 */
+.mr-logic__failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+}
+
+.mr-logic__failure-title {
+  color: var(--mr-color-text);
+  font-weight: 700;
+}
+
+/* 测试校验逐项结果。 */
+.mr-logic__checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr-logic__check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mr-space-2);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-logic__check--pass .mr-logic__check-icon {
+  color: var(--mr-color-action);
+}
+
+.mr-logic__check--fail .mr-logic__check-icon {
+  color: var(--mr-color-danger);
+}
+
+.mr-logic__check-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+}
+
+.mr-logic__check-label {
+  color: var(--mr-color-text);
+}
+
+.mr-logic__check-detail {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+/* 表格与行内操作。 */
+.mr-logic__table {
+  width: 100%;
+}
+
+.mr-logic__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mr-space-1);
+}
+
+.mr-logic__rule-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+}
+
+.mr-logic__summary {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-sm);
+}
+
+.mr-logic__status-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--mr-space-2);
+}
+
+.mr-logic__error-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-1);
+  max-width: 280px;
+  color: var(--mr-color-danger);
+  font-size: var(--mr-font-size-xs);
+}
+
+.mr-logic__segmented {
+  align-self: flex-start;
+}
+
+/* 重试确认弹窗与执行记录展开详情。 */
+.mr-logic__retry-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-3);
+}
+
+.mr-logic__run-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-4);
+  padding: var(--mr-space-3) 0;
+}
+
+.mr-logic__detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-space-2);
+}
+
+.mr-logic__detail-label {
+  color: var(--mr-color-text-secondary);
+  font-size: var(--mr-font-size-xs);
+}
+
+/* 窄视口时把双栏与网格收成单列，保持可读。 */
+@media (max-width: 1100px) {
+  .mr-logic__columns {
+    flex-direction: column;
+  }
+
+  .mr-logic__test-card {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .mr-logic__trigger-grid,
+  .mr-logic__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
