@@ -5,11 +5,17 @@ export type FieldType = 'text' | 'number' | 'boolean' | 'dateTime' | 'json' | 'r
 
 export type ChangeStatus = 'ready' | 'needsReview' | 'failed' | 'applied' | 'discarded'
 
+/** 与 backendmodel.Relation 的真实 JSON 契约一致：targetCollectionId + cardinality。 */
+export type RelationCardinality = 'one-to-one' | 'many-to-one' | 'one-to-many' | 'many-to-many'
+
 export type Relation = {
-  collectionId: string
-  fieldName?: string
-  multiple?: boolean
-  onDelete?: string
+  targetCollectionId: string
+  cardinality: RelationCardinality
+}
+
+/** 多选关联在界面上映射成 many-to-many，单选映射成 many-to-one。 */
+export function isMultipleRelation(relation?: Relation): boolean {
+  return relation?.cardinality === 'many-to-many' || relation?.cardinality === 'one-to-many'
 }
 
 export type Field = {

@@ -6,6 +6,7 @@ import type { TableColumnsType } from '@/ui'
 import {
   collectionsApi,
   collectionKeys,
+  isMultipleRelation,
   type Collection,
   type Field as SchemaField,
   type FieldInput,
@@ -60,14 +61,21 @@ export function SchemaTab(props: { collection: Collection }) {
       dataIndex: 'type',
       width: 150,
       render: (type: FieldType, field) =>
-        field.system ? `系统 · ${FIELD_TYPE_LABELS[type] ?? type}` : field.type === 'relation' ? `关联 · ${field.relation?.multiple ? '多选' : '单选'}` : FIELD_TYPE_LABELS[type],
+        field.system
+          ? `系统 · ${FIELD_TYPE_LABELS[type] ?? type}`
+          : field.type === 'relation'
+            ? `关联 · ${isMultipleRelation(field.relation) ? '多选' : '单选'}`
+            : FIELD_TYPE_LABELS[type],
     },
     { title: '必填', dataIndex: 'required', width: 70, render: (value: boolean) => (value ? '是' : '否') },
     {
       title: '说明 / 关联',
       dataIndex: 'description',
       render: (_value, field) =>
-        field.description ?? (field.relation ? `${field.relation.collectionId} · ${field.relation.multiple ? '多个' : '单条'}` : '—'),
+        field.description ??
+          (field.relation
+            ? `${field.relation.targetCollectionId} · ${isMultipleRelation(field.relation) ? '多个' : '单条'}`
+            : '—'),
     },
     {
       title: '',
@@ -171,8 +179,8 @@ function FieldDrawer(props: { open: boolean; collection: Collection; field?: Sch
     setType(props.field?.type ?? 'text')
     setRequired(Boolean(props.field?.required))
     setDescription(props.field?.description ?? '')
-    setTarget(props.field?.relation?.collectionId ?? '')
-    setMultiple(Boolean(props.field?.relation?.multiple))
+    setTarget(props.field?.relation?.targetCollectionId ?? '')
+    setMultiple(isMultipleRelation(props.field?.relation))
     setError(null)
   }, [props.open, props.field])
 
@@ -184,10 +192,14 @@ function FieldDrawer(props: { open: boolean; collection: Collection; field?: Sch
     try {
       const definition: FieldInput = { name, type, required, description: description || undefined }
       if (type === 'relation') {
-        definition.relation = { collectionId: target, multiple }
+        definition.relation = {
+          targetCollectionId: target,
+          cardinality: multiple ? 'many-to-many' : 'many-to-one',
+        }
       }
+      // 后端要求 relation 字段使用 relation 操作，普通字段使用 field 操作。
       await collectionsApi.addOperation(props.collection.id, {
-        kind: 'field',
+        kind: type === 'relation' ? 'relation' : 'field',
         action: props.field ? 'update' : 'add',
         targetId: props.field?.id,
         definition,

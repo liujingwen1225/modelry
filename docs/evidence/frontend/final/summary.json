@@ -1,0 +1,20 @@
+{
+  "captured": 30,
+  "failures": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "httpErrors": [
+    {
+      "url": "http://127.0.0.1:8080/admin/api/v1/auth/session",
+      "status": 401
+    }
+  ],
+  "failedRequestId": "req_2IiTfv9qcPhxpRJbCQ5Kpg",
+  "anonymousRequestStatus": 403,
+  "evidenceDir": "docs/evidence/frontend/final",
+  "viewport": {
+    "width": 1512,
+    "height": 1000
+  }
+}

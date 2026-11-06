@@ -39,6 +39,9 @@ test('本地项目设置：基本设置与运行时设置都真实持久化', as
   await page.getByLabel('显示操作后的保存反馈').click()
   await page.getByRole('button', { name: '保存设置' }).click()
 
+  // 项目名称必须贯通到全局导航与面包屑，不只是设置页里的一个输入框。
+  await expect(page.getByRole('navigation', { name: '主导航' }).getByText('拾光笔记')).toBeVisible()
+
   const prefs = await page.request.get('/admin/api/v1/project-preferences')
   expect(prefs.status()).toBe(200)
   const prefsBody = (await prefs.json()) as {

@@ -366,7 +366,7 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId?: s
   const ownerFields = useMemo(() => {
     const fields = detailQuery.data?.fields ?? []
     return fields.filter(
-      (field) => field.type === 'relation' && field.relation && authCollectionIds.has(field.relation.collectionId),
+      (field) => field.type === 'relation' && field.relation && authCollectionIds.has(field.relation.targetCollectionId),
     )
   }, [detailQuery.data, authCollectionIds])
 
@@ -873,7 +873,7 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId?: s
                     placeholder="选择关联字段"
                     options={ownerFields.map((field) => ({
                       value: field.id,
-                      label: `${field.name} · ${field.relation?.collectionId ?? ''}`,
+                      label: `${field.name} · ${field.relation?.targetCollectionId ?? ''}`,
                     }))}
                     disabled={ownerFields.length === 0}
                     onChange={(value: string) => updateDraft(operationKey, { ownerFieldId: value })}
