@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { overviewApi, overviewKeys, type OverviewSnapshot } from '@/api/overview'
 import { runtimeApi, runtimeKeys, projectNameFromPath, runtimeOrigin, runtimePort, type RuntimeStatus, type StorageStatus } from '@/api/runtime'
+import { projectPreferencesApi, settingsKeys } from '@/api/settings'
 
 /**
  * 全局工作区上下文：项目名、运行时健康、变更计数。
@@ -28,11 +29,14 @@ export function ProjectProvider(props: { children: ReactNode }) {
   const runtime = useQuery({ queryKey: runtimeKeys.status, queryFn: runtimeApi.status, staleTime: 30_000 })
   const storage = useQuery({ queryKey: runtimeKeys.storage, queryFn: runtimeApi.storage, staleTime: 30_000 })
   const overview = useQuery({ queryKey: overviewKeys.snapshot, queryFn: overviewApi.read, staleTime: 15_000 })
+  // 项目名称来自「设置 · 基本设置」的真实偏好；未命名时回退到数据目录名。
+  const preferences = useQuery({ queryKey: settingsKeys.preferences, queryFn: projectPreferencesApi.get, staleTime: 15_000 })
 
   const value = useMemo<ProjectContextValue>(() => {
     const changes = overview.data?.changes
+    const preferredName = preferences.data?.projectName?.trim()
     return {
-      name: projectNameFromPath(storage.data?.localStorage.path),
+      name: preferredName || projectNameFromPath(storage.data?.localStorage.path),
       port: runtimePort(),
       origin: runtimeOrigin(),
       runtime: runtime.data,
@@ -43,7 +47,7 @@ export function ProjectProvider(props: { children: ReactNode }) {
       healthy: runtime.data?.state === 'ready' && storage.data?.database.state !== 'error',
       dataRoot: storage.data?.localStorage.path,
     }
-  }, [overview.data, runtime.data, storage.data])
+  }, [overview.data, runtime.data, storage.data, preferences.data])
 
   return <ProjectContext.Provider value={value}>{props.children}</ProjectContext.Provider>
 }

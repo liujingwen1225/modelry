@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Button, Drawer, Field, Input, InputNumber, Notice, Select, Switch, Upload } from '@/ui'
 import { UploadOutlined } from '@ant-design/icons'
 import type { Field as SchemaField, Collection } from '@/api/collections'
-import { collectionsApi, collectionKeys } from '@/api/collections'
+import { collectionsApi, collectionKeys, isMultipleRelation } from '@/api/collections'
 import { recordsApi, type RecordItem } from '@/api/records'
 import { errorMessage } from '@/api/client'
 import { recordTitle } from './record-format'
@@ -154,8 +154,8 @@ function FieldInput(props: {
 
 /** 关系字段：下拉列出目标集合的真实记录，显示其标题字段。 */
 function RelationSelect(props: { field: SchemaField; value: unknown; onChange: (value: unknown) => void }) {
-  const targetId = props.field.relation?.collectionId ?? ''
-  const multiple = Boolean(props.field.relation?.multiple)
+  const targetId = props.field.relation?.targetCollectionId ?? ''
+  const multiple = isMultipleRelation(props.field.relation)
 
   const target = useQuery({
     queryKey: collectionKeys.detail(targetId),
