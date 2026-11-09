@@ -78,7 +78,7 @@ Playwright 用例分布：
 | --- | --- | --- |
 | `foundation.spec.ts` | 5 | 首次运行、导航页眉、概览真实计数、视觉基线与无第二套 UI 库、404 |
 | `data-workspace.spec.ts` | 6 | 创建集合、记录 CRUD、结构变更应用、API 标签、文件字段约束、删除集合级联与审计 |
-| `users-access.spec.ts` | 2 | 认证集合五标签与旧 `/access` 重定向、普通集合四标签、集合页规则编辑 / 应用 / 真实 simulate |
+| `users-access.spec.ts` | 2 | 认证集合五标签与旧 `/access` 重定向、普通集合四标签、**UI 创建用户（动态档案字段）**、**认证配置保存 / 应用与无变化反馈**、集合页规则编辑 / 应用 / 真实 simulate |
 | `developer.spec.ts` | 1 | 真实契约、请求日志、真实请求排错、Secrets 生命周期与明文不回显 |
 | `changes.spec.ts` | 1 | 待审阅、差异与风险预检、应用、真实历史、深链接 |
 | `logic.spec.ts` | 1 | 可视化规则编辑、dry-run 不写数据、真实执行、执行记录、失败重试与 attemptOf |
@@ -106,6 +106,16 @@ Playwright 用例分布：
 - 规则收口：`RulesTab` 固定作用于路由中的当前集合，删除集合选择器与规则双入口，两个上下文链接改跳认证集合内的 `用户 / 认证` 标签。
 - 复验：`foundation.spec.ts` 断言主导航不再含「用户与访问」；`users-access.spec.ts` 覆盖认证集合五标签、普通集合四标签、旧链接重定向与 `?collectionId=` 优先；`integration.spec.ts` 改走集合页规则标签并断言无选择器。全站 9 个 spec / 19 个用例重新全部通过，30 张截图重新采集 0 失败。
 - 明确不做：第三方认证、View 集合、代码型 Hook、凭据字段并入集合、`Normal → Base` 重命名、规则并入 `Collection` 对象。
+
+### 3.3 真实体验发现的业务闭环断点与修复（2026-11-09 下午）
+
+项目所有者在演示实例上反馈「业务根本走不通」，逐链路实测定位三个前端断点；**后端契约未改动**：
+
+1. **添加应用用户必然 422**：用户抽屉把姓名硬编码成 `name`，但认证集合的档案字段是建集合时自己定义的（演示 `users` 是 `displayName`，新建的 `ds` 是 `titledd`），后端按 Applied Model 严格校验 profile。改为按集合真实字段动态生成表单、列表列与详情，required 字段做前端校验，profile 只提交真实字段。
+2. **认证配置「保存并应用」404**：配置没有变化时后端 `SaveConfiguration` 不产生 pending，前端仍调用 `/authentication/apply`，返回 "no pending Configuration"。改为用 save 返回的 `version` 作为 apply 的 `expectedVersion`，无变化时明确反馈「配置没有变化」。
+3. **「验证一次访问」默认灰色**：必须先手动在下拉里选记录才能点。改为集合有记录时默认选中第一条真实记录（仍可改选），验证开箱可用；同时消除验收脚本对 antd 下拉浮层动画的依赖。
+
+`users-access.spec.ts` 新增 UI 创建用户（自定义字段名）、认证配置 save→apply 与无变化不报 404、验证默认可用等断言；全站 9 个 spec / 19 个用例重新全部通过，30 张截图重新采集 0 失败。真实演示实例（含所有者新建的 `ds` 认证集合）复验通过。
 
 ## 4. 状态、耐久性与安全验收
 

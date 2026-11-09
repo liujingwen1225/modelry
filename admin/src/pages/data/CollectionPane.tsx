@@ -151,8 +151,8 @@ export function CollectionPane() {
 
       <PendingChangeBanner collectionId={collectionId} />
 
-      {tab === 'users' && isAuth ? <UsersTab collection={collection} onOpen={setActiveUser} /> : null}
-      {tab === 'auth' && isAuth ? <AuthTab collection={collection} /> : null}
+      {tab === 'users' && isAuth ? <UsersTab collection={collection} fields={collection.fields} onOpen={setActiveUser} /> : null}
+      {tab === 'auth' && isAuth ? <AuthTab collection={collection} fields={collection.fields} /> : null}
       {tab === 'records' ? <RecordsTab collection={collection} /> : null}
       {tab === 'schema' && activeFileField ? <FileFieldConfig collection={collection} field={activeFileField} /> : null}
       {tab === 'schema' && !activeFileField ? <SchemaTab collection={collection} /> : null}
@@ -166,7 +166,7 @@ export function CollectionPane() {
         onClose={() => setDeleteOpen(false)}
       />
       {activeUser ? (
-        <UserDrawer collection={collection} record={activeUser} onClose={() => setActiveUser(null)} />
+        <UserDrawer collection={collection} fields={collection.fields} record={activeUser} onClose={() => setActiveUser(null)} />
       ) : null}
     </>
   )

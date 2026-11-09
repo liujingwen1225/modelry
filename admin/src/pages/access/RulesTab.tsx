@@ -432,12 +432,13 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId: st
     })
   }
 
-  // 切换集合时清掉选择与该集合无关的上一次反馈；验证结果按 collectionId 门控展示。
+  // 切换集合或记录加载完成时，默认选中该集合的第一条真实记录：
+  // 「验证一次访问」开箱即可使用，不必先手动在下拉里选一条。用户仍可随时改选。
   useEffect(() => {
-    setRecordId('')
+    setRecordId(recordsQuery.data?.data?.[0]?.id ?? '')
     setIdentity('anonymous')
     setFeedback(null)
-  }, [effectiveId])
+  }, [effectiveId, recordsQuery.data])
 
   // 没有真实应用用户时禁用并回退登录身份，避免提交编造的 ID。
   useEffect(() => {

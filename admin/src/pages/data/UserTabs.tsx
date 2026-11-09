@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Drawer, ErrorState, Field, Input, InputNumber, LoadingBlock, Notice, Select, Switch, Table } from '@/ui'
 import type { TableColumnsType } from '@/ui'
 import { SearchOutlined } from '@ant-design/icons'
+import type { Field as SchemaField } from '@/api/collections'
 import { recordsApi } from '@/api/records'
 import { appAuthApi, appAuthKeys, type ApplicationSession, type AuthConfig } from '@/api/appauth'
 import { errorMessage } from '@/api/client'
@@ -17,12 +18,19 @@ import '@/pages/access/access.css'
  * 应用用户是认证集合的记录，密码与会话由 appauth 管理；
  * 管理面管理员与应用用户完全分离。
  *
- * 集合页传集合详情、独立页曾传列表摘要，这里只依赖 id / name 两个真实字段。
+ * 用户档案字段来自该集合的 Applied Model，不能硬编码 name / displayName：
+ * 后端会按真实字段校验 profile，用户名是建集合时自己定义的。
  */
-type AuthCollectionRef = { id: string; name: string }
+type AuthCollectionRef = { id: string; name: string; fields?: SchemaField[] }
+
+/** 系统字段与 email 由 appauth 管理，其余是用户可填的档案字段。 */
+function profileFields(fields: SchemaField[] = []): SchemaField[] {
+  return fields.filter((field) => !field.system && field.name !== 'email')
+}
 
 export function UsersTab(props: {
   collection: AuthCollectionRef
+  fields: SchemaField[]
   onOpen: (record: Record<string, unknown>) => void
 }) {
   const [search, setSearch] = useState('')
@@ -31,6 +39,9 @@ export function UsersTab(props: {
     queryFn: () => recordsApi.list(props.collection.id, { limit: 100 }),
   })
 
+  const customFields = profileFields(props.fields)
+  const primary = customFields[0]?.name
+
   const rows = useMemo(() => {
     const data = users.data?.data ?? []
     const keyword = search.trim().toLowerCase()
@@ -38,22 +49,31 @@ export function UsersTab(props: {
       return data
     }
     return data.filter((record) =>
-      ['email', 'name'].some((key) => String(record[key] ?? '').toLowerCase().includes(keyword)),
+      ['email', ...customFields.map((field) => field.name)].some((key) =>
+        String(record[key] ?? '').toLowerCase().includes(keyword),
+      ),
     )
-  }, [search, users.data])
+  }, [search, users.data, customFields])
 
   const columns: TableColumnsType<Record<string, unknown>> = [
     {
-      title: '用户',
-      dataIndex: 'name',
+      title: primary ?? '用户',
+      dataIndex: primary ?? 'email',
       width: 180,
       render: (_value, record) => (
         <div className="mr-record-cell">
-          <span className="mr-record-cell__title">{String(record.name ?? record.email ?? '')}</span>
+          <span className="mr-record-cell__title">
+            {String((primary ? record[primary] : undefined) ?? record.email ?? '')}
+          </span>
           <span className="mr-record-cell__snippet">{String(record.id)}</span>
         </div>
       ),
     },
+    ...customFields.slice(1).map((field) => ({
+      title: field.name,
+      dataIndex: field.name,
+      render: (value: unknown) => <span className="mr-mono">{String(value ?? '—')}</span>,
+    })),
     {
       title: '邮箱',
       dataIndex: 'email',
@@ -121,11 +141,15 @@ export function UsersTab(props: {
 
 export function UserDrawer(props: {
   collection: AuthCollectionRef
+  fields: SchemaField[]
   record: Record<string, unknown>
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
   const recordId = String(props.record.id ?? '')
+  const customFields = profileFields(props.fields)
+  const [email, setEmail] = useState(String(props.record.email ?? ''))
+  const [values, setValues] = useState<Record<string, string>>({})
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
@@ -144,11 +168,20 @@ export function UserDrawer(props: {
   }
 
   const create = async () => {
+    // 档案字段必须来自集合的 Applied Model；required 字段不能留空。
+    const missing = customFields.filter((field) => field.required && !values[field.name]?.trim())
+    if (!email.trim() || missing.length > 0) {
+      setError(new Error(`请填写邮箱${missing.length ? `与 ${missing.map((field) => field.name).join('、')}` : ''}。`))
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      const email = String(props.record.email ?? '')
-      await appAuthApi.create(props.collection.id, { ...props.record, email }, password)
+      const profile: Record<string, unknown> = { email: email.trim() }
+      for (const [key, value] of Object.entries(values)) {
+        if (value.trim()) profile[key] = value
+      }
+      await appAuthApi.create(props.collection.id, profile, password)
       setSaved(true)
       refresh()
       props.onClose()
@@ -185,6 +218,8 @@ export function UserDrawer(props: {
     }
   }
 
+  const displayName = String((primaryName(customFields) ? props.record[primaryName(customFields)!] : '') ?? props.record.email ?? '用户')
+
   return (
     <Drawer
       open
@@ -193,7 +228,7 @@ export function UserDrawer(props: {
       rootClassName="mr-drawer"
       title={
         <div className="mr-drawer__title">
-          <span className="mr-drawer__heading">{isNew ? '添加应用用户' : String(props.record.name ?? props.record.email ?? '用户')}</span>
+          <span className="mr-drawer__heading">{isNew ? '添加应用用户' : displayName}</span>
           <span className="mr-drawer__subtitle">{isNew ? '创建后即可登录受保护的应用 API。' : `id · ${recordId}`}</span>
         </div>
       }
@@ -216,17 +251,23 @@ export function UserDrawer(props: {
           <Field label="邮箱" required>
             <Input
               className="mr-mono"
-              value={String(props.record.email ?? '')}
+              value={email}
               placeholder="user@example.test"
-              onChange={(event) => Object.assign(props.record, { email: event.target.value })}
+              onChange={(event) => setEmail(event.target.value)}
             />
           </Field>
-          <Field label="姓名">
-            <Input
-              value={String(props.record.name ?? '')}
-              onChange={(event) => Object.assign(props.record, { name: event.target.value })}
-            />
-          </Field>
+          {customFields.map((field) => (
+            <Field key={field.name} label={field.name} required={Boolean(field.required)}>
+              <Input
+                value={values[field.name] ?? ''}
+                placeholder={`填写 ${field.name}`}
+                onChange={(event) => setValues((previous) => ({ ...previous, [field.name]: event.target.value }))}
+              />
+            </Field>
+          ))}
+          {customFields.length === 0 ? (
+            <Notice>这个认证集合没有自定义档案字段，创建用户只需要邮箱与初始密码。</Notice>
+          ) : null}
         </>
       ) : (
         <>
@@ -235,6 +276,12 @@ export function UserDrawer(props: {
               <dt>邮箱</dt>
               <dd className="mr-mono">{String(props.record.email ?? '—')}</dd>
             </div>
+            {customFields.map((field) => (
+              <div className="mr-detail-list__item" key={field.name}>
+                <dt>{field.name}</dt>
+                <dd className="mr-mono">{String(props.record[field.name] ?? '—')}</dd>
+              </div>
+            ))}
             <div className="mr-detail-list__item">
               <dt>加入时间</dt>
               <dd className="mr-mono">{formatDateTime(String(props.record.createdAt ?? ''))}</dd>
@@ -278,7 +325,11 @@ export function UserDrawer(props: {
   )
 }
 
-export function AuthTab(props: { collection: AuthCollectionRef }) {
+function primaryName(fields: SchemaField[]): string | undefined {
+  return fields[0]?.name
+}
+
+export function AuthTab(props: { collection: AuthCollectionRef; fields?: SchemaField[] }) {
   const queryClient = useQueryClient()
   const config = useQuery({
     queryKey: appAuthKeys.config(props.collection.id),
@@ -305,12 +356,19 @@ export function AuthTab(props: { collection: AuthCollectionRef }) {
     setError(null)
     setSaved(null)
     try {
-      await appAuthApi.saveAuthentication(props.collection.id, state.version, current)
+      // SaveConfiguration 在配置没变化时不产生 pending；此时不能调用 apply（后端会 404）。
+      // apply 的 expectedVersion 必须用 save 返回的 version，而不是本地推测值。
+      const savedState = await appAuthApi.saveAuthentication(props.collection.id, state.version, current)
+      const hasPending = JSON.stringify(savedState.pending) !== JSON.stringify(savedState.applied)
       if (apply) {
-        await appAuthApi.applyAuthentication(props.collection.id, state.version + 1)
-        setSaved('已应用到认证配置')
+        if (!hasPending) {
+          setSaved('配置没有变化，当前已应用版本即为最新')
+        } else {
+          await appAuthApi.applyAuthentication(props.collection.id, savedState.version)
+          setSaved('已应用到认证配置')
+        }
       } else {
-        setSaved('已保存，尚未应用')
+        setSaved(hasPending ? '已保存，尚未应用' : '配置没有变化，无需保存')
       }
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: appAuthKeys.config(props.collection.id) })
