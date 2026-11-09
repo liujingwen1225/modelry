@@ -67,10 +67,29 @@ test('认证集合是用户功能主体：五标签、旧链接重定向、普�
   await expect(page.getByRole('button', { name: '添加用户' })).toBeVisible()
   await expect(page.getByText('lin@modelry.test').first()).toBeVisible()
 
-  // 认证配置归位到集合页，且仍是真实的待应用配置流程。
+  // 用户表单按集合真实字段生成：members 的档案字段是 displayName，不是硬编码的 name。
+  await authTabs.getByRole('button', { name: '用户' }).click()
+  await page.getByRole('button', { name: '添加用户' }).click()
+  const userDialog = page.getByRole('dialog')
+  await expect(userDialog.getByLabel('displayName')).toBeVisible()
+  await userDialog.getByLabel('邮箱').fill('ui@modelry.test')
+  await userDialog.getByLabel('displayName').fill('界面创建')
+  await userDialog.getByLabel('初始密码').fill('ui-password-42')
+  await userDialog.getByRole('button', { name: '创建用户' }).click()
+  await expect(page.getByText('ui@modelry.test').first()).toBeVisible()
+
+  // 认证配置归位到集合页：真实保存 → 应用，配置无变化时不能误调 apply 得到 404。
   await authTabs.getByRole('button', { name: '认证' }).click()
   await expect(page.getByText('邮箱密码登录', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '保存并应用' })).toBeVisible()
+  await page.locator('.mr-auth-config__row').filter({ hasText: '允许自助注册' }).getByRole('switch').click()
+  await page.getByRole('button', { name: '保存并应用' }).click()
+  await expect(page.getByText('已应用到认证配置')).toBeVisible()
+  const configState = await page.request.get(`/admin/api/v1/collections/${authId}/authentication`, {
+    headers: { Origin: origin },
+  })
+  expect(((await configState.json()) as { data: { applied: { selfRegistration: boolean } } }).data.applied.selfRegistration).toBe(true)
+  await page.getByRole('button', { name: '保存并应用' }).click()
+  await expect(page.getByText('配置没有变化，当前已应用版本即为最新')).toBeVisible()
 
   // 普通集合保持四个标签，不出现用户 / 认证。
   await page.goto(`/data/${normalId}`)
@@ -132,12 +151,8 @@ test('集合页访问规则：真实读取、编辑保存、应用与模拟验�
   await page.getByRole('button', { name: '应用', exact: true }).click()
   await expect(page.getByText('任何人').first()).toBeVisible()
 
-  // 模拟验证使用真实记录与真实 identity，结果来自后端 simulate。
-  const recordSelect = page.locator('.mr-rules__verify').getByRole('combobox').first()
-  await recordSelect.click()
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: '验证访问' })).toBeEnabled()
+  // 模拟验证使用真实记录与真实 identity；集合有记录时默认选中第一条，无需手动选择。
+  await expect(page.getByRole('button', { name: '验证访问' })).toBeEnabled({ timeout: 15_000 })
   await page.getByRole('button', { name: '验证访问' }).click()
   await expect(page.locator('.mr-rules__result')).toBeVisible()
   await expect(page.locator('.mr-rules__result')).toContainText(/允许访问|拒绝访问/)
