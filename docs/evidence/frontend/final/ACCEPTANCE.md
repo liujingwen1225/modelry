@@ -5,6 +5,7 @@
 - 设计唯一依据：[Figma — Modelry](https://www.figma.com/design/WDn5msOTqcN4j6eEWBNjwM/modelry?node-id=0-1) 与 `docs/specs/0011-figma-frontend-rebuild.md`
 - 验收对象：Go 单二进制 + 真实 SQLite + 真实 HTTP + 真实 Chromium，**不使用 dev server、不 mock 任何业务数据**
 - 采集视口：1512 × 1000（与 Figma 画板一致）
+- 修订（2026-11-09）：按 `docs/specs/0011-figma-frontend-rebuild.md` 第 8 节取消「用户与访问」独立一级页，用户功能收进认证集合。本报告已按新入口重跑全站验收并重新采集 30 张截图；画板 8 / 9 / 10 / 26 的 Figma 原图仍作为这些工作面的视觉依据。
 
 ## 1. 验收环境与方法
 
@@ -33,9 +34,9 @@
 | 5 | 数据 · 编辑笔记记录 | 记录页新增 / 编辑抽屉 | `figma/figma-05-edit-note-record.png` | `05-edit-note-record.png` | 已对照 |
 | 6 | 数据 · 删除集合确认 | 集合操作菜单 → 确认对话框 | `figma/figma-06-delete-collection.png` | `06-delete-collection-confirm.png` | 已对照，名称校验与真实级联删除 |
 | 7 | 数据 · notes API | `/data/:id/api` | `figma/figma-07-notes-api.png` | `07-notes-api.png` | 已对照 |
-| 8 | 用户与访问 · 用户列表 | `/access` | `figma/figma-08-users-list.png` | `08-users-list.png` | 已对照 |
-| 9 | 用户与访问 · 林晓与会话 | `/access` 用户详情抽屉 | `figma/figma-09-user-sessions.png` | `09-user-and-sessions.png` | 已对照 |
-| 10 | 用户与访问 · 认证配置 | `/access/auth` | `figma/figma-10-auth-config.png` | `10-auth-config.png` | 已对照 |
+| 8 | 用户与访问 · 用户列表 | 认证集合 `/data/:id/users` | `figma/figma-08-users-list.png` | `08-users-list.png` | 已对照（认证集合页） |
+| 9 | 用户与访问 · 林晓与会话 | `/data/:id/users` 用户详情抽屉 | `figma/figma-09-user-sessions.png` | `09-user-and-sessions.png` | 已对照（认证集合页） |
+| 10 | 用户与访问 · 认证配置 | 认证集合 `/data/:id/auth` | `figma/figma-10-auth-config.png` | `10-auth-config.png` | 已对照（认证集合页） |
 | 11 | 数据 · 文件字段配置 | `/data/:id/schema?field=:fieldId` | `figma/figma-11-file-field-config.png` | `11-file-field-config.png` | 已对照，约束经待应用变更生效 |
 | 12 | 数据 · 记录文件字段与上传 | 记录编辑抽屉文件字段 | `figma/figma-12-record-file-upload.png` | `12-record-file-upload.png` | 已对照，上传写入真实 Runtime 引用 |
 | 13 | 开发与连接 · API 文档 | `/developer/api` | `figma/figma-13-api-docs.png` | `13-api-docs.png` | 已对照 |
@@ -51,11 +52,13 @@
 | 23 | 界面控件与状态基线 | 设计系统参考，**不单独创建产品页面** | `figma/figma-23-baseline.png` | `foundation.spec.ts`「视觉基线」+ `src/theme/tokens.css` | 已对照（组件与状态基线） |
 | 24 | AI 变更审阅 · 公开分享 | `/ai/share/:token`（匿名只读） | `figma/figma-24-ai-public-share.png` | `24-ai-public-share.png` | 已对照，匿名上下文验证 |
 | 25 | 业务逻辑 · 欢迎笔记 | `/logic/rules` | `figma/figma-25-logic-welcome-note.png` | `25-logic-welcome-note.png` | 已对照 |
-| 26 | 用户与访问 · 访问规则 | `/access/rules` 与 `/data/:id/access` | `figma/figma-26-access-rules.png` | `26-access-rules-page.png` / `26-access-rules.png` | 已对照 |
+| 26 | 用户与访问 · 访问规则 | `/data/:id/access`（每集合唯一入口；认证集合也有自己的规则页） | `figma/figma-26-access-rules.png` | `26-access-rules-page.png` / `26-access-rules.png` | 已对照，规则页固定当前集合、无集合选择器 |
 | 27 | 数据 · notes 工作台 | `/data/:id` | `figma/figma-27-notes-workspace.png` | `27-notes-workspace.png` | 已对照 |
 | 28 | 概览 · 继续工作 | `/`（有数据态） | `figma/figma-28-overview.png` | `28-overview-continue-work.png` | 已对照 |
 
 第 23 项按规格作为组件与状态验收基线，不作为产品页面；其余 27 个产品页面 / 状态画板均有对应实现与截图。
+
+**信息架构修订（0011 第 8 节）**：主导航从五个入口改为四个（概览 / 数据 / 业务逻辑 / 开发与连接）；画板 8 / 9 / 10 的用户、会话、认证配置挂在认证集合页的 `用户 / 认证` 标签，画板 26 的访问规则作为每个集合自己的 `访问规则` 标签。认证集合页共五个标签（用户 / 认证 / 结构 / 访问规则 / API），普通集合仍是四个（记录 / 结构 / 访问规则 / API）。`/access*` 保留为旧链接重定向壳，`users-access.spec.ts` 逐条验证重定向目标、`?collectionId=` 优先与认证集合旧 `/records` 回落。Figma 设计源需同步标注这四个画板的归属变更。
 
 ## 3. 真实业务验收结果
 
@@ -75,7 +78,7 @@ Playwright 用例分布：
 | --- | --- | --- |
 | `foundation.spec.ts` | 5 | 首次运行、导航页眉、概览真实计数、视觉基线与无第二套 UI 库、404 |
 | `data-workspace.spec.ts` | 6 | 创建集合、记录 CRUD、结构变更应用、API 标签、文件字段约束、删除集合级联与审计 |
-| `users-access.spec.ts` | 2 | 认证集合空态、访问规则编辑 / 应用 / 真实 simulate |
+| `users-access.spec.ts` | 2 | 认证集合五标签与旧 `/access` 重定向、普通集合四标签、集合页规则编辑 / 应用 / 真实 simulate |
 | `developer.spec.ts` | 1 | 真实契约、请求日志、真实请求排错、Secrets 生命周期与明文不回显 |
 | `changes.spec.ts` | 1 | 待审阅、差异与风险预检、应用、真实历史、深链接 |
 | `logic.spec.ts` | 1 | 可视化规则编辑、dry-run 不写数据、真实执行、执行记录、失败重试与 attemptOf |
@@ -93,6 +96,16 @@ Playwright 用例分布：
 本次修复涉及 `src/api/collections.ts`、`SchemaTab.tsx`、`RecordDrawer.tsx`、`RulesTab.tsx`，并新增一条贯穿结构、记录与访问规则的集成用例。该用例验证：界面新增关联字段 → 待应用变更应用后真实结构含 `targetCollectionId/cardinality` → 记录抽屉列出目标集合真实记录并写入真实关联值 → 访问规则页读取同一集合的 5 条真实规则 → 刷新后保持。
 
 **第二处跨界面缺口**：Figma 画板 22 的项目名称与全局导航 / 面包屑里的项目名是同一个事实，但 #49 保存的 `projectName` 只停留在设置页，主导航仍显示数据目录名（`project`）。本次让 `ProjectProvider` 读取真实项目偏好并在未命名时回退数据目录名，`settings.spec.ts` 增加断言：保存项目名称后主导航立即显示该名称。截图 `28-overview-continue-work.png` 与 Figma `figma-28-overview.png` 的项目名现已一致。
+
+### 3.2 信息架构改造与复验（2026-11-09）
+
+按项目所有者决策（`0011` 第 8 节）：产品定位是「PocketBase 式集合模型 + Schema 演进记录 / 可视化业务逻辑 / AI 支持三层增强」。本轮**只调整前端信息架构**，后端、HTTP Contracts、SQLite 结构与变更生命周期均未改动。
+
+- 取消「用户与访问」一级页：`app/nav.tsx` 移除入口，`/access*` 改为按真实集合列表解析的重定向壳；概览快捷入口与记录详情链接改指集合内规则页。
+- `UsersTab / UserDrawer / AuthTab` 从独立页抽成 `pages/data/UserTabs.tsx`，挂到认证集合页；`CollectionPane` 按集合类型分支标签，并把不适用的旧深链接回落到默认标签。
+- 规则收口：`RulesTab` 固定作用于路由中的当前集合，删除集合选择器与规则双入口，两个上下文链接改跳认证集合内的 `用户 / 认证` 标签。
+- 复验：`foundation.spec.ts` 断言主导航不再含「用户与访问」；`users-access.spec.ts` 覆盖认证集合五标签、普通集合四标签、旧链接重定向与 `?collectionId=` 优先；`integration.spec.ts` 改走集合页规则标签并断言无选择器。全站 9 个 spec / 19 个用例重新全部通过，30 张截图重新采集 0 失败。
+- 明确不做：第三方认证、View 集合、代码型 Hook、凭据字段并入集合、`Normal → Base` 重命名、规则并入 `Collection` 对象。
 
 ## 4. 状态、耐久性与安全验收
 
@@ -112,9 +125,10 @@ Playwright 用例分布：
 5. **可视化业务逻辑不是代码型 Hook**：按规格只提供触发事件 + 字段模板 + 测试 + 执行记录 + 重试，不建设 JS/TS 代码编辑器。
 6. **设置偏好**：工作台语言 / 外观作为真实项目偏好持久化，但当前视觉基线按 Figma 固定为浅色简体中文，不假装已完成深色主题或多语言翻译。
 7. **采集日志中的 401**：首次运行时浏览器探测 `GET /admin/api/v1/auth/session` 返回一次 401，这是未登录状态判定的预期请求（见 `summary.json` 的 `httpErrors`），不是页面异常；没有未处理的 Page Exception、5xx 或卡住的 Loading。匿名应用请求真实返回 403 并留下 `failedRequestId`，用于画板 15 的排错上下文。
+8. **信息架构有意偏离原 Figma 基线**：画板 8 / 9 / 10 / 26 原本把「用户与访问」定义为独立一级页；按 2026-11-09 项目所有者决策与 `0011` 第 8 节，用户功能改以认证集合为主体、规则改为集合页唯一入口。这是明确的产品决策，不是实现遗漏；Figma 设计源需同步标注归属变更。
 
 ## 6. 结论
 
-Figma 定义的 27 个产品页面 / 状态画板均有真实实现与截图对照，第 23 个画板作为组件与状态基线验收；所有可见操作都连接真实 Go API 与 SQLite；全站 19 个真实浏览器用例、全量 Go 测试、前端类型与静态检查、单二进制构建与启动均通过。
+Figma 定义的 27 个产品页面 / 状态画板均有真实实现与截图对照（第 23 个画板作为组件与状态基线，画板 8 / 9 / 10 / 26 按第 8 节决策收进认证集合）；所有可见操作都连接真实 Go API 与 SQLite；全站 19 个真实浏览器用例、全量 Go 测试、前端类型与静态检查、单二进制构建与启动均通过，并已在 2026-11-09 信息架构修订后整体复验。
 
 按 #50 要求，本报告交由项目所有者做真实体验确认；**本任务不自动发布**。

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Outlet, useNavigate, useParams } from 'react-router-dom'
 import { Button, ErrorState, LoadingBlock } from '@/ui'
 import { useBreadcrumbTail } from '@/app/BreadcrumbContext'
-import { PlusOutlined, TableOutlined } from '@ant-design/icons'
+import { PlusOutlined, TableOutlined, TeamOutlined } from '@ant-design/icons'
 import { collectionsApi, collectionKeys } from '@/api/collections'
 import { CreateCollectionDrawer } from './CreateCollectionDrawer'
 import { DataProvider } from './DataContext'
@@ -64,7 +64,11 @@ export function DataLayout() {
                 className={`mr-rail__item${collection.id === activeId ? ' mr-rail__item--active' : ''}`}
                 onClick={() => navigate(`/data/${collection.id}`)}
               >
-                <TableOutlined className="mr-rail__icon" />
+                {collection.type === 'Auth' ? (
+                  <TeamOutlined className="mr-rail__icon" aria-label="认证集合" />
+                ) : (
+                  <TableOutlined className="mr-rail__icon" />
+                )}
                 <span className="mr-rail__name">{collection.name}</span>
                 <span className="mr-rail__count">{collection.recordCount}</span>
               </Button>

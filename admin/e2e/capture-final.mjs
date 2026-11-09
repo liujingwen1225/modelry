@@ -279,6 +279,7 @@ async function main() {
     })
 
     const notesPath = `/data/${notes.id}`
+    const usersPath = `/data/${users.id}`
     const routes = [
       ['/', '28-overview-continue-work.png'],
       ['/data', '27-notes-workspace.png'],
@@ -286,9 +287,9 @@ async function main() {
       [`${notesPath}/schema?field=${encodeURIComponent(attachmentsField?.id ?? '')}`, '11-file-field-config.png'],
       [`${notesPath}/api`, '07-notes-api.png'],
       [`${notesPath}/access`, '26-access-rules.png'],
-      ['/access', '08-users-list.png'],
-      ['/access/auth', '10-auth-config.png'],
-      ['/access/rules', '26-access-rules-page.png'],
+      [`${usersPath}/users`, '08-users-list.png'],
+      [`${usersPath}/auth`, '10-auth-config.png'],
+      [`${usersPath}/access`, '26-access-rules-page.png'],
       ['/developer/api', '13-api-docs.png'],
       ['/developer/logs', '14-request-logs.png'],
       [`/developer/diagnose?requestId=${encodeURIComponent(failedRequest?.requestId ?? '')}`, '15-request-diagnose.png'],
@@ -337,7 +338,7 @@ async function main() {
       await page.getByRole('menuitem', { name: '删除集合' }).click()
       await page.getByRole('dialog').waitFor({ state: 'visible' })
     })
-    await captureAction('09-user-and-sessions.png', '/access', async () => {
+    await captureAction('09-user-and-sessions.png', `${usersPath}/users`, async () => {
       await page.getByRole('button', { name: '查看详情' }).first().click()
       await page.getByRole('dialog').waitFor({ state: 'visible' })
     })

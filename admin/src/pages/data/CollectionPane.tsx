@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Button, Dropdown, ErrorState, LoadingBlock, StatusTag } from '@/ui'
@@ -12,10 +12,13 @@ import { ApiTab } from './ApiTab'
 import { PendingChangeBanner } from './PendingChangeBanner'
 import { DeleteCollectionModal } from './DeleteCollectionModal'
 import { FileFieldConfig } from './FileFieldConfig'
+import { UsersTab, UserDrawer, AuthTab } from './UserTabs'
 import { useData } from './DataContext'
 import { RulesTab } from '@/pages/access/RulesTab'
 
 const TABS = [
+  { key: 'users', label: '用户' },
+  { key: 'auth', label: '认证' },
   { key: 'records', label: '记录' },
   { key: 'schema', label: '结构' },
   { key: 'access', label: '访问规则' },
@@ -24,10 +27,15 @@ const TABS = [
 
 export type CollectionTab = (typeof TABS)[number]['key']
 
+/** 认证集合是用户功能主体；普通集合保持数据工作面的四个标签（0011 第 8 节）。 */
+const AUTH_TABS: CollectionTab[] = ['users', 'auth', 'schema', 'access', 'api']
+const NORMAL_TABS: CollectionTab[] = ['records', 'schema', 'access', 'api']
+
 /**
  * 集合工作面：集合标题、就地任务标签与当前标签页内容。
  *
  * 标签页走路由（/data/:id/:tab），因此刷新、深链接和浏览器后退都保持同一上下文。
+ * 认证集合默认落在「用户」，普通集合默认落在「记录」；不适用的标签重定向回默认值。
  */
 export function CollectionPane() {
   const params = useParams<{ collectionId: string; tab?: string }>()
@@ -35,14 +43,25 @@ export function CollectionPane() {
   const [searchParams] = useSearchParams()
   const { collections } = useData()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [activeUser, setActiveUser] = useState<Record<string, unknown> | null>(null)
   const collectionId = params.collectionId ?? ''
-  const tab = (params.tab ?? 'records') as CollectionTab
 
   const collectionQuery = useQuery({
     queryKey: collectionKeys.detail(collectionId),
     queryFn: () => collectionsApi.get(collectionId),
     enabled: Boolean(collectionId),
   })
+
+  const isAuth = collectionQuery.data?.type === 'Auth'
+  const defaultTab: CollectionTab = isAuth ? 'users' : 'records'
+  const tab = (params.tab ?? defaultTab) as CollectionTab
+  const visibleTabs = isAuth ? AUTH_TABS : NORMAL_TABS
+
+  // 旧深链接（/data/:authId/records、/access/* 重定向）落到不存在的标签时，回到该类型的默认工作面。
+  useEffect(() => {
+    if (!collectionQuery.data || visibleTabs.includes(tab)) return
+    navigate(`/data/${collectionId}/${defaultTab}`, { replace: true })
+  }, [collectionQuery.data, visibleTabs, tab, defaultTab, collectionId, navigate])
 
   const activeFileField = collectionQuery.data?.fields.find(
     (field) =>
@@ -90,8 +109,13 @@ export function CollectionPane() {
           <div className="mr-collection__identity">
             <h1 className="mr-collection__name">{collection.name}</h1>
             {collection.description ? <span className="mr-collection__description">{collection.description}</span> : null}
-            <StatusTag>{collection.type === 'Auth' ? '认证集合' : '普通集合'}</StatusTag>
+            <StatusTag>{isAuth ? '认证集合' : '普通集合'}</StatusTag>
           </div>
+          {tab === 'users' ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setActiveUser({})}>
+              添加用户
+            </Button>
+          ) : null}
           {tab === 'records' ? (
             <Button
               type="primary"
@@ -112,14 +136,14 @@ export function CollectionPane() {
         </div>
 
         <nav className="mr-tabs" aria-label="集合工作面">
-          {TABS.map((entry) => (
+          {visibleTabs.map((key) => (
             <Button
-              key={entry.key}
+              key={key}
               type="text"
-              className={`mr-tabs__item${entry.key === tab ? ' mr-tabs__item--active' : ''}`}
-              onClick={() => navigate(`/data/${collectionId}/${entry.key}`)}
+              className={`mr-tabs__item${key === tab ? ' mr-tabs__item--active' : ''}`}
+              onClick={() => navigate(`/data/${collectionId}/${key}`)}
             >
-              {entry.label}
+              {TABS.find((entry) => entry.key === key)?.label}
             </Button>
           ))}
         </nav>
@@ -127,6 +151,8 @@ export function CollectionPane() {
 
       <PendingChangeBanner collectionId={collectionId} />
 
+      {tab === 'users' && isAuth ? <UsersTab collection={collection} onOpen={setActiveUser} /> : null}
+      {tab === 'auth' && isAuth ? <AuthTab collection={collection} /> : null}
       {tab === 'records' ? <RecordsTab collection={collection} /> : null}
       {tab === 'schema' && activeFileField ? <FileFieldConfig collection={collection} field={activeFileField} /> : null}
       {tab === 'schema' && !activeFileField ? <SchemaTab collection={collection} /> : null}
@@ -139,6 +165,9 @@ export function CollectionPane() {
         collectionName={collection.name}
         onClose={() => setDeleteOpen(false)}
       />
+      {activeUser ? (
+        <UserDrawer collection={collection} record={activeUser} onClose={() => setActiveUser(null)} />
+      ) : null}
     </>
   )
 }

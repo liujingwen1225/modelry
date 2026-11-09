@@ -113,9 +113,10 @@ test('关联字段：界面保存、真实结构、记录关联值与访问规�
   expect(rows[0]?.title).toBe('周末徒步路线')
   expect(rows[0]?.author).toBe(userId)
 
-  // 画板 26：访问规则页能读取同一集合的真实规则；刷新与深链接保持上下文。
-  await page.goto('/access/rules')
+  // 画板 26：集合页「访问规则」标签读取同一集合的真实规则；刷新与深链接保持上下文。
+  await page.goto(`/data/${notesId}/access`)
   await expect(page.getByRole('heading', { name: '你的笔记，仍然只属于你' })).toBeVisible()
+  await expect(page.locator('.mr-rules__collection-select')).toHaveCount(0)
   const rules = await page.request.get(`/admin/api/v1/collections/${notesId}/access-rules`)
   expect(rules.status()).toBe(200)
   const ruleState = (await rules.json()) as { data: { applied: unknown[] } }
