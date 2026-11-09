@@ -17,7 +17,7 @@ const outputDir = process.argv[2] ?? 'screenshots'
 const routes = process.argv.slice(3)
 
 if (routes.length === 0) {
-  routes.push('/', '/data', '/access', '/developer', '/logic', '/changes', '/settings')
+  routes.push('/', '/data', '/developer', '/logic', '/changes', '/settings')
 }
 
 await mkdir(outputDir, { recursive: true })

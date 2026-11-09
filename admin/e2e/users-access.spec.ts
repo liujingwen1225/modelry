@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-/** #44 验收：应用用户来自认证集合的真实记录，认证配置可保存并应用。 */
+/**
+ * 认证集合作为用户功能主体（0011 第 8 节）与集合级访问规则的真实浏览器验收。
+ * 独立「用户与访问」一级页已取消，/access 只作为旧链接重定向壳。
+ */
 const OWNER = { email: 'owner@modelry.test', password: 'local-admin-password-42' }
 
 test.describe.configure({ mode: 'serial' })
@@ -24,17 +27,76 @@ test.beforeEach(async ({ page }) => {
   }
 })
 
-test('用户与访问：没有认证集合时给出真实创建入口', async ({ page }) => {
+test('认证集合是用户功能主体：五标签、旧链接重定向、普通集合四标签', async ({ page }) => {
+  const origin = new URL(page.url()).origin
+  const headers = { Origin: origin }
+
+  const auth = await page.request.post('/admin/api/v1/collections', {
+    data: { name: 'members', type: 'Auth', fields: [{ name: 'displayName', type: 'text' }] },
+    headers,
+  })
+  expect(auth.status()).toBe(201)
+  const authId = ((await auth.json()) as { data: { id: string } }).data.id
+
+  const normal = await page.request.post('/admin/api/v1/collections', {
+    data: { name: 'notes_ia', type: 'Normal', fields: [{ name: 'title', type: 'text', required: true }] },
+    headers,
+  })
+  expect(normal.status()).toBe(201)
+  const normalId = ((await normal.json()) as { data: { id: string } }).data.id
+
+  const user = await page.request.post(`/admin/api/v1/collections/${authId}/users`, {
+    data: { profile: { email: 'lin@modelry.test', displayName: '林晓' }, password: 'app-user-password-42' },
+    headers,
+  })
+  expect(user.status()).toBe(201)
+
+  // 主导航不再有独立一级页。
+  await page.goto('/data')
+  await expect(page.getByRole('navigation', { name: '主导航' })).not.toContainText('用户与访问')
+
+  // 认证集合默认落在「用户」，五个标签齐备且没有普通集合的「记录」标签。
+  await page.goto(`/data/${authId}`)
+  const authTabs = page.getByRole('navigation', { name: '集合工作面' })
+  await expect(authTabs).toContainText('用户')
+  await expect(authTabs).toContainText('认证')
+  await expect(authTabs).toContainText('结构')
+  await expect(authTabs).toContainText('访问规则')
+  await expect(authTabs).toContainText('API')
+  await expect(authTabs).not.toContainText('记录')
+  await expect(page.getByRole('button', { name: '添加用户' })).toBeVisible()
+  await expect(page.getByText('lin@modelry.test').first()).toBeVisible()
+
+  // 认证配置归位到集合页，且仍是真实的待应用配置流程。
+  await authTabs.getByRole('button', { name: '认证' }).click()
+  await expect(page.getByText('邮箱密码登录', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '保存并应用' })).toBeVisible()
+
+  // 普通集合保持四个标签，不出现用户 / 认证。
+  await page.goto(`/data/${normalId}`)
+  const normalTabs = page.getByRole('navigation', { name: '集合工作面' })
+  await expect(normalTabs).toContainText('记录')
+  await expect(normalTabs).not.toContainText('用户')
+  await expect(normalTabs).not.toContainText('认证')
+
+  // 旧链接全部重定向到认证集合对应标签，刷新可用。
   await page.goto('/access')
-  await expect(page.getByRole('heading', { name: '用户与访问' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '创建认证集合' })).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`/data/${authId}/users$`))
+  await page.goto('/access/users')
+  await expect(page).toHaveURL(new RegExp(`/data/${authId}/users$`))
+  await page.goto('/access/auth')
+  await expect(page).toHaveURL(new RegExp(`/data/${authId}/auth$`))
+  await page.goto('/access/rules')
+  await expect(page).toHaveURL(new RegExp(`/data/${authId}/access$`))
+  await page.goto(`/access/rules?collectionId=${normalId}`)
+  await expect(page).toHaveURL(new RegExp(`/data/${normalId}/access$`))
+
+  // 认证集合的旧 /records 深链接回落到用户页。
+  await page.goto(`/data/${authId}/records`)
+  await expect(page).toHaveURL(new RegExp(`/data/${authId}/users$`))
 })
 
-test('访问规则：真实读取、编辑保存、应用与模拟验证', async ({ page }) => {
-  await page.goto('/access/rules')
-  await expect(page.getByRole('heading', { name: '用户与访问' })).toBeVisible()
-
-  // 通过真实 API 准备一个带记录的普通集合，验证规则不依赖认证集合。
+test('集合页访问规则：真实读取、编辑保存、应用与模拟验证', async ({ page }) => {
   const origin = new URL(page.url()).origin
   const created = await page.request.post('/admin/api/v1/collections', {
     data: { name: 'notes_rules', type: 'Normal', fields: [{ name: 'title', type: 'text', required: true }] },
@@ -48,8 +110,11 @@ test('访问规则：真实读取、编辑保存、应用与模拟验证', async
   })
   expect(record.status()).toBe(201)
 
-  await page.reload()
+  // 规则入口是集合页的就地标签，固定作用于当前集合，没有集合选择器。
+  await page.goto(`/data/${collectionId}/access`)
   await expect(page.getByRole('heading', { name: '你的笔记，仍然只属于你' })).toBeVisible()
+  await expect(page.locator('.mr-rules__collection-select')).toHaveCount(0)
+  await expect(page.locator('.mr-rules__current-collection')).toContainText('notes_rules')
   await expect(page.getByText('禁止访问').first()).toBeVisible()
   await expect(page.getByText('已生效', { exact: true })).toBeVisible()
 
@@ -57,7 +122,6 @@ test('访问规则：真实读取、编辑保存、应用与模拟验证', async
   await page.getByRole('button', { name: '编辑规则' }).click()
   const drawer = page.getByRole('dialog')
   await expect(drawer.getByText('编辑访问规则 · notes_rules')).toBeVisible()
-  // 规则模式顺序为 noAccess → anyone → …；用键盘选择第二项，避免依赖虚拟列表的浮层定位。
   await drawer.getByRole('combobox').first().click()
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')

@@ -110,7 +110,7 @@ export function OverviewPage() {
             icon={<SafetyCertificateOutlined />}
             title="验证访问"
             description="确认不同身份能看见什么"
-            onClick={() => navigate('/access')}
+            onClick={() => navigate('/access/rules')}
           />
         </div>
       </section>
@@ -283,7 +283,7 @@ function attentionItems(snapshot: OverviewSnapshot): Attention[] {
       title: `${formatCount(requests.clientErrorCount)} 次请求被拒绝`,
       detail: `最近 ${Math.round(requests.windowSeconds / 60)} 分钟内 · 可能是身份或访问规则拦住了调用。`,
       action: '验证访问规则 →',
-      path: '/access',
+      path: '/access/rules',
     })
   }
   if (snapshot.events && snapshot.events.failedDeliveryCount > 0) {

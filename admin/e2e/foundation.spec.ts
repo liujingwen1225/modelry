@@ -70,9 +70,11 @@ test('全局工作区：导航与页眉严格按 Figma 分组', async ({ page })
   await page.goto('/')
   const nav = page.getByRole('navigation', { name: '主导航' })
 
-  for (const label of ['概览', '数据', '用户与访问', '业务逻辑', '开发与连接']) {
+  // 0011 第 8 节：取消「用户与访问」独立一级页，用户功能以认证集合为主体。
+  for (const label of ['概览', '数据', '业务逻辑', '开发与连接']) {
     await expect(nav.getByText(label, { exact: true })).toBeVisible()
   }
+  await expect(nav.getByText('用户与访问', { exact: true })).toHaveCount(0)
   await expect(nav.getByText('待审阅变更', { exact: false })).toBeVisible()
   await expect(nav.getByText('API · 请求日志 · Secrets')).toBeVisible()
   await expect(nav.getByText('SQLite · 单实例 / 单项目')).toBeVisible()

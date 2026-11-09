@@ -39,8 +39,19 @@
   gap: var(--mr-space-3);
 }
 
-.mr-rules__collection-select {
+/* 规则固定在当前集合，用只读集合名替代原来的集合选择器（0011 第 8 节）。 */
+.mr-rules__current-collection {
+  display: inline-flex;
+  align-items: center;
   min-width: 240px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--mr-color-border);
+  border-radius: var(--mr-radius-md);
+  background: var(--mr-color-surface);
+  color: var(--mr-color-text);
+  font-family: var(--mr-font-mono);
+  font-size: 13px;
 }
 
 .mr-rules__links {

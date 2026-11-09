@@ -198,18 +198,20 @@ function recordLabel(record: RecordItem): string {
 }
 
 /**
- * 「用户与访问 · 访问规则」（Figma 15:11177）。
+ * 「访问规则」（Figma 15:11177）。
  *
+ * 按 0011 第 8 节，规则按集合存储，集合页的「访问规则」标签是唯一入口；
+ * 这里固定作用于 activeId 指定的当前集合，不再提供集合选择器。
  * 集合、规则、记录、应用用户、认证状态全部来自真实 API；验证访问走后端 simulate，
  * 页面只展示后端返回的判定，不推测、不编造任何结果或用户 ID。
  */
-export function RulesTab(props: { collections: CollectionSummary[]; activeId?: string }) {
+export function RulesTab(props: { collections: CollectionSummary[]; activeId: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
-  // 当前集合用内部 state 保持；activeId 可能来自 URL，也可能已不在列表里。
-  const [selectedId, setSelectedId] = useState<string>(props.activeId ?? props.collections[0]?.id ?? '')
+  // 当前集合来自集合页路由，刷新与深链接都保持同一上下文。
+  const effectiveId = props.activeId
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
   const [identity, setIdentity] = useState<Identity>('anonymous')
@@ -219,9 +221,6 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId?: s
   const [draftError, setDraftError] = useState<string | null>(null)
   const [draftBase, setDraftBase] = useState<number | null>(null)
 
-  const effectiveId = props.collections.some((item) => item.id === selectedId)
-    ? selectedId
-    : (props.collections[0]?.id ?? '')
   const current = useMemo(
     () => props.collections.find((item) => item.id === effectiveId),
     [props.collections, effectiveId],
@@ -484,18 +483,14 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId?: s
 
   return (
     <div className="mr-rules">
-      {/* 访问上下文：集合选择器显示真实集合名与当前生效状态，链接给出真实人数 / 认证状态。 */}
+      {/* 访问上下文：当前集合由集合页固定，链接跳到认证集合内的用户 / 认证标签。 */}
       <div className="mr-rules__context">
         <div className="mr-rules__context-primary">
           <span className="mr-rules__eyebrow">访问上下文</span>
           <div className="mr-rules__picker">
-            <Select
-              className="mr-rules__collection-select"
-              value={effectiveId || undefined}
-              placeholder="选择集合"
-              options={props.collections.map((item) => ({ value: item.id, label: item.name }))}
-              onChange={(value: string) => setSelectedId(value)}
-            />
+            <span className="mr-rules__current-collection" aria-label="当前集合">
+              {current?.name ?? effectiveId}
+            </span>
             {hasPending ? (
               <StatusTag tone="warning">待审阅</StatusTag>
             ) : (
@@ -508,7 +503,7 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId?: s
             type="link"
             className="mr-rules__link"
             disabled={!authCollection}
-            onClick={() => navigate('/access/users')}
+            onClick={() => navigate(`/data/${authId}/users`)}
           >
             <TeamOutlined />
             用户管理 ·{' '}
@@ -525,7 +520,7 @@ export function RulesTab(props: { collections: CollectionSummary[]; activeId?: s
             type="link"
             className="mr-rules__link"
             disabled={!authCollection}
-            onClick={() => navigate('/access/auth')}
+            onClick={() => navigate(`/data/${authId}/auth`)}
           >
             <SafetyCertificateOutlined />
             邮箱密码认证 ·{' '}

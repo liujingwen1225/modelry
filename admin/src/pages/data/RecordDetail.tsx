@@ -70,7 +70,12 @@ export function RecordDetail(props: {
         <Button type="link" size="small" className="mr-inline-link" onClick={() => navigate(`/data/${props.collection.id}/api`)}>
           <ArrowRightOutlined /> 查看此集合的 API
         </Button>
-        <Button type="link" size="small" className="mr-inline-link" onClick={() => navigate('/access')}>
+        <Button
+          type="link"
+          size="small"
+          className="mr-inline-link"
+          onClick={() => navigate(`/data/${props.collection.id}/access`)}
+        >
           <ArrowRightOutlined /> 验证访问规则
         </Button>
       </div>
